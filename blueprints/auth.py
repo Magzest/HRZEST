@@ -128,7 +128,7 @@ def admin_login():
         # Check lockout before attempting any credential check
         locked, until = _check_login_lockout(identifier)
         if locked:
-            return render_template("admin_login.html",
+            return render_template("admin_login.html", co=co,
                                    error=f"Account locked until {until} due to too many failed attempts.")
 
         # CAPTCHA gate: once this identifier has CAPTCHA_AFTER_ATTEMPTS (2)
@@ -141,7 +141,7 @@ def admin_login():
         if needs_captcha:
             token = request.form.get("cf-turnstile-response", "")
             if not verify_turnstile(token, request.remote_addr):
-                return render_template("admin_login.html",
+                return render_template("admin_login.html", co=co,
                                        error="Please complete the verification challenge.",
                                        show_captcha=True, turnstile_site_key=_TURNSTILE_SITE_KEY)
 
@@ -184,7 +184,7 @@ def admin_login():
             stored_pwd = emp_row[3]
             if not stored_pwd or not check_password_hash(stored_pwd, password):
                 _record_login_failure(identifier)
-                return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
+                return render_template("admin_login.html", co=co, error="Invalid credentials. Check your ID and password.",
                                        show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
             _clear_login_failures(identifier)
             # Upgrade legacy hash to bcrypt on first successful login
@@ -209,7 +209,7 @@ def admin_login():
         _record_login_failure(identifier)
         return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
                                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
-    return render_template("admin_login.html")
+    return render_template("admin_login.html", co=co)
 
 
 @auth_bp.route("/logout", methods=["GET", "POST"])

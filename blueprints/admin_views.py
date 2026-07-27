@@ -964,6 +964,8 @@ def api_soc_verify_2fa():
     (utils/totp.py), required on top of the role check above before the
     dashboard or its events API will respond with anything but a 404."""
     username, _role = _soc_session_or_404()
+    if not username:
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
 
     body = request.get_json(silent=True) or {}
     totp_code = body.get("code", "")

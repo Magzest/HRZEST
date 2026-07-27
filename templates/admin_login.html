@@ -177,7 +177,7 @@
       <div class="logo">
         <div class="logo-icon">🏢</div>
         <h1>Welcome Back</h1>
-        <p>Attendance Management System</p>
+        <p style="font-weight: 600; color: #475569; font-size: 14px; margin-top: 4px;">{{ co.company_name if co and co.company_name else "Employee Attendance System" }}</p>
       </div>
 
       {% if error %}
