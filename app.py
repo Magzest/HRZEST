@@ -1281,6 +1281,55 @@ def _init_core_tables(cursor, db):
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_eq_status ON email_queue (status)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_eq_created ON email_queue (created_at)")
+
+    # ── SecOps: malware quarantine, threat intel, email broadcast ────────────
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS quarantined_files (
+            id SERIAL PRIMARY KEY,
+            filename VARCHAR(255) NOT NULL,
+            file_hash VARCHAR(64) NOT NULL,
+            uploader_id VARCHAR(50) DEFAULT 'Guest/System',
+            file_path VARCHAR(500),
+            detection_signature VARCHAR(150) DEFAULT 'Heuristic.Malware.SuspiciousExtension',
+            status VARCHAR(20) DEFAULT 'Quarantined',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS threat_intel_cve (
+            id SERIAL PRIMARY KEY,
+            cve_id VARCHAR(50) UNIQUE NOT NULL,
+            vendor VARCHAR(100),
+            product VARCHAR(100),
+            vulnerability_name TEXT,
+            date_added VARCHAR(30),
+            due_date VARCHAR(30),
+            notes TEXT,
+            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS threat_intel_ips (
+            id SERIAL PRIMARY KEY,
+            ip VARCHAR(45) UNIQUE NOT NULL,
+            threat_score INT DEFAULT 1,
+            source VARCHAR(100),
+            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS broadcast_emails (
+            id SERIAL PRIMARY KEY,
+            sender_username VARCHAR(100) NOT NULL,
+            target_type VARCHAR(50) NOT NULL,
+            target_value VARCHAR(150),
+            subject VARCHAR(255) NOT NULL,
+            body_snippet TEXT,
+            recipient_count INT DEFAULT 0,
+            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS payroll_runs (
             id SERIAL PRIMARY KEY,
@@ -2945,9 +2994,13 @@ if "core.home" not in app.view_functions:
     from blueprints.onboarding import onboarding_bp
     from blueprints.employee_portal import employee_portal_bp
     from blueprints.core import core_bp
+    from blueprints.ai_hrms import ai_hrms_bp
+    from blueprints.secops import secops_bp
+    from blueprints.email_blast import email_blast_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
-                documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp):
+                documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
+                ai_hrms_bp, secops_bp, email_blast_bp):
         app.register_blueprint(_bp)
 
 _register_api_v1_aliases()

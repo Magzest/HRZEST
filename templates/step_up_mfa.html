@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Step-Up MFA Verification — Admin Portal</title>
+  <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:"Segoe UI", sans-serif; }
+    body {
+      min-height: 100vh; background: radial-gradient(circle at 50% 10%, #0f172a, #020617);
+      color: #e2e8f0; display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .mfa-box {
+      background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px);
+      border: 1px solid rgba(51, 65, 85, 0.6); border-radius: 20px;
+      padding: 40px; width: 100%; max-width: 440px; box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .mfa-hdr { text-align: center; margin-bottom: 24px; }
+    .mfa-icon {
+      width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      display: inline-flex; align-items: center; justify-content: center; font-size: 28px; color: #fff;
+      margin-bottom: 12px; box-shadow: 0 0 20px rgba(37, 99, 235, 0.4);
+    }
+    .mfa-title { font-size: 20px; font-weight: 800; color: #f8fafc; }
+    .mfa-sub { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+    .field { margin-bottom: 20px; }
+    .field label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; letter-spacing: 0.5px; }
+    .field input {
+      width: 100%; padding: 12px 14px; background: #090d16; border: 1.5px solid #1e293b;
+      border-radius: 10px; color: #f8fafc; font-size: 18px; text-align: center; letter-spacing: 6px; outline: none;
+    }
+    .field input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+    .btn-submit {
+      width: 100%; padding: 12px; background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      border: none; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s;
+    }
+    .btn-submit:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5); }
+    .error-msg { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="mfa-box">
+    <div class="mfa-hdr">
+      <div class="mfa-icon"><i class="ti ti-shield-lock"></i></div>
+      <div class="mfa-title">Step-Up MFA Challenge</div>
+      <div class="mfa-sub">Fresh TOTP verification required to perform structural changes</div>
+    </div>
+
+    {% if error %}
+    <div class="error-msg">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/admin/step-up-mfa">
+      <div class="field">
+        <label>6-Digit Authenticator Code</label>
+        <input type="text" name="totp_code" maxlength="6" pattern="\d{6}" placeholder="000000" required autofocus autocomplete="off" />
+      </div>
+
+      <button type="submit" class="btn-submit">🔐 Verify &amp; Proceed</button>
+    </form>
+  </div>
+</body>
+</html>

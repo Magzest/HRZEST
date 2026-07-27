@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SecOps Portal — Cybersecurity Analyst MFA Login</title>
+    <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
+      body {
+        min-height: 100vh;
+        background: radial-gradient(circle at 50% 20%, #0f172a, #020617);
+        color: #f8fafc;
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px; position: relative; overflow: hidden;
+      }
+
+      .glow-orb {
+        position: fixed; border-radius: 50%; filter: blur(100px);
+        opacity: 0.25; pointer-events: none;
+      }
+      .orb1 { width: 450px; height: 450px; background: #3b82f6; top: -100px; left: -100px; }
+      .orb2 { width: 400px; height: 400px; background: #6366f1; bottom: -100px; right: -100px; }
+
+      .card {
+        width: 100%; max-width: 440px;
+        background: rgba(15, 23, 42, 0.85);
+        -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 24px;
+        padding: 40px 36px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(59, 130, 246, 0.15);
+      }
+
+      .logo-hdr { text-align: center; margin-bottom: 30px; }
+      .shield-icon {
+        width: 72px; height: 72px;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+        border-radius: 22px; margin: 0 auto 16px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 36px; color: #fff;
+        box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+      }
+
+      .field-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; letter-spacing: 0.6px; }
+      .field-input {
+        width: 100%; padding: 14px 16px;
+        background: #090d16; border: 1.5px solid #1e293b;
+        border-radius: 12px; color: #f8fafc; font-size: 15px; outline: none; transition: 0.2s; margin-bottom: 20px;
+      }
+      .field-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
+
+      .btn-cyber {
+        width: 100%; padding: 15px; border: none; border-radius: 12px;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; transition: 0.2s;
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+      }
+      .btn-cyber:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(37, 99, 235, 0.6); }
+
+      .error-box {
+        background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5; border-radius: 10px; padding: 12px 16px; font-size: 13px; font-weight: 600; margin-bottom: 20px;
+      }
+
+      .mfa-badge {
+        display: inline-block; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="glow-orb orb1"></div>
+    <div class="glow-orb orb2"></div>
+
+    <div class="card">
+      <div class="logo-hdr">
+        <div class="shield-icon"><i class="ti ti-shield-lock"></i></div>
+        <h1 style="font-size: 22px; font-weight: 800;">SecOps Portal</h1>
+        <p style="font-size: 13px; color: #94a3b8; margin-top: 4px;">Cybersecurity Analyst &amp; SP Admin Gateway</p>
+      </div>
+
+      {% if error %}
+      <div class="error-box">❌ {{ error }}</div>
+      {% endif %}
+
+      {% if show_mfa %}
+      <!-- Step 2: Multi-Factor Authentication Challenge with Google Authenticator QR Code -->
+      <form action="/sp_admin/mfa" method="POST">
+        <div style="text-align: center; margin-bottom: 16px;">
+          {% if qr_uri %}
+          <span class="mfa-badge">Step 2: Scan QR Code with Google Authenticator</span>
+          <p style="font-size: 13px; color: #cbd5e1; margin-top: 6px;">Scan the QR code below using <strong>Google Authenticator</strong> or Authy app:</p>
+          {% else %}
+          <span class="mfa-badge">Step 2: Two-Factor Authentication</span>
+          <p style="font-size: 13px; color: #cbd5e1; margin-top: 6px;">Enter the 6-digit verification code from your Google Authenticator app.</p>
+          {% endif %}
+        </div>
+
+        {% if qr_uri %}
+        <div style="text-align: center; margin-bottom: 20px; background: #ffffff; padding: 14px; border-radius: 16px; width: 210px; margin-left: auto; margin-right: auto; box-shadow: 0 0 30px rgba(59, 130, 246, 0.35);">
+          <img src="{{ qr_uri }}" alt="Google Authenticator QR Code" style="width: 180px; height: 180px; display: block; margin: 0 auto;" />
+          <div style="font-size: 11px; font-weight: 800; color: #0f172a; margin-top: 8px; font-family: monospace; letter-spacing: 1px;">KEY: {{ secret }}</div>
+        </div>
+        {% endif %}
+
+        <label class="field-label">Google Authenticator Passcode</label>
+        <input class="field-input" type="text" name="totp_code" placeholder="Enter 6-digit passcode" required autofocus maxlength="6" style="text-align: center; letter-spacing: 4px; font-size: 20px; font-weight: 800;" />
+
+        <button type="submit" class="btn-cyber">Verify Passcode &amp; Enter SecOps →</button>
+      </form>
+      {% else %}
+      <!-- Step 1: Analyst Credential Check -->
+      <form action="/sp_admin/login" method="POST">
+        <label class="field-label">Cybersecurity Analyst Username</label>
+        <input class="field-input" type="text" name="identifier" value="sp_admin" placeholder="e.g. sp_admin" required autofocus />
+
+        <label class="field-label">Password</label>
+        <input class="field-input" type="password" name="password" placeholder="Enter password" required />
+
+        <div style="display: flex; gap: 12px; margin-top: 8px;">
+          <button type="submit" class="btn-cyber" style="flex: 1;">🛡️ SecOps Login</button>
+          <a href="/admin_login" class="btn-cyber" style="flex: 1; text-align: center; text-decoration: none; background: #1e293b; border: 1px solid #334155; color: #94a3b8; box-shadow: none; display: inline-flex; align-items: center; justify-content: center;">🔑 Admin Login</a>
+        </div>
+      </form>
+      {% endif %}
+
+      <div style="margin-top: 24px; text-align: center; font-size: 13px;">
+        <a href="/admin_login" style="color: #64748b; text-decoration: none;">← Return to Standard Login</a>
+      </div>
+    </div>
+  </body>
+</html>

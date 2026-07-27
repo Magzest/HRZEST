@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Recruitment & Resume Screening — HRMS Portal</title>
+    <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
+      body { background: #f8fafc; color: #1e293b; min-height: 100vh; display: flex; }
+      
+      .main-content { flex: 1; padding: 32px; max-width: 1300px; margin: 0 auto; }
+      .page-title { font-size: 26px; font-weight: 800; color: #0f172a; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; }
+      .page-sub { font-size: 14px; color: #64748b; margin-bottom: 28px; }
+      
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; }
+      @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+      
+      .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); }
+      .card-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+      
+      .form-label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; color: #475569; margin-bottom: 6px; letter-spacing: 0.5px; }
+      .form-control { width: 100%; padding: 12px 14px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; margin-bottom: 16px; transition: 0.2s; }
+      .form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+
+      .drop-zone { border: 2px dashed #94a3b8; border-radius: 12px; padding: 28px; text-align: center; background: #f8fafc; cursor: pointer; transition: 0.2s; margin-bottom: 16px; }
+      .drop-zone:hover { border-color: #3b82f6; background: #eff6ff; }
+      .drop-icon { font-size: 32px; color: #3b82f6; margin-bottom: 8px; }
+
+      .btn-primary { width: 100%; padding: 14px; background: linear-gradient(135deg, #2563eb, #4f46e5); color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+      .btn-primary:hover { opacity: 0.95; transform: translateY(-1px); }
+      
+      .score-badge { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: #eff6ff; border: 3px solid #3b82f6; font-size: 22px; font-weight: 800; color: #1d4ed8; }
+      .skill-tag { display: inline-block; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; margin: 3px 2px; }
+      
+      .candidate-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+      
+      body.dark-mode { background: #0b0f19 !important; color: #cbd5e1 !important; }
+      body.dark-mode .card { background: #111827 !important; border-color: #1f2937 !important; }
+      body.dark-mode .page-title, body.dark-mode .card-title { color: #f1f5f9 !important; }
+      body.dark-mode .form-control { background: #0b0f19 !important; border-color: #334155 !important; color: #e2e8f0 !important; }
+      body.dark-mode .drop-zone { background: #0b0f19 !important; border-color: #334155 !important; }
+      body.dark-mode .candidate-card { background: #182234 !important; border-color: #26334d !important; }
+    </style>
+  </head>
+  <body>
+    <div class="main-content">
+      <div style="margin-bottom: 20px;">
+        <a href="/admin" style="text-decoration: none; color: #3b82f6; font-size: 14px; font-weight: 600;">← Back to Admin Dashboard</a>
+      </div>
+
+      <div class="page-title">
+        <i class="ti ti-robot u-c-3b82f6"></i> AI Recruitment &amp; Resume Screening
+      </div>
+      <div class="page-sub">
+        Automated resume parsing, job-match scoring (0–100), skill extraction, and AI executive rationale summaries.
+      </div>
+
+      <div class="grid-2">
+        <!-- Input Form -->
+        <div class="card">
+          <div class="card-title"><i class="ti ti-file-upload"></i> Upload &amp; Screen Resume</div>
+          
+          <form id="screenForm">
+            <label class="form-label">Job Title / Target Role</label>
+            <input type="text" id="jobTitle" class="form-control" placeholder="e.g. Senior Full-Stack Engineer" value="Software Engineer" />
+
+            <label class="form-label">Job Description &amp; Key Requirements</label>
+            <textarea id="jobDescription" class="form-control" rows="3" placeholder="Enter target skills and requirements...">Seeking Software Engineer with experience in Python, SQL, REST APIs, Git, and Agile software development.</textarea>
+
+            <label class="form-label">Upload Resume (PDF / Docx / TXT)</label>
+            <div class="drop-zone" onclick="document.getElementById('resumeFile').click()">
+              <i class="ti ti-cloud-upload drop-icon"></i>
+              <div style="font-weight: 700; font-size: 14px;">Click to select file or drag &amp; drop</div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 4px;" id="fileName">PDF, Docx, or TXT up to 10MB</div>
+            </div>
+            <input type="file" id="resumeFile" style="display: none;" onchange="document.getElementById('fileName').textContent = this.files[0] ? this.files[0].name : 'PDF, Docx, or TXT'" />
+
+            <label class="form-label">Or Paste Resume Raw Text</label>
+            <textarea id="resumeText" class="form-control" rows="4" placeholder="Paste candidate resume plain text here if no file..."></textarea>
+
+            <button type="submit" class="btn-primary" id="btnScreen"><i class="ti ti-sparkles"></i> Run AI Resume Matcher</button>
+          </form>
+        </div>
+
+        <!-- AI Evaluation Output -->
+        <div class="card">
+          <div class="card-title"><i class="ti ti-chart-dots"></i> AI Candidate Scorecard</div>
+          
+          <div id="outputPlaceholder" style="text-align: center; padding: 48px 20px; color: #64748b;">
+            <i class="ti ti-brain" style="font-size: 48px; opacity: 0.4; margin-bottom: 12px; display: block;"></i>
+            Upload a resume or paste text on the left to generate the candidate match score and summary rationale.
+          </div>
+
+          <div id="outputResult" style="display: none;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;">
+              <div>
+                <h3 style="font-size: 18px; font-weight: 800;" id="candName">Candidate Name</h3>
+                <div style="font-size: 13px; color: #64748b;" id="candMeta">Email / Phone</div>
+              </div>
+              <div class="score-badge" id="candScore">88</div>
+            </div>
+
+            <div class="candidate-card">
+              <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">AI Rationale Summary</div>
+              <p style="font-size: 14px; line-height: 1.6; color: #334155;" id="candRationale"></p>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+              <div class="form-label">Matched Competencies &amp; Skills</div>
+              <div id="skillTags"></div>
+            </div>
+
+            <div class="candidate-card" style="background: #eff6ff; border-color: #bfdbfe;">
+              <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #1d4ed8; margin-bottom: 2px;">Recommendation</div>
+              <div style="font-size: 15px; font-weight: 800; color: #1e40af;" id="candRec">Advance to Technical Interview</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/darkmode.min.js"></script>
+    <script>
+      document.getElementById('screenForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('btnScreen');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ti ti-loader"></i> Analyzing Candidate...';
+
+        try {
+          const fileInput = document.getElementById('resumeFile');
+          const textInput = document.getElementById('resumeText').value;
+          const jobDesc   = document.getElementById('jobDescription').value;
+
+          let parsedProfile = null;
+
+          if (fileInput.files.length > 0) {
+            const formData = new FormData();
+            formData.append('resume_file', fileInput.files[0]);
+            const parseResp = await fetch('/api/ai/parse-resume', { method: 'POST', body: formData });
+            const parseData = await parseResp.json();
+            if (parseData.ok) parsedProfile = parseData.parsed_profile;
+          }
+
+          const screenResp = await fetch('/api/ai/screen-candidate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              parsed_profile: parsedProfile,
+              resume_text: textInput,
+              job_description: jobDesc
+            })
+          });
+
+          const screenData = await screenResp.json();
+          if (screenData.ok) {
+            const res = screenData.match_result;
+            const prof = screenData.parsed_profile;
+
+            document.getElementById('outputPlaceholder').style.display = 'none';
+            document.getElementById('outputResult').style.display = 'block';
+
+            document.getElementById('candName').textContent = prof.candidate_name || 'Candidate Profile';
+            document.getElementById('candMeta').textContent = `${prof.email || 'N/A'} • ${prof.phone || 'N/A'} • ~${prof.years_experience || 3} yrs exp`;
+            document.getElementById('candScore').textContent = res.match_score;
+            document.getElementById('candRationale').textContent = res.rationale_summary;
+            document.getElementById('candRec').textContent = `${res.match_tier} — ${res.recommendation}`;
+
+            const tagsDiv = document.getElementById('skillTags');
+            tagsDiv.innerHTML = '';
+            (res.matched_skills || []).forEach(s => {
+              const span = document.createElement('span');
+              span.className = 'skill-tag';
+              span.textContent = s;
+              tagsDiv.appendChild(span);
+            });
+          }
+        } catch (err) {
+          alert('Screening error: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="ti ti-sparkles"></i> Run AI Resume Matcher';
+        }
+      });
+    </script>
+  </body>
+</html>

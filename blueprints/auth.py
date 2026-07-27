@@ -23,6 +23,7 @@ from utils.auth import (
 from utils.helpers import get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
 from utils.session_risk import ensure_session_id
+from utils.totp import verify_totp_code
 from utils.face_utils import verify_uploaded_face
 from utils.webauthn_utils import (
     webauthn, _webauthn_available, _wa_rp_id, _wa_check_rp_id, _wa_origins,
@@ -966,3 +967,32 @@ def api_mobile_biometric_attest():
     if not ok:
         return jsonify({"ok": False, "msg": err}), 401
     return jsonify({"ok": True})
+
+
+@auth_bp.route("/admin/step-up-mfa", methods=["GET", "POST"])
+def step_up_mfa():
+    """Step-Up MFA challenge for utils/step_up_mfa.py's require_step_up_mfa
+    decorator: a fresh TOTP re-check before a high-privilege action, on top
+    of (not instead of) the admin session already established at login."""
+    username = session.get("admin_username")
+    if not username:
+        return redirect("/admin_login")
+
+    if request.method == "POST":
+        totp_code = request.form.get("totp_code", "").strip()
+        valid = verify_totp_code(username, totp_code, require_enabled=False)
+
+        if valid:
+            session["_step_up_mfa_verified_at"] = time.time()
+            target_url = session.pop("_step_up_target_url", "/admin")
+            log_security_event(
+                "mfa.step_up_success",
+                "Step-Up MFA verified successfully",
+                level="INFO",
+                identifier=username
+            )
+            return redirect(target_url)
+
+        return render_template("step_up_mfa.html", error="Invalid MFA verification code.")
+
+    return render_template("step_up_mfa.html")

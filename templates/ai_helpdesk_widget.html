@@ -1,0 +1,116 @@
+<!-- AI HR Helpdesk Chatbot Floating Widget -->
+<style>
+  .ai-widget-trigger {
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, #2563eb, #4f46e5); color: #ffffff;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px rgba(37,99,235,0.4); cursor: pointer; transition: 0.3s;
+    border: 2px solid rgba(255,255,255,0.8);
+  }
+  .ai-widget-trigger:hover { transform: scale(1.08); }
+  
+  .ai-widget-box {
+    position: fixed; bottom: 90px; right: 24px; z-index: 9999;
+    width: 360px; height: 500px; background: #ffffff; border: 1px solid #e2e8f0;
+    border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column; overflow: hidden; transition: 0.3s;
+  }
+  .ai-widget-hdr {
+    background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff;
+    padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .ai-widget-body { flex: 1; padding: 16px; overflow-y: auto; background: #f8fafc; font-size: 13px; }
+  .ai-msg { margin-bottom: 12px; max-width: 85%; padding: 10px 14px; border-radius: 14px; line-height: 1.5; }
+  .ai-msg-bot { background: #ffffff; border: 1px solid #e2e8f0; color: #1e293b; border-bottom-left-radius: 4px; }
+  .ai-msg-user { background: #2563eb; color: #ffffff; margin-left: auto; border-bottom-right-radius: 4px; }
+  
+  .ai-widget-ftr { padding: 12px; background: #ffffff; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; }
+  .ai-widget-input { flex: 1; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 20px; font-size: 13px; outline: none; }
+  .ai-widget-send { background: #2563eb; color: #fff; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+  body.dark-mode .ai-widget-box { background: #111827 !important; border-color: #1f2937 !important; }
+  body.dark-mode .ai-widget-body { background: #0b0f19 !important; }
+  body.dark-mode .ai-msg-bot { background: #1f2937 !important; color: #e2e8f0 !important; border-color: #374151 !important; }
+  body.dark-mode .ai-widget-ftr { background: #111827 !important; border-color: #1f2937 !important; }
+  body.dark-mode .ai-widget-input { background: #0b0f19 !important; border-color: #374151 !important; color: #e2e8f0 !important; }
+</style>
+
+<div class="ai-widget-trigger" onclick="toggleAIWidget()" title="Ask AI HR Assistant">
+  <i class="ti ti-message-bot" style="font-size: 26px;"></i>
+</div>
+
+<div class="ai-widget-box" id="aiWidgetBox" style="display: none;">
+  <div class="ai-widget-hdr">
+    <div style="font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+      <i class="ti ti-bot"></i> AI HR Assistant
+    </div>
+    <i class="ti ti-x" style="cursor: pointer;" onclick="toggleAIWidget()"></i>
+  </div>
+  
+  <div class="ai-widget-body" id="aiWidgetBody">
+    <div class="ai-msg ai-msg-bot">
+      👋 Hi! I'm your AI HR Assistant. Ask me anything about leave policies, health insurance, or payroll timelines.
+    </div>
+  </div>
+
+  <div class="ai-widget-ftr">
+    <input type="text" class="ai-widget-input" id="aiWidgetInput" placeholder="Ask policy question..." onkeypress="if(event.key==='Enter') sendAIWidgetMsg()" />
+    <button class="ai-widget-send" onclick="sendAIWidgetMsg()"><i class="ti ti-send"></i></button>
+  </div>
+</div>
+
+<script>
+  function toggleAIWidget() {
+    const box = document.getElementById('aiWidgetBox');
+    box.style.display = (box.style.display === 'none') ? 'flex' : 'none';
+  }
+
+  async function sendAIWidgetMsg() {
+    const input = document.getElementById('aiWidgetInput');
+    const msg = input.value.strip ? input.value.strip() : input.value.trim();
+    if (!msg) return;
+
+    const body = document.getElementById('aiWidgetBody');
+    
+    // User message
+    const uDiv = document.createElement('div');
+    uDiv.className = 'ai-msg ai-msg-user';
+    uDiv.textContent = msg;
+    body.appendChild(uDiv);
+    input.value = '';
+    body.scrollTop = body.scrollHeight;
+
+    // Thinking indicator
+    const bDiv = document.createElement('div');
+    bDiv.className = 'ai-msg ai-msg-bot';
+    bDiv.textContent = 'Thinking...';
+    body.appendChild(bDiv);
+
+    try {
+      const resp = await fetch('/api/ai/hr-helpdesk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: msg })
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        bDiv.textContent = data.data.answer;
+        if (data.data.escalated) {
+          const escDiv = document.createElement('div');
+          escDiv.style.marginTop = '6px';
+          escDiv.style.fontSize = '11px';
+          escDiv.style.color = '#ef4444';
+          escDiv.style.fontWeight = '700';
+          escDiv.textContent = `🚨 Escalated: HR Ticket #${data.data.ticket_id || 'NEW'} automatically generated.`;
+          bDiv.appendChild(escDiv);
+        }
+      } else {
+        bDiv.textContent = 'Sorry, could not process request right now.';
+      }
+    } catch (err) {
+      bDiv.textContent = 'Error connecting to AI service.';
+    }
+    body.scrollTop = body.scrollHeight;
+  }
+</script>

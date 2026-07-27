@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>404 — Page Not Found</title>
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, sans-serif; }
+    body {
+      min-height: 100vh;
+      background: #f8fafc;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      color: #1e293b;
+    }
+    .box {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 24px;
+      padding: 48px 40px;
+      max-width: 460px; width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+    }
+    .icon {
+      width: 72px; height: 72px;
+      background: #eff6ff;
+      border-radius: 20px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 36px; color: #2563eb;
+      margin-bottom: 20px;
+    }
+    h1 { font-size: 36px; font-weight: 900; color: #1e3a8a; margin-bottom: 6px; }
+    h2 { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 10px; }
+    p { font-size: 13.5px; color: #64748b; line-height: 1.6; margin-bottom: 28px; }
+    .btn-group { display: flex; flex-direction: column; gap: 10px; }
+    .btn {
+      padding: 13px 20px; border-radius: 12px; font-size: 14px; font-weight: 700;
+      text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      transition: 0.2s;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-secondary { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+    .btn-secondary:hover { background: #e2e8f0; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">🔍</div>
+    <h1>404</h1>
+    <h2>Page Not Found</h2>
+    <p>The page you requested doesn't exist or requires elevated session authentication.</p>
+    <div class="btn-group">
+      <a href="/admin" class="btn btn-primary"><i class="ti ti-layout-dashboard"></i> Go to Admin Dashboard</a>
+      <a href="/secops" class="btn btn-primary" style="background:#1e293b;"><i class="ti ti-shield-lock"></i> Go to SOC Security Dashboard</a>
+      <a href="/admin_login" class="btn btn-secondary"><i class="ti ti-key"></i> Return to Admin Login</a>
+    </div>
+  </div>
+</body>
+</html>

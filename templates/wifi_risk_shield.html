@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emergency Network Shield — High Risk Wi-Fi Detected</title>
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+    body {
+      min-height: 100vh;
+      background: #090d16;
+      color: #f8fafc;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .shield-box {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid #dc2626;
+      box-shadow: 0 0 50px rgba(220, 38, 38, 0.25);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 540px; width: 100%;
+      text-align: center;
+      backdrop-filter: blur(12px);
+    }
+    .shield-icon {
+      width: 72px; height: 72px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 2px solid #ef4444;
+      border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 32px; color: #ef4444;
+      margin-bottom: 20px;
+      animation: pulse 2s infinite ease-in-out;
+    }
+    h1 { font-size: 22px; font-weight: 800; color: #f8fafc; margin-bottom: 10px; }
+    p { font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px; }
+    .risk-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      padding: 8px 16px; border-radius: 999px;
+      font-size: 13px; font-weight: 700;
+      margin-bottom: 24px;
+    }
+    .info-list {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+      font-size: 12px; color: #cbd5e1;
+      margin-bottom: 28px;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .info-row { display: flex; justify-content: space-between; align-items: center; }
+    .info-label { color: #64748b; font-weight: 600; }
+    .info-val { font-weight: 700; font-family: monospace; }
+    .btn-secops {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 14px;
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      color: #ffffff;
+      border: none; border-radius: 12px;
+      font-size: 14px; font-weight: 700;
+      cursor: pointer; text-decoration: none;
+      transition: all 0.2s ease;
+    }
+    .btn-secops:hover { background: #ef4444; transform: translateY(-1px); }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.06); opacity: 0.8; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shield-box">
+    <div class="shield-icon"><i class="ti ti-wifi-off"></i></div>
+    <div class="risk-badge">
+      <i class="ti ti-alert-triangle"></i> Wi-Fi Risk Rate: {{ wifi.risk_score }}% (Threshold EXCEEDED)
+    </div>
+    <h1>Emergency Site Shield Active</h1>
+    <p>
+      The automated Security Gateway detected an unsecure or compromised Wi-Fi network environment (Risk Rate &gt; 50%).
+      To prevent MITM eavesdropping and credential theft, corporate application access is temporarily suspended on this network.
+    </p>
+
+    <div class="info-list">
+      <div class="info-row">
+        <span class="info-label">Network SSID:</span>
+        <span class="info-val">{{ wifi.ssid }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">BSSID Identifier:</span>
+        <span class="info-val">{{ wifi.bssid }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Encryption Protocol:</span>
+        <span class="info-val">{{ wifi.encryption }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Action Taken:</span>
+        <span class="info-val" style="color:#ef4444;">Automatic Traffic Lockout</span>
+      </div>
+    </div>
+
+    <a href="/secops" class="btn-secops">
+      <i class="ti ti-shield-lock"></i> Authorize SOC SecOps Override
+    </a>
+  </div>
+</body>
+</html>
