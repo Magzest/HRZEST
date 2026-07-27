@@ -172,8 +172,8 @@ class TestApiEmployees:
         rv = client.get("/api/employees")
         assert rv.status_code in (302, 401)
 
-    def test_returns_list_for_admin(self, client, db_engine):
-        token, cleanup = _make_admin_token(db_engine)
+    def test_returns_list_for_admin(self, client, db_engine, seed_admin):
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
         try:
             rv = client.get("/api/employees",
                             headers={"Authorization": f"Bearer {token}"})

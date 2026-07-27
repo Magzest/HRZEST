@@ -1116,6 +1116,8 @@ def api_salary_report():
 @api_required
 def api_get_email_config():
     cfg = get_email_config()
+    if cfg is None:
+        return jsonify({"ok": True, "config": None})
     # Never return the SMTP password to clients — they only need to know config exists.
     safe_cfg = {k: v for k, v in cfg.items() if k != "password"}
     safe_cfg["password_set"] = bool(cfg.get("password"))
