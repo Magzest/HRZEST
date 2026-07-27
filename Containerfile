@@ -44,10 +44,17 @@ COPY --from=builder /install /usr/local
 
 # The base image's own preinstalled pip/setuptools toolchain (ensurepip),
 # not anything from requirements.txt -- entrypoint.sh never invokes pip at
-# runtime, so this exists here only as unused attack surface. Patch it in
-# place rather than leaving known-vulnerable wheel/jaraco.context sitting
-# in the image (CVE-2026-24049, CVE-2026-23949).
-RUN pip install --no-cache-dir --upgrade wheel jaraco.context
+# runtime, so this exists here only as unused attack surface. A plain
+# `pip install --upgrade` (tried first) reported the pre-upgrade version
+# as 0.46.3 and "succeeded", yet Trivy's filesystem scan still found a
+# 0.45.1 dist-info sitting on disk -- an orphaned copy from the base
+# image's own site-packages that COPY --from=builder layered another
+# version on top of without removing, which pip's own bookkeeping never
+# sees but Trivy's raw directory scan does. Delete any leftover
+# wheel*/jaraco.context* dist-info dirs first so only the freshly
+# installed one remains (CVE-2026-24049, CVE-2026-23949).
+RUN (find / -xdev -type d \( -iname 'wheel-*' -o -iname 'jaraco.context-*' \) -exec rm -rf {} + || true) && \
+    pip install --no-cache-dir --upgrade wheel jaraco.context
 
 WORKDIR /app
 COPY --chown=appuser:appuser . .
