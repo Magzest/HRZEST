@@ -42,6 +42,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /install /usr/local
 
+# The base image's own preinstalled pip/setuptools toolchain (ensurepip),
+# not anything from requirements.txt -- entrypoint.sh never invokes pip at
+# runtime, so this exists here only as unused attack surface. Patch it in
+# place rather than leaving known-vulnerable wheel/jaraco.context sitting
+# in the image (CVE-2026-24049, CVE-2026-23949).
+RUN pip install --no-cache-dir --upgrade wheel jaraco.context
+
 WORKDIR /app
 COPY --chown=appuser:appuser . .
 
