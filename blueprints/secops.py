@@ -4,8 +4,9 @@ import time
 import re
 import os
 import datetime
-from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for
-from database import get_db_connection, transaction
+import ipaddress
+from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, abort
+from database import get_db_connection, pool_stats, transaction
 from utils.security_logs import (
     fetch_threat_logs,
     get_system_health_metrics,
@@ -14,7 +15,13 @@ from utils.security_logs import (
     get_smtp_config,
     update_smtp_config,
 )
-from utils.auth import _db, check_password_hash, generate_password_hash
+from utils.auth import (
+    _db, check_password_hash, generate_password_hash,
+    SOC_ANALYST_ROLE, soc_step_up_valid, soc_step_up_refresh, soc_step_up_clear,
+    turnstile_enabled,
+)
+from utils.helpers import get_co_features, _upsert_co_feature
+from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
 from utils.totp import verify_totp_code, get_or_create_admin_totp_secret, totp_qr_data_uri, mark_totp_enabled
 from extensions import app_log, log_security_event
@@ -23,8 +30,84 @@ secops_bp = Blueprint("secops", __name__)
 
 
 def _is_secops_authorized():
-    """Verify if session is logged in with SecOps / Cybersecurity / Admin privileges."""
-    return bool(session.get("admin_logged_in")) and session.get("admin_role") in ("soc_analyst", "cybersecurity", "admin")
+    """Verify the session belongs to a dedicated SOC Analyst account.
+
+    Deliberately just the SOC_ANALYST_ROLE, not a fallback list including
+    'admin'/'cybersecurity' -- this account is meant to be a SEPARATE
+    credential from the main admin login (see sp_admin_login below), and
+    letting any regular admin session through here would silently defeat
+    that separation."""
+    return bool(session.get("admin_logged_in")) and session.get("admin_role") == SOC_ANALYST_ROLE
+
+
+def _soc_session_and_stepup_or_404():
+    """Full gate for the dashboard and the monitoring/config APIs migrated
+    from the old admin-embedded SOC dashboard: role check AND a live TOTP
+    step-up window (soc_2fa_verified_at, set at /sp_admin/mfa login and
+    refreshed on every dashboard load). 404, not 401/403, on any failure --
+    matches the original admin_views.py gate's disguise posture: a session
+    that isn't entitled to this sees the exact same response a nonexistent
+    URL would."""
+    username = session.get("admin_username")
+    role = session.get("admin_role")
+    logged_in = bool(session.get("admin_logged_in") and username)
+    if not logged_in or role != SOC_ANALYST_ROLE or not soc_step_up_valid():
+        log_security_event(
+            "access.escalation_attempt" if logged_in else "access.denied",
+            "Unauthorized Escalation Attempt: SOC Security Dashboard accessed without a valid SOC session/step-up"
+            if logged_in else "Unauthenticated request to SOC Security Dashboard",
+            level="ERROR" if logged_in else "INFO",
+            identifier=username or "anonymous", attempted_role=role or "none",
+        )
+        abort(404)
+    return username, role
+
+
+def _compute_security_posture():
+    """Real, config-derived facts -- not a fabricated 'security score'. Each
+    one reads the same source of truth its own feature already uses, so this
+    can't silently drift out of sync with what's actually enforced elsewhere
+    in the app."""
+    return {
+        "hsts_enabled": True,  # app.py's _security_headers sets this unconditionally on every response
+        "csp_enabled": True,   # same -- dynamic per-request nonce CSP, always on
+        "rate_limit_backend": "In-memory (per-worker — no Redis in this deployment)",
+        "malware_scan_enabled": os.environ.get("MALWARE_SCAN_ENABLED", "true").strip().lower() not in ("false", "0", "no"),
+        "login_captcha_configured": turnstile_enabled(),
+        "email_alert_webhook_configured": bool(os.environ.get("SECURITY_ALERT_WEBHOOK_URL")),
+    }
+
+
+def _security_events_summary(cursor):
+    """Aggregate stats over the FULL security_events history -- the
+    "complete log analysis" a SOC analyst needs to judge whether the last 50
+    rows they're looking at are routine noise or the tail of something
+    bigger."""
+    cursor.execute("SELECT COUNT(*) FROM security_events")
+    total = cursor.fetchone()[0]
+    cursor.execute("SELECT level, COUNT(*) FROM security_events GROUP BY level")
+    by_level = {level: count for level, count in cursor.fetchall()}
+    cursor.execute(
+        "SELECT event_type, COUNT(*) c FROM security_events GROUP BY event_type ORDER BY c DESC LIMIT 8"
+    )
+    top_event_types = cursor.fetchall()
+    cursor.execute("SELECT COUNT(DISTINCT identifier) FROM security_events WHERE identifier IS NOT NULL")
+    distinct_identifiers = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(DISTINCT ip) FROM security_events WHERE ip IS NOT NULL")
+    distinct_ips = cursor.fetchone()[0]
+    cursor.execute("SELECT MIN(created_at), MAX(created_at) FROM security_events")
+    oldest, newest = cursor.fetchone()
+    return {
+        "total": total,
+        "by_level": by_level,
+        "top_event_types": top_event_types,
+        "distinct_identifiers": distinct_identifiers,
+        "distinct_ips": distinct_ips,
+        "oldest": oldest, "newest": newest,
+    }
+
+
+_COVERAGE_GATE_PCT = 80
 
 
 @secops_bp.route("/sp_admin")
@@ -33,26 +116,32 @@ def _is_secops_authorized():
 def sp_admin_login():
 
     """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
-    if session.get("admin_logged_in") and session.get("admin_role") in ("soc_analyst", "cybersecurity", "admin"):
+    if session.get("admin_logged_in") and session.get("admin_role") == SOC_ANALYST_ROLE:
         return redirect("/secops")
 
     if request.method == "POST":
-        identifier = request.form.get("identifier", "").strip() or "sp_admin"
+        identifier = request.form.get("identifier", "").strip()
         password = request.form.get("password", "").strip()
 
-        with _db() as (cursor, db):
-            cursor.execute(
-                "SELECT password, COALESCE(role,'admin'), email, totp_secret FROM admin_users WHERE username=%s",
-                (identifier,)
-            )
-            admin_row = cursor.fetchone()
+        admin_row = None
+        if identifier:
+            with _db() as (cursor, db):
+                cursor.execute(
+                    "SELECT password, COALESCE(role,'admin'), email, totp_secret FROM admin_users WHERE username=%s",
+                    (identifier,)
+                )
+                admin_row = cursor.fetchone()
 
-        if admin_row and check_password_hash(admin_row[0], password):
+        # Role must ALREADY be soc_analyst in the DB before password is even
+        # checked -- previously any admin_users row (any role at all) that
+        # passed the password+TOTP check was granted a soc_analyst session
+        # regardless of its actual role column, which defeated the point of
+        # this being a separate, narrowly-scoped credential.
+        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
             session["mfa_pending_username"] = identifier
-            session["mfa_pending_role"] = admin_row[1] if admin_row[1] in ("soc_analyst", "cybersecurity") else "soc_analyst"
             session["mfa_pending_secret"] = admin_row[3] or ""
             return redirect("/sp_admin/mfa")
-        
+
         return render_template("sp_admin_login.html", error="Invalid Cybersecurity Analyst credentials.")
 
     return render_template("sp_admin_login.html")
@@ -78,8 +167,10 @@ def sp_admin_mfa():
             session.clear()
             session["admin_logged_in"] = True
             session["admin_username"] = username
-            session["admin_role"] = "soc_analyst"
-            session["soc_2fa_verified_at"] = time.time()
+            # Guaranteed SOC_ANALYST_ROLE already, since sp_admin_login only
+            # ever sets mfa_pending_username for a row whose DB role matched.
+            session["admin_role"] = SOC_ANALYST_ROLE
+            soc_step_up_refresh()  # sets session["soc_2fa_verified_at"] -- same key/window utils/auth.py's soc_step_up_valid() checks
             session["_session_created"] = time.time()
             session.permanent = True
             ensure_session_id(session)
@@ -103,6 +194,259 @@ def sp_admin_mfa():
         qr_uri=qr_uri
     )
 
+
+@secops_bp.route("/secops")
+def secops_dashboard():
+    """The SOC analyst's dashboard, reached only via /sp_admin/login + MFA
+    above -- there is no other entry point, and no in-page TOTP challenge
+    on top of it (unlike the old admin-embedded version this replaces):
+    completing MFA at login already proves possession, so soc_step_up_valid
+    just enforces that proof stays fresh (10 min, same window sp_admin_mfa
+    sets) rather than asking for a second code mid-session. Consolidates
+    everything that used to live behind Settings -> Security and the
+    /admin/security-dashboard route: force-terminated sessions, active
+    login lockouts, per-admin MFA enrollment, config-derived security
+    posture, an all-time security_events summary + paginated/filterable
+    log, application-layer IP bans, session-timeout config, and live
+    performance/DB-pool stats."""
+    _soc_session_and_stepup_or_404()
+    soc_step_up_refresh()
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        SELECT sid, identifier, attempt_type, score, last_reason, updated_at
+        FROM session_risk WHERE status='compromised'
+        ORDER BY updated_at DESC LIMIT 50
+    """)
+    compromised_sessions = cursor.fetchall()
+    cursor.execute("""
+        SELECT identifier, attempt_type, failed_count, locked_until, last_attempt
+        FROM login_attempts WHERE locked_until IS NOT NULL AND locked_until > NOW()
+        ORDER BY last_attempt DESC LIMIT 50
+    """)
+    active_lockouts = cursor.fetchall()
+    cursor.execute("SELECT username, role, COALESCE(totp_enabled, 0) FROM admin_users ORDER BY username")
+    admin_mfa_status = cursor.fetchall()
+    events_summary = _security_events_summary(cursor)
+    cursor.execute("SELECT session_timeout FROM company_settings LIMIT 1")
+    r = cursor.fetchone()
+    session_timeout = r[0] if r and r[0] else 30
+    cursor.close()
+    db.close()
+
+    return render_template("soc_security_dashboard.html",
+                           compromised_sessions=compromised_sessions,
+                           active_lockouts=active_lockouts,
+                           admin_mfa_status=admin_mfa_status,
+                           events_summary=events_summary,
+                           security_posture=_compute_security_posture(),
+                           session_timeout_minutes=session_timeout,
+                           )
+
+
+@secops_bp.route("/api/security/soc/events")
+def api_soc_events():
+    """Paginated, filterable security_events query backing the dashboard's
+    log table -- the "complete logs" view, since the page load above only
+    carries an all-time summary, not every row."""
+    _soc_session_and_stepup_or_404()
+
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+    try:
+        per_page = min(200, max(1, int(request.args.get("per_page", 50))))
+    except ValueError:
+        per_page = 50
+
+    where = []
+    params = []
+    level = request.args.get("level", "").strip().upper()
+    if level in ("ERROR", "WARNING", "INFO"):
+        where.append("level = %s")
+        params.append(level)
+    event_type = request.args.get("event_type", "").strip()
+    if event_type:
+        where.append("event_type = %s")
+        params.append(event_type)
+    identifier = request.args.get("identifier", "").strip()
+    if identifier:
+        where.append("identifier ILIKE %s")
+        params.append(f"%{identifier}%")
+    q = request.args.get("q", "").strip()
+    if q:
+        where.append("message ILIKE %s")
+        params.append(f"%{q}%")
+    start_date = request.args.get("start_date", "").strip()
+    if start_date:
+        where.append("created_at >= %s")
+        params.append(start_date)
+    end_date = request.args.get("end_date", "").strip()
+    if end_date:
+        where.append("created_at <= %s")
+        params.append(end_date)
+
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(f"SELECT COUNT(*) FROM security_events {where_sql}", params)  # nosec B608 — where_sql built from a fixed allowlist of hardcoded conditions above, all values passed as %s params
+    total = cursor.fetchone()[0]
+    cursor.execute(
+        f"SELECT event_type, level, message, identifier, ip, path, method, created_at "  # nosec B608 — same as above
+        f"FROM security_events {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        params + [per_page, (page - 1) * per_page],
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    return jsonify({
+        "ok": True,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": max(1, -(-total // per_page)),
+        "events": [
+            {
+                "event_type": r[0], "level": r[1], "message": r[2], "identifier": r[3],
+                "ip": r[4], "path": r[5], "method": r[6],
+                "created_at": r[7].strftime("%Y-%m-%d %H:%M:%S") if r[7] else None,
+            }
+            for r in rows
+        ],
+    })
+
+
+@secops_bp.route("/api/security/soc/banned-ips")
+def api_soc_banned_ips():
+    _soc_session_and_stepup_or_404()
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT ip, reason, banned_by, banned_at, expires_at FROM banned_ips "
+        "WHERE expires_at IS NULL OR expires_at > NOW() ORDER BY banned_at DESC"
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "banned_ips": [
+        {
+            "ip": r[0], "reason": r[1], "banned_by": r[2],
+            "banned_at": r[3].strftime("%Y-%m-%d %H:%M:%S") if r[3] else None,
+            "expires_at": r[4].strftime("%Y-%m-%d %H:%M:%S") if r[4] else None,
+        }
+        for r in rows
+    ]})
+
+
+@secops_bp.route("/api/security/soc/ban-ip", methods=["POST"])
+def api_soc_ban_ip():
+    username, _role = _soc_session_and_stepup_or_404()
+    body = request.get_json(silent=True) or {}
+    ip = (body.get("ip") or "").strip()
+    reason = (body.get("reason") or "").strip()[:300] or None
+    duration_raw = body.get("duration_minutes")
+
+    try:
+        ipaddress.ip_address(ip)
+    except ValueError:
+        return jsonify({"ok": False, "msg": "Invalid IP address"}), 400
+
+    expires_at = None
+    if duration_raw not in (None, "", 0, "0"):
+        try:
+            minutes = int(duration_raw)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "msg": "Invalid duration"}), 400
+        if minutes > 0:
+            expires_at = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "INSERT INTO banned_ips (ip, reason, banned_by, expires_at) VALUES (%s,%s,%s,%s) "
+        "ON CONFLICT (ip) DO UPDATE SET reason=EXCLUDED.reason, banned_by=EXCLUDED.banned_by, "
+        "banned_at=CURRENT_TIMESTAMP, expires_at=EXCLUDED.expires_at",
+        (ip, reason, username, expires_at),
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+
+    log_security_event("soc.ip_banned", f"SOC analyst banned IP {ip}",
+                       level="ERROR", identifier=username, target_ip=ip, reason=reason or "(none given)")
+    return jsonify({"ok": True})
+
+
+@secops_bp.route("/api/security/soc/unban-ip", methods=["POST"])
+def api_soc_unban_ip():
+    username, _role = _soc_session_and_stepup_or_404()
+    body = request.get_json(silent=True) or {}
+    ip = (body.get("ip") or "").strip()
+    if not ip:
+        return jsonify({"ok": False, "msg": "IP required"}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("DELETE FROM banned_ips WHERE ip=%s", (ip,))
+    db.commit()
+    cursor.close()
+    db.close()
+
+    log_security_event("soc.ip_unbanned", f"SOC analyst unbanned IP {ip}",
+                       level="WARNING", identifier=username, target_ip=ip)
+    return jsonify({"ok": True})
+
+
+@secops_bp.route("/api/secops/session-timeout", methods=["POST"])
+def api_secops_session_timeout():
+    """Session-timeout config, migrated from the old Settings -> Security
+    hub -- an operational security control, so it lives with the rest of
+    the SOC-only surface now rather than disappearing."""
+    _soc_session_and_stepup_or_404()
+    try:
+        timeout = int((request.get_json(silent=True) or {}).get("timeout", 30))
+        if not (5 <= timeout <= 1440):
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "msg": "Session timeout must be between 5 and 1440 minutes."}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("UPDATE company_settings SET session_timeout=%s", (timeout,))
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True})
+
+
+@secops_bp.route("/api/secops/performance")
+def api_secops_performance():
+    """Live-measured request performance/error-rate plus DB pool
+    utilization and connectivity, migrated from the old Settings ->
+    Security hub."""
+    _soc_session_and_stepup_or_404()
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close()
+        db.close()
+        db_healthy = True
+    except Exception:
+        db_healthy = False
+
+    return jsonify({
+        "ok": True,
+        "performance": get_perf_snapshot(),
+        "db_pool": pool_stats(),
+        "db_healthy": db_healthy,
+        "coverage_gate_pct": _COVERAGE_GATE_PCT,
+    })
 
 
 @secops_bp.route("/api/secops/siem-query")
@@ -258,58 +602,6 @@ def api_reset_employee_password():
     except Exception as exc:
         app_log.error("Failed to reset employee password: %s", exc)
         return jsonify({"ok": False, "msg": f"Server error: {exc}"}), 500
-
-
-@secops_bp.route("/api/secops/ban-ip", methods=["POST"])
-def api_ban_ip():
-    """API Endpoint: Ban an IP address."""
-    if not _is_secops_authorized():
-        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
-
-    data = request.get_json(silent=True) or request.form
-    ip = data.get("ip", "").strip()
-    reason = data.get("reason", "SecOps manual ban").strip()
-
-    if not ip:
-        return jsonify({"ok": False, "msg": "IP address is required."}), 400
-
-    try:
-        db = get_db_connection()
-        with transaction(db):
-            cur = db.cursor()
-            cur.execute(
-                "INSERT INTO banned_ips (ip, reason, banned_at) VALUES (%s, %s, NOW()) "
-                "ON CONFLICT (ip) DO UPDATE SET reason=EXCLUDED.reason, banned_at=NOW()",
-                (ip, reason)
-            )
-            cur.close()
-        return jsonify({"ok": True, "msg": f"IP {ip} has been banned."})
-    except Exception as exc:
-        app_log.error("Failed to ban IP: %s", exc)
-        return jsonify({"ok": False, "msg": str(exc)}), 500
-
-
-@secops_bp.route("/api/secops/unban-ip", methods=["POST"])
-def api_unban_ip():
-    """API Endpoint: Unban an IP address."""
-    if not _is_secops_authorized():
-        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
-
-    data = request.get_json(silent=True) or request.form
-    ip = data.get("ip", "").strip()
-
-    if not ip:
-        return jsonify({"ok": False, "msg": "IP address is required."}), 400
-
-    try:
-        db = get_db_connection()
-        with transaction(db):
-            cur = db.cursor()
-            cur.execute("DELETE FROM banned_ips WHERE ip=%s", (ip,))
-            cur.close()
-        return jsonify({"ok": True, "msg": f"IP {ip} unbanned."})
-    except Exception as exc:
-        return jsonify({"ok": False, "msg": str(exc)}), 500
 
 
 @secops_bp.route("/api/secops/threat-logs")

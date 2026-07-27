@@ -202,15 +202,12 @@
     <div class="topbar-heading">
       <div>
         <h1><i class="ti ti-tool u-c-6366f1"></i> Admin Tools</h1>
-        <div class="sub">Org Chart &amp; Audit Logs</div>
+        <div class="sub">Org Chart</div>
       </div>
     </div>
     <div class="tabs">
       <button class="tab-btn {% if tab == 'org_chart' %}active{% endif %}" onclick="switchTab('org_chart')">
         <i class="ti ti-hierarchy"></i> Org Chart
-      </button>
-      <button class="tab-btn {% if tab == 'audit_logs' %}active{% endif %}" onclick="switchTab('audit_logs')">
-        <i class="ti ti-shield-check"></i> Audit Logs
       </button>
     </div>
   </div>
@@ -247,123 +244,6 @@
       <span class="u-c-94a3b8 u-ml-4">Click card → Profile &nbsp;|&nbsp; Drag to pan &nbsp;|&nbsp; Ctrl+Scroll to zoom</span>
     </div>
   </div>
-
-  <!-- AUDIT LOGS TAB -->
-  <div id="tab-audit_logs" class="tab-panel {% if tab == 'audit_logs' %}active{% endif %}">
-    <div class="audit-wrap">
-
-      <div class="stats-row">
-        <div class="stat-card">
-          <div class="stat-icon si-blue"><i class="ti ti-list u-c-1e3a8a u-fs-18"></i></div>
-          <div><div class="stat-val">{{ total }}</div><div class="stat-lbl">Total Events</div></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon si-green"><i class="ti ti-users u-c-15803d u-fs-18"></i></div>
-          <div><div class="stat-val">{{ actors|length }}</div><div class="stat-lbl">Unique Actors</div></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon si-purple"><i class="ti ti-calendar u-c-7c3aed u-fs-18"></i></div>
-          <div><div class="stat-val">{{ logs[0][8].strftime('%d %b') if logs else '—' }}</div><div class="stat-lbl">Latest Event</div></div>
-        </div>
-      </div>
-
-      <form class="filter-bar" method="GET" action="/admin_tools">
-        <input type="hidden" name="tab" value="audit_logs">
-        <div>
-          <label>Actor</label>
-          <select class="u-minw-160" name="actor">
-            <option value="">All actors</option>
-            {% for a in actors %}
-              <option value="{{ a }}" {% if actor_f==a %}selected{% endif %}>{{ a }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label>Action keyword</label>
-          <input type="text" name="action" placeholder="e.g. delete, salary…" value="{{ action_f }}"/>
-        </div>
-        <div>
-          <label>Date</label>
-          <input type="date" name="date" value="{{ date_f }}"/>
-        </div>
-        <div class="u-d-flex u-gap-8 u-ai-flex-end">
-          <button type="submit" class="btn-filter"><i class="ti ti-filter"></i> Filter</button>
-          {% if actor_f or action_f or date_f %}
-          <a href="/admin_tools?tab=audit_logs" class="btn-clear"><i class="ti ti-x"></i> Clear</a>
-          {% endif %}
-        </div>
-      </form>
-
-      <div class="table-wrap">
-        <div class="table-header">
-          <h3><i class="ti ti-shield-check u-c-1e3a8a"></i> Activity Log</h3>
-          <span class="table-count">{{ total }} event{{ 's' if total != 1 else '' }}{% if actor_f or action_f or date_f %} (filtered){% endif %}</span>
-        </div>
-        {% if logs %}
-        <div class="u-ovx-auto">
-        <table>
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Timestamp</th>
-              <th>Actor</th>
-              <th>Action</th>
-              <th>Target</th>
-              <th>Detail</th>
-              <th>IP Address</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for log in logs %}
-            <tr>
-              <td class="u-c-cbd5e1 u-fs-11">{{ log[0] }}</td>
-              <td>
-                <div class="ts-txt">{{ log[8].strftime('%d %b %Y') }}</div>
-                <div class="u-fs-11 u-c-94a3b8">{{ log[8].strftime('%H:%M:%S') }}</div>
-              </td>
-              <td>
-                <div class="u-fw-700 u-c-1e293b u-fs-13">{{ log[1] }}</div>
-                <span class="{{ 'b-actor-admin' if log[2]=='admin' else 'b-actor-emp' }}">{{ log[2] }}</span>
-              </td>
-              <td><span class="action-pill">{{ log[3] }}</span></td>
-              <td>
-                {% if log[4] %}
-                  <div class="u-fs-12 u-c-334155 u-fw-600">{{ log[4] }}</div>
-                  {% if log[5] %}<div class="u-fs-11 u-c-94a3b8">ID: {{ log[5] }}</div>{% endif %}
-                {% else %}
-                  <span class="u-c-e2e8f0">—</span>
-                {% endif %}
-              </td>
-              <td><div class="detail-txt">{{ log[6] or '—' }}</div></td>
-              <td><span class="ip-txt">{{ log[7] or '—' }}</span></td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        </div>
-        {% if total_pages > 1 %}
-        <div class="pagination">
-          <a href="?tab=audit_logs&page={{ page-1 }}&actor={{ actor_f }}&action={{ action_f }}&date={{ date_f }}"
-             class="pg-btn {% if page<=1 %}disabled{% endif %}"><i class="ti ti-chevron-left"></i></a>
-          {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
-            <a href="?tab=audit_logs&page={{ p }}&actor={{ actor_f }}&action={{ action_f }}&date={{ date_f }}"
-               class="pg-btn {% if p==page %}active{% endif %}">{{ p }}</a>
-          {% endfor %}
-          <a href="?tab=audit_logs&page={{ page+1 }}&actor={{ actor_f }}&action={{ action_f }}&date={{ date_f }}"
-             class="pg-btn {% if page>=total_pages %}disabled{% endif %}"><i class="ti ti-chevron-right"></i></a>
-        </div>
-        {% endif %}
-        {% else %}
-        <div class="empty-state">
-          <i class="ti ti-shield-off"></i>
-          No audit events found{% if actor_f or action_f or date_f %} for these filters{% endif %}.
-        </div>
-        {% endif %}
-      </div>
-
-    </div>
-  </div>
-
 
 {% endblock %}
 

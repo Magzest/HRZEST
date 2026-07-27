@@ -18,7 +18,7 @@ from utils.auth import (
     _check_login_lockout, _record_login_failure, _clear_login_failures,
     admin_required, role_required, employee_required, employee_api_required,
     _get_failed_count, verify_turnstile, turnstile_enabled,
-    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY,
+    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE,
 )
 from utils.helpers import get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
@@ -155,6 +155,20 @@ def admin_login():
         with _db() as (cursor, db):
             cursor.execute("SELECT password, COALESCE(role,'admin'), email FROM admin_users WHERE username=%s", (identifier,))
             admin_row = cursor.fetchone()
+        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
+            # SOC analyst accounts are a deliberately separate credential
+            # (blueprints/secops.py's /sp_admin/login) -- letting one also
+            # complete the regular admin login here would grant it a full
+            # admin_required session (employees, payroll, everything),
+            # which the dedicated, narrowly-scoped SOC login exists
+            # specifically to avoid. Same generic error either way, no
+            # distinction leaked between "wrong role" and "wrong password".
+            _record_login_failure(identifier)
+            return render_template(
+                "admin_login.html", co=co,
+                error="Invalid credentials. Check your ID and password.",
+                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
+            )
         if admin_row and check_password_hash(admin_row[0], password):
             _clear_login_failures(identifier)
             # Upgrade legacy hash to bcrypt on first successful login

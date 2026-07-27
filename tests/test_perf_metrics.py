@@ -1,8 +1,8 @@
 """Tests for the real-instrumentation Performance & Quality panel:
 utils/perf_metrics.py's recorder (hooked into app.py's before/after_request
 on every request) and the gated route that serves it,
-/api/settings/security/performance."""
-import pyotp
+/api/secops/performance (blueprints/secops.py's SOC dashboard)."""
+import time
 import pytest
 import utils.perf_metrics as perf_metrics
 import utils.totp as totp_module
@@ -16,12 +16,19 @@ def _admin_session(client, username, role="admin"):
 
 
 @pytest.fixture
-def mfa_admin(seed_admin, db_engine):
+def soc_admin(seed_admin, db_engine):
+    """A seeded admin promoted to soc_analyst with TOTP enrolled+enabled --
+    /api/secops/performance moved here from the retired Settings -> Security
+    hub, so it's gated the same way the rest of the SOC dashboard is."""
+    cur = db_engine.cursor()
+    cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+    db_engine.commit()
+    cur.close()
     secret, _ = totp_module.get_or_create_admin_totp_secret(seed_admin["username"])
     totp_module.mark_totp_enabled(seed_admin["username"])
     yield seed_admin["username"], secret
     cur = db_engine.cursor()
-    cur.execute("UPDATE admin_users SET totp_secret=NULL, totp_enabled=0 WHERE username=%s",
+    cur.execute("UPDATE admin_users SET role='admin', totp_secret=NULL, totp_enabled=0 WHERE username=%s",
                 (seed_admin["username"],))
     db_engine.commit()
     cur.close()
@@ -62,18 +69,19 @@ class TestPerfMetricsRecorder:
 
 
 class TestPerformanceRoute:
-    def test_without_stepup_is_403(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/api/settings/security/performance")
-        assert resp.status_code == 403
+    def test_without_stepup_is_404(self, client, soc_admin):
+        username, _ = soc_admin
+        _admin_session(client, username, role="soc_analyst")
+        resp = client.get("/api/secops/performance")
+        assert resp.status_code == 404
 
-    def test_with_stepup_returns_metrics(self, client, mfa_admin):
-        username, secret = mfa_admin
-        _admin_session(client, username, role="admin")
-        code = pyotp.TOTP(secret).now()
-        client.post("/api/settings/security/verify-2fa", json={"code": code})
+    def test_with_stepup_returns_metrics(self, client, soc_admin):
+        username, _ = soc_admin
+        _admin_session(client, username, role="soc_analyst")
+        with client.session_transaction() as sess:
+            sess["soc_2fa_verified_at"] = time.time()
 
-        resp = client.get("/api/settings/security/performance")
+        resp = client.get("/api/secops/performance")
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["ok"] is True
@@ -85,5 +93,5 @@ class TestPerformanceRoute:
         assert data["coverage_gate_pct"] == 80
 
     def test_requires_login(self, client):
-        resp = client.get("/api/settings/security/performance", follow_redirects=False)
-        assert resp.status_code in (302, 401, 403)
+        resp = client.get("/api/secops/performance", follow_redirects=False)
+        assert resp.status_code == 404

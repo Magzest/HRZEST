@@ -337,7 +337,7 @@ def _enforce_idle_timeout():
     absolute max-age check above, which only catches a session once it's
     lived 8 hours regardless of how recently it was used. The threshold
     itself (company_settings.session_timeout, admin-configurable 5-1440 min
-    via the Security Settings hub's /api/settings/security/session-timeout)
+    via the SOC dashboard's /api/secops/session-timeout)
     used to be stored and displayed in the UI but was never actually
     enforced anywhere — this closes that gap. Reads through
     get_company_settings()'s existing 60s cache rather than querying the DB
@@ -539,7 +539,7 @@ _SETTINGS_PATHS = {"/settings", "/setup", "/admin_set_recovery_email",
                    "/save_security_settings", "/toggle_auth_feature",
                    "/toggle_fingerprint", "/save_company_code", "/save_geo_settings",
                    "/save_company_info", "/toggle_feature",
-                   "/api/settings/security/session-timeout"}
+                   "/api/secops/session-timeout"}
 
 
 @app.after_request

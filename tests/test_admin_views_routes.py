@@ -483,10 +483,15 @@ class TestAdminTools:
         resp = client.get("/admin_tools")
         assert resp.status_code == 200
 
-    def test_audit_logs_tab_with_filters(self, client, seed_admin):
+    def test_unknown_tab_param_still_renders(self, client, seed_admin):
+        # Audit Logs tab was removed entirely (moved off the admin
+        # dashboard); an old bookmarked URL with tab=audit_logs must not
+        # error, it just shows the Org Chart tab like any other unknown
+        # value would.
         _admin_session(client, seed_admin["username"])
         resp = client.get("/admin_tools?tab=audit_logs&actor=test&action=login&date=2026-01-01&page=1")
         assert resp.status_code == 200
+        assert b"Audit Logs" not in resp.data
 
     def test_scoped_to_active_company(self, client, seed_admin, temp_company):
         _admin_session(client, seed_admin["username"])
@@ -495,11 +500,10 @@ class TestAdminTools:
         resp = client.get("/admin_tools")
         assert resp.status_code == 200
 
-    def test_audit_logs_redirect(self, client, seed_admin):
+    def test_audit_logs_route_removed(self, client, seed_admin):
         _admin_session(client, seed_admin["username"])
         resp = client.get("/audit_logs", follow_redirects=False)
-        assert resp.status_code == 302
-        assert "admin_tools" in resp.headers["Location"]
+        assert resp.status_code == 404
 
 
 class TestDashboardLive:

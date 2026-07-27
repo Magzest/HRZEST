@@ -918,8 +918,8 @@ class TestAdminPageSmoke:
     def test_org_chart_page(self, client):
         assert client.get("/org_chart").status_code == 200
 
-    def test_audit_logs_page(self, client):
-        assert client.get("/audit_logs").status_code in (200, 302)
+    def test_audit_logs_route_removed(self, client):
+        assert client.get("/audit_logs").status_code == 404
 
     def test_announcements_page(self, client):
         assert client.get("/announcements").status_code in (200, 302)

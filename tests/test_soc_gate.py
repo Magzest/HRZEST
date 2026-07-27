@@ -1,9 +1,9 @@
-"""Tests for the hidden SOC Analyst security-dashboard gate: the role check
-+ MFA step-up (TOTP) on POST /api/security/soc/verify-2fa, GET
-/admin/security-dashboard, and GET /api/security/soc/events
-(blueprints/admin_views.py), and the 404-disguise behavior for every
-unauthorized path (anonymous, wrong role, wrong/missing code)."""
-import pyotp
+"""Tests for the SOC Analyst dashboard gate: the role check + MFA step-up
+window (soc_2fa_verified_at, set at /sp_admin/mfa login) on GET /secops and
+GET /api/security/soc/events (blueprints/secops.py), and the 404-disguise
+behavior for every unauthorized path (anonymous, wrong role, expired
+step-up)."""
+import time
 import pytest
 import utils.auth as auth_module
 import utils.totp as totp_module
@@ -43,18 +43,16 @@ def soc_admin(seed_admin, db_engine):
     cur.close()
 
 
-def _verify_stepup(client, secret):
-    code = pyotp.TOTP(secret).now()
-    return client.post("/api/security/soc/verify-2fa", json={"code": code})
-
-
 @pytest.fixture
 def soc_admin_verified(client, soc_admin):
     """soc_admin plus a live step-up window — for tests whose focus is the
-    dashboard/events behavior, not the gate itself."""
+    dashboard/events behavior, not the gate itself. Sets the session key
+    directly rather than posting to a verify-2fa endpoint: MFA now happens
+    once, at /sp_admin/mfa login, not as a separate in-dashboard step-up."""
     username, secret = soc_admin
     _admin_session(client, username, role="soc_analyst")
-    _verify_stepup(client, secret)
+    with client.session_transaction() as sess:
+        sess["soc_2fa_verified_at"] = time.time()
     return username, secret
 
 
@@ -84,71 +82,30 @@ class TestSocStepUpSession:
             assert auth_module.soc_step_up_valid() is True
 
 
-class TestSocVerifyGate:
-    def test_anonymous_gets_404(self, client):
-        resp = client.post("/api/security/soc/verify-2fa", json={"code": "123456"})
-        assert resp.status_code == 404
-
-    def test_regular_admin_gets_404(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"], role="admin")
-        resp = client.post("/api/security/soc/verify-2fa", json={"code": "123456"})
-        assert resp.status_code == 404
-
-    def test_manager_gets_404(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"], role="manager")
-        resp = client.post("/api/security/soc/verify-2fa", json={"code": "123456"})
-        assert resp.status_code == 404
-
-    def test_soc_role_wrong_totp_gets_404(self, client, soc_admin):
-        username, _ = soc_admin
-        _admin_session(client, username, role="soc_analyst")
-        resp = client.post("/api/security/soc/verify-2fa", json={"code": "000000"})
-        assert resp.status_code == 404
-
-    def test_soc_role_correct_code_succeeds(self, client, soc_admin):
-        username, secret = soc_admin
-        _admin_session(client, username, role="soc_analyst")
-        resp = _verify_stepup(client, secret)
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert data["ok"] is True
-        assert data["redirect"] == "/admin/security-dashboard"
-
-    def test_failure_response_body_is_generic(self, client, seed_admin):
-        # Body/shape must not differ between "no session" and "wrong role"
-        # and "wrong code" — that's the whole point of the disguise.
-        anon = client.post("/api/security/soc/verify-2fa", json={"code": "1"})
-        _admin_session(client, seed_admin["username"], role="admin")
-        wrong_role = client.post("/api/security/soc/verify-2fa", json={"code": "1"})
-        assert anon.status_code == wrong_role.status_code == 404
-
-
 class TestSocNavVisibility:
-    def test_regular_admin_does_not_see_nav_item(self, client, seed_admin):
+    """The SOC dashboard is reached only via the separate /sp_admin/login
+    flow now -- the regular admin dashboard never links to it, or to
+    anything SOC-related, regardless of the session's role."""
+
+    def test_regular_admin_does_not_see_soc_nav(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="admin")
         resp = client.get("/admin")
         assert resp.status_code == 200
         assert b"SOC / Security Center" not in resp.data
-
-    def test_soc_analyst_sees_nav_item(self, client, soc_admin):
-        username, _ = soc_admin
-        _admin_session(client, username, role="soc_analyst")
-        resp = client.get("/admin")
-        assert resp.status_code == 200
-        assert b"SOC / Security Center" in resp.data
+        assert b"/secops" not in resp.data
 
 
 class TestSocDashboardRoute:
     def test_anonymous_gets_404(self, client):
-        assert client.get("/admin/security-dashboard").status_code == 404
+        assert client.get("/secops").status_code == 404
 
     def test_soc_role_without_stepup_gets_404(self, client, soc_admin):
         username, _ = soc_admin
         _admin_session(client, username, role="soc_analyst")
-        assert client.get("/admin/security-dashboard").status_code == 404
+        assert client.get("/secops").status_code == 404
 
     def test_soc_role_with_stepup_succeeds(self, client, soc_admin_verified):
-        resp = client.get("/admin/security-dashboard")
+        resp = client.get("/secops")
         assert resp.status_code == 200
         assert b"Security Dashboard" in resp.data
 
@@ -158,15 +115,17 @@ class TestSocDashboardRoute:
         # step-up proves identity, not entitlement.
         _admin_session(client, seed_admin["username"], role="admin")
         with client.session_transaction() as sess:
-            import time
             sess["soc_2fa_verified_at"] = time.time()
-        assert client.get("/admin/security-dashboard").status_code == 404
+        assert client.get("/secops").status_code == 404
 
     def test_lock_reasserts_gate(self, client, soc_admin_verified):
-        assert client.get("/admin/security-dashboard").status_code == 200
+        assert client.get("/secops").status_code == 200
 
-        client.post("/api/security/soc/lock")
-        assert client.get("/admin/security-dashboard").status_code == 404
+        # "Lock & exit" now fully logs out (a separate login means there's
+        # no lesser admin view to drop back to) rather than just clearing
+        # the step-up flag.
+        client.get("/logout")
+        assert client.get("/secops").status_code == 404
 
     def test_dashboard_shows_real_compromised_session_data(self, client, soc_admin_verified, db_engine):
         cur = db_engine.cursor()
@@ -178,7 +137,7 @@ class TestSocDashboardRoute:
         db_engine.commit()
         cur.close()
 
-        resp = client.get("/admin/security-dashboard")
+        resp = client.get("/secops")
         assert resp.status_code == 200
         assert b"EMP999" in resp.data
         assert b"Wi-Fi risk score 90" in resp.data
@@ -198,7 +157,7 @@ class TestSocDashboardRoute:
         db_engine.commit()
         cur.close()
 
-        resp = client.get("/admin/security-dashboard")
+        resp = client.get("/secops")
         assert resp.status_code == 200
         # The all-time summary (counts, top event types) is server-rendered;
         # individual rows are now loaded client-side from
@@ -212,13 +171,21 @@ class TestSocDashboardRoute:
 
     def test_dashboard_shows_security_posture_and_mfa_panels(self, client, soc_admin_verified):
         username, _ = soc_admin_verified
-        resp = client.get("/admin/security-dashboard")
+        resp = client.get("/secops")
         assert resp.status_code == 200
         assert b"Security Posture" in resp.data
         assert b"Admin MFA Enrollment" in resp.data
         # This admin account is itself enrolled (soc_admin fixture enables
         # TOTP) — its own row should show up as enrolled in the table.
         assert username.encode() in resp.data
+
+    def test_dashboard_shows_session_timeout_and_performance_panels(self, client, soc_admin_verified):
+        """Session-timeout config and performance monitoring, migrated from
+        the retired Settings -> Security hub, now live here."""
+        resp = client.get("/secops")
+        assert resp.status_code == 200
+        assert b"Session Timeout" in resp.data
+        assert b"Performance" in resp.data
 
 
 class TestSocEventsApi:

@@ -197,6 +197,29 @@
     </div>
 
     <div class="panel">
+      <div class="panel-title">Session Timeout</div>
+      <div class="filter-row">
+        <select id="session-timeout-select" aria-label="Session timeout" title="Session timeout">
+          <option value="15">15 minutes</option>
+          <option value="30">30 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="120">2 hours</option>
+          <option value="480">8 hours</option>
+        </select>
+        <button type="button" class="btn-lock" onclick="saveSessionTimeout()">Save</button>
+      </div>
+      <div id="session-timeout-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Performance &amp; DB Health</div>
+      <button type="button" class="btn-lock" onclick="loadPerformance()">Refresh</button>
+      <div class="stat-grid" id="perf-grid" style="margin-top:14px;">
+        <div class="empty">Click Refresh to load.</div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">Tactical Mitigation — IP Ban (application layer)</div>
       <div class="mono" style="font-size:11px;color:#64748b;margin-bottom:12px;">
         Blocks the IP from reaching this app immediately. Not an edge/WAF ban —
@@ -371,10 +394,47 @@
 
       socLoadBannedIps();
 
+      document.getElementById('session-timeout-select').value = '{{ session_timeout_minutes }}';
+
+      function saveSessionTimeout() {
+        var statusEl = document.getElementById('session-timeout-status');
+        var minutes = document.getElementById('session-timeout-select').value;
+        statusEl.textContent = 'Saving…';
+        fetch('/api/secops/session-timeout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeout: parseInt(minutes, 10) }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) { statusEl.textContent = d.ok ? 'Saved.' : (d.msg || 'Save failed.'); })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadPerformance() {
+        var grid = document.getElementById('perf-grid');
+        grid.innerHTML = '<div class="empty">Loading…</div>';
+        fetch('/api/secops/performance')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) { grid.innerHTML = '<div class="empty">Failed to load.</div>'; return; }
+            var perf = d.performance || {};
+            var pool = d.db_pool || {};
+            var cards = [
+              ['DB Healthy', d.db_healthy ? 'Yes' : 'No'],
+              ['Coverage gate', d.coverage_gate_pct + '%'],
+            ];
+            Object.keys(perf).forEach(function(k) { cards.push([k, perf[k]]); });
+            Object.keys(pool).forEach(function(k) { cards.push(['pool.' + k, pool[k]]); });
+            grid.innerHTML = cards.map(function(c) {
+              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
+                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
+            }).join('');
+          })
+          .catch(function() { grid.innerHTML = '<div class="empty">Network error.</div>'; });
+      }
+
       function lockAndLeave() {
-        fetch('/api/security/soc/lock', { method: 'POST' })
-          .catch(function() {})
-          .finally(function() { window.location.href = '/admin'; });
+        window.location.href = '/logout';
       }
     </script>
 

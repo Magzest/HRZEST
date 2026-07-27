@@ -1,9 +1,9 @@
 """Tests for the application-layer IP ban: app.py's _enforce_ip_ban
 before_request hook (runs before every other hook, blocking a banned source
 before session/auth logic even runs) and the SOC dashboard's tactical
-mitigation endpoints (blueprints/admin_views.py: ban-ip/unban-ip/banned-ips)."""
+mitigation endpoints (blueprints/secops.py: ban-ip/unban-ip/banned-ips)."""
 import datetime
-import pyotp
+import time
 import pytest
 import blueprints.org as org_module
 import utils.totp as totp_module
@@ -89,10 +89,13 @@ def soc_admin(seed_admin, db_engine):
 
 @pytest.fixture
 def soc_admin_verified(client, soc_admin):
+    """soc_admin plus a live step-up window, set directly rather than via a
+    verify-2fa POST — MFA now happens once, at /sp_admin/mfa login, not as a
+    separate in-dashboard step-up (see blueprints/secops.py)."""
     username, secret = soc_admin
     _admin_session(client, username, role="soc_analyst")
-    code = pyotp.TOTP(secret).now()
-    client.post("/api/security/soc/verify-2fa", json={"code": code})
+    with client.session_transaction() as sess:
+        sess["soc_2fa_verified_at"] = time.time()
     return username, secret
 
 

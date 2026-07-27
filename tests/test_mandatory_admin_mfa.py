@@ -78,7 +78,7 @@ class TestMandatoryMfaGate:
 
     def test_api_path_gets_json_403_not_redirect(self, client, seed_admin, mandatory_mfa_enabled):
         _admin_session(client, seed_admin["username"])
-        resp = client.get("/api/settings/security/overview")
+        resp = client.get("/api/org_chart_data")
         assert resp.status_code == 403
         data = resp.get_json()
         assert data["ok"] is False
