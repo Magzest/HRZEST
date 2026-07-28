@@ -12,42 +12,20 @@
       html, body { height: 100%; }
       body { background: #f1f5f9; display: flex; flex-direction: row; min-height: 100dvh; }
 
-      /* ── TIME-OF-DAY THEME: the sun moving across the sidebar ──
-         Afternoon (12:00-17:00) is "full shine" — the default palette
-         below (unset vars) — bright, saturated sky blue + gold accent.
-         Morning is sunrise (indigo night sky breaking into warm coral/gold
-         near the horizon), evening is sunset (dusk purple into a burnt-
-         orange glow), night is calm dark navy. Overridden via
-         [data-time-theme] on <body>, set by /static/time-theme.min.js —
-         only applies when the user hasn't explicitly picked light/dark
-         mode (that always wins, see time-theme.min.js). Sidebar gradient +
-         active-nav accent + the sun-indicator emoji next to the avatar. */
+      /* ── SIDEBAR ──
+         Fixed dark blue, matching admin_base.html/admin.html's shared
+         sidebar instead of the old time-of-day gradient that made this
+         page's nav look different from every other page depending on
+         when it was loaded (see ff434e9, which fixed the same drift on
+         admin.html). */
       :root {
-        --brand-grad-1: #0c4a6e;
-        --brand-grad-2: #0ea5e9;
         --brand-accent: #fbbf24;
       }
-      body[data-time-theme="morning"] {
-        --brand-grad-1: #372f68;
-        --brand-grad-2: #e0793e;
-        --brand-accent: #fde68a;
-      }
-      body[data-time-theme="evening"] {
-        --brand-grad-1: #4c1d6b;
-        --brand-grad-2: #d2470f;
-        --brand-accent: #fdba74;
-      }
-      body[data-time-theme="night"] {
-        --brand-grad-1: #05070f;
-        --brand-grad-2: #151c33;
-        --brand-accent: #64748b;
-      }
-      #sun-indicator { font-size: 17px; line-height: 1; margin-left: auto; }
 
       /* ── SIDEBAR ── */
       .sidebar {
         width: 240px; height: 100vh; position: sticky; top: 0; overflow: hidden;
-        background: linear-gradient(180deg, var(--brand-grad-1) 0%, var(--brand-grad-2) 100%);
+        background: linear-gradient(180deg, #0f2460 0%, #1a3a8f 100%);
         padding: 20px 14px; color: white;
         display: flex; flex-direction: column; flex-shrink: 0;
         box-shadow: 4px 0 20px rgba(0,0,0,0.18); z-index: 300;
@@ -723,7 +701,6 @@
           <div class="sb-role">{{ emp[2] or 'Employee' }}</div>
           <div class="sb-id">ID: {{ emp[0] }}</div>
         </div>
-        <span id="sun-indicator" title="Time-of-day theme" aria-hidden="true"></span>
       </div>
 
       <div class="sb-scroll-nav">
@@ -4219,7 +4196,6 @@
     <!-- /BREAK TIME NOTIFICATION -->
 
   <script src="/static/darkmode.min.js"></script>
-  <script src="/static/time-theme.min.js"></script>
 
   <!-- AI CHAT ASSISTANT -->
   <style>
