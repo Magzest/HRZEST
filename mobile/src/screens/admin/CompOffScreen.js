@@ -1,0 +1,377 @@
+import React, {
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+} from "react-native";
+
+import AdminHeader from "../../components/admin/AdminHeader";
+
+import CompOffHeaderCard from "../../components/admin/CompOffHeaderCard";
+import CompOffSummaryCard from "../../components/admin/CompOffSummaryCard";
+import CompOffStatsGrid from "../../components/admin/CompOffStatsGrid";
+import MonthYearSelector from "../../components/admin/MonthYearSelector";
+import CompOffSegmentTabs from "../../components/admin/CompOffSegmentTabs";
+import OvertimeHistoryCard from "../../components/admin/OvertimeHistoryCard";
+import CompOffBalanceCard from "../../components/admin/CompOffBalanceCard";
+import CompOffApplicationCard from "../../components/admin/CompOffApplicationCard";
+import CompOffQuickActions from "../../components/admin/CompOffQuickActions";
+import CompOffAnalyticsCard from "../../components/admin/CompOffAnalyticsCard";
+import CompOffInfoCard from "../../components/admin/CompOffInfoCard";
+import CompOffFilterSheet from "../../components/admin/CompOffFilterSheet";
+import CompOffBottomSheet from "../../components/admin/CompOffBottomSheet";
+import CompOffEmptyState from "../../components/admin/CompOffEmptyState";
+
+import COMPOFF_THEME from "../../constants/compOffTheme";
+
+import {
+  compOffSummary,
+  overtimeHistory,
+  compOffBalances,
+  analytics,
+  compOffPolicies,
+  monthOptions,
+  yearOptions,
+} from "../../data/compOffDummyData";
+
+export default function CompOffScreen({
+
+  navigation,
+
+}) {
+
+  const [selectedMonth, setSelectedMonth] =
+    useState(compOffSummary.month);
+
+  const [selectedYear, setSelectedYear] =
+    useState(compOffSummary.year);
+
+  const [selectedTab, setSelectedTab] =
+    useState("overtime");
+
+  const [filterVisible, setFilterVisible] =
+    useState(false);
+
+  const [selectedStatus, setSelectedStatus] =
+    useState("All");
+
+  const [
+    selectedDepartment,
+    setSelectedDepartment,
+  ] = useState("All");
+
+  const [selectedRecord, setSelectedRecord] =
+    useState(null);
+
+  const [detailsVisible, setDetailsVisible] =
+    useState(false);
+
+  const filteredHistory = useMemo(() => {
+
+    return overtimeHistory.filter((item) => {
+
+      const statusMatch =
+        selectedStatus === "All" ||
+        item.status === selectedStatus;
+
+      const departmentMatch =
+        selectedDepartment === "All" ||
+        item.department === selectedDepartment;
+
+      return statusMatch && departmentMatch;
+
+    });
+
+  }, [
+    selectedStatus,
+    selectedDepartment,
+  ]);
+
+  const openRecord = (item) => {
+
+    setSelectedRecord(item);
+
+    setDetailsVisible(true);
+
+  };
+
+  return (
+
+    <SafeAreaView style={styles.container}>
+
+      <AdminHeader
+        title="OT & Comp-off"
+        onMenu={() =>
+          navigation.openDrawer()
+        }
+      />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+      >
+
+        <CompOffHeaderCard
+          month={selectedMonth}
+          year={selectedYear}
+          totalHours={
+            compOffSummary.totalOtHours
+          }
+          availableCompOff={
+            compOffSummary.compOffAvailable
+          }
+          onSettings={() => {}}
+        />
+
+        <CompOffSummaryCard
+          totalHours={
+            compOffSummary.totalOtHours
+          }
+          otPay={compOffSummary.otPay}
+          pendingApproval={
+            compOffSummary.pendingApproval
+          }
+          availableCompOff={
+            compOffSummary.compOffAvailable
+          }
+        />
+
+        <CompOffStatsGrid
+          approvedRequests={
+            compOffSummary.approvedRequests
+          }
+          pendingRequests={
+            compOffSummary.pendingApproval
+          }
+          rejectedRequests={
+            compOffSummary.rejectedRequests
+          }
+          averageHours={
+            analytics.averageHours
+          }
+        />
+                <CompOffQuickActions
+          onApplyOT={() => {}}
+          onRequestCompOff={() => {}}
+          onHistory={() =>
+            setSelectedTab("overtime")
+          }
+          onExport={() => {}}
+        />
+
+        <CompOffSegmentTabs
+          selectedTab={selectedTab}
+          onChangeTab={setSelectedTab}
+        />
+
+        <MonthYearSelector
+          month={selectedMonth}
+          year={selectedYear}
+          months={monthOptions}
+          years={yearOptions}
+          onMonthChange={setSelectedMonth}
+          onYearChange={setSelectedYear}
+          onFilterPress={() =>
+            setFilterVisible(true)
+          }
+        />
+
+        {/* ==========================
+            OVERTIME TAB
+        ========================== */}
+
+        {selectedTab === "overtime" && (
+
+          filteredHistory.length > 0 ? (
+
+            filteredHistory.map((item) => (
+
+              <OvertimeHistoryCard
+                key={item.id}
+                item={item}
+                onPress={openRecord}
+              />
+
+            ))
+
+          ) : (
+
+            <CompOffEmptyState
+              title="No Overtime Records"
+              description="There are no overtime entries available for the selected filters."
+              buttonTitle="Clear Filters"
+              onPress={() => {
+                setSelectedStatus("All");
+                setSelectedDepartment("All");
+              }}
+            />
+
+          )
+
+        )}
+
+        {/* ==========================
+            COMP-OFF TAB
+        ========================== */}
+
+        {selectedTab === "compoff" && (
+
+          <>
+
+            {compOffBalances.map((balance) => (
+
+              <CompOffBalanceCard
+                key={balance.id}
+                availableDays={
+                  balance.availableDays
+                }
+                usedDays={
+                  balance.usedDays
+                }
+                remainingDays={
+                  balance.remainingDays
+                }
+                expiryDate={
+                  balance.expiryDate
+                }
+              />
+
+            ))}
+
+            {filteredHistory
+              .filter(
+                (item) =>
+                  item.compOffEarned > 0
+              )
+              .map((item) => (
+
+                <CompOffApplicationCard
+                  key={`co-${item.id}`}
+                  item={{
+                    employeeName:
+                      item.employeeName,
+
+                    department:
+                      item.department,
+
+                    startDate:
+                      item.date,
+
+                    endDate:
+                      item.date,
+
+                    days:
+                      item.compOffEarned,
+
+                    reason:
+                      item.reason,
+
+                    status:
+                      item.status,
+                  }}
+                  onPress={() => {}}
+                />
+
+              ))}
+
+            <CompOffInfoCard
+              policies={compOffPolicies}
+            />
+
+          </>
+
+        )}
+                {/* ==========================
+            ANALYTICS TAB
+        ========================== */}
+
+        {selectedTab === "analytics" && (
+
+          <>
+
+            <CompOffAnalyticsCard
+              weeklyHours={analytics.weeklyHours}
+              monthlyHours={analytics.monthlyHours}
+              averageHours={analytics.averageHours}
+              approvalRate={analytics.approvalRate}
+            />
+
+            <CompOffInfoCard
+              policies={compOffPolicies}
+            />
+
+          </>
+
+        )}
+
+      </ScrollView>
+
+      {/* ==========================
+          FILTER SHEET
+      ========================== */}
+
+      <CompOffFilterSheet
+        visible={filterVisible}
+        selectedStatus={selectedStatus}
+        selectedDepartment={selectedDepartment}
+        onSelectStatus={setSelectedStatus}
+        onSelectDepartment={
+          setSelectedDepartment
+        }
+        onApply={() =>
+          setFilterVisible(false)
+        }
+        onReset={() => {
+          setSelectedStatus("All");
+          setSelectedDepartment("All");
+        }}
+        onClose={() =>
+          setFilterVisible(false)
+        }
+      />
+
+      {/* ==========================
+          DETAILS SHEET
+      ========================== */}
+
+      <CompOffBottomSheet
+        visible={detailsVisible}
+        record={selectedRecord}
+        onClose={() => {
+          setDetailsVisible(false);
+          setSelectedRecord(null);
+        }}
+      />
+
+    </SafeAreaView>
+
+  );
+
+}
+
+const styles = StyleSheet.create({
+
+  container: {
+
+    flex: 1,
+
+    backgroundColor:
+      COMPOFF_THEME.colors.background,
+  },
+
+  content: {
+
+    paddingHorizontal: 18,
+
+    paddingTop: 12,
+
+    paddingBottom: 120,
+  },
+
+});
