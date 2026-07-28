@@ -212,3 +212,18 @@
     apply(on);
   };
 })();
+
+/* Live clock in the sidebar footer (.sb-live-clock), used across
+   admin_base.html, employee_portal.html, my_compoff.html,
+   my_onboarding.html, and my_performance.html. */
+(function () {
+  document.addEventListener('DOMContentLoaded', function () {
+    function sbTick() {
+      var t = new Date();
+      var s = t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      document.querySelectorAll('.sb-live-clock').forEach(function (e) { e.textContent = s; });
+    }
+    sbTick();
+    setInterval(sbTick, 1000);
+  });
+})();

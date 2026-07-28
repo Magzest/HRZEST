@@ -60,7 +60,7 @@
         text-align: left; cursor: pointer; font-family: inherit; text-decoration: none;
         -webkit-tap-highlight-color: transparent;
       }
-      .sb-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+      .sb-item:hover { background: rgba(255,255,255,0.1); color: #fff; transform: scale(1.03) translateX(2px); }
       .sb-item.active {
         background: rgba(255,255,255,0.15); color: #fff; font-weight: 700;
         box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
@@ -679,6 +679,7 @@
     </style>
   <link rel="stylesheet" href="/static/tabler-icons.min.css" />
   <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="/static/animate-core.min.css" />
   </head>
   <body>
 
@@ -777,7 +778,7 @@
       <!-- ═══ VIEW: DASHBOARD ═══ -->
       <div id="view-dashboard" class="view">
       <div class="page-header">
-        <h1>Welcome, {{ emp[1] }}! 👋</h1>
+        <h1>Welcome, <span data-scramble>{{ emp[1] }}</span>! 👋</h1>
         <p>{{ today }} &nbsp;|&nbsp; <span id="clock"></span></p>
       </div>
 
@@ -785,7 +786,7 @@
       <div class="cards-row">
 
         <!-- PROFILE CARD -->
-        <div class="card">
+        <div class="card" data-tilt>
           <div class="card-title">👤 My Profile</div>
           <div class="u-d-flex u-ai-center u-gap-18 u-mb-14">
             <div class="profile-avatar u-mb-0 u-fxs-0">
@@ -848,7 +849,7 @@
         </div>
 
         <!-- TODAY'S ATTENDANCE -->
-        <div class="card u-d-flex u-fxd-column u-ov-hidden">
+        <div class="card u-d-flex u-fxd-column u-ov-hidden" data-tilt>
           {% if today_att %}
             {% set login_t, logout_t, login_s, logout_s, att_type = today_att %}
           {% endif %}
@@ -987,7 +988,7 @@
       <div class="u-d-grid u-gtc-1fr-1fr u-gap-18 u-mb-20">
 
         <!-- SVG Donut Chart -->
-        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-52-36 u-d-flex u-ai-center u-gap-24">
+        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-52-36 u-d-flex u-ai-center u-gap-24" data-tilt>
           {% set total_shown = full_days + late_days + half_days + absent_days %}
           {% if total_shown > 0 %}
             {% set full_pct  = (full_days  / total_shown * 100) | int %}
@@ -1043,7 +1044,7 @@
         </div>
 
         <!-- Upcoming Holidays -->
-        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-52-36">
+        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-52-36" data-tilt>
           <div class="u-fs-14 u-fw-700 u-c-1e293b u-mb-12">🗓 Upcoming Holidays</div>
           {% if upcoming_holidays %}
             {% for hdate, hname in upcoming_holidays %}
@@ -1064,12 +1065,12 @@
 
       <!-- MONTHLY STATS -->
       <div class="stats">
-        <div class="stat-card"><div class="stat-icon si-green">✅</div><div><div class="stat-num sn-green">{{ full_days }}</div><div class="stat-lbl">Full Days</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-yellow">⚠️</div><div><div class="stat-num sn-yellow">{{ late_days }}</div><div class="stat-lbl">Late Days</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-yellow">🔶</div><div><div class="stat-num sn-yellow">{{ half_days }}</div><div class="stat-lbl">Half Days</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-red">❌</div><div><div class="stat-num sn-red">{{ absent_days }}</div><div class="stat-lbl">Absent</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-blue">📈</div><div><div class="stat-num sn-blue">{{ att_pct }}%</div><div class="stat-lbl">Attendance</div></div></div>
-        <div class="stat-card"><div class="stat-icon si-blue">⏱</div><div><div class="stat-num stat-num-sm sn-blue">{{ total_hours }}</div><div class="stat-lbl">Hours Worked</div></div></div>
+        <div class="stat-card" data-tilt data-tilt-max="4"><div class="stat-icon si-green">✅</div><div><div class="stat-num sn-green" data-animate-counter>{{ full_days }}</div><div class="stat-lbl">Full Days</div></div></div>
+        <div class="stat-card" data-tilt data-tilt-max="4"><div class="stat-icon si-yellow">⚠️</div><div><div class="stat-num sn-yellow" data-animate-counter>{{ late_days }}</div><div class="stat-lbl">Late Days</div></div></div>
+        <div class="stat-card" data-tilt data-tilt-max="4"><div class="stat-icon si-yellow">🔶</div><div><div class="stat-num sn-yellow" data-animate-counter>{{ half_days }}</div><div class="stat-lbl">Half Days</div></div></div>
+        <div class="stat-card" data-tilt data-tilt-max="4"><div class="stat-icon si-red">❌</div><div><div class="stat-num sn-red" data-animate-counter>{{ absent_days }}</div><div class="stat-lbl">Absent</div></div></div>
+        <div class="stat-card" data-tilt data-tilt-max="4"><div class="stat-icon si-blue">📈</div><div><div class="stat-num sn-blue" data-animate-counter>{{ att_pct }}%</div><div class="stat-lbl">Attendance</div></div></div>
+        <div class="stat-card" data-tilt data-tilt-max="4"><div class="stat-icon si-blue">⏱</div><div><div class="stat-num stat-num-sm sn-blue" data-animate-counter>{{ total_hours }}</div><div class="stat-lbl">Hours Worked</div></div></div>
       </div>
 
       <!-- BREAK SCHEDULE WIDGET -->
@@ -4196,6 +4197,7 @@
     <!-- /BREAK TIME NOTIFICATION -->
 
   <script src="/static/darkmode.min.js"></script>
+  <script src="/static/animate-core.min.js"></script>
 
   <!-- AI CHAT ASSISTANT -->
   <style>

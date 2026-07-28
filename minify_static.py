@@ -13,6 +13,8 @@ import rjsmin
 _TARGETS = [
     ("static/shared.css", "static/shared.min.css", rcssmin.cssmin),
     ("static/darkmode.js", "static/darkmode.min.js", rjsmin.jsmin),
+    ("static/animate-core.css", "static/animate-core.min.css", rcssmin.cssmin),
+    ("static/animate-core.js", "static/animate-core.min.js", rjsmin.jsmin),
 ]
 
 if __name__ == "__main__":

@@ -1,0 +1,48 @@
+/* animate-core.css — companion styles for animate-core.js: ripple,
+   particle burst, skeleton shimmer, and card-tilt transition. */
+
+/* Ripple */
+.ac-ripple-host { overflow: hidden; }
+.ac-ripple {
+  position: absolute; border-radius: 50%; pointer-events: none;
+  background: rgba(255, 255, 255, 0.45); transform: scale(0);
+  animation: ac-ripple-anim 0.6s ease-out;
+}
+@keyframes ac-ripple-anim {
+  to { transform: scale(1); opacity: 0; }
+}
+
+/* Particle burst */
+.ac-particle {
+  position: fixed; width: 6px; height: 6px; border-radius: 50%;
+  pointer-events: none; z-index: 9999; margin: -3px 0 0 -3px;
+  animation: ac-particle-anim 0.7s ease-out forwards;
+}
+@keyframes ac-particle-anim {
+  to { transform: translate(var(--ac-dx), var(--ac-dy)) scale(0.3); opacity: 0; }
+}
+
+/* Skeleton shimmer */
+.ac-skeleton {
+  position: relative; overflow: hidden; background: #e2e8f0; border-radius: 8px;
+}
+.ac-skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+  animation: ac-shimmer-anim 1.3s ease-in-out infinite;
+}
+body.dark-mode .ac-skeleton { background: #1e293b; }
+body.dark-mode .ac-skeleton::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent); }
+@keyframes ac-shimmer-anim {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Card tilt */
+.ac-tilt { transition: transform 0.15s ease-out; will-change: transform; }
+
+/* Respect reduced-motion preference across every primitive above */
+@media (prefers-reduced-motion: reduce) {
+  .ac-ripple, .ac-particle, .ac-skeleton::after { animation: none !important; }
+  .ac-tilt { transition: none !important; }
+}
