@@ -586,6 +586,13 @@ def _security_headers(response):
         _is_turnstile_page = request.path == "/admin_login"
         _turnstile_src = " https://challenges.cloudflare.com" if _is_turnstile_page else ""
         _frame_src = "https://challenges.cloudflare.com" if _is_turnstile_page else "'none'"
+        # Employee portal's "DEVICE POSTURE RELAY" script (employee_portal.html)
+        # polls a locally-running Wi-Fi posture agent over loopback
+        # (desktop_agent/wifi_posture_agent.py, 127.0.0.1:47823) — a
+        # deliberate, path-scoped exception, not a blanket relaxation,
+        # same pattern as the Turnstile carve-out above.
+        _is_employee_portal_page = request.path == "/employee_portal"
+        _agent_src = " http://127.0.0.1:47823" if _is_employee_portal_page else ""
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             f"script-src 'self' 'nonce-{nonce}'{_unsafe_hashes}{_hash_src}{_turnstile_src}; "
@@ -594,7 +601,7 @@ def _security_headers(response):
             f"style-src 'self' 'nonce-{nonce}'; "
             "img-src 'self' data: blob:; "
             "font-src 'self' data:; "
-            f"connect-src 'self'{_turnstile_src}; "
+            f"connect-src 'self'{_turnstile_src}{_agent_src}; "
             f"frame-src {_frame_src}; "
             "frame-ancestors 'none'; "
             # No <object>/<embed>/<applet> use anywhere in this app —

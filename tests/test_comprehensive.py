@@ -761,6 +761,31 @@ class TestSecurityHeaders:
         csp = resp.headers.get("Content-Security-Policy", "")
         assert "script-src" in csp or "default-src" in csp or csp == ""
 
+    def test_employee_portal_csp_allows_local_posture_agent(self, client, seed_employee):
+        """employee_portal.html's DEVICE POSTURE RELAY script polls a
+        locally-running Wi-Fi posture agent over loopback
+        (desktop_agent/wifi_posture_agent.py, 127.0.0.1:47823) — connect-src
+        must allow that origin on this page specifically, or the browser's
+        own CSP blocks the fetch before the agent's CORS headers are even
+        evaluated, silently breaking a fully-built feature."""
+        with client.session_transaction() as sess:
+            sess["employee_id"] = seed_employee["employee_id"]
+        resp = client.get("/employee_portal")
+        csp = resp.headers.get("Content-Security-Policy", "")
+        assert "connect-src" in csp
+        assert "http://127.0.0.1:47823" in csp
+
+    def test_other_pages_csp_does_not_allow_posture_agent(self, client, seed_admin):
+        """The 127.0.0.1:47823 connect-src exception is scoped to
+        /employee_portal only -- it must not leak onto unrelated pages."""
+        client.post("/admin_login", data={
+            "identifier": seed_admin["username"],
+            "password": seed_admin["password"],
+        })
+        resp = client.get("/admin")
+        csp = resp.headers.get("Content-Security-Policy", "")
+        assert "127.0.0.1:47823" not in csp
+
     def test_error_page_style_tag_carries_csp_nonce(self, client):
         """_security_headers sets a nonce-requiring CSP header on every
         text/html response, including error pages — the nonce must
