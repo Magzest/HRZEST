@@ -393,7 +393,7 @@ def get_all_user_wifi_telemetry():
     try:
         # Load all registered employees & admins from DB
         cur.execute(
-            "SELECT employee_id, full_name, department, email FROM employees ORDER BY id ASC LIMIT 50"
+            "SELECT employee_id, name, department, email FROM employees ORDER BY id ASC LIMIT 50"
         )
         emp_rows = cur.fetchall()
         

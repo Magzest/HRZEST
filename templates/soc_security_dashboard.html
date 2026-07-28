@@ -243,6 +243,190 @@
       </table>
     </div>
 
+    <div class="panel">
+      <div class="panel-title">System Health</div>
+      <button type="button" class="btn-lock" onclick="loadSystemHealth()">Refresh</button>
+      <div class="stat-grid" id="health-grid" style="margin-top:14px;">
+        <div class="empty">Click Refresh to load.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">SIEM Threat Log Query</div>
+      <div class="filter-row">
+        <select id="siem-category" aria-label="Category" title="Category">
+          <option value="all">All categories</option>
+          <option value="malware">Malware</option>
+          <option value="escalation">Escalation</option>
+          <option value="injection">Injection</option>
+          <option value="audit">Audit</option>
+          <option value="hrms">HRMS</option>
+        </select>
+        <select id="siem-severity" aria-label="Severity" title="Severity">
+          <option value="">Any severity</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+        <input type="text" id="siem-ip" placeholder="IP contains…" />
+        <input type="text" id="siem-user" placeholder="User ID contains…" />
+        <button type="button" class="btn-lock" onclick="loadSiemQuery()">Query</button>
+      </div>
+      <div id="siem-status" class="mono" style="font-size:11px;margin-bottom:10px;"></div>
+      <div class="log-scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Severity</th><th>Event Type</th><th>Details</th><th>User</th><th>IP</th></tr></thead>
+        <tbody id="siem-tbody"><tr><td colspan="6" class="empty">Run a query.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Server Exception Log (5xx)</div>
+      <button type="button" class="btn-lock" onclick="loadServerErrors()">Refresh</button>
+      <div class="log-scroll" style="margin-top:14px;">
+      <table>
+        <thead><tr><th>Time</th><th>Level</th><th>Event</th><th>Message</th><th>Path</th><th>IP</th></tr></thead>
+        <tbody id="server-errors-tbody"><tr><td colspan="6" class="empty">Click Refresh to load.</td></tr></tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Network &amp; Port Health</div>
+      <button type="button" class="btn-lock" onclick="loadPortHealth()">Refresh</button>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Port</th><th>Service</th><th>Process</th><th>Binding</th><th>Status</th></tr></thead>
+        <tbody id="port-health-tbody"><tr><td colspan="5" class="empty">Click Refresh to load.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Enterprise Port Matrix &amp; Recon Detection</div>
+      <button type="button" class="btn-lock" onclick="loadPortMatrix()">Refresh</button>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Port</th><th>Service</th><th>Process</th><th>Status</th></tr></thead>
+        <tbody id="port-matrix-tbody"><tr><td colspan="4" class="empty">Click Refresh to load.</td></tr></tbody>
+      </table>
+      <div class="panel-title" style="margin-top:18px;">Recon / Nmap Scan Detection</div>
+      <table>
+        <thead><tr><th>Type</th><th>Details</th><th>IP</th><th>Time</th></tr></thead>
+        <tbody id="nmap-tbody"><tr><td colspan="4" class="empty">Click Refresh above to load.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Malware Sandbox &amp; Quarantine</div>
+      <button type="button" class="btn-lock" onclick="loadMalwareAnalysis()">Refresh</button>
+      <div class="stat-grid" id="malware-grid" style="margin-top:14px;">
+        <div class="empty">Click Refresh to load.</div>
+      </div>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Filename</th><th>Uploader</th><th>Signature</th><th>Status</th><th>Time</th><th>Action</th></tr></thead>
+        <tbody id="quarantine-tbody"><tr><td colspan="6" class="empty">Click Refresh above to load.</td></tr></tbody>
+      </table>
+      <div class="filter-row" style="margin-top:14px;">
+        <input type="text" id="isolate-user-input" placeholder="Uploader / user ID to isolate" />
+        <button type="button" class="btn-lock" onclick="isolateUser()">Isolate &amp; Lock 30d</button>
+      </div>
+      <div id="isolate-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Threat Intelligence Feeds</div>
+      <button type="button" class="btn-lock" onclick="refreshThreatIntel()">Refresh Feeds</button>
+      <div id="threat-intel-status" class="mono" style="font-size:11px;margin:10px 0;"></div>
+      <div class="panel-title" style="margin-top:10px;">CISA KEV Vulnerabilities</div>
+      <table>
+        <thead><tr><th>CVE</th><th>Vendor</th><th>Product</th><th>Name</th><th>Due Date</th></tr></thead>
+        <tbody id="cve-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+      <div class="panel-title" style="margin-top:18px;">Malicious IP Indicators</div>
+      <table>
+        <thead><tr><th>IP</th><th>Threat Score</th><th>Source</th><th>Fetched</th><th>Action</th></tr></thead>
+        <tbody id="threat-ip-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Wi-Fi Risk &amp; Network Shield</div>
+      <button type="button" class="btn-lock" onclick="loadWifiRisk()">Refresh</button>
+      <div class="stat-grid" id="wifi-grid" style="margin-top:14px;">
+        <div class="empty">Click Refresh to load.</div>
+      </div>
+      <div class="filter-row" style="margin-top:14px;">
+        <button type="button" class="btn-lock" onclick="toggleWifiShield(true)">Enable Shield</button>
+        <button type="button" class="btn-lock" onclick="toggleWifiShield(false)">Disable Shield</button>
+        <input type="number" id="wifi-global-score" placeholder="Global risk score (0-100)" min="0" max="100" />
+        <button type="button" class="btn-lock" onclick="setGlobalWifiScore()">Set Score</button>
+      </div>
+      <div id="wifi-shield-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Employee &amp; Admin Wi-Fi Risk Telemetry</div>
+      <button type="button" class="btn-lock" onclick="loadUserWifiTelemetry()">Refresh</button>
+      <table style="margin-top:14px;">
+        <thead><tr><th>User</th><th>Role</th><th>SSID</th><th>Encryption</th><th>Risk</th><th>Status</th><th>IP</th><th>Last Seen</th></tr></thead>
+        <tbody id="user-wifi-tbody"><tr><td colspan="8" class="empty">Click Refresh to load.</td></tr></tbody>
+      </table>
+      <div class="filter-row" style="margin-top:14px;">
+        <input type="text" id="wifi-update-user" placeholder="Username" />
+        <input type="number" id="wifi-update-score" placeholder="Risk score (0-100)" min="0" max="100" />
+        <button type="button" class="btn-lock" onclick="updateUserWifi()">Update</button>
+      </div>
+      <div id="wifi-update-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">SMTP Alert Configuration</div>
+      <div class="filter-row">
+        <input type="text" id="smtp-server" placeholder="SMTP server" />
+        <input type="number" id="smtp-port" placeholder="Port" />
+        <input type="text" id="smtp-username" placeholder="Username" />
+        <input type="email" id="smtp-alert-email" placeholder="Alert email" />
+        <label class="mono" style="font-size:12px;display:inline-flex;align-items:center;gap:4px;">
+          <input type="checkbox" id="smtp-tls" /> TLS
+        </label>
+        <button type="button" class="btn-lock" onclick="saveSmtpConfig()">Save</button>
+      </div>
+      <div id="smtp-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Admin Accounts — Password Reset</div>
+      <button type="button" class="btn-lock" onclick="loadAdminList()">Refresh List</button>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Username</th><th>Role</th><th>Email</th></tr></thead>
+        <tbody id="admin-list-tbody"><tr><td colspan="3" class="empty">Click Refresh to load.</td></tr></tbody>
+      </table>
+      <div class="filter-row" style="margin-top:14px;">
+        <input type="text" id="admin-reset-username" placeholder="Username" />
+        <input type="password" id="admin-reset-password" placeholder="New password (min 6 chars)" />
+        <button type="button" class="btn-lock" onclick="resetAdminPassword()">Reset Password</button>
+      </div>
+      <div id="admin-reset-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Employee Lookup — Password Reset</div>
+      <div class="filter-row">
+        <input type="text" id="emp-search-q" placeholder="Search by ID, name, or email…" />
+        <button type="button" class="btn-lock" onclick="searchEmployees()">Search</button>
+      </div>
+      <table style="margin-top:14px;">
+        <thead><tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Role</th><th>Action</th></tr></thead>
+        <tbody id="emp-search-tbody"><tr><td colspan="5" class="empty">Search above.</td></tr></tbody>
+      </table>
+      <div class="filter-row" style="margin-top:14px;">
+        <input type="text" id="emp-reset-id" placeholder="Employee ID" />
+        <input type="password" id="emp-reset-password" placeholder="New password (min 6 chars)" />
+        <button type="button" class="btn-lock" onclick="resetEmployeePassword()">Reset Password</button>
+      </div>
+      <div id="emp-reset-status" class="mono" style="font-size:11px;"></div>
+    </div>
+
     <script>
       var evPage = 1;
       var evPerPage = 50;
@@ -439,6 +623,491 @@
       function lockAndLeave() {
         window.location.href = '/logout';
       }
+
+      function loadSystemHealth() {
+        var grid = document.getElementById('health-grid');
+        grid.innerHTML = '<div class="empty">Loading…</div>';
+        fetch('/api/secops/system-health')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) { grid.innerHTML = '<div class="empty">Failed to load.</div>'; return; }
+            var h = d.health;
+            var cards = [
+              ['Status', h.status], ['Uptime', h.uptime_formatted], ['CPU Load', h.cpu_load],
+              ['Memory', h.memory_usage], ['Database', h.database_status], ['Threat Level', h.active_threat_level],
+              ['Avg Latency', h.api_metrics.avg_latency_ms + 'ms'], ['Req/min', h.api_metrics.requests_per_min],
+              ['Error Rate', h.api_metrics.error_rate], ['Active Sessions', h.api_metrics.active_sessions],
+            ];
+            grid.innerHTML = cards.map(function(c) {
+              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
+                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
+            }).join('');
+          })
+          .catch(function() { grid.innerHTML = '<div class="empty">Network error.</div>'; });
+      }
+
+      function loadSiemQuery() {
+        var statusEl = document.getElementById('siem-status');
+        var tbody = document.getElementById('siem-tbody');
+        var params = new URLSearchParams();
+        params.set('category', document.getElementById('siem-category').value);
+        var severity = document.getElementById('siem-severity').value;
+        var ip = document.getElementById('siem-ip').value.trim();
+        var user = document.getElementById('siem-user').value.trim();
+        if (severity) params.set('severity', severity);
+        if (ip) params.set('ip', ip);
+        if (user) params.set('user_id', user);
+        statusEl.textContent = 'Querying…';
+        fetch('/api/secops/siem-query?' + params.toString())
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) { statusEl.textContent = 'Query failed.'; return; }
+            statusEl.textContent = d.count + ' matching log' + (d.count === 1 ? '' : 's');
+            if (!d.logs.length) {
+              tbody.innerHTML = '<tr><td colspan="6" class="empty">No matching logs.</td></tr>';
+              return;
+            }
+            tbody.innerHTML = d.logs.map(function(l) {
+              var cls = (l.severity === 'ERROR' || l.severity === 'CRITICAL') ? 'score-hot' : '';
+              return '<tr>' +
+                '<td class="mono">' + escapeHtml(l.timestamp) + '</td>' +
+                '<td class="' + cls + '">' + escapeHtml(l.severity) + '</td>' +
+                '<td>' + escapeHtml(l.event_type) + '</td>' +
+                '<td>' + escapeHtml(l.details) + '</td>' +
+                '<td>' + escapeHtml(l.user_id) + '</td>' +
+                '<td class="mono">' + escapeHtml(l.ip_address) + '</td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadServerErrors() {
+        var tbody = document.getElementById('server-errors-tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">Loading…</td></tr>';
+        fetch('/api/secops/server-errors')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok || !d.errors.length) {
+              tbody.innerHTML = '<tr><td colspan="6" class="empty">' + (d.ok ? 'No server errors recorded.' : 'Failed to load.') + '</td></tr>';
+              return;
+            }
+            tbody.innerHTML = d.errors.map(function(e) {
+              return '<tr>' +
+                '<td class="mono">' + escapeHtml(e.timestamp) + '</td>' +
+                '<td class="score-hot">' + escapeHtml(e.level) + '</td>' +
+                '<td>' + escapeHtml(e.event) + '</td>' +
+                '<td>' + escapeHtml(e.message) + '</td>' +
+                '<td class="mono">' + escapeHtml(e.path) + '</td>' +
+                '<td class="mono">' + escapeHtml(e.ip) + '</td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { tbody.innerHTML = '<tr><td colspan="6" class="empty">Network error.</td></tr>'; });
+      }
+
+      function loadPortHealth() {
+        var tbody = document.getElementById('port-health-tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">Loading…</td></tr>';
+        fetch('/api/secops/port-health')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Failed to load.</td></tr>'; return; }
+            tbody.innerHTML = d.ports.map(function(p) {
+              return '<tr>' +
+                '<td class="mono">' + p.port + '</td>' +
+                '<td>' + escapeHtml(p.service) + '</td>' +
+                '<td>' + escapeHtml(p.process) + '</td>' +
+                '<td>' + escapeHtml(p.binding) + '</td>' +
+                '<td>' + escapeHtml(p.status) + '</td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { tbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
+      }
+
+      function loadPortMatrix() {
+        var portsTbody = document.getElementById('port-matrix-tbody');
+        var nmapTbody = document.getElementById('nmap-tbody');
+        portsTbody.innerHTML = '<tr><td colspan="4" class="empty">Loading…</td></tr>';
+        nmapTbody.innerHTML = '<tr><td colspan="4" class="empty">Loading…</td></tr>';
+        fetch('/api/secops/port-matrix')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) {
+              portsTbody.innerHTML = '<tr><td colspan="4" class="empty">Failed to load.</td></tr>';
+              nmapTbody.innerHTML = '<tr><td colspan="4" class="empty">Failed to load.</td></tr>';
+              return;
+            }
+            portsTbody.innerHTML = d.ports.map(function(p) {
+              var cls = p.status === 'OPEN' ? 'score-hot' : '';
+              return '<tr>' +
+                '<td class="mono">' + p.port + '</td>' +
+                '<td>' + escapeHtml(p.service) + '</td>' +
+                '<td>' + escapeHtml(p.process) + '</td>' +
+                '<td class="' + cls + '">' + escapeHtml(p.status) + '</td>' +
+                '</tr>';
+            }).join('');
+            nmapTbody.innerHTML = !d.nmap_scans.length
+              ? '<tr><td colspan="4" class="empty">No recon activity detected.</td></tr>'
+              : d.nmap_scans.map(function(s) {
+                  return '<tr>' +
+                    '<td>' + escapeHtml(s.type) + '</td>' +
+                    '<td>' + escapeHtml(s.details) + '</td>' +
+                    '<td class="mono">' + escapeHtml(s.ip) + '</td>' +
+                    '<td class="mono">' + escapeHtml(s.timestamp) + '</td>' +
+                    '</tr>';
+                }).join('');
+          })
+          .catch(function() {
+            portsTbody.innerHTML = '<tr><td colspan="4" class="empty">Network error.</td></tr>';
+            nmapTbody.innerHTML = '<tr><td colspan="4" class="empty">Network error.</td></tr>';
+          });
+      }
+
+      function loadMalwareAnalysis() {
+        var grid = document.getElementById('malware-grid');
+        var tbody = document.getElementById('quarantine-tbody');
+        grid.innerHTML = '<div class="empty">Loading…</div>';
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">Loading…</td></tr>';
+        fetch('/api/secops/malware-analysis')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) {
+              grid.innerHTML = '<div class="empty">Failed to load.</div>';
+              tbody.innerHTML = '<tr><td colspan="6" class="empty">Failed to load.</td></tr>';
+              return;
+            }
+            var t = d.telemetry;
+            var cards = [
+              ['Status', t.status], ['Engine', t.scanner_engine], ['Signatures', t.signatures_loaded],
+              ['Scanned Uploads', t.scanned_uploads_count], ['Threats Neutralized', t.threats_neutralized],
+              ['Suspicious Ext.', t.suspicious_extensions_detected],
+            ];
+            grid.innerHTML = cards.map(function(c) {
+              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
+                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
+            }).join('');
+            tbody.innerHTML = !t.quarantined_files.length
+              ? '<tr><td colspan="6" class="empty">No quarantined files.</td></tr>'
+              : t.quarantined_files.map(function(f) {
+                  return '<tr>' +
+                    '<td class="mono">' + escapeHtml(f.filename) + '</td>' +
+                    '<td>' + escapeHtml(f.uploader_id || '—') + '</td>' +
+                    '<td class="mono">' + escapeHtml(f.signature || '—') + '</td>' +
+                    '<td>' + escapeHtml(f.status) + '</td>' +
+                    '<td class="mono">' + escapeHtml(f.timestamp) + '</td>' +
+                    '<td><button type="button" class="btn-lock" onclick="purgeQuarantine(' + f.id + ')">Purge</button></td>' +
+                    '</tr>';
+                }).join('');
+          })
+          .catch(function() {
+            grid.innerHTML = '<div class="empty">Network error.</div>';
+            tbody.innerHTML = '<tr><td colspan="6" class="empty">Network error.</td></tr>';
+          });
+      }
+
+      function purgeQuarantine(fileId) {
+        fetch('/api/secops/quarantine/purge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_id: fileId }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function() { loadMalwareAnalysis(); })
+          .catch(function() {});
+      }
+
+      function isolateUser() {
+        var statusEl = document.getElementById('isolate-status');
+        var userId = document.getElementById('isolate-user-input').value.trim();
+        if (!userId) { statusEl.textContent = 'Enter a user ID first.'; return; }
+        statusEl.textContent = 'Isolating…';
+        fetch('/api/secops/quarantine/isolate-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uploader_id: userId }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.msg || (d.ok ? 'Isolated.' : 'Failed.');
+            if (d.ok) document.getElementById('isolate-user-input').value = '';
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadThreatIntel() {
+        var cveTbody = document.getElementById('cve-tbody');
+        var ipTbody = document.getElementById('threat-ip-tbody');
+        fetch('/api/secops/threat-intel/cve')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok || !d.cves.length) {
+              cveTbody.innerHTML = '<tr><td colspan="5" class="empty">' + (d.ok ? 'No CVE indicators.' : 'Failed to load.') + '</td></tr>';
+              return;
+            }
+            cveTbody.innerHTML = d.cves.map(function(c) {
+              return '<tr>' +
+                '<td class="mono">' + escapeHtml(c.cve_id) + '</td>' +
+                '<td>' + escapeHtml(c.vendor) + '</td>' +
+                '<td>' + escapeHtml(c.product) + '</td>' +
+                '<td>' + escapeHtml(c.name) + '</td>' +
+                '<td class="mono">' + escapeHtml(c.due_date) + '</td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { cveTbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
+
+        fetch('/api/secops/threat-intel/ips')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok || !d.ips.length) {
+              ipTbody.innerHTML = '<tr><td colspan="5" class="empty">' + (d.ok ? 'No IP indicators.' : 'Failed to load.') + '</td></tr>';
+              return;
+            }
+            ipTbody.innerHTML = d.ips.map(function(i) {
+              return '<tr>' +
+                '<td class="mono">' + escapeHtml(i.ip) + '</td>' +
+                '<td class="score-hot">' + escapeHtml(String(i.threat_score)) + '</td>' +
+                '<td>' + escapeHtml(i.source) + '</td>' +
+                '<td class="mono">' + escapeHtml(i.fetched_at) + '</td>' +
+                '<td><button type="button" class="btn-lock" onclick="socBanIpFromRow(\'' + escapeHtml(i.ip) + '\')">Ban</button></td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { ipTbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
+      }
+
+      function refreshThreatIntel() {
+        var statusEl = document.getElementById('threat-intel-status');
+        statusEl.textContent = 'Refreshing feeds…';
+        fetch('/api/secops/threat-intel/refresh', { method: 'POST' })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.msg || (d.ok ? 'Refreshed.' : 'Refresh failed.');
+            if (d.ok) loadThreatIntel();
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadWifiRisk() {
+        var grid = document.getElementById('wifi-grid');
+        grid.innerHTML = '<div class="empty">Loading…</div>';
+        fetch('/api/secops/wifi-risk')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) { grid.innerHTML = '<div class="empty">Failed to load.</div>'; return; }
+            var w = d.wifi;
+            var cards = [
+              ['Risk Score', w.risk_score + '%'], ['Status', w.status], ['Shield', w.shield_active ? 'Active' : 'Inactive'],
+              ['SSID', w.ssid], ['Encryption', w.encryption],
+              ['Rogue AP', w.rogue_ap_detected ? 'Detected' : 'None'], ['ARP Spoof', w.arp_spoof_detected ? 'Detected' : 'None'],
+            ];
+            grid.innerHTML = cards.map(function(c) {
+              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
+                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
+            }).join('');
+          })
+          .catch(function() { grid.innerHTML = '<div class="empty">Network error.</div>'; });
+      }
+
+      function toggleWifiShield(enable) {
+        var statusEl = document.getElementById('wifi-shield-status');
+        statusEl.textContent = enable ? 'Enabling shield…' : 'Disabling shield…';
+        fetch('/api/secops/wifi-risk/toggle-shield', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enable: enable }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.ok ? ('Shield ' + (d.shield_active ? 'enabled' : 'disabled') + '.') : 'Failed.';
+            if (d.ok) loadWifiRisk();
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function setGlobalWifiScore() {
+        var statusEl = document.getElementById('wifi-shield-status');
+        var score = document.getElementById('wifi-global-score').value.trim();
+        if (score === '') { statusEl.textContent = 'Enter a score first.'; return; }
+        statusEl.textContent = 'Setting score…';
+        fetch('/api/secops/wifi-risk/set-score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ score: parseInt(score, 10) }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.ok ? 'Score updated.' : 'Failed.';
+            if (d.ok) loadWifiRisk();
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadUserWifiTelemetry() {
+        var tbody = document.getElementById('user-wifi-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="empty">Loading…</td></tr>';
+        fetch('/api/secops/user-wifi-telemetry')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok || !d.users.length) {
+              tbody.innerHTML = '<tr><td colspan="8" class="empty">' + (d.ok ? 'No telemetry recorded.' : 'Failed to load.') + '</td></tr>';
+              return;
+            }
+            tbody.innerHTML = d.users.map(function(u) {
+              var cls = u.is_high_risk ? 'score-hot' : '';
+              return '<tr>' +
+                '<td>' + escapeHtml(u.username) + '</td>' +
+                '<td>' + escapeHtml(u.role) + '</td>' +
+                '<td>' + escapeHtml(u.ssid) + '</td>' +
+                '<td>' + escapeHtml(u.encryption) + '</td>' +
+                '<td class="' + cls + '">' + u.risk_score + '%</td>' +
+                '<td class="' + cls + '">' + escapeHtml(u.status) + '</td>' +
+                '<td class="mono">' + escapeHtml(u.ip_address) + '</td>' +
+                '<td class="mono">' + escapeHtml(u.last_seen) + '</td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { tbody.innerHTML = '<tr><td colspan="8" class="empty">Network error.</td></tr>'; });
+      }
+
+      function updateUserWifi() {
+        var statusEl = document.getElementById('wifi-update-status');
+        var username = document.getElementById('wifi-update-user').value.trim();
+        var score = document.getElementById('wifi-update-score').value.trim();
+        if (!username) { statusEl.textContent = 'Enter a username first.'; return; }
+        statusEl.textContent = 'Updating…';
+        fetch('/api/secops/user-wifi-telemetry/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, score: score ? parseInt(score, 10) : undefined }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.ok ? 'Updated.' : (d.msg || 'Update failed.');
+            if (d.ok) loadUserWifiTelemetry();
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadSmtpConfig() {
+        fetch('/api/secops/smtp-config')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok) return;
+            var c = d.config;
+            document.getElementById('smtp-server').value = c.smtp_server || '';
+            document.getElementById('smtp-port').value = c.smtp_port || '';
+            document.getElementById('smtp-username').value = c.smtp_username || '';
+            document.getElementById('smtp-alert-email').value = c.alert_email || '';
+            document.getElementById('smtp-tls').checked = !!c.smtp_use_tls;
+          })
+          .catch(function() {});
+      }
+
+      function saveSmtpConfig() {
+        var statusEl = document.getElementById('smtp-status');
+        statusEl.textContent = 'Saving…';
+        fetch('/api/secops/smtp-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            smtp_server: document.getElementById('smtp-server').value.trim(),
+            smtp_port: parseInt(document.getElementById('smtp-port').value, 10) || 587,
+            smtp_username: document.getElementById('smtp-username').value.trim(),
+            alert_email: document.getElementById('smtp-alert-email').value.trim(),
+            smtp_use_tls: document.getElementById('smtp-tls').checked,
+          }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) { statusEl.textContent = d.msg || (d.ok ? 'Saved.' : 'Save failed.'); })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function loadAdminList() {
+        var tbody = document.getElementById('admin-list-tbody');
+        tbody.innerHTML = '<tr><td colspan="3" class="empty">Loading…</td></tr>';
+        fetch('/api/secops/list-admins')
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok || !d.admins.length) {
+              tbody.innerHTML = '<tr><td colspan="3" class="empty">' + (d.ok ? 'No admin accounts found.' : 'Failed to load.') + '</td></tr>';
+              return;
+            }
+            tbody.innerHTML = d.admins.map(function(a) {
+              return '<tr><td>' + escapeHtml(a.username) + '</td><td>' + escapeHtml(a.role) + '</td><td>' + escapeHtml(a.email) + '</td></tr>';
+            }).join('');
+          })
+          .catch(function() { tbody.innerHTML = '<tr><td colspan="3" class="empty">Network error.</td></tr>'; });
+      }
+
+      function resetAdminPassword() {
+        var statusEl = document.getElementById('admin-reset-status');
+        var username = document.getElementById('admin-reset-username').value.trim();
+        var password = document.getElementById('admin-reset-password').value;
+        if (!username || !password) { statusEl.textContent = 'Username and new password required.'; return; }
+        statusEl.textContent = 'Resetting…';
+        fetch('/api/secops/reset-admin-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username, new_password: password }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.msg || (d.ok ? 'Password reset.' : 'Reset failed.');
+            if (d.ok) document.getElementById('admin-reset-password').value = '';
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      function searchEmployees() {
+        var tbody = document.getElementById('emp-search-tbody');
+        var q = document.getElementById('emp-search-q').value.trim();
+        if (!q) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Enter a search term.</td></tr>'; return; }
+        tbody.innerHTML = '<tr><td colspan="5" class="empty">Searching…</td></tr>';
+        fetch('/api/secops/search-employees?q=' + encodeURIComponent(q))
+          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
+          .then(function(d) {
+            if (!d.ok || !d.employees.length) {
+              tbody.innerHTML = '<tr><td colspan="5" class="empty">' + (d.ok ? 'No matching employees.' : 'Failed to load.') + '</td></tr>';
+              return;
+            }
+            tbody.innerHTML = d.employees.map(function(e) {
+              return '<tr>' +
+                '<td class="mono">' + escapeHtml(e.employee_id) + '</td>' +
+                '<td>' + escapeHtml(e.name) + '</td>' +
+                '<td>' + escapeHtml(e.department) + '</td>' +
+                '<td>' + escapeHtml(e.role) + '</td>' +
+                '<td><button type="button" class="btn-lock" onclick="document.getElementById(\'emp-reset-id\').value=\'' +
+                  escapeHtml(e.employee_id) + '\'">Select</button></td>' +
+                '</tr>';
+            }).join('');
+          })
+          .catch(function() { tbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
+      }
+
+      function resetEmployeePassword() {
+        var statusEl = document.getElementById('emp-reset-status');
+        var empId = document.getElementById('emp-reset-id').value.trim();
+        var password = document.getElementById('emp-reset-password').value;
+        if (!empId || !password) { statusEl.textContent = 'Employee ID and new password required.'; return; }
+        statusEl.textContent = 'Resetting…';
+        fetch('/api/secops/reset-employee-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employee_id: empId, new_password: password }),
+        })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            statusEl.textContent = d.msg || (d.ok ? 'Password reset.' : 'Reset failed.');
+            if (d.ok) document.getElementById('emp-reset-password').value = '';
+          })
+          .catch(function() { statusEl.textContent = 'Network error.'; });
+      }
+
+      loadSmtpConfig();
+      loadThreatIntel();
     </script>
 
   </body>
