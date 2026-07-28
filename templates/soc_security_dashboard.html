@@ -13,6 +13,9 @@
       .hdr .badge { display: inline-block; margin-left: 10px; padding: 3px 10px; border-radius: 20px;
                     background: #1e293b; border: 1px solid #334155; color: #38bdf8; font-size: 11px;
                     font-weight: 700; letter-spacing: 0.5px; vertical-align: middle; }
+      .mitre-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px;
+                     border-radius: 6px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4);
+                     color: #c084fc; font-size: 10px; font-weight: 700; vertical-align: middle; }
       .btn-lock { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 9px 18px;
                   border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
                   text-decoration: none; display: inline-block; }
@@ -44,7 +47,7 @@
   </head>
   <body>
     <div class="hdr">
-      <h1>Security Dashboard <span class="badge">SOC ANALYST</span></h1>
+      <h1>Security Dashboard <span class="badge">SOC ANALYST</span> <span class="mitre-badge">MITRE ATT&amp;CK MAPPER</span></h1>
       <button class="btn-lock" type="button" onclick="lockAndLeave()">&#128274; Lock &amp; Exit</button>
     </div>
 
