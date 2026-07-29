@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
@@ -117,3 +118,131 @@ export const fetchNotifications = () => client.get('/api/notifications');
 export const markNotificationsRead = () => client.post('/api/notifications/mark_read');
 export const fetchEmployeeNotifications = () => client.get('/api/employee/notifications');
 export const markEmployeeNotificationsRead = () => client.post('/api/employee/notifications/mark_read');
+=======
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../config';
+
+const client = axios.create({ baseURL: API_BASE_URL, timeout: 10000 });
+
+client.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// ── Admin API ──────────────────────────────────────────────────────
+export const adminLogin = (username, password) =>
+  client.post('/api/login', { username, password });
+
+export const adminLogout = () => client.post('/api/logout');
+
+export const fetchDashboard = () => client.get('/api/dashboard');
+
+export const fetchEmployees = () => client.get('/api/employees');
+
+// ── Admin: Mark Attendance ──────────────────────────────────────────
+export const fetchAttendanceEmployees = (date) =>
+  client.get('/api/bulk_mark_attendance', { params: { date } });
+
+export const markAttendance = (date, records) =>
+  client.post('/api/bulk_mark_attendance', { date, records });
+
+export const fetchHolidays = () => client.get('/api/holidays');
+
+export const fetchMonthlyReport = (year, month) =>
+  client.get('/api/monthly_report', { params: { year, month } });
+
+export const fetchSalaryReport = (year, month) =>
+  client.get('/api/salary_report', { params: { year, month } });
+
+export const fetchLeaveRequests = () => client.get('/api/leave_requests');
+
+export const leaveAction = (lid, action) =>
+  client.post(`/api/leave_requests/${lid}/action`, { action });
+
+export const fetchResignations = () => client.get('/api/resignation_requests');
+
+export const resignationAction = (rid, action) =>
+  client.post(`/api/resignation_requests/${rid}/action`, { action });
+
+// ── Employee API ───────────────────────────────────────────────────
+export const employeeLogin = (employee_id, password) =>
+  client.post('/api/employee/login', { employee_id, password });
+
+export const changePassword = (current_password, new_password) =>
+  client.post('/api/employee/change-password', { current_password, new_password });
+
+export const uploadEmployeePhoto = (formData) =>
+  client.post('/api/employee/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
+
+export const qrFaceCheckin = (formData) =>
+  client.post('/api/employee/qr-face-checkin', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
+
+export const getAuthConfig = () =>
+  client.get('/api/employee/auth-config');
+
+export const getMobileBiometricNonce = () =>
+  client.post('/api/employee/mobile-biometric-nonce');
+
+export const attestMobileBiometric = (nonce) =>
+  client.post('/api/employee/mobile-biometric-attest', { nonce });
+
+export const attendanceCheckin = (formData) =>
+  client.post('/api/employee/qr-face-checkin', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
+
+export const getPhotoUrl = (empId) => `${API_BASE_URL}/dataset/${empId}.jpg`;
+
+export const employeeLogout = () => client.post('/api/employee/logout');
+
+export const fetchEmployeePortal = () => client.get('/api/employee/portal');
+
+export const employeeCheckin = (lat, lon) =>
+  client.post('/api/employee/checkin', { lat, lon });
+
+export const syncOfflinePunches = (punches) =>
+  client.post('/api/employee/sync_punches', { punches });
+
+export const submitLeaveRequest = (leave_date, reason) =>
+  client.post('/api/employee/leave_request', { leave_date, reason });
+
+export const submitResignation = (last_working_day, reason) =>
+  client.post('/api/employee/resign', { last_working_day, reason });
+
+export const fetchEmployeeTickets = () => client.get('/api/employee/tickets');
+
+export const raiseTicket = (category, subject, description, priority) =>
+  client.post('/api/employee/raise_ticket', { category, subject, description, priority });
+
+// ── Admin: Tickets ─────────────────────────────────────────────────
+export const fetchAllTickets = () => client.get('/api/tickets');
+
+export const ticketAction = (tid, status, admin_response) =>
+  client.post(`/api/tickets/${tid}/action`, { status, admin_response });
+
+export const fetchEmployeeSalary = (year, month) =>
+  client.get('/api/employee/salary', { params: { year, month } });
+
+export const fetchEmployeeAttendance = (year, month) =>
+  client.get('/api/employee/attendance', { params: { year, month } });
+
+export const fetchEmployeeLeaves = () => client.get('/api/employee/leaves');
+
+export const cancelLeaveRequest = (lid) =>
+  client.post(`/api/employee/cancel_leave/${lid}`);
+
+export const requestOvertime = (date, reason) =>
+  client.post('/api/employee/request_overtime', { date, reason });
+
+export const fetchMyOvertime = () => client.get('/api/employee/my_overtime');
+
+export const fetchEmployeeHolidays = () => client.get('/api/employee/holidays');
+
+export const fetchEmployeeProfile = () => client.get('/api/employee/profile');
+
+// ── Notifications ──────────────────────────────────────────────────
+export const fetchNotifications = () => client.get('/api/notifications');
+export const markNotificationsRead = () => client.post('/api/notifications/mark_read');
+export const fetchEmployeeNotifications = () => client.get('/api/employee/notifications');
+export const markEmployeeNotificationsRead = () => client.post('/api/employee/notifications/mark_read');
+>>>>>>> 6dbd917e (Update admin attendance and payroll screens)

@@ -1,6 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 <<<<<<< HEAD
+=======
+>>>>>>> 6dbd917e (Update admin attendance and payroll screens)
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +13,7 @@ import LeaveRequestsScreen from '../screens/admin/LeaveRequestsScreen';
 import ResignationsScreen  from '../screens/admin/ResignationsScreen';
 import AdminTicketsScreen  from '../screens/admin/AdminTicketsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+<<<<<<< HEAD
 import { COLORS } from '../config';
 
 const Tab = createBottomTabNavigator();
@@ -64,6 +68,8 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 =======
 import SalaryPayslipsScreen from "../screens/admin/SalaryPayslipsScreen";
 >>>>>>> 4ee786a7 (Add CompOff and Performance admin screens)
+=======
+>>>>>>> 6dbd917e (Update admin attendance and payroll screens)
 import { COLORS } from '../config';
 
 const Tab = createBottomTabNavigator();
@@ -99,15 +105,14 @@ export default function AdminNavigator() {
       <Tab.Screen name="Leaves"        component={LeaveRequestsScreen} options={{ tabBarLabel: '📋 Leaves' }} />
       <Tab.Screen name="Resignations"  component={ResignationsScreen}  options={{ tabBarLabel: '📤 Resign' }} />
       <Tab.Screen name="Tickets"       component={AdminTicketsScreen}  options={{ tabBarLabel: '🎫 Tickets' }} />
-      <Tab.Screen
-    name="Payroll"
-    component={SalaryPayslipsScreen}
-/>
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: '🔔 Alerts' }} />
     </Tab.Navigator>
   );
 }
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> 216f1b3 (Add CompOff and Performance admin screens)
 >>>>>>> 4ee786a7 (Add CompOff and Performance admin screens)
+=======
+>>>>>>> 6dbd917e (Update admin attendance and payroll screens)

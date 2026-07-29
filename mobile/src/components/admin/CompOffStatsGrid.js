@@ -8,7 +8,7 @@ import {
 
 import { Ionicons } from "@expo/vector-icons";
 
-import COMPOFF_THEME from "../../constants/compOffTheme";
+
 
 export default function CompOffStatsGrid({
   approvedRequests,
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: COMPOFF_THEME.colors.textPrimary,
+    color: "#0F172A",
 
     letterSpacing: -0.5,
   },
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: COMPOFF_THEME.colors.textPrimary,
+    color: "#0F172A",
   },
 
   subtitle: {
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "600",
 
-    color: COMPOFF_THEME.colors.textMuted,
+    color: "#64748B",
   },
     divider: {
     height: 1,
