@@ -90,7 +90,7 @@ def soc_admin(seed_admin, db_engine):
 @pytest.fixture
 def soc_admin_verified(client, soc_admin):
     """soc_admin plus a live step-up window, set directly rather than via a
-    verify-2fa POST — MFA now happens once, at /sp_admin/mfa login, not as a
+    verify-2fa POST — MFA now happens once, at /mfa_login_verify login, not as a
     separate in-dashboard step-up (see blueprints/secops.py)."""
     username, secret = soc_admin
     _admin_session(client, username, role="soc_analyst")

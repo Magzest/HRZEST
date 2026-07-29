@@ -4,6 +4,7 @@ The secret is stored encrypted at rest via the same Fernet-based encrypt_pii/
 decrypt_pii used for PII fields (utils/helpers.py) — reusing the codebase's
 one established encryption idiom rather than introducing a second scheme.
 """
+import html as _html
 import base64
 import io
 import pyotp
@@ -80,6 +81,39 @@ def verify_totp_code(admin_username: str, code: str, require_enabled: bool = Tru
         return False
     secret = decrypt_pii(row[0])
     return pyotp.TOTP(secret).verify(code, valid_window=1)
+
+
+def send_mfa_login_email(to_email: str, username: str, role_label: str, secret: str, otp_code: str):
+    """Email a one-time login code to a SOC/SP-admin account as its MFA
+    step (blueprints/secops.py's sp_admin_login()). Deliberately does NOT
+    include the TOTP secret in the email body -- only the single-use code
+    -- since a raw secret in an inbox would let anyone with mailbox access
+    mint valid codes indefinitely, not just for this one login. `secret` is
+    accepted for signature compatibility with callers that also enroll TOTP
+    but isn't otherwise used here."""
+    from utils.email_utils import get_email_config, send_email_async
+    _user = _html.escape(str(username))
+    _role = _html.escape(str(role_label))
+    _code = _html.escape(str(otp_code))
+    html_body = f"""
+<div style="font-family:Segoe UI,sans-serif;max-width:480px;margin:auto;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;">
+  <div style="background:#1d4ed8;padding:22px 26px;color:#fff;">
+    <div style="font-size:18px;font-weight:700;">Login Verification Code</div>
+    <div style="font-size:12px;opacity:0.8;margin-top:4px;">{_role} &middot; {_user}</div>
+  </div>
+  <div style="padding:26px;">
+    <p style="color:#cbd5e1;font-size:13px;">Use this code to finish signing in. It expires in 5 minutes and can only be used once.</p>
+    <div style="text-align:center;margin:22px 0;padding:16px;background:#090d16;border-radius:12px;">
+      <span style="font-size:32px;font-weight:800;letter-spacing:6px;color:#60a5fa;">{_code}</span>
+    </div>
+    <p style="font-size:12px;color:#64748b;">If you didn't request this, someone may have your password — change it and contact your administrator.</p>
+  </div>
+</div>"""
+    config = get_email_config()
+    if not config:
+        return False
+    send_email_async(to_email, "Your SecOps login code", html_body, config)
+    return True
 
 
 def totp_qr_data_uri(admin_username: str, secret: str) -> str:

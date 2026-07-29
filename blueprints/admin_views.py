@@ -418,7 +418,7 @@ def admin_mfa_required_page():
     """Forced-enrollment landing page: app.py's _enforce_admin_mfa_enrollment
     before_request hook redirects every admin/manager session without TOTP
     enrolled here, and here only, until they complete it (soc_analyst
-    sessions can't reach this unenrolled in the first place -- /sp_admin/mfa
+    sessions can't reach this unenrolled in the first place -- /mfa_login_verify
     already marks TOTP enrolled before that session exists at all). Not a
     TOTP step-up gate -- an unenrolled admin can't pass a step-up gate they
     haven't set up yet, so this page (and the /api/settings/2fa/setup +

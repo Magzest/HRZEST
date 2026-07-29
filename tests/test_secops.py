@@ -1,6 +1,5 @@
 """Automated Pytest Suite for SecOps & SP Admin Portal."""
 
-import pyotp
 import pytest
 from utils.security_logs import (
     fetch_threat_logs,
@@ -8,7 +7,6 @@ from utils.security_logs import (
     get_smtp_config,
     update_smtp_config,
 )
-from utils.totp import get_or_create_admin_totp_secret
 
 
 @pytest.fixture
@@ -63,15 +61,29 @@ def test_sp_admin_login_and_mfa_flow(client, soc_admin):
     res = client.post("/sp_admin/login",
                        data={"identifier": soc_admin["username"], "password": soc_admin["password"]})
     assert res.status_code == 302
-    assert "/sp_admin/mfa" in res.location
+    assert "/mfa_login_verify" in res.location
 
-    # 3. Submit a real TOTP code for that account's secret -- the route
-    # must reject anything else, including any bare 6-digit string.
-    secret, _ = get_or_create_admin_totp_secret(soc_admin["username"])
-    valid_code = pyotp.TOTP(secret).now()
-    res_mfa = client.post("/sp_admin/mfa", data={"totp_code": valid_code})
+    # 3. The one-time code is emailed, never returned in the response --
+    # tests read it straight from the session the same way the emailed
+    # code would eventually be typed in by hand. Submitting anything else
+    # must be rejected.
+    with client.session_transaction() as sess:
+        otp_code = sess["mfa_otp_code"]
+    res_mfa = client.post("/mfa_login_verify", data={"otp_code": otp_code})
     assert res_mfa.status_code == 302
     assert "/secops" in res_mfa.location
+
+
+def test_mfa_login_verify_page_never_leaks_the_code(client, soc_admin):
+    """The emailed OTP must never appear in the page HTML itself -- only
+    typed in by the account owner after reading their email."""
+    client.post("/sp_admin/login",
+                data={"identifier": soc_admin["username"], "password": soc_admin["password"]})
+    with client.session_transaction() as sess:
+        otp_code = sess["mfa_otp_code"]
+    res = client.get("/mfa_login_verify")
+    assert res.status_code == 200
+    assert otp_code.encode() not in res.data
 
 
 def test_sp_admin_login_rejects_unknown_identifier(client, seed_admin):
@@ -93,14 +105,38 @@ def test_sp_admin_login_rejects_non_soc_role(client, seed_admin):
     assert b"Invalid Cybersecurity Analyst credentials" in res.data
 
 
-def test_sp_admin_mfa_rejects_arbitrary_six_digits(client, soc_admin):
-    """A 6-digit string that isn't the account's actual current TOTP code
-    must be rejected -- no digit-shaped fallback."""
+def test_mfa_login_verify_rejects_wrong_code(client, soc_admin):
+    """Any code other than the one actually issued for this session must be
+    rejected -- no digit-shaped fallback."""
     client.post("/sp_admin/login",
                 data={"identifier": soc_admin["username"], "password": soc_admin["password"]})
-    res_mfa = client.post("/sp_admin/mfa", data={"totp_code": "123456"})
+    with client.session_transaction() as sess:
+        real_code = sess["mfa_otp_code"]
+    wrong_code = "1" * 6 if real_code != "1" * 6 else "2" * 6
+    res_mfa = client.post("/mfa_login_verify", data={"otp_code": wrong_code})
     assert res_mfa.status_code == 200
-    assert b"Invalid MFA verification code" in res_mfa.data
+    assert b"Invalid verification code" in res_mfa.data
+
+
+def test_sp_admin_login_rejects_account_with_no_email(client, soc_admin, db_engine):
+    """MFA has nowhere to deliver a code without an email on file -- must
+    fail closed with the same generic error as a bad password, not a
+    distinct message that would leak account state to an anonymous caller."""
+    cur = db_engine.cursor()
+    cur.execute("UPDATE admin_users SET email=NULL WHERE username=%s", (soc_admin["username"],))
+    db_engine.commit()
+    cur.close()
+    try:
+        res = client.post("/sp_admin/login",
+                           data={"identifier": soc_admin["username"], "password": soc_admin["password"]})
+        assert res.status_code == 200
+        assert b"Invalid Cybersecurity Analyst credentials" in res.data
+    finally:
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET email=%s WHERE username=%s",
+                    ("admin@test.local", soc_admin["username"]))
+        db_engine.commit()
+        cur.close()
 
 
 def test_secops_api_endpoints(client, seed_admin):
@@ -132,6 +168,19 @@ def test_secops_api_endpoints(client, seed_admin):
     })
     assert res.status_code == 200
     assert res.get_json()["ok"] is True
+
+    # Test /api/secops/dashboard-stats
+    res = client.get("/api/secops/dashboard-stats")
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["ok"] is True
+    for key in ("total_events", "quarantine_count", "banned_ips"):
+        assert key in body["stats"]
+
+
+def test_dashboard_stats_requires_soc_session(client):
+    res = client.get("/api/secops/dashboard-stats")
+    assert res.status_code == 401
 
 
 def test_soc_analyst_account_cannot_use_regular_admin_login(client, soc_admin):

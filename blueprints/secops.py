@@ -2,7 +2,7 @@
 
 import time
 import re
-import os
+import secrets
 import datetime
 import ipaddress
 from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, abort
@@ -18,13 +18,12 @@ from utils.security_logs import (
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
     SOC_ANALYST_ROLE, soc_step_up_valid, soc_step_up_refresh, soc_step_up_clear,
-    turnstile_enabled,
 )
 from utils.helpers import get_co_features, _upsert_co_feature
 from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
-from utils.totp import verify_totp_code, get_or_create_admin_totp_secret, totp_qr_data_uri, mark_totp_enabled
-from extensions import app_log, log_security_event
+from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email
+from extensions import app_log, log_security_event, limiter
 
 secops_bp = Blueprint("secops", __name__)
 
@@ -43,7 +42,7 @@ def _is_secops_authorized():
 def _soc_session_and_stepup_or_404():
     """Full gate for the dashboard and the monitoring/config APIs migrated
     from the old admin-embedded SOC dashboard: role check AND a live TOTP
-    step-up window (soc_2fa_verified_at, set at /sp_admin/mfa login and
+    step-up window (soc_2fa_verified_at, set at /mfa_login_verify login and
     refreshed on every dashboard load). 404, not 401/403, on any failure --
     matches the original admin_views.py gate's disguise posture: a session
     that isn't entitled to this sees the exact same response a nonexistent
@@ -63,59 +62,24 @@ def _soc_session_and_stepup_or_404():
     return username, role
 
 
-def _compute_security_posture():
-    """Real, config-derived facts -- not a fabricated 'security score'. Each
-    one reads the same source of truth its own feature already uses, so this
-    can't silently drift out of sync with what's actually enforced elsewhere
-    in the app."""
-    return {
-        "hsts_enabled": True,  # app.py's _security_headers sets this unconditionally on every response
-        "csp_enabled": True,   # same -- dynamic per-request nonce CSP, always on
-        "rate_limit_backend": "In-memory (per-worker — no Redis in this deployment)",
-        "malware_scan_enabled": os.environ.get("MALWARE_SCAN_ENABLED", "true").strip().lower() not in ("false", "0", "no"),
-        "login_captcha_configured": turnstile_enabled(),
-        "email_alert_webhook_configured": bool(os.environ.get("SECURITY_ALERT_WEBHOOK_URL")),
-    }
-
-
-def _security_events_summary(cursor):
-    """Aggregate stats over the FULL security_events history -- the
-    "complete log analysis" a SOC analyst needs to judge whether the last 50
-    rows they're looking at are routine noise or the tail of something
-    bigger."""
-    cursor.execute("SELECT COUNT(*) FROM security_events")
-    total = cursor.fetchone()[0]
-    cursor.execute("SELECT level, COUNT(*) FROM security_events GROUP BY level")
-    by_level = {level: count for level, count in cursor.fetchall()}
-    cursor.execute(
-        "SELECT event_type, COUNT(*) c FROM security_events GROUP BY event_type ORDER BY c DESC LIMIT 8"
-    )
-    top_event_types = cursor.fetchall()
-    cursor.execute("SELECT COUNT(DISTINCT identifier) FROM security_events WHERE identifier IS NOT NULL")
-    distinct_identifiers = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(DISTINCT ip) FROM security_events WHERE ip IS NOT NULL")
-    distinct_ips = cursor.fetchone()[0]
-    cursor.execute("SELECT MIN(created_at), MAX(created_at) FROM security_events")
-    oldest, newest = cursor.fetchone()
-    return {
-        "total": total,
-        "by_level": by_level,
-        "top_event_types": top_event_types,
-        "distinct_identifiers": distinct_identifiers,
-        "distinct_ips": distinct_ips,
-        "oldest": oldest, "newest": newest,
-    }
-
-
 _COVERAGE_GATE_PCT = 80
+
+
+_MFA_OTP_TTL_SEC = 300  # 5 minutes
 
 
 @secops_bp.route("/sp_admin")
 @secops_bp.route("/sp_admin/")
 @secops_bp.route("/sp_admin/login", methods=["GET", "POST"])
+@limiter.limit("5 per 15 minutes")
+@limiter.limit("5 per minute")
 def sp_admin_login():
-
-    """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
+    """Dedicated SP Admin / Cybersecurity Analyst Login Page. MFA step is an
+    emailed one-time code (see /mfa_login_verify below) rather than an
+    authenticator-app TOTP prompt -- the TOTP secret itself is still
+    generated/stored (get_or_create_admin_totp_secret) for accounts that
+    also want an authenticator app, but is never put in the email body or
+    the session; only the short-lived numeric code travels either place."""
     if session.get("admin_logged_in") and session.get("admin_role") == SOC_ANALYST_ROLE:
         return redirect("/secops")
 
@@ -127,7 +91,7 @@ def sp_admin_login():
         if identifier:
             with _db() as (cursor, db):
                 cursor.execute(
-                    "SELECT password, COALESCE(role,'admin'), email, totp_secret FROM admin_users WHERE username=%s",
+                    "SELECT password, COALESCE(role,'admin'), email FROM admin_users WHERE username=%s",
                     (identifier,)
                 )
                 admin_row = cursor.fetchone()
@@ -138,37 +102,65 @@ def sp_admin_login():
         # regardless of its actual role column, which defeated the point of
         # this being a separate, narrowly-scoped credential.
         if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
-            session["mfa_pending_username"] = identifier
-            session["mfa_pending_secret"] = admin_row[3] or ""
-            return redirect("/sp_admin/mfa")
+            if not admin_row[2]:
+                # No recovery email on file -- can't deliver a code, so this
+                # account can't complete login until an email is set. Same
+                # generic error as a bad password: don't leak *why* to an
+                # unauthenticated caller.
+                log_security_event(
+                    "auth.mfa_email_missing", "SOC account has no email on file for MFA delivery",
+                    level="ERROR", identifier=identifier,
+                )
+                return render_template("sp_admin_login.html", error="Invalid Cybersecurity Analyst credentials.")
+
+            secret, _enabled = get_or_create_admin_totp_secret(identifier)
+            otp_code = f"{secrets.randbelow(900000) + 100000}"
+            send_mfa_login_email(admin_row[2], identifier, "SecOps Security Administrator", secret, otp_code)
+
+            session.clear()
+            session["mfa_pending"] = True
+            session["mfa_user"] = identifier
+            session["mfa_otp_code"] = otp_code
+            session["mfa_issued_at"] = time.time()
+            return redirect("/mfa_login_verify")
 
         return render_template("sp_admin_login.html", error="Invalid Cybersecurity Analyst credentials.")
 
     return render_template("sp_admin_login.html")
 
 
-@secops_bp.route("/sp_admin/mfa", methods=["GET", "POST"])
-def sp_admin_mfa():
-    """MFA Verification Challenge for Cybersecurity Analyst Login with QR Code."""
-    username = session.get("mfa_pending_username")
-    if not username:
+@secops_bp.route("/mfa_login_verify", methods=["GET", "POST"])
+@limiter.limit("8 per 15 minutes")
+def mfa_login_verify():
+    """Second step of sp_admin_login(): checks the one-time code emailed to
+    the account's address on file. session["mfa_otp_code"] never leaves the
+    server -- the browser only ever sees a blank input to type the emailed
+    code into."""
+    username = session.get("mfa_user")
+    if not username or not session.get("mfa_pending"):
         return redirect("/sp_admin/login")
 
-    secret, enabled = get_or_create_admin_totp_secret(username)
-    qr_uri = None if enabled else totp_qr_data_uri(username, secret)
+    issued_at = session.get("mfa_issued_at") or 0
+    if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
+        session.clear()
+        return render_template("sp_admin_login.html", error="Your code expired. Please log in again.")
 
     if request.method == "POST":
-        totp_code = request.form.get("totp_code", "").strip()
-
-        valid_mfa = verify_totp_code(username, totp_code, require_enabled=False)
-
-        if valid_mfa:
+        submitted = (request.form.get("otp_code") or "").strip()
+        expected = session.get("mfa_otp_code") or ""
+        if submitted and expected and secrets.compare_digest(submitted, expected):
+            # app.py's _enforce_admin_mfa_enrollment before_request hook
+            # requires totp_enabled=1 for every soc_analyst session (it's in
+            # _MANDATORY_MFA_ROLES) or it redirects to /admin/mfa-required
+            # on the very next request -- a completed email OTP here is this
+            # account's MFA enrollment, same as the old flow marked it
+            # enrolled after the first successful authenticator-app code.
             mark_totp_enabled(username)
             session.clear()
             session["admin_logged_in"] = True
             session["admin_username"] = username
             # Guaranteed SOC_ANALYST_ROLE already, since sp_admin_login only
-            # ever sets mfa_pending_username for a row whose DB role matched.
+            # ever sets mfa_pending for a row whose DB role matched.
             session["admin_role"] = SOC_ANALYST_ROLE
             soc_step_up_refresh()  # sets session["soc_2fa_verified_at"] -- same key/window utils/auth.py's soc_step_up_valid() checks
             session["_session_created"] = time.time()
@@ -176,73 +168,55 @@ def sp_admin_mfa():
             ensure_session_id(session)
             return redirect("/secops")
 
-        
-        return render_template(
-            "sp_admin_login.html",
-            show_mfa=True,
-            username=username,
-            secret=secret,
-            qr_uri=qr_uri,
-            error="Invalid MFA verification code."
+        log_security_event(
+            "auth.mfa_failure", "Invalid SOC login MFA code", level="WARNING", identifier=username,
         )
+        return render_template("mfa_login_verify.html", username=username, error="Invalid verification code.")
 
-    return render_template(
-        "sp_admin_login.html",
-        show_mfa=True,
-        username=username,
-        secret=secret,
-        qr_uri=qr_uri
-    )
+    return render_template("mfa_login_verify.html", username=username)
 
 
 @secops_bp.route("/secops")
 def secops_dashboard():
-    """The SOC analyst's dashboard, reached only via /sp_admin/login + MFA
-    above -- there is no other entry point, and no in-page TOTP challenge
-    on top of it (unlike the old admin-embedded version this replaces):
-    completing MFA at login already proves possession, so soc_step_up_valid
-    just enforces that proof stays fresh (10 min, same window sp_admin_mfa
-    sets) rather than asking for a second code mid-session. Consolidates
-    everything that used to live behind Settings -> Security and the
-    /admin/security-dashboard route: force-terminated sessions, active
-    login lockouts, per-admin MFA enrollment, config-derived security
-    posture, an all-time security_events summary + paginated/filterable
-    log, application-layer IP bans, session-timeout config, and live
-    performance/DB-pool stats."""
+    """The SOC analyst's dashboard, reached only via /sp_admin/login +
+    email MFA above -- there is no other entry point, and no in-page TOTP
+    challenge on top of it: completing MFA at login already proves
+    possession, so soc_step_up_valid just enforces that proof stays fresh
+    (10 min, same window mfa_login_verify sets) rather than asking for a
+    second code mid-session.
+
+    This page itself is intentionally a minimal KPI summary (live totals
+    fetched client-side from /api/secops/dashboard-stats below); the fuller
+    panels -- compromised sessions, login lockouts, per-admin MFA
+    enrollment, security posture, full events summary, session-timeout
+    config, threat logs, port health, malware sandbox, threat intel, Wi-Fi
+    risk telemetry, SMTP alert config -- remain reachable as their own
+    /api/secops/* endpoints (all still gated by _is_secops_authorized /
+    _soc_session_and_stepup_or_404 below); they're just not embedded in
+    this page's initial render anymore."""
     _soc_session_and_stepup_or_404()
     soc_step_up_refresh()
+    return render_template("soc_security_dashboard.html")
 
+
+@secops_bp.route("/api/secops/dashboard-stats")
+def api_secops_dashboard_stats():
+    """Real-time dashboard KPI stats -- event counts, quarantine, banned IPs."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT sid, identifier, attempt_type, score, last_reason, updated_at
-        FROM session_risk WHERE status='compromised'
-        ORDER BY updated_at DESC LIMIT 50
-    """)
-    compromised_sessions = cursor.fetchall()
-    cursor.execute("""
-        SELECT identifier, attempt_type, failed_count, locked_until, last_attempt
-        FROM login_attempts WHERE locked_until IS NOT NULL AND locked_until > NOW()
-        ORDER BY last_attempt DESC LIMIT 50
-    """)
-    active_lockouts = cursor.fetchall()
-    cursor.execute("SELECT username, role, COALESCE(totp_enabled, 0) FROM admin_users ORDER BY username")
-    admin_mfa_status = cursor.fetchall()
-    events_summary = _security_events_summary(cursor)
-    cursor.execute("SELECT session_timeout FROM company_settings LIMIT 1")
-    r = cursor.fetchone()
-    session_timeout = r[0] if r and r[0] else 30
-    cursor.close()
+    cur = db.cursor(buffered=True)
+    cur.execute("SELECT COUNT(*) FROM security_events")
+    total_events = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM quarantined_files WHERE status='QUARANTINED'")
+    quarantine_count = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM banned_ips WHERE expires_at IS NULL OR expires_at > NOW()")
+    banned_ips = cur.fetchone()[0]
+    cur.close()
     db.close()
-
-    return render_template("soc_security_dashboard.html",
-                           compromised_sessions=compromised_sessions,
-                           active_lockouts=active_lockouts,
-                           admin_mfa_status=admin_mfa_status,
-                           events_summary=events_summary,
-                           security_posture=_compute_security_posture(),
-                           session_timeout_minutes=session_timeout,
-                           )
+    return jsonify({"ok": True, "stats": {
+        "total_events": total_events, "quarantine_count": quarantine_count, "banned_ips": banned_ips,
+    }})
 
 
 @secops_bp.route("/api/security/soc/events")
