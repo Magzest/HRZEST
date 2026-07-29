@@ -49,6 +49,7 @@ from blueprints.core import core_bp
 from blueprints.ai_hrms import ai_hrms_bp
 from blueprints.secops import secops_bp
 from blueprints.email_blast import email_blast_bp
+from blueprints.compliance import compliance_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -67,6 +68,7 @@ flask_app.register_blueprint(core_bp)
 flask_app.register_blueprint(ai_hrms_bp)
 flask_app.register_blueprint(secops_bp)
 flask_app.register_blueprint(email_blast_bp)
+flask_app.register_blueprint(compliance_bp)
 
 # Import app AFTER blueprints are registered so all module-level reads pick
 # up test values AND _register_api_v1_aliases() sees the full route set.

@@ -1489,6 +1489,44 @@ def _init_core_tables(cursor, db):
     _attach_updated_at_trigger(cursor, "shift_swap_requests")
     db.commit()
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS compliance_certifications (
+            id SERIAL PRIMARY KEY,
+            framework VARCHAR(50) NOT NULL UNIQUE,
+            status VARCHAR(20) NOT NULL DEFAULT 'Not Started',
+            owner VARCHAR(150),
+            last_reviewed DATE,
+            next_review DATE,
+            notes TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    _attach_updated_at_trigger(cursor, "compliance_certifications")
+    db.commit()
+    # Seed the framework rows once so the Compliance Center always has all
+    # four to display; status starts "Not Started" (never fabricate a
+    # compliant/certified claim) until an admin genuinely attests otherwise.
+    for _fw in ("GDPR", "SOC 2 Type II", "ISO 27001", "ISO 9001"):
+        cursor.execute(
+            "INSERT INTO compliance_certifications (framework, status) VALUES (%s, 'Not Started') "
+            "ON CONFLICT (framework) DO NOTHING", (_fw,)
+        )
+    db.commit()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS compliance_deadlines (
+            id SERIAL PRIMARY KEY,
+            title VARCHAR(200) NOT NULL,
+            jurisdiction VARCHAR(100),
+            category VARCHAR(50) DEFAULT 'Regulatory',
+            due_date DATE NOT NULL,
+            status VARCHAR(20) DEFAULT 'Pending',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    db.commit()
+
     # Create company_settings table (must precede the migration loop below,
     # which ALTERs this table — on a fresh install with nothing to migrate
     # from, an ALTER before the table exists silently no-ops instead of
@@ -3005,10 +3043,11 @@ if "core.home" not in app.view_functions:
     from blueprints.ai_hrms import ai_hrms_bp
     from blueprints.secops import secops_bp
     from blueprints.email_blast import email_blast_bp
+    from blueprints.compliance import compliance_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, secops_bp, email_blast_bp):
+                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp):
         app.register_blueprint(_bp)
 
 _register_api_v1_aliases()
