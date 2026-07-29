@@ -258,6 +258,11 @@
     <div class="tab {% if active_tab == 'hike' %}active{% endif %}" onclick="switchTab('hike',this)">
       <i class="ti ti-trending-up"></i> Hike &amp; Incentives
     </div>
+    <a class="tab {% if active_tab == '9box' %}active{% endif %}"
+       href="/performance?tab=9box&quarter={{ quarter }}&year={{ year }}{% if selected_dept %}&dept={{ selected_dept }}{% endif %}"
+       style="text-decoration:none;">
+      <i class="ti ti-grid-dots"></i> 9-Box Talent Matrix
+    </a>
     <div class="tab {% if active_tab == 'announcements' %}active{% endif %}" onclick="switchTab('announcements',this)">
       <i class="ti ti-speakerphone"></i> Announcements
       {% if ann_list %}<span class="u-bg-3b82f6 u-c-fff u-br-20 u-p-1-7 u-fs-10 u-fw-700">{{ ann_list|length }}</span>{% endif %}
@@ -566,6 +571,74 @@
       </div>
     </div>
 
+    {% endif %}
+  </div>
+
+  <!-- ═══════════════ TAB: 9-BOX TALENT MATRIX ═══════════════ -->
+  <div class="tab-content {% if active_tab == '9box' %}active{% endif %}" id="tab-9box">
+    {% if active_tab == '9box' %}
+    <div class="filters">
+      <label>Department</label>
+      <select onchange="location.href='/performance?tab=9box&quarter={{ quarter }}&year={{ year }}&dept='+this.value">
+        <option value="">All Departments</option>
+        {% for d in departments %}
+        <option value="{{ d }}" {% if d == selected_dept %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+      <div class="u-ml-auto u-d-flex u-ai-center u-gap-8">
+        {% for q_num, q_label in [(1,'Q1'),(2,'Q2'),(3,'Q3'),(4,'Q4')] %}
+        <a class="q-tab {% if q_num == quarter %}active{% endif %}"
+           href="/performance?tab=9box&quarter={{ q_num }}&year={{ year }}{% if selected_dept %}&dept={{ selected_dept }}{% endif %}">
+          {{ q_label }}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="u-fs-12 u-c-64748b u-mb-16">
+      <i class="ti ti-info-circle"></i>
+      Plots employees who have both an overall performance rating (from KPIs) and a manager-set potential rating
+      for Q{{ quarter }} {{ year }} — set the latter from the <strong>Feedback</strong> tab of an employee's review.
+      {{ nine_box_rated_count }} employee{{ '' if nine_box_rated_count == 1 else 's' }} plotted.
+    </div>
+
+    <div class="card" style="padding:24px;">
+      <div style="display:grid;grid-template-columns:28px 1fr;gap:0;">
+        <div style="display:flex;align-items:center;justify-content:center;">
+          <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">
+            Potential &rarr;
+          </div>
+        </div>
+        <div style="display:grid;grid-template-rows:repeat(3,1fr);gap:10px;">
+          {% for pot_tier in [2,1,0] %}
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+            {% for perf_tier in [0,1,2] %}
+            {% set cell = nine_box_grid[pot_tier][perf_tier] %}
+            <div style="border-radius:12px;border:1.5px solid {{ nine_box_colors[pot_tier][perf_tier] }}33;background:{{ nine_box_colors[pot_tier][perf_tier] }}0d;padding:12px;min-height:120px;">
+              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:{{ nine_box_colors[pot_tier][perf_tier] }};margin-bottom:8px;">
+                {{ nine_box_labels[pot_tier][perf_tier] }} <span style="opacity:.6;">({{ cell|length }})</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px;">
+                {% for c_eid, c_name, c_dept, c_perf, c_pot in cell %}
+                <a href="/performance_review/{{ c_eid }}?quarter={{ quarter }}&year={{ year }}"
+                   style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 9px;font-size:12px;color:#1e293b;display:block;">
+                  <div style="font-weight:700;">{{ c_name }}</div>
+                  <div style="font-size:10px;color:#94a3b8;">{{ c_dept or c_eid }} &middot; P{{ "%.1f"|format(c_perf) }} / Pt{{ "%.1f"|format(c_pot) }}</div>
+                </a>
+                {% else %}
+                <div style="font-size:11px;color:#cbd5e1;font-style:italic;">Empty</div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;padding:0 4px;">
+            <span>Low</span><span>Performance &rarr;</span><span>High</span>
+          </div>
+        </div>
+      </div>
+    </div>
     {% endif %}
   </div>
 

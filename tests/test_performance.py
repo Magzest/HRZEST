@@ -118,6 +118,139 @@ class TestPerformanceReviewLifecycle:
             _cleanup_reviews(db_engine, seed_employee["employee_id"])
 
 
+class TestNineBoxTalentMatrix:
+    """9-box: performance (KPI-derived overall_rating) vs. potential
+    (manager-set potential_rating), each bucketed low(<3)/mid(3)/high(>=4)."""
+
+    def test_9box_tab_renders(self, client, seed_admin):
+        _admin_session(client, seed_admin)
+        resp = client.get("/performance?tab=9box")
+        assert resp.status_code == 200
+        assert b"9-Box Talent Matrix" in resp.data
+
+    def test_save_review_persists_potential_rating(self, client, seed_admin, seed_employee, db_engine):
+        _admin_session(client, seed_admin)
+        today = datetime.date.today()
+        q = (today.month - 1) // 3 + 1
+        try:
+            resp = client.post("/performance_save_review", data={
+                "employee_id": seed_employee["employee_id"],
+                "quarter": str(q), "year": str(today.year),
+                "reviewer_feedback": "", "status": "Draft", "potential_rating": "4",
+            }, follow_redirects=False)
+            assert resp.status_code in (301, 302)
+            cur = db_engine.cursor()
+            cur.execute(
+                "SELECT potential_rating FROM performance_reviews WHERE employee_id=%s AND quarter=%s AND year=%s",
+                (seed_employee["employee_id"], q, today.year),
+            )
+            assert float(cur.fetchone()[0]) == 4.0
+            cur.close()
+        finally:
+            _cleanup_reviews(db_engine, seed_employee["employee_id"])
+
+    def test_save_review_defaults_potential_to_zero_when_omitted(self, client, seed_admin, seed_employee, db_engine):
+        _admin_session(client, seed_admin)
+        today = datetime.date.today()
+        q = (today.month - 1) // 3 + 1
+        try:
+            client.post("/performance_save_review", data={
+                "employee_id": seed_employee["employee_id"],
+                "quarter": str(q), "year": str(today.year),
+                "reviewer_feedback": "", "status": "Draft",
+            })
+            cur = db_engine.cursor()
+            cur.execute(
+                "SELECT potential_rating FROM performance_reviews WHERE employee_id=%s AND quarter=%s AND year=%s",
+                (seed_employee["employee_id"], q, today.year),
+            )
+            assert float(cur.fetchone()[0]) == 0.0
+            cur.close()
+        finally:
+            _cleanup_reviews(db_engine, seed_employee["employee_id"])
+
+    def test_employee_plotted_in_correct_cell(self, client, seed_admin, seed_employee, db_engine):
+        """overall_rating=4.5 (high) + potential_rating=4.0 (high) -> the
+        'Star' cell (high performance, high potential)."""
+        _admin_session(client, seed_admin)
+        today = datetime.date.today()
+        q = (today.month - 1) // 3 + 1
+        try:
+            client.post("/performance_save_review", data={
+                "employee_id": seed_employee["employee_id"],
+                "quarter": str(q), "year": str(today.year),
+                "reviewer_feedback": "", "status": "Draft", "potential_rating": "4",
+            })
+            cur = db_engine.cursor()
+            cur.execute(
+                "UPDATE performance_reviews SET overall_rating=4.5 WHERE employee_id=%s AND quarter=%s AND year=%s",
+                (seed_employee["employee_id"], q, today.year),
+            )
+            db_engine.commit()
+            cur.close()
+
+            resp = client.get(f"/performance?tab=9box&quarter={q}&year={today.year}")
+            assert resp.status_code == 200
+            body = resp.data.decode()
+            # Every tab's panel is rendered on the same page (shown/hidden via
+            # CSS), so scope the search to the 9-box panel specifically --
+            # otherwise the employee's row in the (hidden) main table would
+            # produce a false positive.
+            grid_html = body[body.index('id="tab-9box"'):body.index('id="tab-announcements"')]
+            assert seed_employee["name"] in grid_html
+            # The employee's card must land inside the "Star" cell (high
+            # performance, high potential) specifically -- "Star" is that
+            # cell's unique label within the grid.
+            star_cell_start = grid_html.index("Star")
+            assert seed_employee["name"] in grid_html[star_cell_start:star_cell_start + 500]
+        finally:
+            _cleanup_reviews(db_engine, seed_employee["employee_id"])
+
+    def test_employee_without_potential_rating_excluded_from_grid(self, client, seed_admin, seed_employee, db_engine):
+        """Only overall_rating set (no potential) -- must not appear on the
+        9-box grid at all, since the grid needs both axes to place a point."""
+        _admin_session(client, seed_admin)
+        today = datetime.date.today()
+        q = (today.month - 1) // 3 + 1
+        try:
+            client.post("/performance_save_review", data={
+                "employee_id": seed_employee["employee_id"],
+                "quarter": str(q), "year": str(today.year),
+                "reviewer_feedback": "", "status": "Draft",
+            })
+            cur = db_engine.cursor()
+            cur.execute(
+                "UPDATE performance_reviews SET overall_rating=4.5 WHERE employee_id=%s AND quarter=%s AND year=%s",
+                (seed_employee["employee_id"], q, today.year),
+            )
+            db_engine.commit()
+            cur.close()
+
+            resp = client.get(f"/performance?tab=9box&quarter={q}&year={today.year}")
+            assert resp.status_code == 200
+            body = resp.data.decode()
+            grid_html = body[body.index('id="tab-9box"'):body.index('id="tab-announcements"')]
+            assert seed_employee["name"] not in grid_html
+        finally:
+            _cleanup_reviews(db_engine, seed_employee["employee_id"])
+
+    def test_potential_rating_field_prefills_on_review_page(self, client, seed_admin, seed_employee, db_engine):
+        _admin_session(client, seed_admin)
+        today = datetime.date.today()
+        q = (today.month - 1) // 3 + 1
+        try:
+            client.post("/performance_save_review", data={
+                "employee_id": seed_employee["employee_id"],
+                "quarter": str(q), "year": str(today.year),
+                "reviewer_feedback": "", "status": "Draft", "potential_rating": "3",
+            })
+            resp = client.get(f"/performance_review/{seed_employee['employee_id']}?quarter={q}&year={today.year}")
+            assert resp.status_code == 200
+            assert b'value="3" selected' in resp.data
+        finally:
+            _cleanup_reviews(db_engine, seed_employee["employee_id"])
+
+
 class TestKpiLifecycleAndRatingMath:
     def _setup_review(self, client, seed_admin, emp_id):
         _admin_session(client, seed_admin)

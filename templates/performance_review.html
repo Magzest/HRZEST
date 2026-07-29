@@ -302,6 +302,17 @@
           <label>Manager / HR Feedback</label>
           <textarea name="reviewer_feedback" rows="5" placeholder="Write detailed feedback about the employee's performance, strengths, and areas for improvement…" {% if review and review[4]=='Submitted' %}readonly{% endif %}>{{ review[2] if review and review[2] else '' }}</textarea>
         </div>
+        <div class="form-group">
+          <label>Potential Rating <span class="u-fw-400 u-ttr-none">— manager's assessment of future growth capacity, feeds the 9-Box Talent Matrix</span></label>
+          <select name="potential_rating" {% if review and review[4]=='Submitted' %}disabled{% endif %}>
+            <option value="0" {% if not review or review[5]|round(1) == 0 %}selected{% endif %}>Not rated</option>
+            <option value="1" {% if review and review[5]|round(1) == 1 %}selected{% endif %}>1 — Low potential</option>
+            <option value="2" {% if review and review[5]|round(1) == 2 %}selected{% endif %}>2 — Below average</option>
+            <option value="3" {% if review and review[5]|round(1) == 3 %}selected{% endif %}>3 — Solid, steady growth</option>
+            <option value="4" {% if review and review[5]|round(1) == 4 %}selected{% endif %}>4 — High potential</option>
+            <option value="5" {% if review and review[5]|round(1) == 5 %}selected{% endif %}>5 — Exceptional, future leader</option>
+          </select>
+        </div>
         {% if not review or review[4] != 'Submitted' %}
         <div class="u-ta-right">
           <button type="submit" class="btn btn-primary"><i class="ti ti-device-floppy"></i> Save Feedback</button>

@@ -17,6 +17,29 @@ performance_bp = Blueprint("performance", __name__)
 RATING_LABELS = {0: "Not Rated", 1: "Unsatisfactory", 2: "Needs Improvement",
                  3: "Meets Expectations", 4: "Exceeds Expectations", 5: "Outstanding"}
 
+# 9-Box Talent Matrix: performance (x-axis, KPI-derived overall_rating) vs.
+# potential (y-axis, manager-set potential_rating), each bucketed low/mid/high
+# on the existing 1-5 rating scale (low=1-2, mid=3, high=4-5). Indexed
+# [potential_tier][performance_tier], both 0=low, 1=mid, 2=high.
+NINE_BOX_LABELS = [
+    ["Risk", "Inconsistent", "Enigma"],
+    ["Underperformer", "Core Player", "Emerging Talent"],
+    ["Trusted Professional", "High Performer", "Star"],
+]
+NINE_BOX_COLORS = [
+    ["#ef4444", "#f59e0b", "#3b82f6"],
+    ["#f59e0b", "#3b82f6", "#22c55e"],
+    ["#3b82f6", "#22c55e", "#15803d"],
+]
+
+
+def _rating_tier(rating):
+    if rating >= 4:
+        return 2
+    if rating >= 3:
+        return 1
+    return 0
+
 
 @performance_bp.route("/performance")
 @admin_required
@@ -115,6 +138,26 @@ def performance():
             hike_employees.append((h_eid, h_name, h_role, h_dept, h_rating, h_status,
                                    h_ctc, band_label, band_color, hike_pct, new_ctc, inc_pct, bonus))
 
+    nine_box_grid = [[[] for _ in range(3)] for _ in range(3)]
+    nine_box_rated_count = 0
+    if active_tab == '9box':
+        _nb_co, _nb_co_args = co_scope_column(active_cid, alias="e")
+        _nb_params = (yr, q) + _nb_co_args
+        cursor.execute(f"""
+            SELECT e.employee_id, e.name, COALESCE(e.department,''),
+                   pr.overall_rating, pr.potential_rating
+            FROM employees e
+            JOIN performance_reviews pr ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
+            WHERE e.is_active=1 AND pr.overall_rating > 0 AND COALESCE(pr.potential_rating,0) > 0 {_nb_co}
+            ORDER BY e.name
+        """, _nb_params)  # nosec B608
+        for nb_eid, nb_name, nb_dept, nb_perf, nb_pot in cursor.fetchall():
+            nb_perf, nb_pot = float(nb_perf), float(nb_pot)
+            nine_box_grid[_rating_tier(nb_pot)][_rating_tier(nb_perf)].append(
+                (nb_eid, nb_name, nb_dept, nb_perf, nb_pot)
+            )
+            nine_box_rated_count += 1
+
     cursor.close()
     db.close()
 
@@ -136,6 +179,10 @@ def performance():
                            total_hike_cost=total_hike_cost,
                            total_bonus_pool=total_bonus_pool,
                            hike_eligible_count=hike_eligible_count,
+                           nine_box_grid=nine_box_grid,
+                           nine_box_labels=NINE_BOX_LABELS,
+                           nine_box_colors=NINE_BOX_COLORS,
+                           nine_box_rated_count=nine_box_rated_count,
                            active_nav="performance",
                            )
 
@@ -164,7 +211,7 @@ def performance_review(emp_id):
 
     # Get or create review
     cursor.execute("""
-        SELECT id, overall_rating, reviewer_feedback, employee_comment, status
+        SELECT id, overall_rating, reviewer_feedback, employee_comment, status, COALESCE(potential_rating,0)
         FROM performance_reviews WHERE employee_id=%s AND quarter=%s AND year=%s
     """, (emp_id, q, yr))
     review = cursor.fetchone()
@@ -214,13 +261,21 @@ def performance_save_review():
     feedback = request.form.get("reviewer_feedback", "").strip()
     status = request.form.get("status", "Draft")
 
+    # Potential (9-box matrix's other axis) is a manager judgment call, not
+    # KPI-derived like overall_rating below -- set directly here, same 0-5
+    # scale, defaults to 0 (not rated) rather than guessing.
+    try:
+        potential = max(0, min(5, float(request.form.get("potential_rating", "0") or 0)))
+    except ValueError:
+        potential = 0
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
-        INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status)
-        VALUES (%s,%s,%s,%s,%s)
-        ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, updated_at=NOW()
-    """, (emp_id, q, yr, feedback, status, feedback, status))
+        INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status, potential_rating)
+        VALUES (%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, potential_rating=%s, updated_at=NOW()
+    """, (emp_id, q, yr, feedback, status, potential, feedback, status, potential))
     db.commit()
 
     # Recalculate overall rating from KPIs
