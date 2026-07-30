@@ -1,265 +1,648 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, ActivityIndicator, Switch,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from '@react-navigation/native';
-import { fetchEmployeePortal, submitResignation } from '../../api/client';
-import Badge from '../../components/Badge';
-import { COLORS } from '../../config';
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+  Switch,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+
+import ProfileHeader from "../../components/profile/ProfileHeader";
+import { fetchEmployeePortal, submitResignation } from "../../api/client";
 
 const REASONS = [
-  '📈 Career Growth',
-  '💼 Better Opportunity',
-  '🏠 Personal Reasons',
-  '🏥 Health Issues',
-  '📍 Relocation',
-  '✏️ Other',
+  { icon: "trending-up-outline", label: "Career Growth" },
+  { icon: "briefcase-outline", label: "Better Opportunity" },
+  { icon: "home-outline", label: "Personal Reasons" },
+  { icon: "fitness-outline", label: "Health Issues" },
+  { icon: "navigate-outline", label: "Relocation" },
+  { icon: "create-outline", label: "Other" },
 ];
 
 function addDays(n) {
   const d = new Date();
   d.setDate(d.getDate() + n);
-  return d.toISOString().split('T')[0];
+  return d.toISOString().split("T")[0];
 }
 
 export default function ResignScreen() {
   const [existing, setExisting] = useState(null);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [lastDay, setLastDay]   = useState(addDays(30));
-  const [reason, setReason]     = useState('');
+  const [lastDay, setLastDay] = useState(addDays(30));
+  const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
 
-  const load = async () => {
+  const loadData = async () => {
     try {
       const res = await fetchEmployeePortal();
-      if (res.data.ok) setExisting(res.data.resignation);
+      if (res && res.data && res.data.ok) {
+        setExisting(res.data.resignation);
+      }
     } catch (_) {}
     setLoading(false);
   };
 
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleSubmit = () => {
-    if (!reason) { Alert.alert('Error', 'Please select a reason.'); return; }
-    if (!confirmed) { Alert.alert('Error', 'Please confirm this action.'); return; }
+    if (!reason) {
+      Alert.alert("Reason Required", "Please select a reason for your resignation.");
+      return;
+    }
+    if (!confirmed) {
+      Alert.alert("Confirmation Required", "Please acknowledge the notice statement before submitting.");
+      return;
+    }
 
     Alert.alert(
-      '⚠️ Confirm Resignation',
-      `Last Working Day: ${lastDay}\nReason: ${reason}\n\nThis action cannot be undone. Proceed?`,
+      "Confirm Resignation",
+      `Last Working Day: ${lastDay}\nReason: ${reason}\n\nThis official action cannot be undone. Are you sure you want to submit?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Submit',
-          style: 'destructive',
+          text: "Submit Resignation",
+          style: "destructive",
           onPress: async () => {
             setSubmitting(true);
             try {
               const res = await submitResignation(lastDay, reason);
-              if (res.data.ok) {
-                Alert.alert('Submitted', 'Your resignation has been submitted successfully.');
-                await load();
+              if (res && res.data && res.data.ok) {
+                Alert.alert("Submitted", "Your resignation request has been submitted successfully.");
+                await loadData();
               } else {
-                Alert.alert('Error', res.data.msg);
+                Alert.alert("Error", res?.data?.msg || "Failed to submit resignation.");
               }
             } catch (e) {
-              Alert.alert('Error', e.response?.data?.msg || 'Failed to submit.');
+              Alert.alert("Error", e.response?.data?.msg || "Failed to submit resignation.");
+            } finally {
+              setSubmitting(false);
             }
-            setSubmitting(false);
           },
         },
       ]
     );
   };
 
-  // Date options: 30 to 90 days from today
   const dateOptions = Array.from({ length: 61 }, (_, i) => addDays(30 + i));
 
   if (loading) {
     return (
-      <LinearGradient colors={COLORS.employeeBg} style={styles.center}>
-        <ActivityIndicator size="large" color="#fff" />
+      <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#173B8C" />
       </LinearGradient>
     );
   }
 
-  // Show status if resignation exists and not Declined
-  if (existing && existing.status !== 'Declined') {
+  // Show status view if active resignation exists and is not Declined
+  if (existing && existing.status !== "Declined") {
+    const isAccepted = existing.status === "Accepted" || existing.status === "Approved";
+    const isPending = existing.status === "Pending" || !existing.status;
+
     return (
-      <LinearGradient colors={COLORS.employeeBg} style={styles.bg}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={styles.pageTitle}>🚨 Resignation Status</Text>
+      <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+        <SafeAreaView style={{ flex: 1 }}>
+          <ProfileHeader title="Resignation Status" subtitle="EMPLOYEE PORTAL" />
 
-          <View style={[styles.statusCard, existing.status === 'Accepted' ? styles.acceptedCard : styles.pendingCard]}>
-            <View style={styles.statusRow}>
-              <Text style={styles.lbl}>Status</Text>
-              <Badge label={existing.status} />
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.lbl}>Last Working Day</Text>
-              <Text style={[styles.val, { color: COLORS.redLight }]}>{existing.last_working_day}</Text>
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.lbl}>Reason</Text>
-              <Text style={[styles.val, { flex: 1, textAlign: 'right' }]}>{existing.reason}</Text>
-            </View>
-            <View style={styles.statusRow}>
-              <Text style={styles.lbl}>Submitted</Text>
-              <Text style={styles.val}>{existing.created_at?.slice(0, 10)}</Text>
-            </View>
-          </View>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.content}
+          >
+            {/* Status Header Banner Card */}
+            <View style={[styles.card, isAccepted ? styles.cardAccepted : styles.cardPending]}>
+              <View style={styles.statusHeaderRow}>
+                <View style={styles.statusTitleGroup}>
+                  <Text style={styles.statusHeaderLabel}>CURRENT STATUS</Text>
+                  <Text style={[styles.statusHeaderTitle, { color: isAccepted ? "#059669" : "#D97706" }]}>
+                    {existing.status}
+                  </Text>
+                </View>
+                <View style={[styles.badgePill, { backgroundColor: isAccepted ? "#D1FAE5" : "#FEF3C7" }]}>
+                  <Ionicons
+                    name={isAccepted ? "checkmark-circle" : "time"}
+                    size={14}
+                    color={isAccepted ? "#059669" : "#D97706"}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.badgeText, { color: isAccepted ? "#059669" : "#D97706" }]}>
+                    {existing.status}
+                  </Text>
+                </View>
+              </View>
 
-          {existing.status === 'Pending' && (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoTxt}>⏳ Your resignation is pending review by the admin.</Text>
+              <View style={styles.divider} />
+
+              <View style={styles.detailItem}>
+                <View style={styles.detailIconCircle}>
+                  <Ionicons name="calendar-outline" size={16} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.detailLabel}>Last Working Day</Text>
+                  <Text style={styles.detailValueRed}>{existing.last_working_day}</Text>
+                </View>
+              </View>
+
+              {!!existing.reason && (
+                <View style={styles.reasonBox}>
+                  <Text style={styles.reasonBoxLabel}>REASON</Text>
+                  <Text style={styles.reasonBoxText}>{existing.reason}</Text>
+                </View>
+              )}
+
+              {!!existing.created_at && (
+                <View style={styles.submittedRow}>
+                  <Ionicons name="time-outline" size={13} color="#64748B" />
+                  <Text style={styles.submittedText}>
+                    Submitted on {existing.created_at?.slice(0, 10)}
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
-          {existing.status === 'Accepted' && (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoTxt}>✅ Your resignation has been accepted. Please complete the handover process.</Text>
-            </View>
-          )}
-        </ScrollView>
+
+            {/* Info Hint Card */}
+            {isPending && (
+              <View style={styles.infoBanner}>
+                <Ionicons name="hourglass-outline" size={20} color="#D97706" style={{ marginRight: 10 }} />
+                <Text style={styles.infoBannerText}>
+                  Your resignation request is currently under review by management. You will be notified once a decision is made.
+                </Text>
+              </View>
+            )}
+
+            {isAccepted && (
+              <View style={[styles.infoBanner, { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" }]}>
+                <Ionicons name="checkmark-done-circle-outline" size={20} color="#059669" style={{ marginRight: 10 }} />
+                <Text style={[styles.infoBannerText, { color: "#065F46" }]}>
+                  Your resignation request has been accepted. Please coordinate with HR for handover and offboarding formalities.
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </SafeAreaView>
       </LinearGradient>
     );
   }
 
   return (
-    <LinearGradient colors={COLORS.employeeBg} style={styles.bg}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.pageTitle}>🚨 Resign</Text>
-        {existing?.status === 'Declined' && (
-          <View style={styles.declinedBanner}>
-            <Text style={styles.declinedTxt}>❌ Your previous resignation was declined. You may submit a new one.</Text>
-          </View>
-        )}
+    <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ProfileHeader title="Resignation Request" subtitle="EMPLOYEE PORTAL" />
 
-        {/* Warning notice */}
-        <View style={styles.warnCard}>
-          <Text style={styles.warnTitle}>⚠️ Before you proceed:</Text>
-          <Text style={styles.warnText}>• A 1-month notice period is required</Text>
-          <Text style={styles.warnText}>• Last working day must be at least 30 days from today</Text>
-          <Text style={styles.warnText}>• Admin will be notified immediately</Text>
-          <Text style={styles.warnText}>• This action cannot be undone</Text>
-        </View>
-
-        {/* Last working day */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Last Working Day</Text>
-          <Text style={styles.cardSubtitle}>Minimum 30 days from today</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
-            {dateOptions.filter((_, i) => i % 3 === 0).slice(0, 10).map(d => (
-              <TouchableOpacity
-                key={d}
-                style={[styles.dateChip, lastDay === d && styles.dateChipActive]}
-                onPress={() => setLastDay(d)}
-              >
-                <Text style={[styles.dateNum, lastDay === d && styles.dateNumActive]}>
-                  {d.split('-')[2]}
-                </Text>
-                <Text style={[styles.dateMon, lastDay === d && styles.dateMonActive]}>
-                  {new Date(d).toLocaleString('default', { month: 'short' })}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <Text style={styles.selectedDate}>Selected: {new Date(lastDay).toDateString()}</Text>
-        </View>
-
-        {/* Reason */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Reason for Resignation</Text>
-          <View style={styles.chips}>
-            {REASONS.map(r => {
-              const val = r.replace(/^.+?\s/, '');
-              return (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.chip, reason === val && styles.chipActive]}
-                  onPress={() => setReason(val)}
-                >
-                  <Text style={[styles.chipTxt, reason === val && styles.chipTxtActive]}>{r}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Confirmation */}
-        <View style={styles.confirmRow}>
-          <Switch
-            value={confirmed}
-            onValueChange={setConfirmed}
-            trackColor={{ true: '#ef4444', false: 'rgba(255,255,255,0.15)' }}
-            thumbColor="#fff"
-          />
-          <Text style={styles.confirmTxt}>I understand this resignation is official and cannot be undone.</Text>
-        </View>
-
-        {/* Submit */}
-        <TouchableOpacity
-          style={[styles.resignBtn, submitting && styles.disabledBtn]}
-          onPress={handleSubmit}
-          disabled={submitting}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
         >
-          {submitting
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.resignTxt}>📤 Submit Resignation</Text>}
-        </TouchableOpacity>
-      </ScrollView>
+          {existing?.status === "Declined" && (
+            <View style={styles.declinedNotice}>
+              <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+              <Text style={styles.declinedNoticeText}>
+                Your previous resignation request was declined by management. You may submit a new request if needed.
+              </Text>
+            </View>
+          )}
+
+          {/* Warning Notice Card */}
+          <View style={styles.warningCard}>
+            <View style={styles.warningTitleRow}>
+              <Ionicons name="warning" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+              <Text style={styles.warningTitle}>Notice Policy Guidelines</Text>
+            </View>
+            <Text style={styles.warningText}>• Standard 30-day notice period is required.</Text>
+            <Text style={styles.warningText}>• Last working day must be at least 30 days from today.</Text>
+            <Text style={styles.warningText}>• HR and management will be notified immediately.</Text>
+            <Text style={styles.warningText}>• Resignation requests are binding once submitted.</Text>
+          </View>
+
+          {/* Last Working Day Picker */}
+          <View style={styles.card}>
+            <Text style={styles.cardHeaderTitle}>Select Last Working Day</Text>
+            <Text style={styles.cardHeaderSubtitle}>Minimum 30 days notice from today</Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateChipsRow}
+            >
+              {dateOptions
+                .filter((_, i) => i % 3 === 0)
+                .slice(0, 10)
+                .map((d) => {
+                  const active = lastDay === d;
+                  const dateObj = new Date(d);
+                  const dayNum = d.split("-")[2];
+                  const monthName = dateObj.toLocaleString("default", { month: "short" });
+
+                  return (
+                    <TouchableOpacity
+                      key={d}
+                      activeOpacity={0.7}
+                      style={[styles.dateChip, active && styles.dateChipActive]}
+                      onPress={() => setLastDay(d)}
+                    >
+                      <Text style={[styles.dateNum, active && styles.dateNumActive]}>
+                        {dayNum}
+                      </Text>
+                      <Text style={[styles.dateMon, active && styles.dateMonActive]}>
+                        {monthName}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+
+            <View style={styles.selectedDateBadge}>
+              <Ionicons name="calendar-sharp" size={14} color="#173B8C" style={{ marginRight: 6 }} />
+              <Text style={styles.selectedDateText}>
+                Selected Last Day: <Text style={{ fontWeight: "800", color: "#173B8C" }}>{new Date(lastDay).toDateString()}</Text>
+              </Text>
+            </View>
+          </View>
+
+          {/* Reason Selection */}
+          <View style={styles.card}>
+            <Text style={styles.cardHeaderTitle}>Reason for Resignation</Text>
+            <Text style={styles.cardHeaderSubtitle}>Select the primary reason for your departure</Text>
+
+            <View style={styles.reasonChipsGrid}>
+              {REASONS.map((r) => {
+                const active = reason === r.label;
+                return (
+                  <TouchableOpacity
+                    key={r.label}
+                    activeOpacity={0.7}
+                    style={[styles.reasonChip, active && styles.reasonChipActive]}
+                    onPress={() => setReason(r.label)}
+                  >
+                    <Ionicons
+                      name={r.icon}
+                      size={14}
+                      color={active ? "#FFFFFF" : "#475569"}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.reasonChipText, active && styles.reasonChipTextActive]}>
+                      {r.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Confirmation Switch Card */}
+          <View style={styles.confirmCard}>
+            <Switch
+              value={confirmed}
+              onValueChange={setConfirmed}
+              trackColor={{ true: "#DC2626", false: "#CBD5E1" }}
+              thumbColor="#FFFFFF"
+            />
+            <Text style={styles.confirmText}>
+              I confirm that this resignation request is official and I understand it will be logged with HR.
+            </Text>
+          </View>
+
+          {/* Submit Button */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[styles.submitBtn, (!confirmed || submitting) && styles.submitBtnDisabled]}
+            disabled={!confirmed || submitting}
+            onPress={handleSubmit}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="paper-plane-sharp" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.submitBtnText}>Submit Official Resignation</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  bg:     { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  scroll: { padding: 20, paddingTop: 60, paddingBottom: 40 },
+  container: {
+    flex: 1,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 90,
+  },
+  declinedNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  declinedNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  warningCard: {
+    backgroundColor: "#FEF2F2",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  warningTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  warningTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+  warningText: {
+    fontSize: 12,
+    color: "#991B1B",
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E8EDF5",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  cardHeaderTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  cardHeaderSubtitle: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  dateChipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 12,
+  },
+  dateChip: {
+    width: 58,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dateChipActive: {
+    backgroundColor: "#DC2626",
+    borderColor: "#DC2626",
+  },
+  dateNum: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  dateNumActive: {
+    color: "#FFFFFF",
+  },
+  dateMon: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+    marginTop: 2,
+  },
+  dateMonActive: {
+    color: "rgba(255,255,255,0.9)",
+  },
+  selectedDateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EEF4FF",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  selectedDateText: {
+    fontSize: 12,
+    color: "#475569",
+  },
+  reasonChipsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 14,
+  },
+  reasonChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  reasonChipActive: {
+    backgroundColor: "#173B8C",
+    borderColor: "#173B8C",
+  },
+  reasonChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  reasonChipTextActive: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+  },
+  confirmCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#E8EDF5",
+    gap: 12,
+  },
+  confirmText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#475569",
+    lineHeight: 17,
+  },
+  submitBtn: {
+    backgroundColor: "#DC2626",
+    height: 50,
+    borderRadius: 14,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#DC2626",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  submitBtnDisabled: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  submitBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
 
-  pageTitle: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 16 },
-
-  declinedBanner: { backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' },
-  declinedTxt:    { color: COLORS.redLight, fontSize: 13 },
-
-  warnCard:  { backgroundColor: 'rgba(239,68,68,0.08)', borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(239,68,68,0.25)' },
-  warnTitle: { color: '#f87171', fontWeight: '700', marginBottom: 8 },
-  warnText:  { color: '#fca5a5', fontSize: 13, marginTop: 3 },
-
-  card:        { backgroundColor: COLORS.card, borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: COLORS.border },
-  cardTitle:   { color: '#fff', fontWeight: '700', fontSize: 14 },
-  cardSubtitle:{ color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
-
-  dateChip:       { width: 54, alignItems: 'center', padding: 10, borderRadius: 12, marginRight: 8, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: COLORS.border },
-  dateChipActive: { backgroundColor: 'rgba(239,68,68,0.4)', borderColor: '#ef4444' },
-  dateNum:        { color: '#fff', fontWeight: '700', fontSize: 16 },
-  dateNumActive:  { color: '#fff' },
-  dateMon:        { color: COLORS.textMuted, fontSize: 11, marginTop: 2 },
-  dateMonActive:  { color: 'rgba(255,255,255,0.9)' },
-  selectedDate:   { color: COLORS.textMuted, fontSize: 12, marginTop: 10 },
-
-  chips:        { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  chip:         { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: COLORS.border },
-  chipActive:   { backgroundColor: 'rgba(239,68,68,0.3)', borderColor: '#ef4444' },
-  chipTxt:      { color: COLORS.textMuted, fontSize: 13 },
-  chipTxtActive:{ color: '#fff', fontWeight: '600' },
-
-  confirmRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20, backgroundColor: 'rgba(239,68,68,0.07)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)' },
-  confirmTxt: { flex: 1, color: COLORS.textMuted, fontSize: 13, lineHeight: 18 },
-
-  resignBtn:    { backgroundColor: '#ef4444', paddingVertical: 15, borderRadius: 14, alignItems: 'center' },
-  disabledBtn:  { opacity: 0.6 },
-  resignTxt:    { color: '#fff', fontWeight: '700', fontSize: 15 },
-
-  // Status card styles
-  statusCard:   { backgroundColor: COLORS.card, borderRadius: 16, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: COLORS.border },
-  pendingCard:  { borderColor: 'rgba(251,191,36,0.3)' },
-  acceptedCard: { borderColor: 'rgba(34,197,94,0.3)' },
-  statusRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  lbl:          { color: COLORS.textMuted, fontSize: 13 },
-  val:          { color: '#fff', fontSize: 13, fontWeight: '600' },
-  infoBox:      { backgroundColor: 'rgba(99,102,241,0.1)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(99,102,241,0.25)' },
-  infoTxt:      { color: '#a5b4fc', fontSize: 13, lineHeight: 20 },
+  // Existing Resignation Card Styles
+  cardPending: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#D97706",
+  },
+  cardAccepted: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#059669",
+  },
+  statusHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  statusTitleGroup: {
+    flex: 1,
+  },
+  statusHeaderLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#64748B",
+    letterSpacing: 0.6,
+  },
+  statusHeaderTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    marginTop: 2,
+  },
+  badgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  divider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 12,
+  },
+  detailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  detailIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 10,
+  },
+  detailLabel: {
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  detailValueRed: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#DC2626",
+    marginTop: 1,
+  },
+  reasonBox: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  reasonBoxLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#94A3B8",
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  reasonBoxText: {
+    fontSize: 13,
+    color: "#334155",
+    lineHeight: 18,
+  },
+  submittedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  submittedText: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  infoBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: "#92400E",
+    lineHeight: 18,
+    fontWeight: "500",
+  },
 });

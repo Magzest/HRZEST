@@ -4,149 +4,165 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
+  StatusBar,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, DrawerActions } from "@react-navigation/native";
 
 export default function ProfileHeader({
   title = "My Profile",
-  subtitle = "",
+  subtitle = "EMPLOYEE PORTAL",
   showBack = false,
+  rightAction,
 }) {
-      const navigation = useNavigation();
+  const navigation = useNavigation();
 
-  const today = new Date();
-
-  const formattedDate = today.toLocaleDateString("en-US", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const handleMenuOrBack = () => {
+    if (showBack) {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.dispatch(DrawerActions.openDrawer());
+      }
+    } else {
+      navigation.dispatch(DrawerActions.openDrawer());
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle="dark-content"
+      />
       <View style={styles.container}>
-        {/* Left */}
-
+        {/* Left Action (Hamburger or Back) */}
         <TouchableOpacity
-  activeOpacity={0.8}
-  style={styles.iconButton}
-  onPress={() => {
-    if (showBack) {
-      navigation.goBack();
-    } else {
-      navigation.openDrawer();
-    }
-  }}
->
-  <Ionicons
-    name={showBack ? "arrow-back" : "menu"}
-    size={22}
-    color="#173B8C"
-  />
-</TouchableOpacity>
-        {/* Center */}
+          activeOpacity={0.7}
+          style={styles.iconButton}
+          onPress={handleMenuOrBack}
+        >
+          <Ionicons
+            name={showBack ? "arrow-back-sharp" : "menu-sharp"}
+            size={22}
+            color="#0F172A"
+          />
+        </TouchableOpacity>
 
-        <View style={styles.center}>
-          <Text style={styles.subtitle}>
-            {subtitle}
-          </Text>
-
-          <Text style={styles.title}>
+        {/* Title Section (Aligned next to Hamburger) */}
+        <View style={styles.titleSection}>
+          {!!subtitle && (
+            <View style={styles.tagBadge}>
+              <Text style={styles.tagText}>{subtitle.toUpperCase()}</Text>
+            </View>
+          )}
+          <Text numberOfLines={1} style={styles.title}>
             {title}
-          </Text>
-
-          <Text style={styles.date}>
-            {formattedDate}
           </Text>
         </View>
 
-        {/* Right */}
-
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.iconButton}
-        >
-          <Ionicons
-            name="person-circle-outline"
-            size={26}
-            color="#173B8C"
-          />
-        </TouchableOpacity>
+        {/* Right Action */}
+        <View style={styles.rightGroup}>
+          {rightAction ? (
+            rightAction
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.avatarButton}
+              onPress={() => {
+                try {
+                  navigation.navigate("Profile");
+                } catch (e) {
+                  // Fallback
+                }
+              }}
+            >
+              <View style={styles.avatarFallback}>
+                <Ionicons
+                  name="person-sharp"
+                  size={18}
+                  color="#173B8C"
+                />
+              </View>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: "#F8FAFC",
-  },
-
   container: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-
-  paddingHorizontal: 20,
-  paddingTop: 16,
-  paddingBottom: 20,
-
-  marginTop: 16, // Pushes the whole header down
-},
-
-  center: {
-    flex: 1,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-
-  subtitle: {
-    fontSize: 12,
-    color: "#64748B",
-    fontWeight: "600",
-    letterSpacing: 0.3,
-  },
-
-  title: {
-    marginTop: 3,
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    letterSpacing: -0.8,
-  },
-
-  date: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#94A3B8",
-    fontWeight: "500",
-  },
-
-  iconButton: {
-    width: 46,
-    height: 46,
-
-    borderRadius: 14,
-
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === "ios" ? 54 : (StatusBar.currentHeight || 24) + 12,
+    paddingBottom: 14,
     backgroundColor: "#FFFFFF",
-
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
     justifyContent: "center",
     alignItems: "center",
-
     borderWidth: 1,
-    borderColor: "#E8EDF3",
-
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
-    elevation: 3,
+    borderColor: "#E2E8F0",
+  },
+  titleSection: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+    justifyContent: "center",
+  },
+  tagBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#EEF4FF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  tagText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#173B8C",
+    letterSpacing: 0.6,
+  },
+  title: {
+    fontSize: 19,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.4,
+  },
+  rightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatarButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  avatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#EEF4FF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#DBEAFE",
   },
 });

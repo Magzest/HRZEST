@@ -7,30 +7,35 @@ import {
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation, DrawerActions } from "@react-navigation/native";
 
 export default function EmployeeHeroCard({
-
   employeeName,
-
   designation,
-
   employeeId,
-
   date,
-
   attendance,
-
   onCheckIn,
-
   checking,
-
   onMenu,
-
   onLogout,
   photoUrl,
   onScanQR,
   companyName,
 }) {
+  const navigation = useNavigation();
+
+  const handleMenu = () => {
+    if (typeof onMenu === "function") {
+      try {
+        onMenu();
+      } catch (e) {
+        navigation.dispatch(DrawerActions.openDrawer());
+      }
+    } else {
+      navigation.dispatch(DrawerActions.openDrawer());
+    }
+  };
 
   const checkedIn =
     attendance?.login_time &&
@@ -80,30 +85,36 @@ export default function EmployeeHeroCard({
       {/* Top Row */}
 
       <View style={styles.topRow}>
-
         <TouchableOpacity
-  onPress={onMenu}
-  activeOpacity={0.7}
-  style={styles.menuButton}
->
-  <Ionicons
-    name="menu"
-    size={24}
-    color="#173B8C"
-  />
-</TouchableOpacity>
+          onPress={handleMenu}
+          activeOpacity={0.7}
+          style={styles.menuButton}
+        >
+          <Ionicons
+            name="menu-sharp"
+            size={22}
+            color="#0F172A"
+          />
+        </TouchableOpacity>
+
+        <View style={styles.headerTitleGroup}>
+          <View style={styles.headerTag}>
+            <Text style={styles.headerTagText}>EMPLOYEE PORTAL</Text>
+          </View>
+          <Text style={styles.headerBrandTitle}>Dashboard</Text>
+        </View>
 
         <TouchableOpacity
           style={styles.iconBtn}
           onPress={onLogout}
+          activeOpacity={0.7}
         >
           <Ionicons
             name="log-out-outline"
-            size={21}
-            color="#173B8C"
+            size={20}
+            color="#0F172A"
           />
         </TouchableOpacity>
-
       </View>
 
       {/* User */}
@@ -430,22 +441,49 @@ iconBtn: {
     marginLeft:8,
   },
   menuButton: {
-  width: 46,
-  height: 46,
-  borderRadius: 16,
-  backgroundColor: "#FFFFFF",
-
-  justifyContent: "center",
-  alignItems: "center",
-
-  shadowColor: "#000",
-  shadowOpacity: 0.08,
-  shadowRadius: 12,
-  shadowOffset: {
-    width: 0,
-    height: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  elevation: 5,
-},
-
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  headerTitleGroup: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
+    justifyContent: "center",
+  },
+  headerTag: {
+    alignSelf: "flex-start",
+    backgroundColor: "#EEF4FF",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  headerTagText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#173B8C",
+    letterSpacing: 0.6,
+  },
+  headerBrandTitle: {
+    fontSize: 19,
+    fontWeight: "700",
+    color: "#0F172A",
+    letterSpacing: -0.4,
+  },
 });

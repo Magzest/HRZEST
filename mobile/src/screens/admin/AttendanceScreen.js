@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 import AdminHeader from "../../components/admin/AdminHeader";
+import AdminSearchBar from "../../components/admin/AdminSearchBar";
 
 export default function AttendanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
@@ -23,52 +24,22 @@ export default function AttendanceScreen({ navigation }) {
   const summary = {
     employees: 254,
     workingDays: 26,
-    attendance: 92,
+    attendance: 94,
     holidays: 2,
   };
 
   const employees = [
-    {
-      id: "EMP001",
-      name: "John Anderson",
-      full: 22,
-      late: 2,
-      half: 1,
-      absent: 1,
-      working: 26,
-      percent: 92,
-    },
-    {
-      id: "EMP002",
-      name: "Sophia Brown",
-      full: 24,
-      late: 1,
-      half: 0,
-      absent: 1,
-      working: 26,
-      percent: 96,
-    },
-    {
-      id: "EMP003",
-      name: "Michael Wilson",
-      full: 20,
-      late: 3,
-      half: 2,
-      absent: 1,
-      working: 26,
-      percent: 86,
-    },
-    {
-      id: "EMP004",
-      name: "Emma Davis",
-      full: 25,
-      late: 0,
-      half: 0,
-      absent: 1,
-      working: 26,
-      percent: 98,
-    },
+    { id: "EMP001", name: "Rahul Kumar", full: 24, late: 1, half: 1, absent: 0, working: 26, percent: 96 },
+    { id: "EMP002", name: "Priya Sharma", full: 22, late: 2, half: 0, absent: 2, working: 26, percent: 88 },
+    { id: "EMP003", name: "Arjun Joshi", full: 25, late: 1, half: 0, absent: 0, working: 26, percent: 98 },
+    { id: "EMP004", name: "Vikram Nair", full: 20, late: 3, half: 2, absent: 1, working: 26, percent: 85 },
   ];
+
+  const filteredEmployees = employees.filter(
+    (e) =>
+      e.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.id.toLowerCase().includes(search.toLowerCase())
+  );
 
   const renderEmployee = ({ item }) => (
     <View style={styles.employeeCard}>
@@ -84,14 +55,7 @@ export default function AttendanceScreen({ navigation }) {
       </View>
 
       <View style={styles.progressBackground}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${item.percent}%`,
-            },
-          ]}
-        />
+        <View style={[styles.progressFill, { width: `${item.percent}%` }]} />
       </View>
 
       <View style={styles.statsRow}>
@@ -119,495 +83,137 @@ export default function AttendanceScreen({ navigation }) {
   );
 
   return (
-    <LinearGradient
-      colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]}
-      style={styles.container}
-    >
+    <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
-          title="Attendance"
-          onMenu={() =>
-            navigation.dispatch(DrawerActions.openDrawer())
-          }
+          title="Daily Attendance"
+          onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
         />
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.content}
-        >
-          <View style={styles.searchContainer}>
-            <Ionicons
-              name="search"
-              size={20}
-              color="#94A3B8"
-            />
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+          {/* Quick Mark Attendance Banner */}
+          <TouchableOpacity
+            style={styles.markBanner}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate("AdminTabs", { screen: "MarkAttendance" })}
+          >
+            <View style={styles.markBannerLeft}>
+              <Ionicons name="create-outline" size={24} color="#FFFFFF" />
+              <View style={{ marginLeft: 12 }}>
+                <Text style={styles.markBannerTitle}>Mark Bulk Attendance</Text>
+                <Text style={styles.markBannerSub}>Quick manual attendance entry for staff</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
 
-            <TextInput
-              placeholder="Search employee..."
-              placeholderTextColor="#94A3B8"
-              value={search}
-              onChangeText={setSearch}
-              style={styles.searchInput}
-            />
-          </View>
+          {/* Search */}
+          <AdminSearchBar
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Search employee by name or ID..."
+          />
 
-          <View style={styles.filterRow}>
-            <TouchableOpacity style={styles.dropdown}>
-              <Text style={styles.dropdownText}>{month}</Text>
-              <Ionicons
-                name="chevron-down"
-                size={18}
-                color="#64748B"
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.dropdown}>
-              <Text style={styles.dropdownText}>{year}</Text>
-              <Ionicons
-                name="chevron-down"
-                size={18}
-                color="#64748B"
-              />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.primaryButton}>
-              <Ionicons
-                name="bar-chart"
-                size={18}
-                color="#FFFFFF"
-              />
-
-              <Text style={styles.primaryText}>
-                View Report
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.successButton}>
-              <Ionicons
-                name="download"
-                size={18}
-                color="#FFFFFF"
-              />
-
-              <Text style={styles.primaryText}>
-                Download
-              </Text>
-            </TouchableOpacity>
-          </View>
-
+          {/* Summary Grid */}
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
-              <Ionicons
-                name="people"
-                size={26}
-                color="#2563EB"
-              />
-              <Text style={styles.summaryValue}>
-                {summary.employees}
-              </Text>
-              <Text style={styles.summaryLabel}>
-                Employees
-              </Text>
+              <Ionicons name="people" size={24} color="#2563EB" />
+              <Text style={styles.summaryValue}>{summary.employees}</Text>
+              <Text style={styles.summaryLabel}>Total Staff</Text>
             </View>
 
             <View style={styles.summaryCard}>
-              <Ionicons
-                name="calendar"
-                size={26}
-                color="#16A34A"
-              />
-              <Text style={styles.summaryValue}>
-                {summary.workingDays}
-              </Text>
-              <Text style={styles.summaryLabel}>
-                Working Days
-              </Text>
+              <Ionicons name="calendar" size={24} color="#16A34A" />
+              <Text style={styles.summaryValue}>{summary.workingDays}</Text>
+              <Text style={styles.summaryLabel}>Working Days</Text>
             </View>
 
             <View style={styles.summaryCard}>
-              <Ionicons
-                name="checkmark-circle"
-                size={26}
-                color="#F59E0B"
-              />
-              <Text style={styles.summaryValue}>
-                {summary.attendance}%
-              </Text>
-              <Text style={styles.summaryLabel}>
-                Attendance
-              </Text>
+              <Ionicons name="checkmark-circle" size={24} color="#F59E0B" />
+              <Text style={styles.summaryValue}>{summary.attendance}%</Text>
+              <Text style={styles.summaryLabel}>Avg Attendance</Text>
             </View>
 
             <View style={styles.summaryCard}>
-              <Ionicons
-                name="gift"
-                size={26}
-                color="#EF4444"
-              />
-              <Text style={styles.summaryValue}>
-                {summary.holidays}
-              </Text>
-              <Text style={styles.summaryLabel}>
-                Holidays
-              </Text>
+              <Ionicons name="gift" size={24} color="#EF4444" />
+              <Text style={styles.summaryValue}>{summary.holidays}</Text>
+              <Text style={styles.summaryLabel}>Holidays</Text>
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>
-            Employee Attendance
-          </Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Employee Records</Text>
+            <Text style={styles.sectionBadge}>{filteredEmployees.length} Found</Text>
+          </View>
 
           <FlatList
-            data={employees}
+            data={filteredEmployees}
             keyExtractor={(item) => item.id}
             renderItem={renderEmployee}
             scrollEnabled={false}
           />
 
-          <View style={{ height: 120 }} />
+          <View style={{ height: 110 }} />
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
 }
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 120,
-  },
-
-  searchContainer: {
-    marginTop: 16,
-
-    height: 56,
-
-    backgroundColor: "#FFFFFF",
-
-    borderRadius: 18,
-
-    paddingHorizontal: 18,
-
+  container: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 10 },
+  markBanner: {
+    backgroundColor: "#173B8C",
+    borderRadius: 20,
+    padding: 16,
     flexDirection: "row",
-
     alignItems: "center",
-
-    shadowColor: "#000",
-
-    shadowOpacity: 0.05,
-
-    shadowRadius: 12,
-
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    elevation: 4,
-  },
-
-  searchInput: {
-    flex: 1,
-
-    marginLeft: 12,
-
-    fontSize: 15,
-
-    color: "#0F172A",
-
-    fontWeight: "500",
-  },
-
-  filterRow: {
-    flexDirection: "row",
-
     justifyContent: "space-between",
-
-    marginTop: 20,
+    marginBottom: 14,
+    elevation: 3,
   },
-
-  dropdown: {
-    width: "48%",
-
-    height: 52,
-
-    backgroundColor: "#FFFFFF",
-
-    borderRadius: 16,
-
-    borderWidth: 1,
-
-    borderColor: "#E2E8F0",
-
-    flexDirection: "row",
-
-    justifyContent: "space-between",
-
-    alignItems: "center",
-
-    paddingHorizontal: 16,
-  },
-
-  dropdownText: {
-    fontSize: 15,
-
-    color: "#1E293B",
-
-    fontWeight: "600",
-  },
-
-  buttonRow: {
-    flexDirection: "row",
-
-    justifyContent: "space-between",
-
-    marginTop: 18,
-
-    marginBottom: 24,
-  },
-
-  primaryButton: {
-    width: "48%",
-
-    height: 52,
-
-    borderRadius: 16,
-
-    backgroundColor: "#2563EB",
-
-    flexDirection: "row",
-
-    justifyContent: "center",
-
-    alignItems: "center",
-  },
-
-  successButton: {
-    width: "48%",
-
-    height: 52,
-
-    borderRadius: 16,
-
-    backgroundColor: "#22C55E",
-
-    flexDirection: "row",
-
-    justifyContent: "center",
-
-    alignItems: "center",
-  },
-
-  primaryText: {
-    color: "#FFFFFF",
-
-    fontWeight: "700",
-
-    fontSize: 15,
-
-    marginLeft: 8,
-  },
-
-  summaryGrid: {
-    flexDirection: "row",
-
-    flexWrap: "wrap",
-
-    justifyContent: "space-between",
-
-    marginBottom: 28,
-  },
-
+  markBannerLeft: { flexDirection: "row", alignItems: "center" },
+  markBannerTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  markBannerSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginTop: 2 },
+  summaryGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginVertical: 14 },
   summaryCard: {
     width: "48%",
-
     backgroundColor: "#FFFFFF",
-
-    borderRadius: 20,
-
-    paddingVertical: 22,
-
+    borderRadius: 18,
+    paddingVertical: 16,
     alignItems: "center",
-
-    marginBottom: 16,
-
+    marginBottom: 12,
     borderWidth: 1,
-
-    borderColor: "#E5E7EB",
-
-    shadowColor: "#000",
-
-    shadowOpacity: 0.05,
-
-    shadowRadius: 10,
-
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    elevation: 4,
+    borderColor: "#E2E8F0",
+    elevation: 2,
   },
-
-  summaryValue: {
-    marginTop: 12,
-
-    fontSize: 28,
-
-    fontWeight: "800",
-
-    color: "#0F172A",
-  },
-
-  summaryLabel: {
-    marginTop: 6,
-
-    fontSize: 13,
-
-    color: "#64748B",
-
-    fontWeight: "600",
-  },
-
-  sectionTitle: {
-    fontSize: 22,
-
-    fontWeight: "800",
-
-    color: "#0F172A",
-
-    marginBottom: 18,
-  },
-
+  summaryValue: { marginTop: 8, fontSize: 24, fontWeight: "800", color: "#0F172A" },
+  summaryLabel: { marginTop: 4, fontSize: 12, color: "#64748B", fontWeight: "600" },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+  sectionBadge: { fontSize: 13, fontWeight: "700", color: "#173B8C" },
   employeeCard: {
     backgroundColor: "#FFFFFF",
-
-    borderRadius: 22,
-
-    padding: 20,
-
-    marginBottom: 18,
-
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-
-    borderColor: "#E5E7EB",
-
-    shadowColor: "#000",
-
-    shadowOpacity: 0.05,
-
-    shadowRadius: 10,
-
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    elevation: 4,
+    borderColor: "#E2E8F0",
+    elevation: 2,
   },
-    employeeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  employeeName: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-
-  employeeId: {
-    marginTop: 4,
-    fontSize: 13,
-    color: "#64748B",
-    fontWeight: "500",
-  },
-
-  percentBadge: {
-    minWidth: 64,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#DBEAFE",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 12,
-  },
-
-  percentText: {
-    color: "#2563EB",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-
-  progressBackground: {
-    width: "100%",
-    height: 10,
-    borderRadius: 6,
-    backgroundColor: "#E2E8F0",
-    overflow: "hidden",
-    marginBottom: 18,
-  },
-
-  progressFill: {
-    height: "100%",
-    borderRadius: 6,
-    backgroundColor: "#22C55E",
-  },
-
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  statChipGreen: {
-    width: "23%",
-    borderRadius: 14,
-    backgroundColor: "#ECFDF5",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-
-  statChipOrange: {
-    width: "23%",
-    borderRadius: 14,
-    backgroundColor: "#FFF7ED",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-
-  statChipBlue: {
-    width: "23%",
-    borderRadius: 14,
-    backgroundColor: "#EFF6FF",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-
-  statChipRed: {
-    width: "23%",
-    borderRadius: 14,
-    backgroundColor: "#FEF2F2",
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-
-  chipValue: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  chipLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#64748B",
-    fontWeight: "600",
-  },
+  employeeHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  employeeName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
+  employeeId: { marginTop: 2, fontSize: 12, color: "#64748B", fontWeight: "500" },
+  percentBadge: { borderRadius: 14, backgroundColor: "#DBEAFE", paddingHorizontal: 10, paddingVertical: 4 },
+  percentText: { color: "#173B8C", fontWeight: "800", fontSize: 13 },
+  progressBackground: { width: "100%", height: 8, borderRadius: 4, backgroundColor: "#E2E8F0", overflow: "hidden", marginBottom: 14 },
+  progressFill: { height: "100%", borderRadius: 4, backgroundColor: "#22C55E" },
+  statsRow: { flexDirection: "row", justifyContent: "space-between" },
+  statChipGreen: { width: "23%", borderRadius: 12, backgroundColor: "#ECFDF5", alignItems: "center", paddingVertical: 8 },
+  statChipOrange: { width: "23%", borderRadius: 12, backgroundColor: "#FFF7ED", alignItems: "center", paddingVertical: 8 },
+  statChipBlue: { width: "23%", borderRadius: 12, backgroundColor: "#EFF6FF", alignItems: "center", paddingVertical: 8 },
+  statChipRed: { width: "23%", borderRadius: 12, backgroundColor: "#FEF2F2", alignItems: "center", paddingVertical: 8 },
+  chipValue: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
+  chipLabel: { marginTop: 2, fontSize: 11, color: "#64748B", fontWeight: "600" },
 });
