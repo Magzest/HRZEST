@@ -107,7 +107,7 @@ class TestSocDashboardRoute:
     def test_soc_role_with_stepup_succeeds(self, client, soc_admin_verified):
         resp = client.get("/secops")
         assert resp.status_code == 200
-        assert b"Cyber SecOps Command Center" in resp.data
+        assert b"Security Dashboard" in resp.data
 
     def test_regular_admin_with_stepup_flag_forged_still_404s(self, client, seed_admin):
         # Even if a regular admin's session somehow carries a soc_2fa_verified_at
@@ -127,18 +127,77 @@ class TestSocDashboardRoute:
         client.get("/logout")
         assert client.get("/secops").status_code == 404
 
+    def test_dashboard_shows_real_compromised_session_data(self, client, soc_admin_verified, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO session_risk (sid, identifier, attempt_type, score, status, last_reason) "
+            "VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (sid) DO NOTHING",
+            ("test-sid-soc-dash", "EMP999", "employee", 100, "compromised", "Wi-Fi risk score 90 exceeded 60"),
+        )
+        db_engine.commit()
+        cur.close()
+
+        resp = client.get("/secops")
+        assert resp.status_code == 200
+        assert b"EMP999" in resp.data
+        assert b"Wi-Fi risk score 90" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("DELETE FROM session_risk WHERE sid='test-sid-soc-dash'")
+        db_engine.commit()
+        cur.close()
+
+    def test_dashboard_shows_log_analysis_summary(self, client, soc_admin_verified, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO security_events (event_type, level, message, identifier) "
+            "VALUES (%s,%s,%s,%s)",
+            ("access.denied", "WARNING", "Test event for dashboard rendering", "PROBE_USER_XYZ"),
+        )
+        db_engine.commit()
+        cur.close()
+
+        resp = client.get("/secops")
+        assert resp.status_code == 200
+        # The all-time summary (counts, top event types) is server-rendered;
+        # individual rows are now loaded client-side from
+        # /api/security/soc/events, so the raw message/identifier text is
+        # deliberately NOT expected in this initial page HTML.
+        assert b"Log Analysis Summary" in resp.data
+        assert b"Total events" in resp.data
+        assert b"access.denied" in resp.data
+
+        _purge_test_event(db_engine, "PROBE_USER_XYZ")
+
+    def test_dashboard_shows_security_posture_and_mfa_panels(self, client, soc_admin_verified):
+        username, _ = soc_admin_verified
+        resp = client.get("/secops")
+        assert resp.status_code == 200
+        assert b"Security Posture" in resp.data
+        assert b"Admin MFA Enrollment" in resp.data
+        # This admin account is itself enrolled (soc_admin fixture enables
+        # TOTP) — its own row should show up as enrolled in the table.
+        assert username.encode() in resp.data
+
+    def test_dashboard_shows_session_timeout_and_performance_panels(self, client, soc_admin_verified):
+        """Session-timeout config and performance monitoring, migrated from
+        the retired Settings -> Security hub, now live here."""
+        resp = client.get("/secops")
+        assert resp.status_code == 200
+        assert b"Session Timeout" in resp.data
+        assert b"Performance" in resp.data
+
     def test_dashboard_stats_reflect_real_event_data(self, client, soc_admin_verified, db_engine):
-        """The dashboard's KPI numbers (fetched client-side from
-        /api/secops/dashboard-stats, not server-rendered into the page
-        anymore) must move when real security_events rows are added --
-        real counts, not a fabricated/static display."""
+        """The lightweight /api/secops/dashboard-stats endpoint (added
+        alongside the full server-rendered dashboard, not a replacement for
+        it) must also reflect real security_events counts."""
         cur = db_engine.cursor()
         cur.execute("SELECT COUNT(*) FROM security_events")
         before = cur.fetchone()[0]
         cur.execute(
             "INSERT INTO security_events (event_type, level, message, identifier) "
             "VALUES (%s,%s,%s,%s)",
-            ("access.denied", "WARNING", "Test event for dashboard stats", "PROBE_USER_XYZ"),
+            ("access.denied", "WARNING", "Test event for dashboard stats", "PROBE_USER_XYZ2"),
         )
         db_engine.commit()
         cur.close()
@@ -147,7 +206,7 @@ class TestSocDashboardRoute:
         assert resp.status_code == 200
         assert resp.get_json()["stats"]["total_events"] == before + 1
 
-        _purge_test_event(db_engine, "PROBE_USER_XYZ")
+        _purge_test_event(db_engine, "PROBE_USER_XYZ2")
 
 
 class TestSocEventsApi:

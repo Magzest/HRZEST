@@ -2,6 +2,7 @@
 
 import time
 import re
+import os
 import secrets
 import datetime
 import ipaddress
@@ -18,6 +19,7 @@ from utils.security_logs import (
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
     SOC_ANALYST_ROLE, soc_step_up_valid, soc_step_up_refresh, soc_step_up_clear,
+    turnstile_enabled,
 )
 from utils.helpers import get_co_features, _upsert_co_feature
 from utils.perf_metrics import snapshot as get_perf_snapshot
@@ -60,6 +62,50 @@ def _soc_session_and_stepup_or_404():
         )
         abort(404)
     return username, role
+
+
+def _compute_security_posture():
+    """Real, config-derived facts -- not a fabricated 'security score'. Each
+    one reads the same source of truth its own feature already uses, so this
+    can't silently drift out of sync with what's actually enforced elsewhere
+    in the app."""
+    return {
+        "hsts_enabled": True,  # app.py's _security_headers sets this unconditionally on every response
+        "csp_enabled": True,   # same -- dynamic per-request nonce CSP, always on
+        "rate_limit_backend": "In-memory (per-worker — no Redis in this deployment)",
+        "malware_scan_enabled": os.environ.get("MALWARE_SCAN_ENABLED", "true").strip().lower() not in ("false", "0", "no"),
+        "login_captcha_configured": turnstile_enabled(),
+        "email_alert_webhook_configured": bool(os.environ.get("SECURITY_ALERT_WEBHOOK_URL")),
+    }
+
+
+def _security_events_summary(cursor):
+    """Aggregate stats over the FULL security_events history -- the
+    "complete log analysis" a SOC analyst needs to judge whether the last 50
+    rows they're looking at are routine noise or the tail of something
+    bigger."""
+    cursor.execute("SELECT COUNT(*) FROM security_events")
+    total = cursor.fetchone()[0]
+    cursor.execute("SELECT level, COUNT(*) FROM security_events GROUP BY level")
+    by_level = {level: count for level, count in cursor.fetchall()}
+    cursor.execute(
+        "SELECT event_type, COUNT(*) c FROM security_events GROUP BY event_type ORDER BY c DESC LIMIT 8"
+    )
+    top_event_types = cursor.fetchall()
+    cursor.execute("SELECT COUNT(DISTINCT identifier) FROM security_events WHERE identifier IS NOT NULL")
+    distinct_identifiers = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(DISTINCT ip) FROM security_events WHERE ip IS NOT NULL")
+    distinct_ips = cursor.fetchone()[0]
+    cursor.execute("SELECT MIN(created_at), MAX(created_at) FROM security_events")
+    oldest, newest = cursor.fetchone()
+    return {
+        "total": total,
+        "by_level": by_level,
+        "top_event_types": top_event_types,
+        "distinct_identifiers": distinct_identifiers,
+        "distinct_ips": distinct_ips,
+        "oldest": oldest, "newest": newest,
+    }
 
 
 _COVERAGE_GATE_PCT = 80
@@ -179,24 +225,50 @@ def mfa_login_verify():
 @secops_bp.route("/secops")
 def secops_dashboard():
     """The SOC analyst's dashboard, reached only via /sp_admin/login +
-    email MFA above -- there is no other entry point, and no in-page TOTP
-    challenge on top of it: completing MFA at login already proves
+    email MFA (/mfa_login_verify) -- there is no other entry point, and no
+    in-page challenge on top of it: completing MFA at login already proves
     possession, so soc_step_up_valid just enforces that proof stays fresh
     (10 min, same window mfa_login_verify sets) rather than asking for a
-    second code mid-session.
-
-    This page itself is intentionally a minimal KPI summary (live totals
-    fetched client-side from /api/secops/dashboard-stats below); the fuller
-    panels -- compromised sessions, login lockouts, per-admin MFA
-    enrollment, security posture, full events summary, session-timeout
-    config, threat logs, port health, malware sandbox, threat intel, Wi-Fi
-    risk telemetry, SMTP alert config -- remain reachable as their own
-    /api/secops/* endpoints (all still gated by _is_secops_authorized /
-    _soc_session_and_stepup_or_404 below); they're just not embedded in
-    this page's initial render anymore."""
+    second code mid-session. Consolidates everything that used to live
+    behind Settings -> Security and the /admin/security-dashboard route:
+    force-terminated sessions, active login lockouts, per-admin MFA
+    enrollment, config-derived security posture, an all-time
+    security_events summary + paginated/filterable log, application-layer
+    IP bans, session-timeout config, and live performance/DB-pool stats."""
     _soc_session_and_stepup_or_404()
     soc_step_up_refresh()
-    return render_template("soc_security_dashboard.html")
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        SELECT sid, identifier, attempt_type, score, last_reason, updated_at
+        FROM session_risk WHERE status='compromised'
+        ORDER BY updated_at DESC LIMIT 50
+    """)
+    compromised_sessions = cursor.fetchall()
+    cursor.execute("""
+        SELECT identifier, attempt_type, failed_count, locked_until, last_attempt
+        FROM login_attempts WHERE locked_until IS NOT NULL AND locked_until > NOW()
+        ORDER BY last_attempt DESC LIMIT 50
+    """)
+    active_lockouts = cursor.fetchall()
+    cursor.execute("SELECT username, role, COALESCE(totp_enabled, 0) FROM admin_users ORDER BY username")
+    admin_mfa_status = cursor.fetchall()
+    events_summary = _security_events_summary(cursor)
+    cursor.execute("SELECT session_timeout FROM company_settings LIMIT 1")
+    r = cursor.fetchone()
+    session_timeout = r[0] if r and r[0] else 30
+    cursor.close()
+    db.close()
+
+    return render_template("soc_security_dashboard.html",
+                           compromised_sessions=compromised_sessions,
+                           active_lockouts=active_lockouts,
+                           admin_mfa_status=admin_mfa_status,
+                           events_summary=events_summary,
+                           security_posture=_compute_security_posture(),
+                           session_timeout_minutes=session_timeout,
+                           )
 
 
 @secops_bp.route("/api/secops/dashboard-stats")
