@@ -204,7 +204,7 @@
           <a class="u-d-inline-flex u-ai-center u-gap-5 u-tdec-none u-c-64748b u-fs-13 u-fw-600 u-mb-8 u-bg-f1f5f9 u-bd-1-solid-e2e8f0 u-p-5-12 u-br-8 u-trs-0d15s" href="javascript:history.back()" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
             <i class="ti ti-arrow-left u-fs-14"></i> Back
           </a>
-          <h1>🎫 Support Tickets</h1>
+          <h1><i class="ti ti-ticket"></i> Support Tickets</h1>
           <p>{{ today }} &nbsp;·&nbsp; Manage and respond to employee support requests</p>
         </div>
       </div>
@@ -216,28 +216,28 @@
       <!-- STAT CARDS -->
       <div class="stats">
         <div class="stat-card">
-          <div class="stat-icon si-blue">🎫</div>
+          <div class="stat-icon si-blue"><i class="ti ti-ticket" style="color:#2563eb"></i></div>
           <div>
             <div class="stat-num sn-blue">{{ all_tickets | length }}</div>
             <div class="stat-lbl">Total Tickets</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon si-red">🔴</div>
+          <div class="stat-icon si-red"><i class="ti ti-alert-circle" style="color:#dc2626"></i></div>
           <div>
             <div class="stat-num sn-red">{{ open_tickets | length }}</div>
             <div class="stat-lbl">Open</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon si-orange">🟠</div>
+          <div class="stat-icon si-orange"><i class="ti ti-progress" style="color:#ea580c"></i></div>
           <div>
             <div class="stat-num sn-orange">{{ inprog_tickets | length }}</div>
             <div class="stat-lbl">In Progress</div>
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon si-green">✅</div>
+          <div class="stat-icon si-green"><i class="ti ti-circle-check" style="color:#16a34a"></i></div>
           <div>
             <div class="stat-num sn-green">{{ resolved_tickets | length }}</div>
             <div class="stat-lbl">Resolved / Closed</div>
@@ -248,7 +248,7 @@
       {% if not all_tickets %}
       <!-- EMPTY STATE -->
       <div class="empty-state">
-        <div class="empty-icon">🎫</div>
+        <div class="empty-icon"><i class="ti ti-ticket"></i></div>
         <div class="empty-title">No tickets yet</div>
         <div class="empty-sub">When employees raise support tickets, they'll appear here for you to manage.</div>
       </div>
@@ -258,7 +258,7 @@
       <!-- OPEN TICKETS -->
       {% if open_tickets %}
       <div class="sec-head open">
-        🔴 Open Tickets
+        <i class="ti ti-alert-circle"></i> Open Tickets
         <span class="sec-count">{{ open_tickets | length }} ticket{{ 's' if open_tickets | length != 1 }}</span>
       </div>
       {% for t in open_tickets %}
@@ -268,9 +268,9 @@
             <span class="ticket-id">#{{ tid }}</span>
             <span class="ticket-subject">{{ tsubj }}</span>
             <div class="badges">
-              {% if tpri == 'High' %}<span class="badge b-red">🔴 High</span>
+              {% if tpri == 'High' %}<span class="badge b-red">High</span>
               {% elif tpri == 'Low' %}<span class="badge b-gray">Low</span>
-              {% else %}<span class="badge b-yellow">⚡ Medium</span>{% endif %}
+              {% else %}<span class="badge b-yellow">Medium</span>{% endif %}
               <span class="badge b-blue">Open</span>
               <span class="badge b-purple">{{ tcat }}</span>
             </div>
@@ -287,13 +287,13 @@
           <form method="POST" action="/ticket_action/{{ tid }}" class="respond-form">
             <div class="respond-row">
               <select name="status" class="respond-select">
-                <option value="Open" selected>🔴 Open</option>
-                <option value="In Progress">🟠 In Progress</option>
-                <option value="Resolved">✅ Resolved</option>
-                <option value="Closed">🔒 Closed</option>
+                <option value="Open" selected>Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Closed">Closed</option>
               </select>
               <textarea name="admin_response" class="respond-textarea" placeholder="Type your response to the employee…">{{ tresp or '' }}</textarea>
-              <button type="submit" class="btn-respond">💬 Respond</button>
+              <button type="submit" class="btn-respond"><i class="ti ti-message-circle"></i> Respond</button>
             </div>
           </form>
         </div>
@@ -303,7 +303,7 @@
       <!-- IN PROGRESS -->
       {% if inprog_tickets %}
       <div class="sec-head inprog">
-        🟠 In Progress
+        <i class="ti ti-progress"></i> In Progress
         <span class="sec-count">{{ inprog_tickets | length }} ticket{{ 's' if inprog_tickets | length != 1 }}</span>
       </div>
       {% for t in inprog_tickets %}
@@ -313,10 +313,10 @@
             <span class="ticket-id">#{{ tid }}</span>
             <span class="ticket-subject">{{ tsubj }}</span>
             <div class="badges">
-              {% if tpri == 'High' %}<span class="badge b-red">🔴 High</span>
+              {% if tpri == 'High' %}<span class="badge b-red">High</span>
               {% elif tpri == 'Low' %}<span class="badge b-gray">Low</span>
-              {% else %}<span class="badge b-yellow">⚡ Medium</span>{% endif %}
-              <span class="badge b-orange">🟠 In Progress</span>
+              {% else %}<span class="badge b-yellow">Medium</span>{% endif %}
+              <span class="badge b-orange">In Progress</span>
               <span class="badge b-purple">{{ tcat }}</span>
             </div>
           </div>
@@ -332,13 +332,13 @@
           <form method="POST" action="/ticket_action/{{ tid }}" class="respond-form">
             <div class="respond-row">
               <select name="status" class="respond-select">
-                <option value="Open">🔴 Open</option>
-                <option value="In Progress" selected>🟠 In Progress</option>
-                <option value="Resolved">✅ Resolved</option>
-                <option value="Closed">🔒 Closed</option>
+                <option value="Open">Open</option>
+                <option value="In Progress" selected>In Progress</option>
+                <option value="Resolved">Resolved</option>
+                <option value="Closed">Closed</option>
               </select>
               <textarea name="admin_response" class="respond-textarea" placeholder="Update your response…">{{ tresp or '' }}</textarea>
-              <button type="submit" class="btn-respond">💬 Update</button>
+              <button type="submit" class="btn-respond"><i class="ti ti-message-circle"></i> Update</button>
             </div>
           </form>
         </div>
@@ -348,7 +348,7 @@
       <!-- RESOLVED / CLOSED -->
       {% if resolved_tickets %}
       <div class="sec-head done">
-        ✅ Resolved / Closed
+        <i class="ti ti-circle-check"></i> Resolved / Closed
         <span class="sec-count">{{ resolved_tickets | length }} ticket{{ 's' if resolved_tickets | length != 1 }}</span>
       </div>
       {% for t in resolved_tickets %}
@@ -358,8 +358,8 @@
             <span class="ticket-id">#{{ tid }}</span>
             <span class="ticket-subject">{{ tsubj }}</span>
             <div class="badges">
-              {% if tstat == 'Resolved' %}<span class="badge b-green">✅ Resolved</span>
-              {% else %}<span class="badge b-gray">🔒 Closed</span>{% endif %}
+              {% if tstat == 'Resolved' %}<span class="badge b-green">Resolved</span>
+              {% else %}<span class="badge b-gray">Closed</span>{% endif %}
               <span class="badge b-purple">{{ tcat }}</span>
             </div>
           </div>
@@ -374,10 +374,10 @@
           <form method="POST" action="/ticket_action/{{ tid }}" class="respond-form">
             <div class="respond-row">
               <select name="status" class="respond-select">
-                <option value="Open">🔴 Reopen</option>
-                <option value="In Progress">🟠 In Progress</option>
-                <option value="Resolved" {% if tstat=='Resolved' %}selected{% endif %}>✅ Resolved</option>
-                <option value="Closed"   {% if tstat=='Closed'   %}selected{% endif %}>🔒 Closed</option>
+                <option value="Open">Reopen</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Resolved" {% if tstat=='Resolved' %}selected{% endif %}>Resolved</option>
+                <option value="Closed"   {% if tstat=='Closed'   %}selected{% endif %}>Closed</option>
               </select>
               <textarea name="admin_response" class="respond-textarea" placeholder="Update response…">{{ tresp or '' }}</textarea>
               <button type="submit" class="btn-respond">Update</button>
