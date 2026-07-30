@@ -1546,7 +1546,7 @@ def api_employee_chat():
     cursor.close()
     db.close()
 
-    ok, reply = ask_assistant(context, message, history if isinstance(history, list) else [])
+    ok, reply = ask_assistant(context, message, history if isinstance(history, list) else [], emp_id=emp_id)
     return jsonify({"ok": ok, "reply": reply})
 
 

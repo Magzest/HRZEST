@@ -79,6 +79,7 @@ class TestAskAssistant:
 
     def test_missing_api_key_returns_friendly_error(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
         ok, reply = ask_assistant("ctx", "How many leave days do I have?")
         assert ok is False
         assert "isn't configured" in reply.lower()
@@ -89,6 +90,7 @@ class TestAskAssistant:
             assert messages[-1] == {"role": "user", "content": "How many leave days do I have?"}
             return "You have 5 leave days remaining.", None
 
+        monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", _fake_call)
         ok, reply = ask_assistant("Leave balance: 5 days", "How many leave days do I have?")
@@ -96,6 +98,7 @@ class TestAskAssistant:
         assert reply == "You have 5 leave days remaining."
 
     def test_api_failure_returns_friendly_error_not_exception(self, monkeypatch):
+        monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: (None, "network error: simulated outage"))
         ok, reply = ask_assistant("ctx", "hello")
@@ -109,6 +112,7 @@ class TestAskAssistant:
             captured["messages"] = messages
             return "ok", None
 
+        monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", _fake_call)
         history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello there"}]
@@ -148,6 +152,147 @@ class TestAskAssistant:
         assert captured["body"]["messages"] == [{"role": "user", "content": "hi"}]
 
 
+class TestN8nBackend:
+    """n8n is tried first (when N8N_WEBHOOK_URL is set), falling back to
+    Claude on any failure -- see utils/ai_assistant.py's module docstring
+    for the request/response contract."""
+
+    def test_n8n_not_configured_falls_straight_through_to_claude(self, monkeypatch):
+        monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: ("claude reply", None))
+        ok, reply = ask_assistant("ctx", "hi")
+        assert ok is True
+        assert reply == "claude reply"
+
+    def test_neither_backend_configured_returns_friendly_error(self, monkeypatch):
+        monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        ok, reply = ask_assistant("ctx", "hi")
+        assert ok is False
+        assert "isn't configured" in reply.lower()
+
+    def test_successful_n8n_call_is_used_and_claude_is_not_called(self, monkeypatch):
+        monkeypatch.setenv("N8N_WEBHOOK_URL", "https://n8n.example.com/webhook/chat")
+        monkeypatch.setattr(ai_assistant, "_call_n8n", lambda url, emp_id, ctx, msg, turns: ("n8n reply", None))
+        monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: (_ for _ in ()).throw(AssertionError("Claude should not be called")))
+        ok, reply = ask_assistant("ctx", "hi", emp_id="EMP001")
+        assert ok is True
+        assert reply == "n8n reply"
+
+    def test_n8n_failure_falls_back_to_claude_when_configured(self, monkeypatch):
+        monkeypatch.setenv("N8N_WEBHOOK_URL", "https://n8n.example.com/webhook/chat")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+        monkeypatch.setattr(ai_assistant, "_call_n8n", lambda url, emp_id, ctx, msg, turns: (None, "network error: simulated outage"))
+        monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: ("claude fallback reply", None))
+        ok, reply = ask_assistant("ctx", "hi")
+        assert ok is True
+        assert reply == "claude fallback reply"
+
+    def test_n8n_failure_with_no_claude_configured_returns_friendly_error(self, monkeypatch):
+        monkeypatch.setenv("N8N_WEBHOOK_URL", "https://n8n.example.com/webhook/chat")
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.setattr(ai_assistant, "_call_n8n", lambda url, emp_id, ctx, msg, turns: (None, "HTTP 500"))
+        ok, reply = ask_assistant("ctx", "hi")
+        assert ok is False
+        assert "couldn't reach" in reply.lower()
+
+    def test_n8n_payload_shape(self, monkeypatch):
+        captured = {}
+
+        def _fake_call(url, emp_id, ctx, msg, turns):
+            captured.update(url=url, emp_id=emp_id, ctx=ctx, msg=msg, turns=turns)
+            return "ok", None
+
+        monkeypatch.setenv("N8N_WEBHOOK_URL", "https://n8n.example.com/webhook/chat")
+        monkeypatch.setattr(ai_assistant, "_call_n8n", _fake_call)
+        ask_assistant("employee context here", "What's my leave balance?", emp_id="EMP007")
+        assert captured["url"] == "https://n8n.example.com/webhook/chat"
+        assert captured["emp_id"] == "EMP007"
+        assert captured["ctx"] == "employee context here"
+        assert captured["msg"] == "What's my leave balance?"
+        assert captured["turns"][-1] == {"role": "user", "content": "What's my leave balance?"}
+
+    def test_call_n8n_builds_expected_request_and_parses_reply(self, monkeypatch):
+        import json as _json
+
+        captured = {}
+
+        class _FakeResp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self):
+                return _json.dumps({"reply": "Here's your answer"}).encode()
+
+        def _fake_urlopen(req, timeout=None):
+            captured["url"] = req.full_url
+            captured["headers"] = {k.lower(): v for k, v in req.headers.items()}
+            captured["body"] = _json.loads(req.data.decode())
+            captured["timeout"] = timeout
+            return _FakeResp()
+
+        monkeypatch.setenv("N8N_WEBHOOK_SECRET", "shh-secret")
+        monkeypatch.setattr(ai_assistant.urllib.request, "urlopen", _fake_urlopen)
+        text, err = ai_assistant._call_n8n(
+            "https://n8n.example.com/webhook/chat", "EMP001", "ctx text",
+            "hello", [{"role": "user", "content": "hello"}],
+        )
+        assert err is None
+        assert text == "Here's your answer"
+        assert captured["url"] == "https://n8n.example.com/webhook/chat"
+        assert captured["headers"]["x-webhook-secret"] == "shh-secret"
+        assert captured["body"] == {
+            "employee_id": "EMP001", "message": "hello",
+            "history": [{"role": "user", "content": "hello"}], "context": "ctx text",
+        }
+
+    def test_call_n8n_no_secret_header_when_unset(self, monkeypatch):
+        import json as _json
+
+        captured = {}
+
+        class _FakeResp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self):
+                return _json.dumps({"reply": "ok"}).encode()
+
+        def _fake_urlopen(req, timeout=None):
+            captured["headers"] = {k.lower(): v for k, v in req.headers.items()}
+            return _FakeResp()
+
+        monkeypatch.delenv("N8N_WEBHOOK_SECRET", raising=False)
+        monkeypatch.setattr(ai_assistant.urllib.request, "urlopen", _fake_urlopen)
+        ai_assistant._call_n8n("https://n8n.example.com/webhook/chat", "EMP001", "ctx", "hi", [])
+        assert "x-webhook-secret" not in captured["headers"]
+
+    def test_call_n8n_missing_reply_field_is_treated_as_failure(self, monkeypatch):
+        import json as _json
+
+        class _FakeResp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self):
+                return _json.dumps({"ok": True}).encode()
+
+        monkeypatch.setattr(ai_assistant.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp())
+        text, err = ai_assistant._call_n8n("https://n8n.example.com/webhook/chat", "EMP001", "ctx", "hi", [])
+        assert text is None
+        assert "reply" in err
+
+    def test_call_n8n_malformed_json_is_treated_as_failure(self, monkeypatch):
+        class _FakeResp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self):
+                return b"not json"
+
+        monkeypatch.setattr(ai_assistant.urllib.request, "urlopen", lambda req, timeout=None: _FakeResp())
+        text, err = ai_assistant._call_n8n("https://n8n.example.com/webhook/chat", "EMP001", "ctx", "hi", [])
+        assert text is None
+        assert err is not None
+
+
 class TestChatRoute:
     def test_requires_employee_login(self, client):
         resp = client.post("/api/employee/chat", json={"message": "hi"}, follow_redirects=False)
@@ -157,7 +302,7 @@ class TestChatRoute:
         with client.session_transaction() as sess:
             sess["employee_id"] = seed_employee["employee_id"]
 
-        monkeypatch.setattr(employee_portal_module, "ask_assistant", lambda context, message, history: (True, "Mocked reply"))
+        monkeypatch.setattr(employee_portal_module, "ask_assistant", lambda context, message, history, emp_id=None: (True, "Mocked reply"))
 
         resp = client.post("/api/employee/chat", json={"message": "How much leave do I have?"})
         assert resp.status_code == 200
@@ -177,7 +322,7 @@ class TestChatRoute:
 
         captured = {}
 
-        def _fake_ask(context, message, history):
+        def _fake_ask(context, message, history, emp_id=None):
             captured["history"] = history
             return True, "ok"
 

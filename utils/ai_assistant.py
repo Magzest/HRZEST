@@ -1,20 +1,44 @@
-"""Employee AI chat assistant — Claude-backed Q&A scoped to the logged-in
-employee's own attendance/leave data plus general HR policy questions.
+"""Employee AI chat assistant — Q&A scoped to the logged-in employee's own
+attendance/leave data plus general HR policy questions.
 
-Talks to the Anthropic Messages API directly over HTTPS via
-urllib.request (stdlib) rather than the `anthropic` SDK — the same
-pattern already used for webhook delivery in utils/alerts.py. This
-avoids the SDK's `jiter` dependency, which has no Python 3.7 wheels and
-would otherwise disable the feature entirely on this app's Python 3.7
-dev environment; it also means no extra package to install at all.
+Two possible backends, tried in order:
+  1. An n8n workflow, if N8N_WEBHOOK_URL is configured — lets whoever owns
+     the n8n instance build/change the actual query-answering logic (RAG
+     over a knowledge base, ticket creation, HR system lookups, etc.)
+     without touching this app's code at all.
+  2. The Anthropic Messages API directly, if ANTHROPIC_API_KEY is
+     configured — the original implementation, kept as a fallback so the
+     chat still works before n8n is set up, or if the n8n workflow/instance
+     is temporarily down.
+Both are optional; if neither is configured, ask_assistant() says so.
+
+The Anthropic call goes over HTTPS via urllib.request (stdlib) rather than
+the `anthropic` SDK — the same pattern already used for webhook delivery in
+utils/alerts.py. This avoids the SDK's `jiter` dependency, which has no
+Python 3.7 wheels and would otherwise disable the feature entirely on this
+app's Python 3.7 dev environment; it also means no extra package to install.
 
 Security model: the client (browser) only ever sends the free-text
 `message` and prior conversation `history` — it never sends the employee's
 data itself. Every call re-fetches this employee's own rows from the DB
 server-side (build_employee_context), keyed off the authenticated
 session's employee_id, and that's the only data placed in the system
-prompt. The model has no DB/tool access of its own, so there is no path
-for a crafted message to make it read or leak another employee's data.
+prompt / n8n payload. Neither backend has DB/tool access of its own, so
+there is no path for a crafted message to make it read or leak another
+employee's data.
+
+n8n workflow contract (see .env.example for the two env vars):
+  Request  -- POST to N8N_WEBHOOK_URL, JSON body:
+              {"employee_id": "...", "message": "...",
+               "history": [{"role": "user"|"assistant", "content": "..."}],
+               "context": "<same text block the Anthropic fallback uses>"}
+              Header "X-Webhook-Secret: <N8N_WEBHOOK_SECRET>" is sent
+              whenever that env var is set, so the workflow's first node
+              can reject requests that don't carry it (n8n webhook URLs
+              are otherwise unauthenticated).
+  Response -- 2xx JSON body: {"reply": "<answer text to show the employee>"}
+              Anything else (non-2xx, timeout, malformed JSON, empty/missing
+              "reply") counts as failure and falls through to Anthropic.
 """
 import os
 import json
@@ -28,6 +52,7 @@ _API_VERSION = "2023-06-01"
 _MODEL = "claude-sonnet-5"
 _MAX_TOKENS = 500
 _TIMEOUT_SECONDS = 20
+_N8N_TIMEOUT_SECONDS = 25  # workflows can chain several steps; a bit more slack than the direct Claude call
 MAX_MESSAGE_LEN = 1000
 MAX_HISTORY_TURNS = 6
 
@@ -49,6 +74,14 @@ Rules:
 
 def _api_key():
     return os.environ.get("ANTHROPIC_API_KEY")
+
+
+def _n8n_webhook_url():
+    return os.environ.get("N8N_WEBHOOK_URL", "").strip()
+
+
+def _n8n_webhook_secret():
+    return os.environ.get("N8N_WEBHOOK_SECRET", "").strip()
 
 
 def build_employee_context(cursor, emp_id):
@@ -180,8 +213,45 @@ def _call_claude(system_prompt, messages):
     return text, None
 
 
-def ask_assistant(context: str, message: str, history: list = None):
-    """Send one turn to Claude, scoped to `context`, with prior turns in `history`.
+def _call_n8n(webhook_url, emp_id, context, message, turns):
+    """POST the query to the configured n8n webhook. Returns (text, error) —
+    exactly one is None. See module docstring for the request/response
+    contract."""
+    body = json.dumps({
+        "employee_id": emp_id,
+        "message": message,
+        "history": turns,
+        "context": context,
+    }).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    secret = _n8n_webhook_secret()
+    if secret:
+        headers["X-Webhook-Secret"] = secret
+    req = urllib.request.Request(webhook_url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=_N8N_TIMEOUT_SECONDS) as resp:  # nosec B310
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return None, f"HTTP {e.code}"
+    except urllib.error.URLError as e:
+        return None, f"network error: {e.reason}"
+    except (ValueError, json.JSONDecodeError) as e:
+        return None, f"invalid JSON response: {e}"
+    except Exception as e:
+        return None, f"unexpected error: {e}"
+
+    reply = data.get("reply") if isinstance(data, dict) else None
+    if not isinstance(reply, str) or not reply.strip():
+        return None, "response missing a non-empty 'reply' field"
+    return reply.strip(), None
+
+
+def ask_assistant(context: str, message: str, history: list = None, emp_id: str = None):
+    """Answer one turn, scoped to `context`, with prior turns in `history`.
+
+    Tries the n8n webhook first (if N8N_WEBHOOK_URL is set), then falls
+    back to calling Claude directly (if ANTHROPIC_API_KEY is set). See the
+    module docstring for why there are two backends and how they differ.
 
     Returns (ok: bool, reply_or_error: str).
     """
@@ -191,11 +261,21 @@ def ask_assistant(context: str, message: str, history: list = None):
     if len(message) > MAX_MESSAGE_LEN:
         return False, f"That message is too long (max {MAX_MESSAGE_LEN} characters)."
 
-    if not _api_key():
+    n8n_url = _n8n_webhook_url()
+    has_anthropic = bool(_api_key())
+    if not n8n_url and not has_anthropic:
         return False, "The AI assistant isn't configured yet. Contact your admin to enable it."
 
     turns = _sanitize_history(history)
     turns.append({"role": "user", "content": message})
+
+    if n8n_url:
+        text, err = _call_n8n(n8n_url, emp_id, context, message, turns)
+        if err is None:
+            return True, text
+        app_log.warning("n8n webhook call failed, falling back: %s", err)
+        if not has_anthropic:
+            return False, "Sorry, I couldn't reach the AI assistant right now. Please try again shortly."
 
     text, err = _call_claude(_SYSTEM_PROMPT + "\n\n--- Employee data ---\n" + context, turns)
     if err is not None:
