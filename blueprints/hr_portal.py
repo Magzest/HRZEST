@@ -20,7 +20,8 @@ from utils.helpers import get_company_settings, co_scope_subquery, _db
 from utils.email_utils import notify_if_new_login_ip
 from utils.session_risk import ensure_session_id
 from database import get_db_connection
-from extensions import limiter, log_security_event
+from extensions import app, limiter, log_security_event
+from blueprints.auth import _start_login_mfa
 
 hr_bp = Blueprint("hr_portal", __name__)
 
@@ -92,6 +93,9 @@ def hr_login():
             _uc.execute("UPDATE admin_users SET password=%s WHERE username=%s",
                         (generate_password_hash(password), identifier))
             _ud.commit()
+
+    if app.config.get("MANDATORY_LOGIN_MFA", True):
+        return _start_login_mfa(co, "hr_login.html", "admin_users", identifier, admin_row[2], "HR Administrator")
 
     session.clear()
     session["admin_logged_in"] = True

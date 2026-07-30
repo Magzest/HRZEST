@@ -95,6 +95,14 @@ _app_module.limiter.enabled = False
 # gate itself (tests/test_mandatory_admin_mfa.py) re-enable it locally.
 flask_app.config["MANDATORY_ADMIN_MFA"] = False
 
+# Disable the mandatory-emailed-OTP-at-login gate (blueprints/auth.py's
+# MANDATORY_LOGIN_MFA, blueprints/hr_portal.py's hr_login()) for the same
+# reason: nearly the entire suite uses a plain POST /admin_login or
+# /hr_login as its "get an authenticated session" setup and expects it to
+# complete immediately. Tests for the gate itself (tests/test_login_mfa.py)
+# re-enable it locally.
+flask_app.config["MANDATORY_LOGIN_MFA"] = False
+
 
 @pytest.fixture(scope="session")
 def db_engine():

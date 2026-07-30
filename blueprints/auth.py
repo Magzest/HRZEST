@@ -23,7 +23,7 @@ from utils.auth import (
 from utils.helpers import get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
 from utils.session_risk import ensure_session_id
-from utils.totp import verify_totp_code
+from utils.totp import verify_totp_code, send_mfa_login_email, mark_totp_enabled
 from utils.face_utils import verify_uploaded_face
 from utils.webauthn_utils import (
     webauthn, _webauthn_available, _wa_rp_id, _wa_check_rp_id, _wa_origins,
@@ -98,6 +98,46 @@ def setup_wizard():
             return redirect("/admin_login?setup=done")
 
     return render_template("setup.html", error=error)
+
+
+# Every successful password check in admin_login()/hr_portal.hr_login() goes
+# through this OTP step before a real session exists -- app.config's default
+# (True) matches the "no login without MFA" ask; tests disable it globally
+# (tests/conftest.py) since almost the entire suite uses a plain POST
+# /admin_login as its "get an authenticated session" setup, exactly like the
+# existing MANDATORY_ADMIN_MFA flag already does for the TOTP-enrollment gate.
+app.config.setdefault("MANDATORY_LOGIN_MFA", True)
+
+_MFA_OTP_TTL_SEC = 300
+
+
+def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
+    """Common second step once a password has already checked out (called
+    from admin_login()'s admin/employee branches and hr_portal.hr_login()'s
+    hr branch): email a one-time code instead of completing the session
+    immediately, and redirect to /mfa_verify to finish. `kind` is
+    "admin_users" or "employee" -- which table /mfa_verify re-fetches the
+    final session's fields from."""
+    if not email:
+        # Can't deliver a code -- same generic error as a bad password, no
+        # distinction leaked between "wrong credentials" and "no email on
+        # file for MFA delivery".
+        log_security_event(
+            "auth.mfa_email_missing", "Account has no email on file for login MFA delivery",
+            level="ERROR", identifier=identifier,
+        )
+        _record_login_failure(identifier)
+        return render_template(login_template, co=co, error="Invalid credentials. Check your ID and password.")
+
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+    send_mfa_login_email(email, identifier, role_label, "", otp_code)
+    session.clear()
+    session["mfa_pending"] = True
+    session["mfa_kind"] = kind
+    session["mfa_user"] = identifier
+    session["mfa_otp_code"] = otp_code
+    session["mfa_issued_at"] = time.time()
+    return redirect("/mfa_verify")
 
 
 @auth_bp.route("/admin_login", methods=["GET", "POST"])
@@ -179,6 +219,9 @@ def admin_login():
                     _uc.execute("UPDATE admin_users SET password=%s WHERE username=%s",
                                 (generate_password_hash(password), identifier))
                     _ud.commit()
+            if app.config.get("MANDATORY_LOGIN_MFA", True):
+                return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
+                                         "Executive Administrator" if admin_row[1] == "admin" else admin_row[1].title())
             session.clear()
             session["admin_logged_in"] = True
             session["admin_username"] = identifier
@@ -209,6 +252,8 @@ def admin_login():
                     _uc.execute("UPDATE employees SET password=%s WHERE employee_id=%s",
                                 (generate_password_hash(password), emp_row[0]))
                     _ud.commit()
+            if app.config.get("MANDATORY_LOGIN_MFA", True):
+                return _start_login_mfa(co, "admin_login.html", "employee", emp_row[0], emp_row[5], "Employee")
             session.clear()
             session["employee_id"] = emp_row[0]
             session["employee_name"] = emp_row[1]
@@ -226,6 +271,81 @@ def admin_login():
         return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
                                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
     return render_template("admin_login.html", co=co)
+
+
+@auth_bp.route("/mfa_verify", methods=["GET", "POST"])
+@limiter.limit("8 per 15 minutes")
+def mfa_verify():
+    """Completion step for _start_login_mfa(): checks the emailed one-time
+    code, then builds the real admin/HR/employee session. Deliberately
+    separate from secops.py's own /mfa_login_verify -- SOC keeps its own
+    dedicated flow untouched, rather than risking that already-tested
+    portal by sharing this route with it."""
+    username = session.get("mfa_user")
+    kind = session.get("mfa_kind")
+    if not username or not session.get("mfa_pending") or kind not in ("admin_users", "employee"):
+        return redirect("/admin_login")
+
+    issued_at = session.get("mfa_issued_at") or 0
+    if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
+        session.clear()
+        return render_template("mfa_verify.html", error="Your code expired. Please log in again.")
+
+    if request.method == "POST":
+        submitted = (request.form.get("otp_code") or "").strip()
+        expected = session.get("mfa_otp_code") or ""
+        if submitted and expected and secrets.compare_digest(submitted, expected):
+            if kind == "employee":
+                with _db() as (cursor, db):
+                    cursor.execute(
+                        "SELECT employee_id, name, role, COALESCE(force_pin_change,0), email "
+                        "FROM employees WHERE employee_id=%s", (username,)
+                    )
+                    row = cursor.fetchone()
+                if not row:
+                    session.clear()
+                    return redirect("/admin_login")
+                session.clear()
+                session["employee_id"] = row[0]
+                session["employee_name"] = row[1]
+                session["employee_role"] = row[2] or ""
+                session["_session_created"] = time.time()
+                session["_fpc"] = bool(row[3])
+                session.permanent = True
+                ensure_session_id(session)
+                if row[4]:
+                    notify_if_new_login_ip(row[0], "employee", request.remote_addr, row[1], row[4])
+                if row[3]:
+                    return redirect("/force_change_pin")
+                return redirect("/employee_portal")
+            else:
+                with _db() as (cursor, db):
+                    cursor.execute("SELECT role, email FROM admin_users WHERE username=%s", (username,))
+                    row = cursor.fetchone()
+                if not row:
+                    session.clear()
+                    return redirect("/admin_login")
+                role = row[0] or "admin"
+                # This emailed code IS this login's MFA -- mark enrolled so
+                # app.py's _enforce_admin_mfa_enrollment (which still applies
+                # to admin/manager/hr sessions) doesn't also demand a
+                # separate authenticator-app enrollment right after.
+                mark_totp_enabled(username)
+                session.clear()
+                session["admin_logged_in"] = True
+                session["admin_username"] = username
+                session["admin_role"] = role
+                session["_session_created"] = time.time()
+                session.permanent = True
+                ensure_session_id(session)
+                if row[1]:
+                    notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
+                return redirect("/hr" if role == "hr" else "/admin")
+
+        log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
+        return render_template("mfa_verify.html", username=username, error="Invalid code. Please try again.")
+
+    return render_template("mfa_verify.html", username=username)
 
 
 @auth_bp.route("/logout", methods=["GET", "POST"])

@@ -84,13 +84,15 @@ def verify_totp_code(admin_username: str, code: str, require_enabled: bool = Tru
 
 
 def send_mfa_login_email(to_email: str, username: str, role_label: str, secret: str, otp_code: str):
-    """Email a one-time login code to a SOC/SP-admin account as its MFA
-    step (blueprints/secops.py's sp_admin_login()). Deliberately does NOT
-    include the TOTP secret in the email body -- only the single-use code
-    -- since a raw secret in an inbox would let anyone with mailbox access
-    mint valid codes indefinitely, not just for this one login. `secret` is
-    accepted for signature compatibility with callers that also enroll TOTP
-    but isn't otherwise used here."""
+    """Email a one-time login code as an account's MFA step -- used by every
+    login flow that requires one: blueprints/secops.py's sp_admin_login(),
+    and blueprints/auth.py's _start_login_mfa() (admin, HR, and employee
+    logins alike, via admin_login()/hr_portal.hr_login()). Deliberately does
+    NOT include the TOTP secret in the email body -- only the single-use
+    code -- since a raw secret in an inbox would let anyone with mailbox
+    access mint valid codes indefinitely, not just for this one login.
+    `secret` is accepted for signature compatibility with callers that also
+    enroll TOTP but isn't otherwise used here."""
     from utils.email_utils import get_email_config, send_email_async
     _user = _html.escape(str(username))
     _role = _html.escape(str(role_label))
@@ -112,7 +114,7 @@ def send_mfa_login_email(to_email: str, username: str, role_label: str, secret: 
     config = get_email_config()
     if not config:
         return False
-    send_email_async(to_email, "Your SecOps login code", html_body, config)
+    send_email_async(to_email, "Your login verification code", html_body, config)
     return True
 
 
