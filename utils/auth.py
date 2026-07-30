@@ -502,6 +502,13 @@ def email_settings_step_up_clear():
 SOC_ANALYST_ROLE = "soc_analyst"
 SOC_2FA_WINDOW_SEC = 10 * 60
 
+# HR accounts are a separate credential (blueprints/hr_portal.py's /hr_login)
+# from regular admin_users rows -- same reasoning as SOC_ANALYST_ROLE: a
+# dedicated, narrowly-scoped portal (employees, attendance, leave, onboarding,
+# performance, tickets, documents) rather than the full admin session, which
+# also carries tenant/system settings, company management, and analytics.
+HR_ROLE = "hr"
+
 
 def soc_step_up_valid() -> bool:
     ts = session.get("soc_2fa_verified_at", 0)

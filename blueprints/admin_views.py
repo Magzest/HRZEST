@@ -25,7 +25,7 @@ from flask import (
 from database import get_db_connection, transaction
 from extensions import app, app_log, log_security_event, limiter
 from utils.auth import (
-    admin_required, require_email_2fa, EMAIL_2FA_WINDOW_SEC,
+    admin_required, role_required, require_email_2fa, EMAIL_2FA_WINDOW_SEC,
     email_settings_step_up_refresh, email_settings_step_up_clear,
     security_settings_step_up_clear,
     check_password_hash,
@@ -65,6 +65,11 @@ _TOGGLE_LABEL_MAP = {
 @admin_views_bp.route("/admin")
 @admin_required
 def admin():
+    if session.get("admin_role") == "hr":
+        # HR accounts have their own dashboard (blueprints/hr_portal.py) --
+        # this full view also renders links to payroll, settings, and
+        # company management that their session can't actually use.
+        return redirect("/hr")
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     today = datetime.date.today()
@@ -428,7 +433,7 @@ def admin_mfa_required_page():
 
 
 @admin_views_bp.route("/settings")
-@admin_required
+@role_required("admin")
 def settings_page():
     tab = request.args.get("tab", "company")
     db = get_db_connection()
@@ -811,7 +816,7 @@ def api_settings_lock():
 
 
 @admin_views_bp.route("/api/settings/email")
-@admin_required
+@role_required("admin")
 @require_email_2fa
 def api_get_email_settings():
     db = get_db_connection()
@@ -840,7 +845,7 @@ def api_get_email_settings():
 
 
 @admin_views_bp.route("/api/settings/email", methods=["POST"])
-@admin_required
+@role_required("admin")
 @require_email_2fa
 def api_save_email_settings():
     data = request.get_json(silent=True) or {}
@@ -884,7 +889,7 @@ def api_save_email_settings():
 
 
 @admin_views_bp.route("/api/settings/email/reveal-password", methods=["POST"])
-@admin_required
+@role_required("admin")
 @require_email_2fa
 def api_reveal_email_password():
     """Separate from the GET above on purpose: viewing the masked settings
@@ -906,7 +911,7 @@ def api_reveal_email_password():
 
 
 @admin_views_bp.route("/save_default_onboarding_template", methods=["POST"])
-@admin_required
+@role_required("admin")
 def save_default_onboarding_template():
     tpl_id = request.form.get("default_onboarding_template_id") or None
     if tpl_id == "0" or tpl_id == "":
@@ -922,7 +927,7 @@ def save_default_onboarding_template():
 
 
 @admin_views_bp.route("/save_salary_rules", methods=["POST"])
-@admin_required
+@role_required("admin")
 def save_salary_rules():
     try:
         late_pct = max(0.0, min(100.0, float(request.form.get("late_deduction_pct", 10))))
@@ -973,7 +978,7 @@ def save_salary_rules():
 
 
 @admin_views_bp.route("/toggle_auth_method", methods=["POST"])
-@admin_required
+@role_required("admin")
 def toggle_auth_method():
     method = request.form.get("method", "")
     enabled = request.form.get("enabled", "0") == "1"
@@ -1006,7 +1011,7 @@ def toggle_auth_method():
 
 
 @admin_views_bp.route("/toggle_fingerprint", methods=["POST"])
-@admin_required
+@role_required("admin")
 def toggle_fingerprint():
     enabled = request.form.get("enabled", "0") == "1"
     active_cid = session.get("active_company_id")
@@ -1025,7 +1030,7 @@ def toggle_fingerprint():
 
 
 @admin_views_bp.route("/save_company_code", methods=["POST"])
-@admin_required
+@role_required("admin")
 def save_company_code():
     code = request.form.get("company_code", "").strip().upper()[:10]
     db = get_db_connection()
@@ -1039,7 +1044,7 @@ def save_company_code():
 
 
 @admin_views_bp.route("/save_company_info", methods=["POST"])
-@admin_required
+@role_required("admin")
 def save_company_info():
     import pytz as _pytz
     _VALID_DAYS = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
@@ -1071,7 +1076,7 @@ def save_company_info():
 
 
 @admin_views_bp.route("/toggle_feature", methods=["POST"])
-@admin_required
+@role_required("admin")
 def toggle_feature():
     allowed = {
         "face_auth_enabled", "geo_enabled", "qr_enabled", "pin_enabled",
@@ -1113,7 +1118,7 @@ def toggle_feature():
 
 
 @admin_views_bp.route("/save_geo_radius", methods=["POST"])
-@admin_required
+@role_required("admin")
 def save_geo_radius():
     try:
         radius = int(request.form.get("geo_radius", 100))
@@ -1142,7 +1147,7 @@ def save_geo_radius():
 
 
 @admin_views_bp.route("/switch_company", methods=["POST"])
-@admin_required
+@role_required("admin")
 def switch_company():
     cid = request.form.get("company_id", "").strip()
     pin = request.form.get("pin", "").strip()
@@ -1174,7 +1179,7 @@ def switch_company():
 
 
 @admin_views_bp.route("/clear_company", methods=["POST"])
-@admin_required
+@role_required("admin")
 def clear_company():
     session.pop("active_company_id", None)
     flash("Viewing all companies.", "success")
@@ -1182,7 +1187,7 @@ def clear_company():
 
 
 @admin_views_bp.route("/set_company_pin", methods=["POST"])
-@admin_required
+@role_required("admin")
 def set_company_pin():
     cid = request.form.get("company_id", "").strip()
     pin = request.form.get("pin", "").strip()
@@ -1201,7 +1206,7 @@ def set_company_pin():
 
 
 @admin_views_bp.route("/companies")
-@admin_required
+@role_required("admin")
 def view_companies():
     return redirect("/settings?tab=company")
 
@@ -1231,7 +1236,7 @@ def _delete_company_image(rel_path):
 
 
 @admin_views_bp.route("/companies/add", methods=["POST"])
-@admin_required
+@role_required("admin")
 def add_company():
     name = request.form.get("name", "").strip()
     code = request.form.get("code", "").strip().upper()[:20] or None
@@ -1317,7 +1322,7 @@ def add_company():
 
 
 @admin_views_bp.route("/companies/<int:cid>/edit", methods=["POST"])
-@admin_required
+@role_required("admin")
 def edit_company(cid):
     name = request.form.get("name", "").strip()
     new_code = (request.form.get("code", "").strip().upper()[:20]) or None
@@ -1452,7 +1457,7 @@ def edit_company(cid):
 
 
 @admin_views_bp.route("/companies/<int:cid>/delete", methods=["POST"])
-@admin_required
+@role_required("admin")
 def delete_company(cid):
     redirect_to = request.form.get("redirect_to", "companies")
     dest = "/settings?tab=company" if redirect_to == "settings" else "/companies"
@@ -1493,7 +1498,7 @@ _ID_CARD_FIELD_KEYS = {
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/upload", methods=["POST"])
-@admin_required
+@role_required("admin")
 def id_card_template_upload(cid):
     front_file = request.files.get("front_image")
     back_file = request.files.get("back_image")
@@ -1560,7 +1565,7 @@ def id_card_template_upload(cid):
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/editor")
-@admin_required
+@role_required("admin")
 def id_card_template_editor(cid):
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1594,7 +1599,7 @@ def id_card_template_editor(cid):
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/save_positions", methods=["POST"])
-@admin_required
+@role_required("admin")
 def id_card_template_save_positions(cid):
     raw = request.form.get("positions_json", "")
     try:
@@ -1651,7 +1656,7 @@ def id_card_template_save_positions(cid):
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/reset", methods=["POST"])
-@admin_required
+@role_required("admin")
 def id_card_template_reset(cid):
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1671,7 +1676,7 @@ def id_card_template_reset(cid):
 
 
 @admin_views_bp.route("/announcements", methods=["GET", "POST"])
-@admin_required
+@role_required("admin")
 def announcements_admin():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1725,7 +1730,7 @@ def announcements_admin():
 
 
 @admin_views_bp.route("/test_email", methods=["POST"])
-@admin_required
+@role_required("admin")
 def test_email():
     to_email = request.form.get("test_to", "").strip()
     config = get_email_config()
@@ -1777,7 +1782,7 @@ def api_expiring_documents():
 
 
 @admin_views_bp.route("/analytics")
-@admin_required
+@role_required("admin")
 def analytics():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -2157,7 +2162,7 @@ def analytics():
 
 
 @admin_views_bp.route("/org_chart")
-@admin_required
+@role_required("admin")
 def org_chart_page():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -2188,7 +2193,7 @@ def org_chart_page():
 
 
 @admin_views_bp.route("/admin_tools")
-@admin_required
+@role_required("admin")
 def admin_tools():
     tab = request.args.get("tab", "org_chart")
     db = get_db_connection()

@@ -18,7 +18,7 @@ from utils.auth import (
     _check_login_lockout, _record_login_failure, _clear_login_failures,
     admin_required, role_required, employee_required, employee_api_required,
     _get_failed_count, verify_turnstile, turnstile_enabled,
-    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE,
+    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE, HR_ROLE,
 )
 from utils.helpers import get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
@@ -155,14 +155,16 @@ def admin_login():
         with _db() as (cursor, db):
             cursor.execute("SELECT password, COALESCE(role,'admin'), email FROM admin_users WHERE username=%s", (identifier,))
             admin_row = cursor.fetchone()
-        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
-            # SOC analyst accounts are a deliberately separate credential
-            # (blueprints/secops.py's /sp_admin/login) -- letting one also
-            # complete the regular admin login here would grant it a full
-            # admin_required session (employees, payroll, everything),
-            # which the dedicated, narrowly-scoped SOC login exists
-            # specifically to avoid. Same generic error either way, no
-            # distinction leaked between "wrong role" and "wrong password".
+        if admin_row and admin_row[1] in (SOC_ANALYST_ROLE, HR_ROLE) and check_password_hash(admin_row[0], password):
+            # SOC analyst and HR accounts are deliberately separate
+            # credentials (blueprints/secops.py's /sp_admin/login,
+            # blueprints/hr_portal.py's /hr_login) -- letting either also
+            # complete the regular admin login here would grant them a full
+            # admin_required session (payroll, tenant settings, company
+            # management, everything), which those dedicated, narrowly-scoped
+            # logins exist specifically to avoid. Same generic error either
+            # way, no distinction leaked between "wrong role" and "wrong
+            # password".
             _record_login_failure(identifier)
             return render_template(
                 "admin_login.html", co=co,

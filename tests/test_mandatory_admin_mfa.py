@@ -25,7 +25,7 @@ def mandatory_mfa_enabled(client):
 
 
 class TestMandatoryMfaGate:
-    @pytest.mark.parametrize("role", ["admin", "manager", "soc_analyst"])
+    @pytest.mark.parametrize("role", ["admin", "manager", "soc_analyst", "hr"])
     def test_unenrolled_admin_role_redirected_to_enrollment(self, client, seed_admin, mandatory_mfa_enabled, role):
         _admin_session(client, seed_admin["username"], role=role)
         resp = client.get("/admin", follow_redirects=False)

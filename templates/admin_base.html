@@ -65,17 +65,18 @@
 
 <!-- ── SIDEBAR ── -->
 <div class="sidebar">
+  {% set _is_hr = session.admin_role == 'hr' %}
   <div class="brand-wrap">
     <div class="brand-icon"><i class="ti ti-layout-dashboard u-fs-18"></i></div>
     <div>
-      <div class="brand">Admin Panel</div>
+      <div class="brand">{{ 'HR Panel' if _is_hr else 'Admin Panel' }}</div>
       <div class="brand-sub">{{ co.company_name }}</div>
     </div>
   </div>
 
   {% set _tp = (pending_leaves|default(0)) + (pending_resignations|default(0)) + (pending_tickets|default(0)) %}
 
-  <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="/admin">
+  <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="{{ '/hr' if _is_hr else '/admin' }}">
     <span class="nav-icon"><i class="ti ti-home"></i></span>Dashboard
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="/employees">
@@ -84,9 +85,11 @@
   <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="/monthly_report">
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>
+  {% if not _is_hr %}
   <a class="nav-item {{ 'active' if active_nav == 'salary' }}" href="/salary_report">
     <span class="nav-icon"><i class="ti ti-coin"></i></span>Salary &amp; Payslips
   </a>
+  {% endif %}
   <a class="nav-item {{ 'active' if active_nav == 'leaves' }}" href="/leave_holidays">
     <span class="nav-icon"><i class="ti ti-calendar-event"></i></span>Leaves &amp; Holidays{% if _tp > 0 %}<span class="badge-count">{{ _tp }}</span>{% endif %}
   </a>
@@ -102,6 +105,13 @@
   <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="/onboarding">
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
   </a>
+  <a class="nav-item {{ 'active' if active_nav == 'tickets' }}" href="/tickets">
+    <span class="nav-icon"><i class="ti ti-ticket"></i></span>Tickets
+  </a>
+  <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="/documents">
+    <span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents
+  </a>
+  {% if not _is_hr %}
   <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="/analytics">
     <span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics
   </a>
@@ -114,6 +124,7 @@
   <a class="nav-item {{ 'active' if active_nav == 'settings' }}" href="/settings">
     <span class="nav-icon"><i class="ti ti-settings"></i></span>Settings
   </a>
+  {% endif %}
   <a class="nav-item" href="/logout">
     <span class="nav-icon"><i class="ti ti-logout"></i></span>Logout
   </a>

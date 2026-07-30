@@ -363,15 +363,15 @@ def _enforce_idle_timeout():
 
 # Roles that count as "administrative/HR" for the mandatory-MFA requirement
 # below — every role that can reach admin-side data or actions.
-_MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst"}
+_MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
 
-# Routes reachable by an admin/manager/soc_analyst session that has NOT yet
-# enrolled TOTP — must stay small and deliberate. Anything not on this list
-# is unreachable until enrollment is complete, which is the point (a genuine
-# "mandatory," not a step-up an admin can defer indefinitely).
+# Routes reachable by an admin/manager/soc_analyst/hr session that has NOT
+# yet enrolled TOTP — must stay small and deliberate. Anything not on this
+# list is unreachable until enrollment is complete, which is the point (a
+# genuine "mandatory," not a step-up an admin can defer indefinitely).
 _MANDATORY_MFA_EXEMPT_PATHS = {
     "/admin/mfa-required", "/api/settings/2fa/setup", "/api/settings/2fa/enable",
-    "/logout", "/admin_login", "/setup",
+    "/logout", "/admin_login", "/setup", "/hr_login",
 }
 
 app.config.setdefault("MANDATORY_ADMIN_MFA", True)
@@ -3044,10 +3044,11 @@ if "core.home" not in app.view_functions:
     from blueprints.secops import secops_bp
     from blueprints.email_blast import email_blast_bp
     from blueprints.compliance import compliance_bp
+    from blueprints.hr_portal import hr_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp):
+                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp):
         app.register_blueprint(_bp)
 
 _register_api_v1_aliases()

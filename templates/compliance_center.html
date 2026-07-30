@@ -217,12 +217,13 @@
       <div class="section">
         <div class="section-title"><i class="ti ti-lock-access"></i> Access Control Matrix</div>
         <table>
-          <thead><tr><th>Feature</th><th>Admin</th><th>SOC</th><th>Employee</th></tr></thead>
+          <thead><tr><th>Feature</th><th>Admin</th><th>HR</th><th>SOC</th><th>Employee</th></tr></thead>
           <tbody>
             {% for row in access_matrix %}
               <tr title="{{ row.gate }}">
                 <td>{{ row.feature }}</td>
                 <td>{% if row.admin %}<span class="yes">&check;</span>{% else %}<span class="no">&mdash;</span>{% endif %}</td>
+                <td>{% if row.hr %}<span class="yes">&check;</span>{% else %}<span class="no">&mdash;</span>{% endif %}</td>
                 <td>{% if row.soc_analyst %}<span class="yes">&check;</span>{% else %}<span class="no">&mdash;</span>{% endif %}</td>
                 <td>{% if row.employee %}<span class="yes">&check;</span>{% else %}<span class="no">&mdash;</span>{% endif %}</td>
               </tr>

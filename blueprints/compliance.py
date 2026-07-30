@@ -1,6 +1,9 @@
 """Compliance & Security Center — certification attestations, regulatory
 deadlines, a searchable audit-log explorer, and a role/feature access
-matrix, all admin-only.
+matrix. Locked to the 'admin' role specifically (role_required("admin")),
+not just any admin-side session -- HR and SOC accounts are separate,
+narrowly-scoped credentials (see blueprints/hr_portal.py, blueprints/secops.py)
+that must not reach audit logs or certification records.
 
 Deliberately no auto-computed "compliant" claims: certification status and
 deadlines are whatever an admin has genuinely entered (default "Not
@@ -18,7 +21,7 @@ import os
 from flask import Blueprint, request, redirect, render_template, flash
 
 from database import get_db_connection
-from utils.auth import admin_required
+from utils.auth import role_required
 from utils.helpers import _audit
 
 compliance_bp = Blueprint("compliance", __name__)
@@ -30,26 +33,28 @@ DEADLINE_STATUSES = ["Pending", "Completed", "Missed"]
 # Snapshot of this app's actual authorization gates -- see module docstring.
 ACCESS_MATRIX = [
     {"feature": "Employee Directory & Records", "gate": "@admin_required",
-     "admin": True, "soc_analyst": False, "employee": False},
-    {"feature": "Payroll & Payslips", "gate": "@admin_required / @role_required(\"admin\")",
-     "admin": True, "soc_analyst": False, "employee": False},
+     "admin": True, "hr": True, "soc_analyst": False, "employee": False},
+    {"feature": "Payroll & Payslips", "gate": "@role_required(\"admin\")",
+     "admin": True, "hr": False, "soc_analyst": False, "employee": False},
     {"feature": "Attendance Management", "gate": "@admin_required",
-     "admin": True, "soc_analyst": False, "employee": False},
+     "admin": True, "hr": True, "soc_analyst": False, "employee": False},
     {"feature": "Performance Reviews & 9-Box", "gate": "@admin_required",
-     "admin": True, "soc_analyst": False, "employee": False},
+     "admin": True, "hr": True, "soc_analyst": False, "employee": False},
     {"feature": "Onboarding", "gate": "@admin_required",
-     "admin": True, "soc_analyst": False, "employee": False},
-    {"feature": "Compliance & Security Center", "gate": "@admin_required",
-     "admin": True, "soc_analyst": False, "employee": False},
+     "admin": True, "hr": True, "soc_analyst": False, "employee": False},
+    {"feature": "Tenant / System Settings & Company Management", "gate": "@role_required(\"admin\")",
+     "admin": True, "hr": False, "soc_analyst": False, "employee": False},
+    {"feature": "Compliance & Security Center", "gate": "@role_required(\"admin\")",
+     "admin": True, "hr": False, "soc_analyst": False, "employee": False},
     {"feature": "SOC Security Dashboard", "gate": "_soc_session_and_stepup_or_404()",
-     "admin": False, "soc_analyst": True, "employee": False},
+     "admin": False, "hr": False, "soc_analyst": True, "employee": False},
     {"feature": "Employee Self-Service Portal", "gate": "@employee_required",
-     "admin": False, "soc_analyst": False, "employee": True},
+     "admin": False, "hr": False, "soc_analyst": False, "employee": True},
 ]
 
 
 @compliance_bp.route("/compliance")
-@admin_required
+@role_required("admin")
 def compliance_center():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -123,7 +128,7 @@ def compliance_center():
 
 
 @compliance_bp.route("/compliance/certifications/update", methods=["POST"])
-@admin_required
+@role_required("admin")
 def update_certification():
     framework = (request.form.get("framework") or "").strip()
     status = (request.form.get("status") or "").strip()
@@ -154,7 +159,7 @@ def update_certification():
 
 
 @compliance_bp.route("/compliance/deadlines/add", methods=["POST"])
-@admin_required
+@role_required("admin")
 def add_deadline():
     title = (request.form.get("title") or "").strip()
     jurisdiction = (request.form.get("jurisdiction") or "").strip()
@@ -184,7 +189,7 @@ def add_deadline():
 
 
 @compliance_bp.route("/compliance/deadlines/<int:deadline_id>/status", methods=["POST"])
-@admin_required
+@role_required("admin")
 def update_deadline_status(deadline_id):
     status = (request.form.get("status") or "").strip()
     if status not in DEADLINE_STATUSES:
@@ -209,7 +214,7 @@ def update_deadline_status(deadline_id):
 
 
 @compliance_bp.route("/compliance/audit-logs")
-@admin_required
+@role_required("admin")
 def audit_log_explorer():
     actor = (request.args.get("actor") or "").strip()
     action = (request.args.get("action") or "").strip()
