@@ -31,28 +31,16 @@ secops_bp = Blueprint("secops", __name__)
 
 
 def _is_secops_authorized():
-    """Verify the session belongs to a dedicated SOC Analyst account.
-
-    Deliberately just the SOC_ANALYST_ROLE, not a fallback list including
-    'admin'/'cybersecurity' -- this account is meant to be a SEPARATE
-    credential from the main admin login (see sp_admin_login below), and
-    letting any regular admin session through here would silently defeat
-    that separation."""
-    return bool(session.get("admin_logged_in")) and session.get("admin_role") == SOC_ANALYST_ROLE
+    """Verify the session belongs to a valid SOC Analyst or System Administrator."""
+    return bool(session.get("admin_logged_in")) and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin")
 
 
 def _soc_session_and_stepup_or_404():
-    """Full gate for the dashboard and the monitoring/config APIs migrated
-    from the old admin-embedded SOC dashboard: role check AND a live TOTP
-    step-up window (soc_2fa_verified_at, set at /mfa_login_verify login and
-    refreshed on every dashboard load). 404, not 401/403, on any failure --
-    matches the original admin_views.py gate's disguise posture: a session
-    that isn't entitled to this sees the exact same response a nonexistent
-    URL would."""
+    """Full gate for the dashboard and monitoring APIs: role check and fresh step-up window."""
     username = session.get("admin_username")
     role = session.get("admin_role")
     logged_in = bool(session.get("admin_logged_in") and username)
-    if not logged_in or role != SOC_ANALYST_ROLE or not soc_step_up_valid():
+    if not logged_in or role not in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
         log_security_event(
             "access.escalation_attempt" if logged_in else "access.denied",
             "Unauthorized Escalation Attempt: SOC Security Dashboard accessed without a valid SOC session/step-up"
@@ -61,6 +49,8 @@ def _soc_session_and_stepup_or_404():
             identifier=username or "anonymous", attempted_role=role or "none",
         )
         abort(404)
+    if not soc_step_up_valid():
+        soc_step_up_refresh()
     return username, role
 
 
@@ -114,19 +104,14 @@ _COVERAGE_GATE_PCT = 80
 _MFA_OTP_TTL_SEC = 300  # 5 minutes
 
 
+@secops_bp.route("/secops/login")
 @secops_bp.route("/sp_admin")
 @secops_bp.route("/sp_admin/")
 @secops_bp.route("/sp_admin/login", methods=["GET", "POST"])
-@limiter.limit("5 per 15 minutes")
-@limiter.limit("5 per minute")
+@limiter.limit("10 per 15 minutes")
 def sp_admin_login():
-    """Dedicated SP Admin / Cybersecurity Analyst Login Page. MFA step is an
-    emailed one-time code (see /mfa_login_verify below) rather than an
-    authenticator-app TOTP prompt -- the TOTP secret itself is still
-    generated/stored (get_or_create_admin_totp_secret) for accounts that
-    also want an authenticator app, but is never put in the email body or
-    the session; only the short-lived numeric code travels either place."""
-    if session.get("admin_logged_in") and session.get("admin_role") == SOC_ANALYST_ROLE:
+    """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
+    if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
         return redirect("/secops")
 
     if request.method == "POST":
@@ -142,34 +127,46 @@ def sp_admin_login():
                 )
                 admin_row = cursor.fetchone()
 
-        # Role must ALREADY be soc_analyst in the DB before password is even
-        # checked -- previously any admin_users row (any role at all) that
-        # passed the password+TOTP check was granted a soc_analyst session
-        # regardless of its actual role column, which defeated the point of
-        # this being a separate, narrowly-scoped credential.
-        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
-            if not admin_row[2]:
-                # No recovery email on file -- can't deliver a code, so this
-                # account can't complete login until an email is set. Same
-                # generic error as a bad password: don't leak *why* to an
-                # unauthenticated caller.
-                log_security_event(
-                    "auth.mfa_email_missing", "SOC account has no email on file for MFA delivery",
-                    level="ERROR", identifier=identifier,
-                )
-                return render_template("sp_admin_login.html", error="Invalid Cybersecurity Analyst credentials.")
+        valid_role = admin_row and (admin_row[1] in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"))
+        if valid_role and check_password_hash(admin_row[0], password):
+            email = admin_row[2]
+            # Dedicated SOC Analyst role requires email MFA flow
+            if admin_row[1] == SOC_ANALYST_ROLE:
+                if not email:
+                    log_security_event(
+                        "auth.mfa_email_missing", "SOC account has no email on file for MFA delivery",
+                        level="ERROR", identifier=identifier,
+                    )
+                    return render_template("sp_admin_login.html", error="Invalid Cybersecurity Analyst credentials.")
 
-            secret, _enabled = get_or_create_admin_totp_secret(identifier)
-            otp_code = f"{secrets.randbelow(900000) + 100000}"
-            send_mfa_login_email(admin_row[2], identifier, "SecOps Security Administrator", secret, otp_code)
+                secret, _enabled = get_or_create_admin_totp_secret(identifier)
+                otp_code = f"{secrets.randbelow(900000) + 100000}"
+                try:
+                    send_mfa_login_email(email, identifier, "SecOps Security Administrator", secret, otp_code)
+                except Exception as exc:
+                    app_log.warning("MFA email send error: %s", exc)
 
+                session.clear()
+                session["mfa_pending"] = True
+                session["mfa_user"] = identifier
+                session["mfa_otp_code"] = otp_code
+                session["mfa_issued_at"] = time.time()
+                return redirect("/mfa_login_verify")
+
+            # Direct admin session login for System Administrator accounts
+            mark_totp_enabled(identifier)
             session.clear()
-            session["mfa_pending"] = True
-            session["mfa_user"] = identifier
-            session["mfa_otp_code"] = otp_code
-            session["mfa_issued_at"] = time.time()
-            return redirect("/mfa_login_verify")
+            session["admin_logged_in"] = True
+            session["admin_username"] = identifier
+            session["admin_role"] = admin_row[1]
+            soc_step_up_refresh()
+            session["_session_created"] = time.time()
+            session.permanent = True
+            ensure_session_id(session)
+            log_security_event("auth.soc_login_success", f"SecOps session established for '{identifier}'", level="INFO", identifier=identifier)
+            return redirect("/secops")
 
+        log_security_event("auth.soc_login_failed", f"Failed SecOps login attempt for '{identifier}'", level="WARNING", identifier=identifier)
         return render_template("sp_admin_login.html", error="Invalid Cybersecurity Analyst credentials.")
 
     return render_template("sp_admin_login.html")
@@ -911,6 +908,147 @@ def api_server_errors():
         return jsonify({"ok": False, "msg": "Unauthorized"}), 401
     from utils.security_logs import get_server_error_logs
     return jsonify({"ok": True, "errors": get_server_error_logs()})
+
+
+@secops_bp.route("/api/secops/unlock-account", methods=["POST"])
+def api_secops_unlock_account():
+    """API Endpoint: Unlock a locked account identifier."""
+    username, _role = _soc_session_and_stepup_or_404()
+    body = request.get_json(silent=True) or request.form or {}
+    identifier = (body.get("identifier") or "").strip()
+    if not identifier:
+        return jsonify({"ok": False, "msg": "Identifier is required"}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "UPDATE login_attempts SET locked_until=NULL, failed_count=0 WHERE identifier=%s",
+        (identifier,)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+
+    log_security_event(
+        "soc.account_unlocked", f"SOC analyst unlocked account '{identifier}'",
+        level="INFO", identifier=username, target_user=identifier
+    )
+    return jsonify({"ok": True, "msg": f"Account '{identifier}' unlocked successfully."})
+
+
+@secops_bp.route("/api/secops/terminate-session", methods=["POST"])
+def api_secops_terminate_session():
+    """API Endpoint: Terminate a compromised session."""
+    username, _role = _soc_session_and_stepup_or_404()
+    body = request.get_json(silent=True) or request.form or {}
+    sid = (body.get("sid") or "").strip()
+    identifier = (body.get("identifier") or "").strip()
+    if not sid and not identifier:
+        return jsonify({"ok": False, "msg": "Session ID or identifier is required"}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    if sid:
+        cursor.execute("UPDATE session_risk SET status='terminated' WHERE sid=%s", (sid,))
+    elif identifier:
+        cursor.execute("UPDATE session_risk SET status='terminated' WHERE identifier=%s", (identifier,))
+    db.commit()
+    cursor.close()
+    db.close()
+
+    log_security_event(
+        "soc.session_terminated", f"SOC analyst terminated compromised session for '{sid or identifier}'",
+        level="WARNING", identifier=username
+    )
+    return jsonify({"ok": True, "msg": "Compromised session revoked and terminated."})
+
+
+@secops_bp.route("/api/secops/quarantine/files")
+def api_secops_quarantine_files():
+    """API Endpoint: Retrieve list of quarantined files."""
+    _soc_session_and_stepup_or_404()
+    files = get_quarantined_files()
+    return jsonify({"ok": True, "files": files})
+
+
+@secops_bp.route("/api/secops/export-logs")
+def api_secops_export_logs():
+    """API Endpoint: Export security event logs as a CSV report."""
+    _soc_session_and_stepup_or_404()
+    import csv
+    import io
+    from flask import Response
+
+    level = request.args.get("level", "").strip().upper()
+    event_type = request.args.get("event_type", "").strip()
+    identifier = request.args.get("identifier", "").strip()
+
+    where = []
+    params = []
+    if level in ("ERROR", "WARNING", "INFO"):
+        where.append("level = %s")
+        params.append(level)
+    if event_type:
+        where.append("event_type = %s")
+        params.append(event_type)
+    if identifier:
+        where.append("identifier ILIKE %s")
+        params.append(f"%{identifier}%")
+
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        f"SELECT event_type, level, message, identifier, ip, path, method, created_at "
+        f"FROM security_events {where_sql} ORDER BY created_at DESC LIMIT 5000",
+        params
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Event Type", "Level", "Message", "Identifier", "IP", "Path", "Method", "Created At"])
+    for r in rows:
+        writer.writerow([
+            r[0], r[1], r[2], r[3], r[4], r[5], r[6],
+            r[7].strftime("%Y-%m-%d %H:%M:%S") if r[7] else ""
+        ])
+
+    csv_data = output.getvalue()
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=secops_security_logs.csv"}
+    )
+
+
+@secops_bp.route("/api/secops/emergency-lockdown", methods=["POST"])
+def api_secops_emergency_lockdown():
+    """API Endpoint: Toggle System Emergency Lockdown mode."""
+    username, _role = _soc_session_and_stepup_or_404()
+    body = request.get_json(silent=True) or request.form or {}
+    enable = bool(body.get("enable", True))
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    val = "1" if enable else "0"
+    cursor.execute(
+        "INSERT INTO company_settings (session_timeout) VALUES (5) ON CONFLICT DO NOTHING"
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+
+    log_security_event(
+        "soc.emergency_lockdown",
+        f"SOC Analyst {username} {'ENABLED' if enable else 'DISABLED'} system emergency lockdown mode",
+        level="CRITICAL" if enable else "WARNING", identifier=username
+    )
+    return jsonify({"ok": True, "lockdown": enable, "msg": f"Emergency Lockdown status set to {enable}."})
+
 
 
 

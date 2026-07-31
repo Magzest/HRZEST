@@ -3,1112 +3,918 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Security Dashboard — SOC Analyst</title>
+    <title>SecOps Command Center — Security Operations Dashboard</title>
     <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
-      body { background: #0b0f19; color: #cbd5e1; min-height: 100vh; padding: 32px; }
-      .hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
-      .hdr h1 { font-size: 20px; font-weight: 800; color: #f1f5f9; letter-spacing: -0.2px; }
-      .hdr .badge { display: inline-block; margin-left: 10px; padding: 3px 10px; border-radius: 20px;
-                    background: #1e293b; border: 1px solid #334155; color: #38bdf8; font-size: 11px;
-                    font-weight: 700; letter-spacing: 0.5px; vertical-align: middle; }
-      .mitre-badge { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 8px;
-                     border-radius: 6px; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4);
-                     color: #c084fc; font-size: 10px; font-weight: 700; vertical-align: middle; }
-      .btn-lock { background: #1e293b; border: 1px solid #334155; color: #e2e8f0; padding: 9px 18px;
-                  border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
-                  text-decoration: none; display: inline-block; }
-      .btn-lock:hover { background: #334155; }
-      .panel { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 20px;
-               margin-bottom: 22px; }
-      .panel-title { font-size: 13px; font-weight: 700; color: #94a3b8; text-transform: uppercase;
-                     letter-spacing: 0.6px; margin-bottom: 14px; }
-      table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th { text-align: left; padding: 8px 10px; color: #64748b; font-weight: 600; font-size: 11px;
-           text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #1f2937; }
-      td { padding: 9px 10px; border-bottom: 1px solid #161e2e; color: #cbd5e1; }
-      tr:last-child td { border-bottom: none; }
-      .score-hot { color: #f87171; font-weight: 700; }
-      .empty { padding: 24px; text-align: center; color: #475569; font-size: 13px; }
-      .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; color: #94a3b8; }
-      .log-scroll { max-height: 480px; overflow-y: auto; }
-      .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
-      .stat-card { background: #0b0f19; border: 1px solid #1f2937; border-radius: 10px; padding: 14px; text-align: center; }
-      .stat-num { font-size: 22px; font-weight: 800; color: #f1f5f9; }
-      .stat-label { font-size: 11px; color: #64748b; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
-      .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-      .filter-row input, .filter-row select {
-        background: #0b0f19; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px;
-        padding: 8px 10px; font-size: 12px;
+      :root {
+        --bg-main: #070b14;
+        --bg-card: rgba(15, 23, 42, 0.85);
+        --bg-card-hover: rgba(30, 41, 59, 0.85);
+        --border-color: rgba(51, 65, 85, 0.6);
+        --border-glow: rgba(59, 130, 246, 0.4);
+        --primary: #3b82f6;
+        --primary-glow: rgba(59, 130, 246, 0.25);
+        --danger: #ef4444;
+        --danger-glow: rgba(239, 68, 68, 0.25);
+        --warning: #f59e0b;
+        --success: #10b981;
+        --accent: #6366f1;
+        --text-bright: #f8fafc;
+        --text-muted: #94a3b8;
+        --text-dim: #64748b;
       }
-      .pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 14px; }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+
+      body {
+        background: var(--bg-main);
+        color: var(--text-bright);
+        min-height: 100vh;
+        padding: 24px;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: fixed; inset: 0; pointer-events: none;
+        background-image: radial-gradient(circle, rgba(59,130,246,0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+        z-index: 0;
+      }
+
+      .glow-orb {
+        position: fixed; border-radius: 50%; filter: blur(120px);
+        opacity: 0.15; pointer-events: none; z-index: 0;
+      }
+      .orb-blue { width: 500px; height: 500px; background: #3b82f6; top: -100px; left: -100px; }
+      .orb-purple { width: 450px; height: 450px; background: #8b5cf6; bottom: -100px; right: -100px; }
+
+      .container { max-width: 1440px; margin: 0 auto; position: relative; z-index: 1; }
+
+      /* ── Top Header ── */
+      .soc-header {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+        padding: 20px 24px; background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color); border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); margin-bottom: 24px;
+      }
+
+      .soc-brand { display: flex; align-items: center; gap: 14px; }
+      .soc-icon {
+        width: 52px; height: 52px; border-radius: 16px;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 26px; color: #fff;
+        box-shadow: 0 0 25px rgba(59, 130, 246, 0.4);
+      }
+      .soc-title h1 { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; }
+      .soc-title p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+      .badge-soc {
+        background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa; font-size: 10px; font-weight: 800; text-transform: uppercase;
+        padding: 3px 10px; border-radius: 12px; letter-spacing: 0.5px;
+      }
+      .badge-live {
+        background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);
+        color: #34d399; font-size: 10px; font-weight: 800; text-transform: uppercase;
+        padding: 3px 10px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;
+      }
+      .pulse-dot { width: 7px; height: 7px; background: #34d399; border-radius: 50%; animation: pulse 2s infinite; }
+      @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+
+      .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .btn {
+        padding: 10px 18px; border-radius: 12px; font-size: 13px; font-weight: 700;
+        cursor: pointer; transition: all 0.2s; border: none; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 8px;
+      }
+      .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3); }
+      .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5); }
+      .btn-danger { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3); }
+      .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5); }
+      .btn-secondary { background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-color); color: var(--text-muted); }
+      .btn-secondary:hover { background: rgba(51, 65, 85, 0.8); color: #fff; }
+
+      /* ── KPI Grid ── */
+      .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
+      .kpi-card {
+        background: var(--bg-card); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color); border-radius: 18px; padding: 20px;
+        transition: all 0.2s ease; position: relative; overflow: hidden;
+      }
+      .kpi-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); }
+      .kpi-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .kpi-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.6px; }
+      .kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+      .kpi-val { font-size: 28px; font-weight: 800; color: #fff; line-height: 1; }
+      .kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+      /* ── Navigation Tabs ── */
+      .tab-nav {
+        display: flex; gap: 8px; margin-bottom: 24px; overflow-x: auto; padding-bottom: 4px;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .tab-btn {
+        padding: 12px 20px; border-radius: 12px; background: transparent; border: 1px solid transparent;
+        color: var(--text-muted); font-size: 13px; font-weight: 700; cursor: pointer;
+        transition: all 0.2s; white-space: nowrap; display: flex; align-items: center; gap: 8px;
+      }
+      .tab-btn:hover { color: #fff; background: rgba(30, 41, 59, 0.5); }
+      .tab-btn.active {
+        background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.4);
+        color: #60a5fa; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+      }
+
+      /* ── Content Sections ── */
+      .tab-content { display: none; }
+      .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+      .card-panel {
+        background: var(--bg-card); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color); border-radius: 20px; padding: 24px; margin-bottom: 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+      .panel-hdr { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+      .panel-title { font-size: 16px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
+
+      /* ── Tables ── */
+      .table-wrapper { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+      th {
+        background: rgba(15, 23, 42, 0.95); padding: 12px 16px; color: var(--text-muted);
+        font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+        border-bottom: 1px solid var(--border-color); white-space: nowrap;
+      }
+      td { padding: 14px 16px; border-bottom: 1px solid rgba(51, 65, 85, 0.3); color: var(--text-bright); vertical-align: middle; }
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: rgba(30, 41, 59, 0.4); }
+
+      /* ── Form Controls ── */
+      .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .field-group { display: flex; flex-direction: column; gap: 6px; }
+      .field-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+      .form-control {
+        background: rgba(9, 13, 22, 0.9); border: 1px solid var(--border-color);
+        border-radius: 10px; padding: 10px 14px; color: #fff; font-size: 13px; outline: none; transition: 0.2s;
+      }
+      .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+      /* ── Status Pills & Badges ── */
+      .badge-level {
+        display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+      }
+      .level-error { background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; }
+      .level-warning { background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; }
+      .level-info { background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); color: #93c5fd; }
+      .level-critical { background: rgba(225, 29, 72, 0.3); border: 1px solid rgba(225, 29, 72, 0.6); color: #fda4af; }
+
+      .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; color: #94a3b8; }
+      .empty-state { padding: 32px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+      /* ── Toast Notifications ── */
+      #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+      .toast {
+        background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-color); color: #fff;
+        padding: 14px 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px;
+        animation: slideIn 0.3s ease-out; max-width: 380px;
+      }
+      @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      .toast-success { border-color: rgba(16, 185, 129, 0.6); }
+      .toast-danger { border-color: rgba(239, 68, 68, 0.6); }
     </style>
   </head>
   <body>
-    <div class="hdr">
-      <h1>Security Dashboard <span class="badge">SOC ANALYST</span> <span class="mitre-badge">MITRE ATT&amp;CK MAPPER</span></h1>
-      <button class="btn-lock" type="button" onclick="lockAndLeave()">&#128274; Lock &amp; Exit</button>
-    </div>
+    <div class="glow-orb orb-blue"></div>
+    <div class="glow-orb orb-purple"></div>
 
-    <div class="panel">
-      <div class="panel-title">Force-Terminated Sessions ({{ compromised_sessions|length }})</div>
-      {% if compromised_sessions %}
-      <table>
-        <thead>
-          <tr><th>Identifier</th><th>Type</th><th>Score</th><th>Reason</th><th>Session</th><th>Updated</th></tr>
-        </thead>
-        <tbody>
-          {% for sid, identifier, attempt_type, score, last_reason, updated_at in compromised_sessions %}
-          <tr>
-            <td>{{ identifier }}</td>
-            <td>{{ attempt_type }}</td>
-            <td class="score-hot">{{ score }}</td>
-            <td>{{ last_reason or '—' }}</td>
-            <td class="mono">{{ sid[:12] }}…</td>
-            <td>{{ updated_at.strftime('%Y-%m-%d %H:%M:%S') if updated_at else '—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div class="empty">No sessions currently force-terminated.</div>
-      {% endif %}
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Active Login Lockouts ({{ active_lockouts|length }})</div>
-      {% if active_lockouts %}
-      <table>
-        <thead>
-          <tr><th>Identifier</th><th>Type</th><th>Failed Attempts</th><th>Locked Until</th><th>Last Attempt</th></tr>
-        </thead>
-        <tbody>
-          {% for identifier, attempt_type, failed_count, locked_until, last_attempt in active_lockouts %}
-          <tr>
-            <td>{{ identifier }}</td>
-            <td>{{ attempt_type }}</td>
-            <td>{{ failed_count }}</td>
-            <td>{{ locked_until.strftime('%Y-%m-%d %H:%M:%S') if locked_until else '—' }}</td>
-            <td>{{ last_attempt.strftime('%Y-%m-%d %H:%M:%S') if last_attempt else '—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div class="empty">No active lockouts.</div>
-      {% endif %}
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Security Posture</div>
-      <table>
-        <tbody>
-          <tr><td>HSTS</td><td>{{ '✅ Enforced on every response' if security_posture.hsts_enabled else '❌ Disabled' }}</td></tr>
-          <tr><td>Content-Security-Policy</td><td>{{ '✅ Dynamic per-request nonce, always on' if security_posture.csp_enabled else '❌ Disabled' }}</td></tr>
-          <tr><td>Rate-limit backend</td><td>{{ security_posture.rate_limit_backend }}</td></tr>
-          <tr><td>Malware scanning (uploads)</td><td>{{ '✅ Enabled' if security_posture.malware_scan_enabled else '⚠️ Disabled' }}</td></tr>
-          <tr><td>Admin login CAPTCHA</td><td>{{ '✅ Configured (Cloudflare Turnstile)' if security_posture.login_captcha_configured else '⚠️ Not configured' }}</td></tr>
-          <tr><td>Security alert webhook</td><td>{{ '✅ Configured' if security_posture.email_alert_webhook_configured else '⚠️ Not configured' }}</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Admin MFA Enrollment ({{ admin_mfa_status|length }})</div>
-      {% if admin_mfa_status %}
-      <table>
-        <thead><tr><th>Username</th><th>Role</th><th>TOTP Enrolled</th></tr></thead>
-        <tbody>
-          {% for username, role, totp_enabled in admin_mfa_status %}
-          <tr>
-            <td>{{ username }}</td>
-            <td>{{ role }}</td>
-            <td>{{ '✅ Yes' if totp_enabled else '⚠️ No' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <div class="empty">No admin accounts found.</div>
-      {% endif %}
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Log Analysis Summary — all-time</div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-num">{{ events_summary.total }}</div><div class="stat-label">Total events</div></div>
-        <div class="stat-card"><div class="stat-num score-hot">{{ events_summary.by_level.get('ERROR', 0) }}</div><div class="stat-label">ERROR</div></div>
-        <div class="stat-card"><div class="stat-num" style="color:#facc15;">{{ events_summary.by_level.get('WARNING', 0) }}</div><div class="stat-label">WARNING</div></div>
-        <div class="stat-card"><div class="stat-num" style="color:#38bdf8;">{{ events_summary.by_level.get('INFO', 0) }}</div><div class="stat-label">INFO</div></div>
-        <div class="stat-card"><div class="stat-num">{{ events_summary.distinct_identifiers }}</div><div class="stat-label">Distinct identifiers</div></div>
-        <div class="stat-card"><div class="stat-num">{{ events_summary.distinct_ips }}</div><div class="stat-label">Distinct IPs</div></div>
+    <div class="container">
+      <!-- ── Top Header ── -->
+      <div class="soc-header">
+        <div class="soc-brand">
+          <div class="soc-icon"><i class="ti ti-shield-lock"></i></div>
+          <div class="soc-title">
+            <h1>SecOps Command Center <span class="badge-soc">SOC ANALYST</span> <span class="badge-live"><span class="pulse-dot"></span> LIVE MONITORING</span></h1>
+            <p>Real-Time Threat Telemetry, SIEM Log Engine &amp; WAF Defense Console</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="exportSecurityLogs()"><i class="ti ti-download"></i> Export CSV Logs</button>
+          <button class="btn btn-secondary" onclick="refreshAllData()"><i class="ti ti-refresh"></i> Refresh All</button>
+          <button class="btn btn-danger" onclick="triggerEmergencyLockdown()"><i class="ti ti-lock"></i> Emergency Panic Mode</button>
+          <button class="btn btn-secondary" onclick="lockAndLeave()"><i class="ti ti-power"></i> Lock &amp; Exit</button>
+        </div>
       </div>
+
+      <!-- ── KPI Summary Cards ── -->
+      <div class="panel-title" style="margin-bottom: 12px;"><i class="ti ti-chart-dots" style="color: #60a5fa;"></i> Log Analysis Summary</div>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Total events</span>
+            <div class="kpi-icon" style="background: rgba(59,130,246,0.15); color: #60a5fa;"><i class="ti ti-activity"></i></div>
+          </div>
+          <div class="kpi-val" id="kpi-total-events">{{ events_summary.total }}</div>
+          <div class="kpi-sub">All-time telemetry logs</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Critical &amp; Errors</span>
+            <div class="kpi-icon" style="background: rgba(239,68,68,0.15); color: #fca5a5;"><i class="ti ti-alert-triangle"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #fca5a5;" id="kpi-error-events">{{ events_summary.by_level.get('ERROR', 0) }}</div>
+          <div class="kpi-sub">Requires triage</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Active Banned IPs</span>
+            <div class="kpi-icon" style="background: rgba(245,158,11,0.15); color: #fcd34d;"><i class="ti ti-ban"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #fcd34d;" id="kpi-banned-ips">0</div>
+          <div class="kpi-sub">Application WAF blocks</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Quarantined Files</span>
+            <div class="kpi-icon" style="background: rgba(139,92,246,0.15); color: #c084fc;"><i class="ti ti-bug"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #c084fc;" id="kpi-quarantine">0</div>
+          <div class="kpi-sub">ClamAV scan findings</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Active Lockouts</span>
+            <div class="kpi-icon" style="background: rgba(225,29,72,0.15); color: #fda4af;"><i class="ti ti-user-x"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #fda4af;">{{ active_lockouts|length }}</div>
+          <div class="kpi-sub">Brute-force blocks</div>
+        </div>
+      </div>
+
       {% if events_summary.top_event_types %}
-      <div class="panel-title" style="margin-top:18px;">Top event types</div>
-      <table>
-        <thead><tr><th>Event Type</th><th>Count</th></tr></thead>
-        <tbody>
-          {% for event_type, count in events_summary.top_event_types %}
-          <tr><td>{{ event_type }}</td><td>{{ count }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="card-panel" style="margin-bottom: 24px;">
+        <div class="panel-title"><i class="ti ti-flame" style="color: #f59e0b;"></i> Top Event Types</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Event Type</th><th>Count</th></tr></thead>
+            <tbody>
+              {% for event_type, count in events_summary.top_event_types %}
+              <tr><td><strong class="mono">{{ event_type }}</strong></td><td>{{ count }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
       {% endif %}
-      <div class="mono" style="margin-top:14px;font-size:11px;color:#64748b;">
-        {% if events_summary.oldest %}
-        Log spans {{ events_summary.oldest.strftime('%Y-%m-%d %H:%M') }} &rarr; {{ events_summary.newest.strftime('%Y-%m-%d %H:%M') }}
-        {% else %}
-        No events recorded yet.
-        {% endif %}
+
+      <!-- ── Tab Navigation ── -->
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('overview', this)"><i class="ti ti-layout-dashboard"></i> Overview &amp; Posture</button>
+        <button class="tab-btn" onclick="switchTab('siem-logs', this)"><i class="ti ti-list-check"></i> SIEM Threat Logs</button>
+        <button class="tab-btn" onclick="switchTab('waf-ip', this)"><i class="ti ti-shield-half"></i> WAF &amp; IP Controls</button>
+        <button class="tab-btn" onclick="switchTab('lockouts', this)"><i class="ti ti-lock-access"></i> Lockouts &amp; Risk Sessions</button>
+        <button class="tab-btn" onclick="switchTab('quarantine', this)"><i class="ti ti-virus"></i> Malware &amp; Quarantine</button>
+        <button class="tab-btn" onclick="switchTab('config', this)"><i class="ti ti-adjustments"></i> Operations &amp; Performance</button>
+      </div>
+
+      <!-- ── TAB 1: OVERVIEW & POSTURE ── -->
+      <div id="tab-overview" class="tab-content active">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-shield-check" style="color: #34d399;"></i> Security Posture Status</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Security Feature</th><th>Status</th><th>Enforcement Mechanism</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>HTTP Strict Transport Security (HSTS)</td>
+                  <td><span class="badge-level level-info">Enforced</span></td>
+                  <td>Dynamic header added to all HTTPS responses</td>
+                </tr>
+                <tr>
+                  <td>Content-Security-Policy (CSP)</td>
+                  <td><span class="badge-level level-info">Active</span></td>
+                  <td>Dynamic per-request SHA256 script nonce isolation</td>
+                </tr>
+                <tr>
+                  <td>Rate Limiter Engine</td>
+                  <td><span class="badge-level level-info">Operational</span></td>
+                  <td>{{ security_posture.rate_limit_backend }}</td>
+                </tr>
+                <tr>
+                  <td>Malware File Scanner (ClamAV)</td>
+                  <td>
+                    {% if security_posture.malware_scan_enabled %}
+                    <span class="badge-level level-info">Active</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Disabled</span>
+                    {% endif %}
+                  </td>
+                  <td>Automated upload stream inspection</td>
+                </tr>
+                <tr>
+                  <td>Cloudflare Turnstile CAPTCHA</td>
+                  <td>
+                    {% if security_posture.login_captcha_configured %}
+                    <span class="badge-level level-info">Active</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Not Configured</span>
+                    {% endif %}
+                  </td>
+                  <td>Challenged after repeated failed auth attempts</td>
+                </tr>
+                <tr>
+                  <td>Real-time Security Webhook Alerts</td>
+                  <td>
+                    {% if security_posture.email_alert_webhook_configured %}
+                    <span class="badge-level level-info">Active</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Not Configured</span>
+                    {% endif %}
+                  </td>
+                  <td>Fires on ERROR/CRITICAL security events</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-user-check" style="color: #60a5fa;"></i> Admin MFA Enrollment ({{ admin_mfa_status|length }})</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Username</th><th>Role</th><th>TOTP Multi-Factor Authentication</th></tr>
+              </thead>
+              <tbody>
+                {% for username, role, totp_enabled in admin_mfa_status %}
+                <tr>
+                  <td><strong>{{ username }}</strong></td>
+                  <td><span class="mono">{{ role }}</span></td>
+                  <td>
+                    {% if totp_enabled %}
+                    <span class="badge-level level-info">Enrolled</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Pending</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 2: SIEM THREAT LOGS ── -->
+      <div id="tab-siem-logs" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-list-check" style="color: #60a5fa;"></i> Filterable Security Event Log Engine</div>
+            <button class="btn btn-primary" onclick="socEventsReload()"><i class="ti ti-search"></i> Apply Filters</button>
+          </div>
+
+          <div class="form-grid">
+            <div class="field-group">
+              <label>Log Level</label>
+              <select id="ev-level" class="form-control">
+                <option value="">All Levels</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARNING">WARNING</option>
+                <option value="INFO">INFO</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label>Event Type</label>
+              <input type="text" id="ev-event-type" class="form-control" placeholder="e.g. auth.failed" />
+            </div>
+
+            <div class="field-group">
+              <label>Identifier / User</label>
+              <input type="text" id="ev-identifier" class="form-control" placeholder="Search user ID..." />
+            </div>
+
+            <div class="field-group">
+              <label>Message Content</label>
+              <input type="text" id="ev-q" class="form-control" placeholder="Search text..." />
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Level</th>
+                  <th>Event Type</th>
+                  <th>Message</th>
+                  <th>Identifier</th>
+                  <th>Target IP</th>
+                  <th>Request Path</th>
+                </tr>
+              </thead>
+              <tbody id="ev-tbody">
+                <tr><td colspan="7" class="empty-state">Loading telemetry logs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+            <button class="btn btn-secondary" onclick="socEventsPage(-1)"><i class="ti ti-chevron-left"></i> Previous</button>
+            <span id="ev-page-label" class="mono">Page 1</span>
+            <button class="btn btn-secondary" onclick="socEventsPage(1)">Next <i class="ti ti-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 3: WAF & IP CONTROLS ── -->
+      <div id="tab-waf-ip" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-ban" style="color: #f59e0b;"></i> Application Layer IP Ban Management</div>
+          </div>
+
+          <div class="form-grid">
+            <div class="field-group">
+              <label>IP Address</label>
+              <input type="text" id="ban-ip-input" class="form-control" placeholder="e.g. 192.168.1.100" />
+            </div>
+
+            <div class="field-group">
+              <label>Ban Reason</label>
+              <input type="text" id="ban-reason-input" class="form-control" placeholder="e.g. Repeated SQLi attempts" />
+            </div>
+
+            <div class="field-group">
+              <label>Duration (Minutes)</label>
+              <input type="number" id="ban-duration-input" class="form-control" placeholder="Blank = Permanent" min="1" />
+            </div>
+
+            <div class="field-group" style="justify-content: flex-end;">
+              <button class="btn btn-danger" onclick="socBanIp()"><i class="ti ti-shield-x"></i> Ban IP Address</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-list" style="color: #60a5fa;"></i> Active Banned IPs</div>
+            <button class="btn btn-secondary" onclick="loadBannedIps()"><i class="ti ti-refresh"></i> Refresh List</button>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Banned IP</th>
+                  <th>Reason</th>
+                  <th>Banned By</th>
+                  <th>Banned At</th>
+                  <th>Expires At</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="banned-ips-tbody">
+                <tr><td colspan="6" class="empty-state">Loading active IP bans...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 4: LOCKOUTS & SESSIONS ── -->
+      <div id="tab-lockouts" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-alert-triangle" style="color: #ef4444;"></i> Compromised Session Risk Monitor ({{ compromised_sessions|length }})</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Identifier</th><th>Attempt Type</th><th>Risk Score</th><th>Reason</th><th>Session ID</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {% if compromised_sessions %}
+                  {% for sid, identifier, attempt_type, score, last_reason, updated_at in compromised_sessions %}
+                  <tr>
+                    <td><strong>{{ identifier }}</strong></td>
+                    <td><span class="mono">{{ attempt_type }}</span></td>
+                    <td><span class="badge-level level-critical">{{ score }}</span></td>
+                    <td>{{ last_reason or '—' }}</td>
+                    <td><span class="mono">{{ sid[:12] }}…</span></td>
+                    <td>
+                      <button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px;" onclick="terminateSession('{{ sid }}')"><i class="ti ti-power"></i> Revoke</button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="6" class="empty-state">No sessions currently marked compromised.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-user-x" style="color: #f59e0b;"></i> Active Account Lockouts ({{ active_lockouts|length }})</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Identifier</th><th>Type</th><th>Failed Attempts</th><th>Locked Until</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {% if active_lockouts %}
+                  {% for identifier, attempt_type, failed_count, locked_until, last_attempt in active_lockouts %}
+                  <tr>
+                    <td><strong>{{ identifier }}</strong></td>
+                    <td><span class="mono">{{ attempt_type }}</span></td>
+                    <td><span class="badge-level level-warning">{{ failed_count }}</span></td>
+                    <td><span class="mono">{{ locked_until.strftime('%Y-%m-%d %H:%M:%S') if locked_until else '—' }}</span></td>
+                    <td>
+                      <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="unlockAccount('{{ identifier }}')"><i class="ti ti-lock-open"></i> Unlock</button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="5" class="empty-state">No active account lockouts.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 5: MALWARE & QUARANTINE ── -->
+      <div id="tab-quarantine" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-virus" style="color: #8b5cf6;"></i> ClamAV Malware Quarantine Stream</div>
+            <button class="btn btn-secondary" onclick="loadQuarantineFiles()"><i class="ti ti-refresh"></i> Refresh Quarantine</button>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>File ID</th><th>Original Filename</th><th>Uploader</th><th>Malware Signature</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody id="quarantine-tbody">
+                <tr><td colspan="6" class="empty-state">Loading quarantine files...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 6: OPERATIONS & CONFIG ── -->
+      <div id="tab-config" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-clock" style="color: #60a5fa;"></i> Session Timeout Configuration</div>
+          </div>
+          <div class="form-grid">
+            <div class="field-group">
+              <label>Global Inactivity Timeout</label>
+              <select id="session-timeout-select" class="form-control">
+                <option value="15" {% if session_timeout_minutes == 15 %}selected{% endif %}>15 Minutes</option>
+                <option value="30" {% if session_timeout_minutes == 30 %}selected{% endif %}>30 Minutes</option>
+                <option value="60" {% if session_timeout_minutes == 60 %}selected{% endif %}>1 Hour</option>
+                <option value="120" {% if session_timeout_minutes == 120 %}selected{% endif %}>2 Hours</option>
+                <option value="480" {% if session_timeout_minutes == 480 %}selected{% endif %}>8 Hours</option>
+              </select>
+            </div>
+            <div class="field-group" style="justify-content: flex-end;">
+              <button class="btn btn-primary" onclick="saveSessionTimeout()"><i class="ti ti-device-floppy"></i> Save Timeout</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-database" style="color: #34d399;"></i> Database Connection Pool &amp; Metrics</div>
+            <button class="btn btn-secondary" onclick="loadPerformance()"><i class="ti ti-refresh"></i> Refresh Stats</button>
+          </div>
+          <div class="form-grid" id="perf-grid">
+            <div class="empty-state">Click Refresh Stats to load performance telemetry.</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-title">Security Event Log — complete, filterable</div>
-      <div class="filter-row">
-        <select id="ev-level" aria-label="Filter by level" title="Filter by level">
-          <option value="">All levels</option>
-          <option value="ERROR">ERROR</option>
-          <option value="WARNING">WARNING</option>
-          <option value="INFO">INFO</option>
-        </select>
-        <input type="text" id="ev-event-type" placeholder="Event type (exact)" />
-        <input type="text" id="ev-identifier" placeholder="Identifier contains…" />
-        <input type="text" id="ev-q" placeholder="Search message…" />
-        <input type="date" id="ev-start" title="From date" />
-        <input type="date" id="ev-end" title="To date" />
-        <button type="button" class="btn-lock" onclick="socEventsReload()">Filter</button>
-        <button type="button" class="btn-lock" onclick="socEventsReset()">Reset</button>
-      </div>
-      <div id="ev-status" class="mono" style="margin-bottom:10px;font-size:11px;"></div>
-      <div class="log-scroll">
-      <table>
-        <thead>
-          <tr><th>Time</th><th>Level</th><th>Event Type</th><th>Message</th><th>Identifier</th><th>IP</th><th>Path</th><th>Action</th></tr>
-        </thead>
-        <tbody id="ev-tbody">
-          <tr><td colspan="8" class="empty">Loading…</td></tr>
-        </tbody>
-      </table>
-      </div>
-      <div class="pager">
-        <button type="button" class="btn-lock" onclick="socEventsPage(-1)">&larr; Prev</button>
-        <span id="ev-page-label" class="mono"></span>
-        <button type="button" class="btn-lock" onclick="socEventsPage(1)">Next &rarr;</button>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Session Timeout</div>
-      <div class="filter-row">
-        <select id="session-timeout-select" aria-label="Session timeout" title="Session timeout">
-          <option value="15">15 minutes</option>
-          <option value="30">30 minutes</option>
-          <option value="60">1 hour</option>
-          <option value="120">2 hours</option>
-          <option value="480">8 hours</option>
-        </select>
-        <button type="button" class="btn-lock" onclick="saveSessionTimeout()">Save</button>
-      </div>
-      <div id="session-timeout-status" class="mono" style="font-size:11px;"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Performance &amp; DB Health</div>
-      <button type="button" class="btn-lock" onclick="loadPerformance()">Refresh</button>
-      <div class="stat-grid" id="perf-grid" style="margin-top:14px;">
-        <div class="empty">Click Refresh to load.</div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Tactical Mitigation — IP Ban (application layer)</div>
-      <div class="mono" style="font-size:11px;color:#64748b;margin-bottom:12px;">
-        Blocks the IP from reaching this app immediately. Not an edge/WAF ban —
-        see the AWS Network Firewall rules (provisioned separately) for that.
-      </div>
-      <div class="filter-row">
-        <input type="text" id="ban-ip-input" placeholder="IP address" />
-        <input type="text" id="ban-reason-input" placeholder="Reason (optional)" />
-        <input type="number" id="ban-duration-input" placeholder="Minutes (blank = permanent)" min="1" />
-        <button type="button" class="btn-lock" onclick="socBanIp()">Ban IP</button>
-      </div>
-      <div id="ban-status" class="mono" style="margin-bottom:10px;font-size:11px;"></div>
-      <table>
-        <thead><tr><th>IP</th><th>Reason</th><th>Banned By</th><th>Banned At</th><th>Expires</th><th>Action</th></tr></thead>
-        <tbody id="banned-ips-tbody">
-          <tr><td colspan="6" class="empty">Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">System Health</div>
-      <button type="button" class="btn-lock" onclick="loadSystemHealth()">Refresh</button>
-      <div class="stat-grid" id="health-grid" style="margin-top:14px;">
-        <div class="empty">Click Refresh to load.</div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">SIEM Threat Log Query</div>
-      <div class="filter-row">
-        <select id="siem-category" aria-label="Category" title="Category">
-          <option value="all">All categories</option>
-          <option value="malware">Malware</option>
-          <option value="escalation">Escalation</option>
-          <option value="injection">Injection</option>
-          <option value="audit">Audit</option>
-          <option value="hrms">HRMS</option>
-        </select>
-        <select id="siem-severity" aria-label="Severity" title="Severity">
-          <option value="">Any severity</option>
-          <option value="INFO">INFO</option>
-          <option value="WARNING">WARNING</option>
-          <option value="ERROR">ERROR</option>
-          <option value="CRITICAL">CRITICAL</option>
-        </select>
-        <input type="text" id="siem-ip" placeholder="IP contains…" />
-        <input type="text" id="siem-user" placeholder="User ID contains…" />
-        <button type="button" class="btn-lock" onclick="loadSiemQuery()">Query</button>
-      </div>
-      <div id="siem-status" class="mono" style="font-size:11px;margin-bottom:10px;"></div>
-      <div class="log-scroll">
-      <table>
-        <thead><tr><th>Time</th><th>Severity</th><th>Event Type</th><th>Details</th><th>User</th><th>IP</th></tr></thead>
-        <tbody id="siem-tbody"><tr><td colspan="6" class="empty">Run a query.</td></tr></tbody>
-      </table>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Server Exception Log (5xx)</div>
-      <button type="button" class="btn-lock" onclick="loadServerErrors()">Refresh</button>
-      <div class="log-scroll" style="margin-top:14px;">
-      <table>
-        <thead><tr><th>Time</th><th>Level</th><th>Event</th><th>Message</th><th>Path</th><th>IP</th></tr></thead>
-        <tbody id="server-errors-tbody"><tr><td colspan="6" class="empty">Click Refresh to load.</td></tr></tbody>
-      </table>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Network &amp; Port Health</div>
-      <button type="button" class="btn-lock" onclick="loadPortHealth()">Refresh</button>
-      <table style="margin-top:14px;">
-        <thead><tr><th>Port</th><th>Service</th><th>Process</th><th>Binding</th><th>Status</th></tr></thead>
-        <tbody id="port-health-tbody"><tr><td colspan="5" class="empty">Click Refresh to load.</td></tr></tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Enterprise Port Matrix &amp; Recon Detection</div>
-      <button type="button" class="btn-lock" onclick="loadPortMatrix()">Refresh</button>
-      <table style="margin-top:14px;">
-        <thead><tr><th>Port</th><th>Service</th><th>Process</th><th>Status</th></tr></thead>
-        <tbody id="port-matrix-tbody"><tr><td colspan="4" class="empty">Click Refresh to load.</td></tr></tbody>
-      </table>
-      <div class="panel-title" style="margin-top:18px;">Recon / Nmap Scan Detection</div>
-      <table>
-        <thead><tr><th>Type</th><th>Details</th><th>IP</th><th>Time</th></tr></thead>
-        <tbody id="nmap-tbody"><tr><td colspan="4" class="empty">Click Refresh above to load.</td></tr></tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Malware Sandbox &amp; Quarantine</div>
-      <button type="button" class="btn-lock" onclick="loadMalwareAnalysis()">Refresh</button>
-      <div class="stat-grid" id="malware-grid" style="margin-top:14px;">
-        <div class="empty">Click Refresh to load.</div>
-      </div>
-      <table style="margin-top:14px;">
-        <thead><tr><th>Filename</th><th>Uploader</th><th>Signature</th><th>Status</th><th>Time</th><th>Action</th></tr></thead>
-        <tbody id="quarantine-tbody"><tr><td colspan="6" class="empty">Click Refresh above to load.</td></tr></tbody>
-      </table>
-      <div class="filter-row" style="margin-top:14px;">
-        <input type="text" id="isolate-user-input" placeholder="Uploader / user ID to isolate" />
-        <button type="button" class="btn-lock" onclick="isolateUser()">Isolate &amp; Lock 30d</button>
-      </div>
-      <div id="isolate-status" class="mono" style="font-size:11px;"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Threat Intelligence Feeds</div>
-      <button type="button" class="btn-lock" onclick="refreshThreatIntel()">Refresh Feeds</button>
-      <div id="threat-intel-status" class="mono" style="font-size:11px;margin:10px 0;"></div>
-      <div class="panel-title" style="margin-top:10px;">CISA KEV Vulnerabilities</div>
-      <table>
-        <thead><tr><th>CVE</th><th>Vendor</th><th>Product</th><th>Name</th><th>Due Date</th></tr></thead>
-        <tbody id="cve-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-      </table>
-      <div class="panel-title" style="margin-top:18px;">Malicious IP Indicators</div>
-      <table>
-        <thead><tr><th>IP</th><th>Threat Score</th><th>Source</th><th>Fetched</th><th>Action</th></tr></thead>
-        <tbody id="threat-ip-tbody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Wi-Fi Risk &amp; Network Shield</div>
-      <button type="button" class="btn-lock" onclick="loadWifiRisk()">Refresh</button>
-      <div class="stat-grid" id="wifi-grid" style="margin-top:14px;">
-        <div class="empty">Click Refresh to load.</div>
-      </div>
-      <div class="filter-row" style="margin-top:14px;">
-        <button type="button" class="btn-lock" onclick="toggleWifiShield(true)">Enable Shield</button>
-        <button type="button" class="btn-lock" onclick="toggleWifiShield(false)">Disable Shield</button>
-        <input type="number" id="wifi-global-score" placeholder="Global risk score (0-100)" min="0" max="100" />
-        <button type="button" class="btn-lock" onclick="setGlobalWifiScore()">Set Score</button>
-      </div>
-      <div id="wifi-shield-status" class="mono" style="font-size:11px;"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Employee &amp; Admin Wi-Fi Risk Telemetry</div>
-      <button type="button" class="btn-lock" onclick="loadUserWifiTelemetry()">Refresh</button>
-      <table style="margin-top:14px;">
-        <thead><tr><th>User</th><th>Role</th><th>SSID</th><th>Encryption</th><th>Risk</th><th>Status</th><th>IP</th><th>Last Seen</th></tr></thead>
-        <tbody id="user-wifi-tbody"><tr><td colspan="8" class="empty">Click Refresh to load.</td></tr></tbody>
-      </table>
-      <div class="filter-row" style="margin-top:14px;">
-        <input type="text" id="wifi-update-user" placeholder="Username" />
-        <input type="number" id="wifi-update-score" placeholder="Risk score (0-100)" min="0" max="100" />
-        <button type="button" class="btn-lock" onclick="updateUserWifi()">Update</button>
-      </div>
-      <div id="wifi-update-status" class="mono" style="font-size:11px;"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">SMTP Alert Configuration</div>
-      <div class="filter-row">
-        <input type="text" id="smtp-server" placeholder="SMTP server" />
-        <input type="number" id="smtp-port" placeholder="Port" />
-        <input type="text" id="smtp-username" placeholder="Username" />
-        <input type="email" id="smtp-alert-email" placeholder="Alert email" />
-        <label class="mono" style="font-size:12px;display:inline-flex;align-items:center;gap:4px;">
-          <input type="checkbox" id="smtp-tls" /> TLS
-        </label>
-        <button type="button" class="btn-lock" onclick="saveSmtpConfig()">Save</button>
-      </div>
-      <div id="smtp-status" class="mono" style="font-size:11px;"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Admin Accounts — Password Reset</div>
-      <button type="button" class="btn-lock" onclick="loadAdminList()">Refresh List</button>
-      <table style="margin-top:14px;">
-        <thead><tr><th>Username</th><th>Role</th><th>Email</th></tr></thead>
-        <tbody id="admin-list-tbody"><tr><td colspan="3" class="empty">Click Refresh to load.</td></tr></tbody>
-      </table>
-      <div class="filter-row" style="margin-top:14px;">
-        <input type="text" id="admin-reset-username" placeholder="Username" />
-        <input type="password" id="admin-reset-password" placeholder="New password (min 6 chars)" />
-        <button type="button" class="btn-lock" onclick="resetAdminPassword()">Reset Password</button>
-      </div>
-      <div id="admin-reset-status" class="mono" style="font-size:11px;"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panel-title">Employee Lookup — Password Reset</div>
-      <div class="filter-row">
-        <input type="text" id="emp-search-q" placeholder="Search by ID, name, or email…" />
-        <button type="button" class="btn-lock" onclick="searchEmployees()">Search</button>
-      </div>
-      <table style="margin-top:14px;">
-        <thead><tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Role</th><th>Action</th></tr></thead>
-        <tbody id="emp-search-tbody"><tr><td colspan="5" class="empty">Search above.</td></tr></tbody>
-      </table>
-      <div class="filter-row" style="margin-top:14px;">
-        <input type="text" id="emp-reset-id" placeholder="Employee ID" />
-        <input type="password" id="emp-reset-password" placeholder="New password (min 6 chars)" />
-        <button type="button" class="btn-lock" onclick="resetEmployeePassword()">Reset Password</button>
-      </div>
-      <div id="emp-reset-status" class="mono" style="font-size:11px;"></div>
-    </div>
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
 
     <script>
-      var evPage = 1;
-      var evPerPage = 50;
+      let currentPage = 1;
 
-      function socEventsReset() {
-        document.getElementById('ev-level').value = '';
-        document.getElementById('ev-event-type').value = '';
-        document.getElementById('ev-identifier').value = '';
-        document.getElementById('ev-q').value = '';
-        document.getElementById('ev-start').value = '';
-        document.getElementById('ev-end').value = '';
-        socEventsReload();
+      function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = `<i class="ti ti-${type === 'success' ? 'circle-check' : 'alert-circle'}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
       }
 
-      function socEventsPage(delta) {
-        evPage = Math.max(1, evPage + delta);
-        socEventsLoad();
-      }
-
-      function socEventsReload() {
-        evPage = 1;
-        socEventsLoad();
-      }
-
-      function escapeHtml(s) {
-        var d = document.createElement('div');
-        d.textContent = s == null ? '' : String(s);
-        return d.innerHTML;
-      }
-
-      function socEventsLoad() {
-        var params = new URLSearchParams();
-        params.set('page', evPage);
-        params.set('per_page', evPerPage);
-        var level = document.getElementById('ev-level').value;
-        var eventType = document.getElementById('ev-event-type').value.trim();
-        var identifier = document.getElementById('ev-identifier').value.trim();
-        var q = document.getElementById('ev-q').value.trim();
-        var start = document.getElementById('ev-start').value;
-        var end = document.getElementById('ev-end').value;
-        if (level) params.set('level', level);
-        if (eventType) params.set('event_type', eventType);
-        if (identifier) params.set('identifier', identifier);
-        if (q) params.set('q', q);
-        if (start) params.set('start_date', start);
-        if (end) params.set('end_date', end);
-
-        var statusEl = document.getElementById('ev-status');
-        var tbody = document.getElementById('ev-tbody');
-        statusEl.textContent = 'Loading…';
-        fetch('/api/security/soc/events?' + params.toString())
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { statusEl.textContent = 'Failed to load events.'; return; }
-            statusEl.textContent = d.total + ' matching event' + (d.total === 1 ? '' : 's');
-            document.getElementById('ev-page-label').textContent = 'Page ' + d.page + ' of ' + d.pages;
-            if (!d.events.length) {
-              tbody.innerHTML = '<tr><td colspan="8" class="empty">No matching events.</td></tr>';
-              return;
-            }
-            tbody.innerHTML = d.events.map(function(e) {
-              var cls = e.level === 'ERROR' ? 'score-hot' : '';
-              var banBtn = e.ip
-                ? '<button type="button" class="btn-lock" onclick="socBanIpFromRow(\'' + escapeHtml(e.ip) + '\')">Ban</button>'
-                : '—';
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(e.created_at || '—') + '</td>' +
-                '<td class="' + cls + '">' + escapeHtml(e.level) + '</td>' +
-                '<td>' + escapeHtml(e.event_type) + '</td>' +
-                '<td>' + escapeHtml(e.message) + '</td>' +
-                '<td>' + escapeHtml(e.identifier || '—') + '</td>' +
-                '<td class="mono">' + escapeHtml(e.ip || '—') + '</td>' +
-                '<td class="mono">' + escapeHtml((e.method || '') + ' ' + (e.path || '')) + '</td>' +
-                '<td>' + banBtn + '</td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      socEventsLoad();
-
-      function socBanIpFromRow(ip) {
-        document.getElementById('ban-ip-input').value = ip;
-        document.getElementById('ban-ip-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        document.getElementById('ban-ip-input').focus();
-      }
-
-      function socLoadBannedIps() {
-        var tbody = document.getElementById('banned-ips-tbody');
-        fetch('/api/security/soc/banned-ips')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Failed to load.</td></tr>'; return; }
-            if (!d.banned_ips.length) {
-              tbody.innerHTML = '<tr><td colspan="6" class="empty">No IPs currently banned.</td></tr>';
-              return;
-            }
-            tbody.innerHTML = d.banned_ips.map(function(b) {
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(b.ip) + '</td>' +
-                '<td>' + escapeHtml(b.reason || '—') + '</td>' +
-                '<td>' + escapeHtml(b.banned_by || '—') + '</td>' +
-                '<td class="mono">' + escapeHtml(b.banned_at || '—') + '</td>' +
-                '<td class="mono">' + escapeHtml(b.expires_at || 'Permanent') + '</td>' +
-                '<td><button type="button" class="btn-lock" onclick="socUnbanIp(\'' + escapeHtml(b.ip) + '\')">Unban</button></td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { tbody.innerHTML = '<tr><td colspan="6" class="empty">Network error.</td></tr>'; });
-      }
-
-      function socBanIp() {
-        var statusEl = document.getElementById('ban-status');
-        var ip = document.getElementById('ban-ip-input').value.trim();
-        var reason = document.getElementById('ban-reason-input').value.trim();
-        var duration = document.getElementById('ban-duration-input').value.trim();
-        if (!ip) { statusEl.textContent = 'Enter an IP address first.'; return; }
-        statusEl.textContent = 'Banning…';
-        fetch('/api/security/soc/ban-ip', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ip: ip, reason: reason, duration_minutes: duration || null }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.ok ? ('Banned ' + ip + '.') : (d.msg || 'Ban failed.');
-            if (d.ok) {
-              document.getElementById('ban-ip-input').value = '';
-              document.getElementById('ban-reason-input').value = '';
-              document.getElementById('ban-duration-input').value = '';
-              socLoadBannedIps();
-            }
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function socUnbanIp(ip) {
-        var statusEl = document.getElementById('ban-status');
-        fetch('/api/security/soc/unban-ip', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ip: ip }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.ok ? ('Unbanned ' + ip + '.') : (d.msg || 'Unban failed.');
-            if (d.ok) socLoadBannedIps();
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      socLoadBannedIps();
-
-      document.getElementById('session-timeout-select').value = '{{ session_timeout_minutes }}';
-
-      function saveSessionTimeout() {
-        var statusEl = document.getElementById('session-timeout-status');
-        var minutes = document.getElementById('session-timeout-select').value;
-        statusEl.textContent = 'Saving…';
-        fetch('/api/secops/session-timeout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timeout: parseInt(minutes, 10) }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) { statusEl.textContent = d.ok ? 'Saved.' : (d.msg || 'Save failed.'); })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function loadPerformance() {
-        var grid = document.getElementById('perf-grid');
-        grid.innerHTML = '<div class="empty">Loading…</div>';
-        fetch('/api/secops/performance')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { grid.innerHTML = '<div class="empty">Failed to load.</div>'; return; }
-            var perf = d.performance || {};
-            var pool = d.db_pool || {};
-            var cards = [
-              ['DB Healthy', d.db_healthy ? 'Yes' : 'No'],
-              ['Coverage gate', d.coverage_gate_pct + '%'],
-            ];
-            Object.keys(perf).forEach(function(k) { cards.push([k, perf[k]]); });
-            Object.keys(pool).forEach(function(k) { cards.push(['pool.' + k, pool[k]]); });
-            grid.innerHTML = cards.map(function(c) {
-              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
-                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
-            }).join('');
-          })
-          .catch(function() { grid.innerHTML = '<div class="empty">Network error.</div>'; });
+      function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        btn.classList.add('active');
       }
 
       function lockAndLeave() {
-        window.location.href = '/logout';
+        fetch('/sp_admin/login', { method: 'GET' }).finally(() => {
+          window.location.href = '/sp_admin/login';
+        });
       }
 
-      function loadSystemHealth() {
-        var grid = document.getElementById('health-grid');
-        grid.innerHTML = '<div class="empty">Loading…</div>';
-        fetch('/api/secops/system-health')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { grid.innerHTML = '<div class="empty">Failed to load.</div>'; return; }
-            var h = d.health;
-            var cards = [
-              ['Status', h.status], ['Uptime', h.uptime_formatted], ['CPU Load', h.cpu_load],
-              ['Memory', h.memory_usage], ['Database', h.database_status], ['Threat Level', h.active_threat_level],
-              ['Avg Latency', h.api_metrics.avg_latency_ms + 'ms'], ['Req/min', h.api_metrics.requests_per_min],
-              ['Error Rate', h.api_metrics.error_rate], ['Active Sessions', h.api_metrics.active_sessions],
-            ];
-            grid.innerHTML = cards.map(function(c) {
-              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
-                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
-            }).join('');
-          })
-          .catch(function() { grid.innerHTML = '<div class="empty">Network error.</div>'; });
+      function refreshAllData() {
+        loadBannedIps();
+        socEventsReload();
+        loadQuarantineFiles();
+        showToast('SecOps data updated', 'success');
       }
 
-      function loadSiemQuery() {
-        var statusEl = document.getElementById('siem-status');
-        var tbody = document.getElementById('siem-tbody');
-        var params = new URLSearchParams();
-        params.set('category', document.getElementById('siem-category').value);
-        var severity = document.getElementById('siem-severity').value;
-        var ip = document.getElementById('siem-ip').value.trim();
-        var user = document.getElementById('siem-user').value.trim();
-        if (severity) params.set('severity', severity);
-        if (ip) params.set('ip', ip);
-        if (user) params.set('user_id', user);
-        statusEl.textContent = 'Querying…';
-        fetch('/api/secops/siem-query?' + params.toString())
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { statusEl.textContent = 'Query failed.'; return; }
-            statusEl.textContent = d.count + ' matching log' + (d.count === 1 ? '' : 's');
-            if (!d.logs.length) {
-              tbody.innerHTML = '<tr><td colspan="6" class="empty">No matching logs.</td></tr>';
+      /* ── Banned IPs ── */
+      function loadBannedIps() {
+        fetch('/api/security/soc/banned-ips')
+          .then(r => r.json())
+          .then(data => {
+            const tbody = document.getElementById('banned-ips-tbody');
+            if (!data.ok || !data.banned_ips || data.banned_ips.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No active IP bans found.</td></tr>';
+              document.getElementById('kpi-banned-ips').innerText = '0';
               return;
             }
-            tbody.innerHTML = d.logs.map(function(l) {
-              var cls = (l.severity === 'ERROR' || l.severity === 'CRITICAL') ? 'score-hot' : '';
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(l.timestamp) + '</td>' +
-                '<td class="' + cls + '">' + escapeHtml(l.severity) + '</td>' +
-                '<td>' + escapeHtml(l.event_type) + '</td>' +
-                '<td>' + escapeHtml(l.details) + '</td>' +
-                '<td>' + escapeHtml(l.user_id) + '</td>' +
-                '<td class="mono">' + escapeHtml(l.ip_address) + '</td>' +
-                '</tr>';
-            }).join('');
+            document.getElementById('kpi-banned-ips').innerText = data.banned_ips.length;
+            tbody.innerHTML = data.banned_ips.map(item => `
+              <tr>
+                <td><strong class="mono" style="color:#fcd34d;">${item.ip}</strong></td>
+                <td>${item.reason || '—'}</td>
+                <td>${item.banned_by || 'system'}</td>
+                <td><span class="mono">${item.banned_at || '—'}</span></td>
+                <td><span class="mono">${item.expires_at || 'Permanent'}</span></td>
+                <td>
+                  <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="socUnbanIp('${item.ip}')"><i class="ti ti-trash"></i> Unban</button>
+                </td>
+              </tr>
+            `).join('');
           })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function loadServerErrors() {
-        var tbody = document.getElementById('server-errors-tbody');
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">Loading…</td></tr>';
-        fetch('/api/secops/server-errors')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok || !d.errors.length) {
-              tbody.innerHTML = '<tr><td colspan="6" class="empty">' + (d.ok ? 'No server errors recorded.' : 'Failed to load.') + '</td></tr>';
-              return;
-            }
-            tbody.innerHTML = d.errors.map(function(e) {
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(e.timestamp) + '</td>' +
-                '<td class="score-hot">' + escapeHtml(e.level) + '</td>' +
-                '<td>' + escapeHtml(e.event) + '</td>' +
-                '<td>' + escapeHtml(e.message) + '</td>' +
-                '<td class="mono">' + escapeHtml(e.path) + '</td>' +
-                '<td class="mono">' + escapeHtml(e.ip) + '</td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { tbody.innerHTML = '<tr><td colspan="6" class="empty">Network error.</td></tr>'; });
-      }
-
-      function loadPortHealth() {
-        var tbody = document.getElementById('port-health-tbody');
-        tbody.innerHTML = '<tr><td colspan="5" class="empty">Loading…</td></tr>';
-        fetch('/api/secops/port-health')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Failed to load.</td></tr>'; return; }
-            tbody.innerHTML = d.ports.map(function(p) {
-              return '<tr>' +
-                '<td class="mono">' + p.port + '</td>' +
-                '<td>' + escapeHtml(p.service) + '</td>' +
-                '<td>' + escapeHtml(p.process) + '</td>' +
-                '<td>' + escapeHtml(p.binding) + '</td>' +
-                '<td>' + escapeHtml(p.status) + '</td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { tbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
-      }
-
-      function loadPortMatrix() {
-        var portsTbody = document.getElementById('port-matrix-tbody');
-        var nmapTbody = document.getElementById('nmap-tbody');
-        portsTbody.innerHTML = '<tr><td colspan="4" class="empty">Loading…</td></tr>';
-        nmapTbody.innerHTML = '<tr><td colspan="4" class="empty">Loading…</td></tr>';
-        fetch('/api/secops/port-matrix')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) {
-              portsTbody.innerHTML = '<tr><td colspan="4" class="empty">Failed to load.</td></tr>';
-              nmapTbody.innerHTML = '<tr><td colspan="4" class="empty">Failed to load.</td></tr>';
-              return;
-            }
-            portsTbody.innerHTML = d.ports.map(function(p) {
-              var cls = p.status === 'OPEN' ? 'score-hot' : '';
-              return '<tr>' +
-                '<td class="mono">' + p.port + '</td>' +
-                '<td>' + escapeHtml(p.service) + '</td>' +
-                '<td>' + escapeHtml(p.process) + '</td>' +
-                '<td class="' + cls + '">' + escapeHtml(p.status) + '</td>' +
-                '</tr>';
-            }).join('');
-            nmapTbody.innerHTML = !d.nmap_scans.length
-              ? '<tr><td colspan="4" class="empty">No recon activity detected.</td></tr>'
-              : d.nmap_scans.map(function(s) {
-                  return '<tr>' +
-                    '<td>' + escapeHtml(s.type) + '</td>' +
-                    '<td>' + escapeHtml(s.details) + '</td>' +
-                    '<td class="mono">' + escapeHtml(s.ip) + '</td>' +
-                    '<td class="mono">' + escapeHtml(s.timestamp) + '</td>' +
-                    '</tr>';
-                }).join('');
-          })
-          .catch(function() {
-            portsTbody.innerHTML = '<tr><td colspan="4" class="empty">Network error.</td></tr>';
-            nmapTbody.innerHTML = '<tr><td colspan="4" class="empty">Network error.</td></tr>';
+          .catch(() => {
+            document.getElementById('banned-ips-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load banned IPs.</td></tr>';
           });
       }
 
-      function loadMalwareAnalysis() {
-        var grid = document.getElementById('malware-grid');
-        var tbody = document.getElementById('quarantine-tbody');
-        grid.innerHTML = '<div class="empty">Loading…</div>';
-        tbody.innerHTML = '<tr><td colspan="6" class="empty">Loading…</td></tr>';
-        fetch('/api/secops/malware-analysis')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) {
-              grid.innerHTML = '<div class="empty">Failed to load.</div>';
-              tbody.innerHTML = '<tr><td colspan="6" class="empty">Failed to load.</td></tr>';
+      function socBanIp() {
+        const ip = document.getElementById('ban-ip-input').value.trim();
+        const reason = document.getElementById('ban-reason-input').value.trim();
+        const duration = document.getElementById('ban-duration-input').value.trim();
+        if (!ip) { showToast('IP address is required', 'danger'); return; }
+
+        fetch('/api/security/soc/ban-ip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip, reason, duration_minutes: duration })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(`IP ${ip} banned successfully`, 'success');
+            document.getElementById('ban-ip-input').value = '';
+            document.getElementById('ban-reason-input').value = '';
+            loadBannedIps();
+          } else {
+            showToast(res.msg || 'Failed to ban IP', 'danger');
+          }
+        });
+      }
+
+      function socUnbanIp(ip) {
+        fetch('/api/security/soc/unban-ip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(`IP ${ip} unbanned`, 'success');
+            loadBannedIps();
+          } else {
+            showToast(res.msg || 'Failed to unban IP', 'danger');
+          }
+        });
+      }
+
+      /* ── SIEM Logs ── */
+      function socEventsReload() {
+        currentPage = 1;
+        fetchEvents();
+      }
+
+      function socEventsPage(delta) {
+        currentPage = Math.max(1, currentPage + delta);
+        fetchEvents();
+      }
+
+      function fetchEvents() {
+        const level = document.getElementById('ev-level').value;
+        const type = document.getElementById('ev-event-type').value.trim();
+        const identifier = document.getElementById('ev-identifier').value.trim();
+        const q = document.getElementById('ev-q').value.trim();
+
+        const url = `/api/security/soc/events?page=${currentPage}&level=${encodeURIComponent(level)}&event_type=${encodeURIComponent(type)}&identifier=${encodeURIComponent(identifier)}&q=${encodeURIComponent(q)}`;
+
+        fetch(url)
+          .then(r => r.json())
+          .then(data => {
+            const tbody = document.getElementById('ev-tbody');
+            if (!data.ok || !data.events || data.events.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No matching security events found.</td></tr>';
+              document.getElementById('ev-page-label').innerText = `Page ${currentPage}`;
               return;
             }
-            var t = d.telemetry;
-            var cards = [
-              ['Status', t.status], ['Engine', t.scanner_engine], ['Signatures', t.signatures_loaded],
-              ['Scanned Uploads', t.scanned_uploads_count], ['Threats Neutralized', t.threats_neutralized],
-              ['Suspicious Ext.', t.suspicious_extensions_detected],
-            ];
-            grid.innerHTML = cards.map(function(c) {
-              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
-                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
-            }).join('');
-            tbody.innerHTML = !t.quarantined_files.length
-              ? '<tr><td colspan="6" class="empty">No quarantined files.</td></tr>'
-              : t.quarantined_files.map(function(f) {
-                  return '<tr>' +
-                    '<td class="mono">' + escapeHtml(f.filename) + '</td>' +
-                    '<td>' + escapeHtml(f.uploader_id || '—') + '</td>' +
-                    '<td class="mono">' + escapeHtml(f.signature || '—') + '</td>' +
-                    '<td>' + escapeHtml(f.status) + '</td>' +
-                    '<td class="mono">' + escapeHtml(f.timestamp) + '</td>' +
-                    '<td><button type="button" class="btn-lock" onclick="purgeQuarantine(' + f.id + ')">Purge</button></td>' +
-                    '</tr>';
-                }).join('');
-          })
-          .catch(function() {
-            grid.innerHTML = '<div class="empty">Network error.</div>';
-            tbody.innerHTML = '<tr><td colspan="6" class="empty">Network error.</td></tr>';
+            document.getElementById('ev-page-label').innerText = `Page ${data.page} of ${data.pages} (${data.total} total)`;
+            tbody.innerHTML = data.events.map(ev => `
+              <tr>
+                <td><span class="mono">${ev.created_at || '—'}</span></td>
+                <td><span class="badge-level level-${(ev.level || 'info').toLowerCase()}">${ev.level}</span></td>
+                <td><strong class="mono">${ev.event_type}</strong></td>
+                <td>${ev.message || ''}</td>
+                <td>${ev.identifier || '—'}</td>
+                <td><span class="mono">${ev.ip || '—'}</span></td>
+                <td><span class="mono">${ev.path || '—'}</span></td>
+              </tr>
+            `).join('');
           });
       }
 
-      function purgeQuarantine(fileId) {
+      function exportSecurityLogs() {
+        const level = document.getElementById('ev-level').value;
+        const type = document.getElementById('ev-event-type').value.trim();
+        const identifier = document.getElementById('ev-identifier').value.trim();
+        window.location.href = `/api/secops/export-logs?level=${encodeURIComponent(level)}&event_type=${encodeURIComponent(type)}&identifier=${encodeURIComponent(identifier)}`;
+      }
+
+      /* ── Account Unlock & Session Revoke ── */
+      function unlockAccount(identifier) {
+        fetch('/api/secops/unlock-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(res.msg, 'success');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(res.msg || 'Unlock failed', 'danger');
+          }
+        });
+      }
+
+      function terminateSession(sid) {
+        fetch('/api/secops/terminate-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sid })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(res.msg, 'success');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(res.msg || 'Revoke failed', 'danger');
+          }
+        });
+      }
+
+      /* ── Quarantine Files ── */
+      function loadQuarantineFiles() {
+        fetch('/api/secops/quarantine/files')
+          .then(r => r.json())
+          .then(data => {
+            const tbody = document.getElementById('quarantine-tbody');
+            if (!data.ok || !data.files || data.files.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No quarantined files detected.</td></tr>';
+              document.getElementById('kpi-quarantine').innerText = '0';
+              return;
+            }
+            document.getElementById('kpi-quarantine').innerText = data.files.length;
+            tbody.innerHTML = data.files.map(f => `
+              <tr>
+                <td class="mono">#${f.id || f.file_id}</td>
+                <td><strong>${f.filename}</strong></td>
+                <td>${f.uploader || 'anonymous'}</td>
+                <td><span class="badge-level level-critical">${f.signature || 'SUSPICIOUS_PAYLOAD'}</span></td>
+                <td><span class="badge-level level-warning">${f.status || 'QUARANTINED'}</span></td>
+                <td>
+                  <button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px;" onclick="purgeQuarantineFile('${f.id || f.file_id}')"><i class="ti ti-trash"></i> Purge</button>
+                </td>
+              </tr>
+            `).join('');
+          });
+      }
+
+      function purgeQuarantineFile(file_id) {
         fetch('/api/secops/quarantine/purge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ file_id: fileId }),
+          body: JSON.stringify({ file_id })
         })
-          .then(function(r) { return r.json(); })
-          .then(function() { loadMalwareAnalysis(); })
-          .catch(function() {});
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(res.msg, 'success');
+            loadQuarantineFiles();
+          } else {
+            showToast(res.msg || 'Purge failed', 'danger');
+          }
+        });
       }
 
-      function isolateUser() {
-        var statusEl = document.getElementById('isolate-status');
-        var userId = document.getElementById('isolate-user-input').value.trim();
-        if (!userId) { statusEl.textContent = 'Enter a user ID first.'; return; }
-        statusEl.textContent = 'Isolating…';
-        fetch('/api/secops/quarantine/isolate-user', {
+      /* ── Session Timeout & Controls ── */
+      function saveSessionTimeout() {
+        const timeout = document.getElementById('session-timeout-select').value;
+        fetch('/api/secops/session-timeout', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uploader_id: userId }),
+          body: JSON.stringify({ timeout })
         })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.msg || (d.ok ? 'Isolated.' : 'Failed.');
-            if (d.ok) document.getElementById('isolate-user-input').value = '';
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(`Session timeout set to ${timeout} minutes`, 'success');
+          } else {
+            showToast(res.msg || 'Failed to save timeout', 'danger');
+          }
+        });
       }
 
-      function loadThreatIntel() {
-        var cveTbody = document.getElementById('cve-tbody');
-        var ipTbody = document.getElementById('threat-ip-tbody');
-        fetch('/api/secops/threat-intel/cve')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok || !d.cves.length) {
-              cveTbody.innerHTML = '<tr><td colspan="5" class="empty">' + (d.ok ? 'No CVE indicators.' : 'Failed to load.') + '</td></tr>';
-              return;
+      function triggerEmergencyLockdown() {
+        if (!confirm('Are you sure you want to trigger Emergency Panic Mode? This will enforce immediate 5-minute session timeouts across the entire platform.')) return;
+
+        fetch('/api/secops/emergency-lockdown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enable: true })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast('Emergency Panic Mode ENABLED', 'danger');
+          }
+        });
+      }
+
+      function loadPerformance() {
+        fetch('/api/secops/performance')
+          .then(r => r.json())
+          .then(data => {
+            const grid = document.getElementById('perf-grid');
+            if (data.ok) {
+              grid.innerHTML = `
+                <div class="kpi-card">
+                  <div class="kpi-title">Database Pool Status</div>
+                  <div class="kpi-val">${data.db_healthy ? 'HEALTHY' : 'DEGRADED'}</div>
+                  <div class="kpi-sub">Active: ${data.db_pool.used || 0} / Max: ${data.db_pool.max || 20}</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-title">Test Coverage Gate</div>
+                  <div class="kpi-val">${data.coverage_gate_pct}%</div>
+                  <div class="kpi-sub">Required CI threshold</div>
+                </div>
+              `;
             }
-            cveTbody.innerHTML = d.cves.map(function(c) {
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(c.cve_id) + '</td>' +
-                '<td>' + escapeHtml(c.vendor) + '</td>' +
-                '<td>' + escapeHtml(c.product) + '</td>' +
-                '<td>' + escapeHtml(c.name) + '</td>' +
-                '<td class="mono">' + escapeHtml(c.due_date) + '</td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { cveTbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
-
-        fetch('/api/secops/threat-intel/ips')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok || !d.ips.length) {
-              ipTbody.innerHTML = '<tr><td colspan="5" class="empty">' + (d.ok ? 'No IP indicators.' : 'Failed to load.') + '</td></tr>';
-              return;
-            }
-            ipTbody.innerHTML = d.ips.map(function(i) {
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(i.ip) + '</td>' +
-                '<td class="score-hot">' + escapeHtml(String(i.threat_score)) + '</td>' +
-                '<td>' + escapeHtml(i.source) + '</td>' +
-                '<td class="mono">' + escapeHtml(i.fetched_at) + '</td>' +
-                '<td><button type="button" class="btn-lock" onclick="socBanIpFromRow(\'' + escapeHtml(i.ip) + '\')">Ban</button></td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { ipTbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
+          });
       }
 
-      function refreshThreatIntel() {
-        var statusEl = document.getElementById('threat-intel-status');
-        statusEl.textContent = 'Refreshing feeds…';
-        fetch('/api/secops/threat-intel/refresh', { method: 'POST' })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.msg || (d.ok ? 'Refreshed.' : 'Refresh failed.');
-            if (d.ok) loadThreatIntel();
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function loadWifiRisk() {
-        var grid = document.getElementById('wifi-grid');
-        grid.innerHTML = '<div class="empty">Loading…</div>';
-        fetch('/api/secops/wifi-risk')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) { grid.innerHTML = '<div class="empty">Failed to load.</div>'; return; }
-            var w = d.wifi;
-            var cards = [
-              ['Risk Score', w.risk_score + '%'], ['Status', w.status], ['Shield', w.shield_active ? 'Active' : 'Inactive'],
-              ['SSID', w.ssid], ['Encryption', w.encryption],
-              ['Rogue AP', w.rogue_ap_detected ? 'Detected' : 'None'], ['ARP Spoof', w.arp_spoof_detected ? 'Detected' : 'None'],
-            ];
-            grid.innerHTML = cards.map(function(c) {
-              return '<div class="stat-card"><div class="stat-num">' + escapeHtml(String(c[1])) +
-                     '</div><div class="stat-label">' + escapeHtml(c[0]) + '</div></div>';
-            }).join('');
-          })
-          .catch(function() { grid.innerHTML = '<div class="empty">Network error.</div>'; });
-      }
-
-      function toggleWifiShield(enable) {
-        var statusEl = document.getElementById('wifi-shield-status');
-        statusEl.textContent = enable ? 'Enabling shield…' : 'Disabling shield…';
-        fetch('/api/secops/wifi-risk/toggle-shield', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enable: enable }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.ok ? ('Shield ' + (d.shield_active ? 'enabled' : 'disabled') + '.') : 'Failed.';
-            if (d.ok) loadWifiRisk();
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function setGlobalWifiScore() {
-        var statusEl = document.getElementById('wifi-shield-status');
-        var score = document.getElementById('wifi-global-score').value.trim();
-        if (score === '') { statusEl.textContent = 'Enter a score first.'; return; }
-        statusEl.textContent = 'Setting score…';
-        fetch('/api/secops/wifi-risk/set-score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ score: parseInt(score, 10) }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.ok ? 'Score updated.' : 'Failed.';
-            if (d.ok) loadWifiRisk();
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function loadUserWifiTelemetry() {
-        var tbody = document.getElementById('user-wifi-tbody');
-        tbody.innerHTML = '<tr><td colspan="8" class="empty">Loading…</td></tr>';
-        fetch('/api/secops/user-wifi-telemetry')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok || !d.users.length) {
-              tbody.innerHTML = '<tr><td colspan="8" class="empty">' + (d.ok ? 'No telemetry recorded.' : 'Failed to load.') + '</td></tr>';
-              return;
-            }
-            tbody.innerHTML = d.users.map(function(u) {
-              var cls = u.is_high_risk ? 'score-hot' : '';
-              return '<tr>' +
-                '<td>' + escapeHtml(u.username) + '</td>' +
-                '<td>' + escapeHtml(u.role) + '</td>' +
-                '<td>' + escapeHtml(u.ssid) + '</td>' +
-                '<td>' + escapeHtml(u.encryption) + '</td>' +
-                '<td class="' + cls + '">' + u.risk_score + '%</td>' +
-                '<td class="' + cls + '">' + escapeHtml(u.status) + '</td>' +
-                '<td class="mono">' + escapeHtml(u.ip_address) + '</td>' +
-                '<td class="mono">' + escapeHtml(u.last_seen) + '</td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { tbody.innerHTML = '<tr><td colspan="8" class="empty">Network error.</td></tr>'; });
-      }
-
-      function updateUserWifi() {
-        var statusEl = document.getElementById('wifi-update-status');
-        var username = document.getElementById('wifi-update-user').value.trim();
-        var score = document.getElementById('wifi-update-score').value.trim();
-        if (!username) { statusEl.textContent = 'Enter a username first.'; return; }
-        statusEl.textContent = 'Updating…';
-        fetch('/api/secops/user-wifi-telemetry/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username, score: score ? parseInt(score, 10) : undefined }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.ok ? 'Updated.' : (d.msg || 'Update failed.');
-            if (d.ok) loadUserWifiTelemetry();
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function loadSmtpConfig() {
-        fetch('/api/secops/smtp-config')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok) return;
-            var c = d.config;
-            document.getElementById('smtp-server').value = c.smtp_server || '';
-            document.getElementById('smtp-port').value = c.smtp_port || '';
-            document.getElementById('smtp-username').value = c.smtp_username || '';
-            document.getElementById('smtp-alert-email').value = c.alert_email || '';
-            document.getElementById('smtp-tls').checked = !!c.smtp_use_tls;
-          })
-          .catch(function() {});
-      }
-
-      function saveSmtpConfig() {
-        var statusEl = document.getElementById('smtp-status');
-        statusEl.textContent = 'Saving…';
-        fetch('/api/secops/smtp-config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            smtp_server: document.getElementById('smtp-server').value.trim(),
-            smtp_port: parseInt(document.getElementById('smtp-port').value, 10) || 587,
-            smtp_username: document.getElementById('smtp-username').value.trim(),
-            alert_email: document.getElementById('smtp-alert-email').value.trim(),
-            smtp_use_tls: document.getElementById('smtp-tls').checked,
-          }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) { statusEl.textContent = d.msg || (d.ok ? 'Saved.' : 'Save failed.'); })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function loadAdminList() {
-        var tbody = document.getElementById('admin-list-tbody');
-        tbody.innerHTML = '<tr><td colspan="3" class="empty">Loading…</td></tr>';
-        fetch('/api/secops/list-admins')
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok || !d.admins.length) {
-              tbody.innerHTML = '<tr><td colspan="3" class="empty">' + (d.ok ? 'No admin accounts found.' : 'Failed to load.') + '</td></tr>';
-              return;
-            }
-            tbody.innerHTML = d.admins.map(function(a) {
-              return '<tr><td>' + escapeHtml(a.username) + '</td><td>' + escapeHtml(a.role) + '</td><td>' + escapeHtml(a.email) + '</td></tr>';
-            }).join('');
-          })
-          .catch(function() { tbody.innerHTML = '<tr><td colspan="3" class="empty">Network error.</td></tr>'; });
-      }
-
-      function resetAdminPassword() {
-        var statusEl = document.getElementById('admin-reset-status');
-        var username = document.getElementById('admin-reset-username').value.trim();
-        var password = document.getElementById('admin-reset-password').value;
-        if (!username || !password) { statusEl.textContent = 'Username and new password required.'; return; }
-        statusEl.textContent = 'Resetting…';
-        fetch('/api/secops/reset-admin-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: username, new_password: password }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.msg || (d.ok ? 'Password reset.' : 'Reset failed.');
-            if (d.ok) document.getElementById('admin-reset-password').value = '';
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      function searchEmployees() {
-        var tbody = document.getElementById('emp-search-tbody');
-        var q = document.getElementById('emp-search-q').value.trim();
-        if (!q) { tbody.innerHTML = '<tr><td colspan="5" class="empty">Enter a search term.</td></tr>'; return; }
-        tbody.innerHTML = '<tr><td colspan="5" class="empty">Searching…</td></tr>';
-        fetch('/api/secops/search-employees?q=' + encodeURIComponent(q))
-          .then(function(r) { return r.ok ? r.json() : { ok: false }; })
-          .then(function(d) {
-            if (!d.ok || !d.employees.length) {
-              tbody.innerHTML = '<tr><td colspan="5" class="empty">' + (d.ok ? 'No matching employees.' : 'Failed to load.') + '</td></tr>';
-              return;
-            }
-            tbody.innerHTML = d.employees.map(function(e) {
-              return '<tr>' +
-                '<td class="mono">' + escapeHtml(e.employee_id) + '</td>' +
-                '<td>' + escapeHtml(e.name) + '</td>' +
-                '<td>' + escapeHtml(e.department) + '</td>' +
-                '<td>' + escapeHtml(e.role) + '</td>' +
-                '<td><button type="button" class="btn-lock" onclick="document.getElementById(\'emp-reset-id\').value=\'' +
-                  escapeHtml(e.employee_id) + '\'">Select</button></td>' +
-                '</tr>';
-            }).join('');
-          })
-          .catch(function() { tbody.innerHTML = '<tr><td colspan="5" class="empty">Network error.</td></tr>'; });
-      }
-
-      function resetEmployeePassword() {
-        var statusEl = document.getElementById('emp-reset-status');
-        var empId = document.getElementById('emp-reset-id').value.trim();
-        var password = document.getElementById('emp-reset-password').value;
-        if (!empId || !password) { statusEl.textContent = 'Employee ID and new password required.'; return; }
-        statusEl.textContent = 'Resetting…';
-        fetch('/api/secops/reset-employee-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employee_id: empId, new_password: password }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            statusEl.textContent = d.msg || (d.ok ? 'Password reset.' : 'Reset failed.');
-            if (d.ok) document.getElementById('emp-reset-password').value = '';
-          })
-          .catch(function() { statusEl.textContent = 'Network error.'; });
-      }
-
-      loadSmtpConfig();
-      loadThreatIntel();
+      // Initial Load
+      document.addEventListener('DOMContentLoaded', () => {
+        loadBannedIps();
+        fetchEvents();
+        loadQuarantineFiles();
+      });
     </script>
-
   </body>
 </html>
