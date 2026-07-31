@@ -24,7 +24,7 @@
 
 resource "aws_security_group" "honeypot" {
   name        = "${var.project_name}-honeypot"
-  description = "Decoy ports (system32_crypto_admin) open to the public on purpose — see utils/honeypot.py"
+  description = "Decoy ports (system32_crypto_admin) open to the public on purpose - see utils/honeypot.py"
   vpc_id      = var.vpc_id
 
   ingress {

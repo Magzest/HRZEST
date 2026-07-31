@@ -107,7 +107,7 @@ resource "aws_security_group" "app_firewall" {
   }
 
   ingress {
-    description = "SSH — filtered to trusted IPs only"
+    description = "SSH - filtered to trusted IPs only"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -115,7 +115,7 @@ resource "aws_security_group" "app_firewall" {
   }
 
   ingress {
-    description = "RDP — filtered to trusted IPs only (not used by this Linux deployment; kept filtered per policy rather than unlisted)"
+    description = "RDP - filtered to trusted IPs only (not used by this Linux deployment, kept filtered per policy rather than unlisted)"
     from_port   = 3389
     to_port     = 3389
     protocol    = "tcp"
@@ -123,7 +123,7 @@ resource "aws_security_group" "app_firewall" {
   }
 
   ingress {
-    description = "Direct PostgreSQL access — filtered to trusted IPs only (normal app traffic goes to RDS over the private VPC via aws_security_group.rds, not through here)"
+    description = "Direct PostgreSQL access - filtered to trusted IPs only (normal app traffic goes to RDS over the private VPC, not through here)"
     from_port   = 5432
     to_port     = 5432
     protocol    = "tcp"
@@ -131,7 +131,7 @@ resource "aws_security_group" "app_firewall" {
   }
 
   ingress {
-    description = "MSSQL — filtered to trusted IPs only (not used by this stack; kept filtered per policy rather than unlisted)"
+    description = "MSSQL - filtered to trusted IPs only (not used by this stack, kept filtered per policy rather than unlisted)"
     from_port   = 1433
     to_port     = 1433
     protocol    = "tcp"
@@ -139,7 +139,7 @@ resource "aws_security_group" "app_firewall" {
   }
 
   ingress {
-    description = "Alternate HTTP — filtered to trusted IPs only"
+    description = "Alternate HTTP - filtered to trusted IPs only"
     from_port   = 8080
     to_port     = 8080
     protocol    = "tcp"
@@ -147,7 +147,7 @@ resource "aws_security_group" "app_firewall" {
   }
 
   ingress {
-    description = "Alternate HTTPS — filtered to trusted IPs only"
+    description = "Alternate HTTPS - filtered to trusted IPs only"
     from_port   = 8443
     to_port     = 8443
     protocol    = "tcp"
@@ -227,6 +227,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
   rule {
     id     = "expire-old-backups"
     status = "Enabled"
+    filter {}
     expiration {
       days = 30
     }
