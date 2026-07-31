@@ -178,10 +178,14 @@ run_as_app systemctl --user enable podman-restart.service 2>/dev/null || true
 run_as_app systemctl --user enable --now podman-auto-update.timer 2>/dev/null || true
 
 echo "==> Cloning / pulling repository"
+# Run as $APP_USER, not root: $APP_DIR was just chowned to $APP_USER above,
+# and a root-run clone/pull leaves .git itself root-owned underneath an
+# attendance-owned parent — git's dubious-ownership check then refuses the
+# next `pull` on every re-run of this script.
 if [ -d "$APP_DIR/.git" ]; then
-    git -C "$APP_DIR" pull origin master
+    run_as_app git -C "$APP_DIR" pull origin master
 else
-    git clone "$REPO_URL" "$APP_DIR"
+    run_as_app git clone "$REPO_URL" "$APP_DIR"
 fi
 
 echo "==> Setting up .env file"
