@@ -33,8 +33,13 @@ _INJECTION_PATTERN_RE = re.compile(
 
 
 @hr_bp.route("/hr_login", methods=["GET", "POST"])
-@limiter.limit("5 per 15 minutes")
-@limiter.limit("5 per minute")
+# Raised from 5/15min, 5/min — same reason as blueprints/auth.py's
+# admin_login: rootless Podman's port-forwarding proxy collapses every
+# visitor to one apparent IP, so these limits were shared site-wide, not
+# per-visitor. Per-account lockout (_check_login_lockout) is the real
+# brute-force defense and is unaffected.
+@limiter.limit("60 per 15 minutes")
+@limiter.limit("20 per minute")
 def hr_login():
     co = get_company_settings()
     if session.get("admin_logged_in") and session.get("admin_role") == HR_ROLE:

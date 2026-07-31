@@ -141,9 +141,17 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
 
 
 @auth_bp.route("/admin_login", methods=["GET", "POST"])
-@limiter.limit("5 per 15 minutes")
-@limiter.limit("5 per minute")
-@limiter.limit("20 per hour")
+# Raised from 5/15min, 5/min, 20/hour: under rootless Podman's port-forwarding
+# proxy, every visitor's IP collapses to the same internal gateway address
+# (see nginx/nginx.conf.template's matching comment), so these IP-keyed
+# limits were shared by the whole site's traffic combined, not per-visitor
+# — a handful of page loads by anyone locked out everyone else for 15
+# minutes. The real brute-force defense is the per-account lockout above
+# (_check_login_lockout/_record_login_failure), unaffected by this; these
+# stay only as a backstop against raw request floods.
+@limiter.limit("60 per 15 minutes")
+@limiter.limit("20 per minute")
+@limiter.limit("150 per hour")
 def admin_login():
     co = get_company_settings()
     if not co["setup_done"]:
@@ -274,7 +282,10 @@ def admin_login():
 
 
 @auth_bp.route("/mfa_verify", methods=["GET", "POST"])
-@limiter.limit("8 per 15 minutes")
+# Raised from 8/15min for the same reason as admin_login above — all
+# visitors share one apparent IP under rootless Podman's port-forwarding.
+# The OTP itself is still the real defense (short TTL, compare_digest).
+@limiter.limit("40 per 15 minutes")
 def mfa_verify():
     """Completion step for _start_login_mfa(): checks the emailed one-time
     code, then builds the real admin/HR/employee session. Deliberately
