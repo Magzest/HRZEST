@@ -13,7 +13,7 @@ secrets:
 
 services:
   db:
-    image: postgres:16
+    image: docker.io/library/postgres:16
     # podman-restart.service (enabled for the app user by deploy.sh) only
     # picks up containers with policy exactly `always` — `unless-stopped`
     # is not restarted by it — so `always` is required for the stack to
@@ -73,7 +73,7 @@ services:
       retries: 5
 
   clamav:
-    image: clamav/clamav:stable
+    image: docker.io/clamav/clamav:stable
     restart: always
     labels:
       io.containers.autoupdate: registry
@@ -121,7 +121,7 @@ services:
       start_period: 300s
 
   redis:
-    image: redis:7-alpine
+    image: docker.io/library/redis:7-alpine
     restart: always
     labels:
       io.containers.autoupdate: registry
@@ -288,7 +288,7 @@ services:
       - ALL
 
   nginx:
-    image: nginxinc/nginx-unprivileged:alpine # Hardened unprivileged alternative to stock nginx
+    image: docker.io/nginxinc/nginx-unprivileged:alpine # Hardened unprivileged alternative to stock nginx
     restart: always
     labels:
       io.containers.autoupdate: registry
