@@ -14,13 +14,19 @@ server_tokens off;
 # previously declared inside the `server {}` block below, which is invalid
 # nginx syntax and would make `nginx -s reload`/startup fail outright.
 #
-# Two zones: a tight one for login/auth endpoints (defense-in-depth on top
-# of Flask-Limiter — this still holds even if the app-level lockout has a
-# gap, since nginx sees every request before it reaches gunicorn), and a
+# Two zones: a login/auth endpoint zone (defense-in-depth on top of
+# Flask-Limiter — this still holds even if the app-level lockout has a gap,
+# since nginx sees every request before it reaches gunicorn), and a
 # generous general one as a backstop for everything else, since Flask's
 # default limit (300/min, extensions.py) is otherwise the only thing
 # standing between the app and a request flood.
-limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+#
+# rate=30r/m, not a tighter per-IP-style value: under rootless Podman's
+# port-forwarding proxy every external visitor collapses to the same
+# internal gateway IP before nginx ever sees it (see deploy.sh's matching
+# comment), so this bucket is shared by the whole site's traffic, not one
+# visitor. Revisit once nginx can see real client IPs again.
+limit_req_zone $binary_remote_addr zone=login:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=general:10m rate=20r/s;
 limit_conn_zone $binary_remote_addr zone=perip:10m;
 
@@ -89,7 +95,7 @@ server {
     limit_conn perip 20;
 
     location ~ ^/(admin_login|employee_login|api/login|api/employee/login) {
-        limit_req zone=login burst=10 nodelay;
+        limit_req zone=login burst=20 nodelay;
         proxy_pass         https://app;
         proxy_ssl_verify   off;
         proxy_set_header   Host              $host;

@@ -254,7 +254,19 @@ upstream app {
 # Same zones as nginx/nginx.conf.template — kept in sync so this temporary
 # HTTP-only config has the same defense-in-depth rate limiting before a
 # domain/HTTPS is set up, not just after.
-limit_req_zone $binary_remote_addr zone=login:10m rate=5r/m;
+#
+# rate=30r/m (not the tighter 5r/m you'd normally pick for a login endpoint):
+# under rootless Podman's port-forwarding proxy, every external visitor's
+# source IP is collapsed to the same internal gateway address before nginx
+# ever sees it (verified 2026-07-31 — mobile, desktop, and bot traffic all
+# showed as one IP in access logs), so this bucket is effectively shared by
+# the whole site's traffic combined, not per-visitor. A tight per-IP-style
+# limit here locks out every real user after a handful of page reloads by
+# anyone. The app's own Flask-Limiter (300/min) and mandatory email-OTP MFA
+# are the real brute-force defenses; this is just a backstop. Revisit once
+# nginx can see real client IPs again (host networking, or pasta-based
+# publishing instead of the rootlessport proxy).
+limit_req_zone $binary_remote_addr zone=login:10m rate=30r/m;
 limit_req_zone $binary_remote_addr zone=general:10m rate=20r/s;
 limit_conn_zone $binary_remote_addr zone=perip:10m;
 
@@ -277,7 +289,7 @@ server {
     limit_conn perip 20;
 
     location ~ ^/(admin_login|employee_login|api/login|api/employee/login) {
-        limit_req zone=login burst=10 nodelay;
+        limit_req zone=login burst=20 nodelay;
         proxy_pass         https://app;
         proxy_ssl_verify   off;
         proxy_set_header   Host              $host;
