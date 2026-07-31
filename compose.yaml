@@ -311,6 +311,16 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro,Z # world-readable, see app service comment above
       - ./cert.pem:/etc/ssl/certs/app.crt:ro,z
       - ./key.pem:/etc/ssl/private/app.key:ro,z
+      # nginx.conf's `location /static/ { alias /app/static/; }` needs the
+      # actual static assets on disk — app only has them because Containerfile
+      # COPYs the repo into its image at build time, which nginx (a pulled,
+      # unmodified image) never sees. Bind-mount the same repo checkout the
+      # app was built from; static/*.min.css and *.min.js are pre-minified
+      # and committed as-is (no build step regenerates them), so this exactly
+      # matches what the app container serves. Must come before the qrcodes
+      # line below so that named volume can override the qrcodes/ subpath
+      # with the runtime-shared one instead of this read-only snapshot.
+      - ./static:/app/static:ro,Z
       - qrcodes:/app/static/qrcodes:ro,z
     # nginx-unprivileged still needs to write its pid file, client body
     # buffers, and proxy/fastcgi cache dirs — all under /var/cache/nginx
