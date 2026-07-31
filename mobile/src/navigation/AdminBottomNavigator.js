@@ -8,7 +8,7 @@ import AttendanceScreen from "../screens/admin/AttendanceScreen";
 import LeaveRequestsScreen from "../screens/admin/LeaveRequestsScreen";
 import SettingsScreen from "../screens/admin/SettingsScreen";
 
-import PayrollScreen from "../screens/admin/PayrollScreen";
+import SalaryPayslipsScreen from "../screens/admin/SalaryPayslipsScreen";
 import AnalyticsScreen from "../screens/admin/AnalyticsScreen";
 import CompOffScreen from "../screens/admin/CompOffScreen";
 import MarkAttendanceScreen from "../screens/admin/MarkAttendanceScreen";
@@ -17,6 +17,7 @@ import AdminTicketsScreen from "../screens/admin/AdminTicketsScreen";
 import PerformanceScreen from "../screens/admin/PerformanceScreen";
 import OnboardingScreen from "../screens/admin/OnboardingScreen";
 import OrgChartScreen from "../screens/admin/OrgChartScreen";
+import DepartmentsScreen from "../screens/admin/DepartmentsScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -116,7 +117,7 @@ export default function AdminBottomNavigator() {
       {/* Hidden Screens - Accessible via Drawer Menu */}
       <Tab.Screen
         name="Payroll"
-        component={PayrollScreen}
+        component={SalaryPayslipsScreen}
         options={{ tabBarButton: () => null }}
       />
 
@@ -165,6 +166,12 @@ export default function AdminBottomNavigator() {
       <Tab.Screen
         name="OrgChart"
         component={OrgChartScreen}
+        options={{ tabBarButton: () => null }}
+      />
+
+      <Tab.Screen
+        name="Departments"
+        component={DepartmentsScreen}
         options={{ tabBarButton: () => null }}
       />
     </Tab.Navigator>

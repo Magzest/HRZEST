@@ -247,12 +247,14 @@ const styles = StyleSheet.create({
   },
 
   balanceValue: {
-    fontSize: 54,
+    fontSize: 32,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color:
       COMPOFF_THEME.colors.success,
+
+    letterSpacing: -0.6,
   },
 
   balanceLabel: {
@@ -331,12 +333,14 @@ const styles = StyleSheet.create({
   },
 
   statValue: {
-    fontSize: 24,
+    fontSize: 18,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color:
       COMPOFF_THEME.colors.textPrimary,
+
+    letterSpacing: -0.3,
   },
 
   statLabel: {

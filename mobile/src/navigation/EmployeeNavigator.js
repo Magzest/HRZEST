@@ -13,6 +13,7 @@ import AttendanceScreen from "../screens/employee/AttendanceScreen";
 import CompOffScreen from "../screens/employee/CompOffScreen";
 import HolidaysScreen from "../screens/employee/HolidaysScreen";
 import EarningsScreen from "../screens/employee/EarningsScreen";
+import PayslipsScreen from "../screens/employee/PayslipsScreen";
 import PerformanceScreen from "../screens/employee/PerformanceScreen";
 import OnboardingScreen from "../screens/employee/OnboardingScreen";
 import ProfileNavigator from "./ProfileNavigator";
@@ -157,6 +158,12 @@ export default function EmployeeNavigator() {
         <Tab.Screen
           name="Earnings"
           component={EarningsScreen}
+          options={{ tabBarButton: () => null }}
+        />
+
+        <Tab.Screen
+          name="Payslips"
+          component={PayslipsScreen}
           options={{ tabBarButton: () => null }}
         />
 

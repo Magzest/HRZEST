@@ -30,7 +30,7 @@ export default function DashboardHeroCard({
   return (
 
     <LinearGradient
-      colors={["#2563EB", "#1D4ED8"]}
+      colors={["#0F2460", "#1A3A8F"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}

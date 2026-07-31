@@ -14,8 +14,10 @@
 //  tokens are visible to anyone on the same network.
 // ─────────────────────────────────────────────────────────────
 
-// ⚠  LOCAL DEV ONLY — change to production URL before release
-export const API_BASE_URL = 'http://10.0.2.2:5000';
+import { Platform } from 'react-native';
+
+const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+export const API_BASE_URL = `http://${DEV_HOST}:5000`;
 
 export const COLORS = {
   // Backgrounds

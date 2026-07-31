@@ -303,13 +303,13 @@ const styles = StyleSheet.create({
   },
 
   balanceValue: {
-    fontSize: 40,
+    fontSize: 26,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color: "#FFFFFF",
 
-    letterSpacing: -1.5,
+    letterSpacing: -0.5,
   },
 
   balanceUnit: {

@@ -330,12 +330,13 @@ const styles = StyleSheet.create({
   },
 
   statValue: {
-    fontSize: 20,
+    fontSize: 18,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color:
       COMPOFF_THEME.colors.primary,
+    letterSpacing: -0.3,
   },
 
   statLabel: {

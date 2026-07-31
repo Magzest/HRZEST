@@ -39,7 +39,7 @@ export default function AdminHeader({
       onProfile();
     } else {
       try {
-        navigation.navigate("Settings");
+        navigation.navigate("Settings", { tab: "profile" });
       } catch (e) {
         // Fallback if settings route not found
       }
@@ -170,16 +170,16 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   tagText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
     color: "#2563EB",
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
   title: {
-    fontSize: 19,
-    fontWeight: "700",
+    fontSize: 18,
+    fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   rightGroup: {
     flexDirection: "row",

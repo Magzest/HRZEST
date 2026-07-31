@@ -347,13 +347,13 @@ const styles = StyleSheet.create({
   },
 
   value: {
-    fontSize: 26,
+    fontSize: 22,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color: "#0F172A",
 
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
 
   title: {
