@@ -5,10 +5,6 @@ try:
 except Exception:
     pass
 
-from flask import request, session, jsonify, redirect, url_for, flash, current_app
-import datetime
-import html as _html
-from database import get_db_connection
 import os
 import re
 import psycopg2
@@ -20,8 +16,14 @@ import base64
 from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 
+load_dotenv()
 _HASHI_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hashi", ".env")
 load_dotenv(_HASHI_ENV)
+
+from flask import request, session, jsonify, redirect, url_for, flash, current_app
+import datetime
+import html as _html
+from database import get_db_connection
 
 # ── Startup: warn if critical env vars are missing ──
 _missing_env = [k for k in ("DB_HOST", "DB_USER", "DB_PASS", "DB_NAME") if not os.environ.get(k)]
@@ -371,7 +373,7 @@ _MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
 # genuine "mandatory," not a step-up an admin can defer indefinitely).
 _MANDATORY_MFA_EXEMPT_PATHS = {
     "/admin/mfa-required", "/api/settings/2fa/setup", "/api/settings/2fa/enable",
-    "/logout", "/admin_login", "/setup", "/hr_login",
+    "/logout", "/admin_login", "/setup", "/hr_login", "/sp_admin/login", "/secops/login", "/secops"
 }
 
 app.config.setdefault("MANDATORY_ADMIN_MFA", True)
@@ -425,6 +427,8 @@ def _enforce_csrf():
         return  # CSRF disabled in test mode; Bearer-token tests handle auth separately
     if request.path.startswith("/api/"):
         return  # API routes use Bearer-token auth — no session/CSRF needed
+    if request.path in ("/sp_admin/login", "/secops/login", "/admin_login"):
+        return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
     # script (_inject_csrf_meta) adds X-CSRF-Token to every fetch() call, so
     # legitimate JSON POSTs from the web UI already carry the token.

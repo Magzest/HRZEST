@@ -190,3 +190,36 @@ export const yearOptions = [
   "2026",
   "2027",
 ];
+
+const COMPOFF_THEME = {
+  colors: {
+    // Primary
+    primary: "#2563EB",
+    primaryLight: "#DBEAFE",
+
+    // Secondary
+    secondary: "#6366F1",
+
+    // Backgrounds
+    background: "#F8FAFC",
+
+    // Text
+    textPrimary: "#0F172A",
+    textSecondary: "#475569",
+    textMuted: "#64748B",
+
+    // Borders & Dividers
+    border: "#E2E8F0",
+    divider: "#EEF2F7",
+
+    // Status
+    success: "#22C55E",
+    successLight: "#DCFCE7",
+    warning: "#F59E0B",
+    warningLight: "#FEF3C7",
+    danger: "#EF4444",
+    dangerLight: "#FEE2E2",
+  },
+};
+
+export default COMPOFF_THEME;

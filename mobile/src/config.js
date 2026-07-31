@@ -1,14 +1,24 @@
-// ─────────────────────────────────────────────
-//  UPDATE THIS to your machine's local IP when
-//  running on a real device or Android emulator.
+// ─────────────────────────────────────────────────────────────
+//  API_BASE_URL — set this before building a release APK/IPA.
 //
-//  Find it with:  ipconfig  (Windows)
-//  Example:  'http://192.168.1.105:5000'
+//  PRODUCTION:
+//    export const API_BASE_URL = 'https://yourdomain.com';
 //
-//  For iOS Simulator you can use localhost:
-//  'http://localhost:5000'
-// ─────────────────────────────────────────────
-export const API_BASE_URL = 'http://10.0.2.2:5000';
+//  LOCAL DEV — USB debugging (adb reverse tcp:5000 tcp:5000):
+//    export const API_BASE_URL = 'http://localhost:5000';
+//
+//  LOCAL DEV — real Android device on same Wi-Fi:
+//    export const API_BASE_URL = 'http://192.168.1.x:5000';
+//
+//  SECURITY: Never ship a build pointing at http:// — Bearer
+//  tokens are visible to anyone on the same network.
+// ─────────────────────────────────────────────────────────────
+
+import { Platform } from 'react-native';
+
+const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
+export const API_BASE_URL = `http://${DEV_HOST}:5000`;
+
 export const COLORS = {
   // Backgrounds
   adminBg:    ['#0f2027', '#203a43', '#2c5364'],

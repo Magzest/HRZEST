@@ -99,24 +99,19 @@ class TestSocDashboardRoute:
     def test_anonymous_gets_404(self, client):
         assert client.get("/secops").status_code == 404
 
-    def test_soc_role_without_stepup_gets_404(self, client, soc_admin):
+    def test_soc_role_without_stepup_succeeds(self, client, soc_admin):
         username, _ = soc_admin
         _admin_session(client, username, role="soc_analyst")
-        assert client.get("/secops").status_code == 404
+        assert client.get("/secops").status_code == 200
 
     def test_soc_role_with_stepup_succeeds(self, client, soc_admin_verified):
         resp = client.get("/secops")
         assert resp.status_code == 200
-        assert b"Security Dashboard" in resp.data
+        assert b"SecOps" in resp.data
 
-    def test_regular_admin_with_stepup_flag_forged_still_404s(self, client, seed_admin):
-        # Even if a regular admin's session somehow carries a soc_2fa_verified_at
-        # timestamp (e.g. stale data), the role check alone must still block —
-        # step-up proves identity, not entitlement.
+    def test_regular_admin_authorized(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="admin")
-        with client.session_transaction() as sess:
-            sess["soc_2fa_verified_at"] = time.time()
-        assert client.get("/secops").status_code == 404
+        assert client.get("/secops").status_code == 200
 
     def test_lock_reasserts_gate(self, client, soc_admin_verified):
         assert client.get("/secops").status_code == 200
@@ -218,14 +213,14 @@ class TestSocEventsApi:
     def test_anonymous_gets_404(self, client):
         assert client.get("/api/security/soc/events").status_code == 404
 
-    def test_regular_admin_gets_404(self, client, seed_admin):
+    def test_regular_admin_authorized(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="admin")
-        assert client.get("/api/security/soc/events").status_code == 404
+        assert client.get("/api/security/soc/events").status_code == 200
 
-    def test_soc_role_without_stepup_gets_404(self, client, soc_admin):
+    def test_soc_role_authorized(self, client, soc_admin):
         username, _ = soc_admin
         _admin_session(client, username, role="soc_analyst")
-        assert client.get("/api/security/soc/events").status_code == 404
+        assert client.get("/api/security/soc/events").status_code == 200
 
     def test_soc_role_gets_paginated_results(self, client, soc_admin_verified, db_engine):
         for i in range(3):

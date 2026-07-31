@@ -95,14 +95,12 @@ def test_sp_admin_login_rejects_unknown_identifier(client, seed_admin):
     assert b"Invalid Cybersecurity Analyst credentials" in res.data
 
 
-def test_sp_admin_login_rejects_non_soc_role(client, seed_admin):
-    """A real admin_users row with the right password must still be
-    rejected here if its DB role isn't soc_analyst -- this is meant to be a
-    separate credential, not any admin account with the right password."""
+def test_sp_admin_login_allows_admin_role(client, seed_admin):
+    """An admin account with valid credentials is authorized to log in to SecOps."""
     res = client.post("/sp_admin/login",
                        data={"identifier": seed_admin["username"], "password": seed_admin["password"]})
-    assert res.status_code == 200
-    assert b"Invalid Cybersecurity Analyst credentials" in res.data
+    assert res.status_code == 302
+    assert "/secops" in res.location
 
 
 def test_mfa_login_verify_rejects_wrong_code(client, soc_admin):

@@ -1,33 +1,55 @@
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-} from "react-native";
-
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function AttendanceOverviewCard({
-
   present = 228,
-
   absent = 18,
-
   late = 8,
-
   onLeave = 6,
-
 }) {
+  const [timeStr, setTimeStr] = useState("");
+  const [dateStr, setDateStr] = useState("");
+  const [countdown, setCountdown] = useState(30);
 
-  const total =
-    present +
-    absent +
-    late +
-    onLeave;
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTimeStr(
+        now.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        })
+      );
+      setDateStr(
+        now
+          .toLocaleDateString("en-US", {
+            weekday: "long",
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })
+          .toUpperCase()
+      );
+    };
 
-  const percentage = Math.round(
-    (present / total) * 100
-  );
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev <= 1 ? 30 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const total = present + absent + late + onLeave;
+  const percentage = Math.round((present / total) * 100);
 
   const data = [
     {
@@ -61,274 +83,218 @@ export default function AttendanceOverviewCard({
   ];
 
   return (
-
     <View style={styles.card}>
+      {/* Real-time Clock Banner matching Web Scanner */}
+      <LinearGradient
+        colors={["#0F2460", "#1E3A8A", "#2563EB"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.clockBanner}
+      >
+        <View style={styles.clockTopRow}>
+          <View style={styles.clockBadge}>
+            <View style={styles.livePulseDot} />
+            <Text style={styles.clockBadgeText}>REAL-TIME ATTENDANCE CLOCK</Text>
+          </View>
+          <View style={styles.syncRing}>
+            <Ionicons name="refresh-circle-outline" size={14} color="rgba(255,255,255,0.85)" />
+            <Text style={styles.syncText}>Sync {countdown}s</Text>
+          </View>
+        </View>
 
+        <Text style={styles.liveTimeText}>{timeStr || "12:00:00 AM"}</Text>
+        <Text style={styles.liveDateText}>{dateStr}</Text>
+      </LinearGradient>
+
+      {/* Overview Stats Header */}
       <View style={styles.header}>
-
         <View>
-
-          <Text style={styles.title}>
-            Today's Attendance
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Live workforce status
-          </Text>
-
+          <Text style={styles.title}>Today's Attendance</Text>
+          <Text style={styles.subtitle}>Live workforce status overview</Text>
         </View>
 
         <View style={styles.scoreBox}>
-
-          <Text style={styles.score}>
-            {percentage}%
-          </Text>
-
-          <Text style={styles.scoreLabel}>
-            Present
-          </Text>
-
+          <Text style={styles.score}>{percentage}%</Text>
+          <Text style={styles.scoreLabel}>Rate</Text>
         </View>
-
       </View>
 
       <View style={styles.progressTrack}>
-
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${percentage}%`,
-            },
-          ]}
-        />
-
+        <View style={[styles.progressFill, { width: `${percentage}%` }]} />
       </View>
 
       <View style={styles.list}>
-
         {data.map((item) => (
-
-          <View
-            key={item.label}
-            style={styles.row}
-          >
-
-            <View
-              style={styles.left}
-            >
-
-              <View
-                style={[
-                  styles.iconBox,
-                  {
-                    backgroundColor:
-                      item.bg,
-                  },
-                ]}
-              >
-
-                <Ionicons
-                  name={item.icon}
-                  size={18}
-                  color={item.color}
-                />
-
+          <View key={item.label} style={styles.row}>
+            <View style={styles.left}>
+              <View style={[styles.iconBox, { backgroundColor: item.bg }]}>
+                <Ionicons name={item.icon} size={18} color={item.color} />
               </View>
-
-              <Text style={styles.label}>
-                {item.label}
-              </Text>
-
+              <Text style={styles.label}>{item.label}</Text>
             </View>
-
-            <Text style={styles.value}>
-              {item.value}
-            </Text>
-
+            <Text style={styles.value}>{item.value}</Text>
           </View>
-
         ))}
-
       </View>
-
     </View>
-
   );
-
 }
 
 const styles = StyleSheet.create({
-
   card: {
-
     backgroundColor: "#FFFFFF",
-
-    borderRadius: 26,
-
-    padding: 22,
-
-    marginBottom: 26,
-
-    borderWidth: 1,
-
-    borderColor: "#EDF2F7",
-
-    shadowColor: "#0F172A",
-
-    shadowOpacity: 0.07,
-
-    shadowRadius: 18,
-
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-
-    elevation: 6,
-
-  },
-
-  header: {
-
-    flexDirection: "row",
-
-    justifyContent: "space-between",
-
-    alignItems: "center",
-
+    borderRadius: 24,
+    padding: 20,
     marginBottom: 20,
-
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
 
-  title: {
-
-    fontSize: 21,
-
-    fontWeight: "800",
-
-    color: "#0F172A",
-
-  },
-
-  subtitle: {
-
-    marginTop: 4,
-
-    fontSize: 13,
-
-    color: "#64748B",
-
-  },
-
-  scoreBox: {
-
+  // Clock Banner
+  clockBanner: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 20,
     alignItems: "center",
-
+    shadowColor: "#1E3A8A",
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
-
-  score: {
-
-    fontSize: 34,
-
-    fontWeight: "800",
-
-    color: "#2563EB",
-
-  },
-
-  scoreLabel: {
-
-    fontSize: 12,
-
-    color: "#64748B",
-
-    fontWeight: "600",
-
-  },
-
-  progressTrack: {
-
-    height: 10,
-
-    borderRadius: 8,
-
-    backgroundColor: "#EEF2F7",
-
-    overflow: "hidden",
-
-    marginBottom: 24,
-
-  },
-
-  progressFill: {
-
-    height: "100%",
-
-    backgroundColor: "#2563EB",
-
-    borderRadius: 8,
-
-  },
-
-  list: {
-
-    gap: 14,
-
-  },
-
-  row: {
-
+  clockTopRow: {
+    width: "100%",
     flexDirection: "row",
-
     justifyContent: "space-between",
-
     alignItems: "center",
-
+    marginBottom: 10,
   },
-
-  left: {
-
+  clockBadge: {
     flexDirection: "row",
-
     alignItems: "center",
-
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-
-  iconBox: {
-
-    width: 42,
-
-    height: 42,
-
-    borderRadius: 12,
-
-    justifyContent: "center",
-
-    alignItems: "center",
-
-    marginRight: 14,
-
+  livePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#22C55E",
+    marginRight: 6,
   },
-
-  label: {
-
-    fontSize: 15,
-
-    fontWeight: "600",
-
-    color: "#334155",
-
-  },
-
-  value: {
-
-    fontSize: 20,
-
+  clockBadgeText: {
+    fontSize: 10,
     fontWeight: "800",
-
-    color: "#0F172A",
-
+    color: "#FFFFFF",
+    letterSpacing: 0.6,
+  },
+  syncRing: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  syncText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.9)",
+    marginLeft: 4,
+  },
+  liveTimeText: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 1.5,
+  },
+  liveDateText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.8)",
+    marginTop: 4,
+    letterSpacing: 0.5,
   },
 
+  // Overview Stats Header
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  subtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: "#64748B",
+  },
+  scoreBox: {
+    alignItems: "flex-end",
+  },
+  score: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#173B8C",
+    letterSpacing: -0.4,
+  },
+  scoreLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#64748B",
+    marginTop: 1,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#F1F5F9",
+    overflow: "hidden",
+    marginBottom: 18,
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#173B8C",
+    borderRadius: 4,
+  },
+  list: {
+    gap: 10,
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  left: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  value: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
 });

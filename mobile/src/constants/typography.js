@@ -1,23 +1,34 @@
 const TYPOGRAPHY = {
+  // Hero / Banner Headings
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    lineHeight: 30,
+    letterSpacing: -0.5,
+  },
+
   // Page Titles
   pageTitle: {
     fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 28,
+    fontWeight: "800",
+    lineHeight: 26,
+    letterSpacing: -0.4,
   },
 
   // Screen Headers
   headerTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
     lineHeight: 24,
+    letterSpacing: -0.3,
   },
 
   // Card Titles
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "700",
-    lineHeight: 22,
+    lineHeight: 21,
+    letterSpacing: -0.2,
   },
 
   // Section Titles
@@ -25,55 +36,83 @@ const TYPOGRAPHY = {
     fontSize: 15,
     fontWeight: "700",
     lineHeight: 20,
+    letterSpacing: -0.1,
+  },
+
+  // Form Section Overlines / Badges
+  overline: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
   },
 
   // Large Statistics
   statNumber: {
-    fontSize: 28,
-    fontWeight: "700",
-    lineHeight: 34,
+    fontSize: 24,
+    fontWeight: "800",
+    lineHeight: 30,
+    letterSpacing: -0.4,
   },
 
   // Medium Numbers
   statValue: {
-    fontSize: 22,
-    fontWeight: "700",
-    lineHeight: 28,
+    fontSize: 20,
+    fontWeight: "800",
+    lineHeight: 26,
+    letterSpacing: -0.3,
   },
 
   // Body Text
   body: {
     fontSize: 14,
-    fontWeight: "400",
-    lineHeight: 22,
+    fontWeight: "500",
+    lineHeight: 20,
+  },
+
+  // Primary Body Bold
+  bodySemiBold: {
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
   },
 
   // Secondary Text
   bodyMedium: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "500",
-    lineHeight: 22,
+    lineHeight: 18,
   },
 
-  // Small Text
+  // Small Text / Captions
   caption: {
     fontSize: 12,
     fontWeight: "500",
-    lineHeight: 18,
+    lineHeight: 16,
   },
 
-  // Labels
-  label: {
-    fontSize: 13,
+  // Micro Metadata
+  micro: {
+    fontSize: 11,
     fontWeight: "600",
-    lineHeight: 18,
+    lineHeight: 15,
+  },
+
+  // Form Field Labels
+  label: {
+    fontSize: 11,
+    fontWeight: "800",
+    lineHeight: 16,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
 
   // Button Text
   button: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     lineHeight: 20,
+    letterSpacing: 0.2,
   },
 
   // Navigation Labels

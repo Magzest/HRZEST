@@ -198,9 +198,11 @@ const styles = StyleSheet.create({
 
     color: "#FFFFFF",
 
-    fontSize: 34,
+    fontSize: 22,
 
     fontWeight: "800",
+
+    letterSpacing: -0.4,
   },
 
   statsRow: {

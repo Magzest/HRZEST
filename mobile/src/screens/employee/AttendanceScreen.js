@@ -23,6 +23,8 @@ import AttendanceLegend from "../../components/attendance/AttendanceLegend";
 import AttendanceHistoryCard from "../../components/attendance/AttendanceHistoryCard";
 import AttendanceEmptyState from "../../components/attendance/AttendanceEmptyState";
 
+import ProfileHeader from "../../components/profile/ProfileHeader";
+
 export default function AttendanceScreen() {
   const navigation = useNavigation();
 
@@ -115,38 +117,7 @@ export default function AttendanceScreen() {
       colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]}
       style={styles.container}
     >
-      {/* Header */}
-
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => navigation.openDrawer()}
-        >
-          <Ionicons
-            name="menu"
-            size={24}
-            color="#173B8C"
-          />
-        </TouchableOpacity>
-
-        <View>
-          <Text style={styles.smallTitle}>
-            Employee Portal
-          </Text>
-
-          <Text style={styles.title}>
-            Attendance
-          </Text>
-        </View>
-
-        <TouchableOpacity style={styles.profile}>
-          <Ionicons
-            name="person"
-            size={22}
-            color="#173B8C"
-          />
-        </TouchableOpacity>
-      </View>
+      <ProfileHeader title="Attendance Logs" subtitle="EMPLOYEE PORTAL" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}

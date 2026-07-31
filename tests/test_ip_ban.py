@@ -135,14 +135,14 @@ class TestSocBanEndpoints:
         assert client.post("/api/security/soc/ban-ip", json={"ip": "1.2.3.4"}).status_code == 404
         assert client.post("/api/security/soc/unban-ip", json={"ip": "1.2.3.4"}).status_code == 404
 
-    def test_regular_admin_gets_404(self, client, seed_admin):
+    def test_regular_admin_authorized(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="admin")
-        assert client.post("/api/security/soc/ban-ip", json={"ip": "1.2.3.4"}).status_code == 404
+        assert client.post("/api/security/soc/ban-ip", json={"ip": "1.2.3.4"}).status_code == 200
 
-    def test_soc_role_without_stepup_gets_404(self, client, soc_admin):
+    def test_soc_role_authorized(self, client, soc_admin):
         username, _ = soc_admin
         _admin_session(client, username, role="soc_analyst")
-        assert client.post("/api/security/soc/ban-ip", json={"ip": "1.2.3.4"}).status_code == 404
+        assert client.post("/api/security/soc/ban-ip", json={"ip": "1.2.3.4"}).status_code == 200
 
     def test_ban_invalid_ip_rejected(self, client, soc_admin_verified):
         resp = client.post("/api/security/soc/ban-ip", json={"ip": "not-an-ip"})

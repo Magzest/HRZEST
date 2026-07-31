@@ -516,17 +516,17 @@ const styles = StyleSheet.create({
   heroValue: {
     marginTop: 6,
 
-    fontSize: 52,
+    fontSize: 30,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color: "#FFFFFF",
 
-    letterSpacing: -2,
+    letterSpacing: -0.6,
   },
 
   heroUnit: {
-    fontSize: 28,
+    fontSize: 18,
 
     fontWeight: "700",
 
@@ -618,13 +618,15 @@ const styles = StyleSheet.create({
   },
 
   balanceValue: {
-    marginTop: 14,
+    marginTop: 10,
 
-    fontSize: 34,
+    fontSize: 22,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color: COMPOFF_THEME.colors.textPrimary,
+
+    letterSpacing: -0.4,
   },
 
   balanceLabel: {

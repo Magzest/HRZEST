@@ -1,19 +1,15 @@
 import React from "react";
 import {
   View,
- Text,
+  Text,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  ScrollView,
 } from "react-native";
-
 import { DrawerContentScrollView } from "@react-navigation/drawer";
 import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-
 import { useAuth } from "../../store/AuthContext";
-import THEME from "../../constants/theme";
 
 export default function AdminDrawerContent(props) {
   const { navigation, state } = props;
@@ -22,87 +18,90 @@ export default function AdminDrawerContent(props) {
   const drawerRoute = state.routes[state.index];
 
   const activeRoute =
-    getFocusedRouteNameFromRoute(drawerRoute) ??
-    drawerRoute.name;
+    getFocusedRouteNameFromRoute(drawerRoute) ?? drawerRoute.name;
 
   const handleLogout = () => {
     signOut();
   };
 
- const menuItems = [
+  // ─────────────────────────────────────────────────────────────
+  //  ZERO DUPLICATION POLICY:
+  //  Items present in the Bottom Tab Bar (Home, Staff, Attendance,
+  //  Approvals, Settings) are EXCLUDED from the drawer so that
+  //  no menu item repeats in both places.
+  // ─────────────────────────────────────────────────────────────
+  const menuItems = [
+    // ANALYTICS & REPORTS
+    {
+      title: "Analytics & Reports",
+      icon: "bar-chart-outline",
+      iconFocused: "bar-chart",
+      route: "Analytics",
+      section: "ANALYTICS & REPORTS",
+    },
 
-  // HR MANAGEMENT
+    // HR OPERATIONS & MANAGEMENT
+    {
+      title: "Mark Attendance",
+      icon: "create-outline",
+      iconFocused: "create",
+      route: "MarkAttendance",
+      section: "HR OPERATIONS",
+    },
+    {
+      title: "OT & Comp-Off",
+      icon: "time-outline",
+      iconFocused: "time",
+      route: "CompOff",
+      section: "HR OPERATIONS",
+    },
+    {
+      title: "Resignation Requests",
+      icon: "exit-outline",
+      iconFocused: "exit",
+      route: "Resignations",
+      section: "HR OPERATIONS",
+    },
+    {
+      title: "Performance & KPIs",
+      icon: "trending-up-outline",
+      iconFocused: "trending-up",
+      route: "Performance",
+      section: "HR OPERATIONS",
+    },
+    {
+      title: "Onboarding Tasks",
+      icon: "briefcase-outline",
+      iconFocused: "briefcase",
+      route: "Onboarding",
+      section: "HR OPERATIONS",
+    },
+    {
+      title: "Organization Chart",
+      icon: "git-network-outline",
+      iconFocused: "git-network",
+      route: "OrgChart",
+      section: "HR OPERATIONS",
+    },
 
-  {
-    title: "Mark Attendance",
-    icon: "create-outline",
-    route: "MarkAttendance",
-    section: "HR",
-  },
+    // PAYROLL & COMPENSATION
+    {
+      title: "Salary & Payslips",
+      icon: "wallet-outline",
+      iconFocused: "wallet",
+      route: "Payroll",
+      section: "PAYROLL & COMP",
+    },
 
-  {
-    title: "Salary & Payslips",
-    icon: "wallet-outline",
-    route: "Payroll",
-    section: "HR",
-  },
-
-  {
-    title: "Leaves & Holidays",
-    icon: "calendar-clear-outline",
-    route: "LeaveRequests",
-    section: "HR",
-  },
-
-  {
-    title: "OT & Comp-off",
-    icon: "time-outline",
-    route: "CompOff",
-    section: "HR",
-  },
-
-  // EMPLOYEE
-
-  {
-    title: "Performance",
-    icon: "trending-up-outline",
-    route: "Performance",
-    section: "EMPLOYEE",
-  },
-
-  {
-    title: "Onboarding",
-    icon: "briefcase-outline",
-    route: "Onboarding",
-    section: "EMPLOYEE",
-  },
-
-  {
-    title: "Organization Chart",
-    icon: "git-network-outline",
-    route: "Organization",
-    section: "EMPLOYEE",
-  },
-
-  // ADMIN
-
-  
-  
-
-  
-
-  
-
- 
-
-  {
-    title: "Admin Tools",
-    icon: "construct-outline",
-    route: "AdminTools",
-    section: "ADMIN",
-  },
-
-];
+    // SUPPORT & HELPDESK
+    {
+      title: "Support Tickets",
+      icon: "ticket-outline",
+      iconFocused: "ticket",
+      route: "Tickets",
+      section: "SUPPORT & HELPDESK",
+    },
+  ];
 
   const renderMenuItem = (item) => {
     const active = activeRoute === item.route;
@@ -111,378 +110,229 @@ export default function AdminDrawerContent(props) {
       <TouchableOpacity
         key={item.title}
         activeOpacity={0.85}
-        style={[
-          styles.menuItem,
-          active && styles.activeMenuItem,
-        ]}
+        style={[styles.menuItem, active && styles.activeMenuItem]}
         onPress={() => {
           navigation.navigate("AdminTabs", {
             screen: item.route,
           });
-
           navigation.closeDrawer();
         }}
       >
         <Ionicons
-          name={item.icon}
-          size={22}
-          color={
-            active
-              ? "#FFFFFF"
-              : "#173B8C"
-          }
+          name={active ? item.iconFocused : item.icon}
+          size={20}
+          color={active ? "#FFFFFF" : "#173B8C"}
         />
 
-        <Text
-          style={[
-            styles.menuText,
-            active &&
-              styles.activeMenuText,
-          ]}
-        >
+        <Text style={[styles.menuText, active && styles.activeMenuText]}>
           {item.title}
         </Text>
 
         <Ionicons
           name="chevron-forward"
-          size={18}
-          color={
-            active
-              ? "#FFFFFF"
-              : "#94A3B8"
-          }
+          size={16}
+          color={active ? "#FFFFFF" : "#94A3B8"}
         />
       </TouchableOpacity>
     );
   };
 
-  const renderSection = (
-    title,
-    section
-  ) => (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        {title}
-      </Text>
+  const renderSection = (title, section) => {
+    const items = menuItems.filter((item) => item.section === section);
+    if (items.length === 0) return null;
 
-      {menuItems
-        .filter(
-          (item) =>
-            item.section === section
-        )
-        .map(renderMenuItem)}
-    </View>
-  );
+    return (
+      <View style={styles.section} key={section}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {items.map(renderMenuItem)}
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       <DrawerContentScrollView
         {...props}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          styles.scrollContent
-        }
+        contentContainerStyle={styles.scrollContent}
       >
         {/* Header */}
-
         <View style={styles.header}>
           <View style={styles.avatar}>
-
-            <Ionicons
-              name="shield-checkmark"
-              size={42}
-              color="#173B8C"
-            />
-
+            <Ionicons name="shield-checkmark" size={38} color="#173B8C" />
             <View style={styles.onlineDot} />
-
           </View>
 
-          <Text style={styles.name}>
-            Administrator
-          </Text>
+          <Text style={styles.name}>Administrator</Text>
 
           <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>
-              Super Administrator
-            </Text>
+            <Text style={styles.roleText}>Super Administrator</Text>
           </View>
 
-          <Text style={styles.empId}>
-            ADMIN001
-          </Text>
-
+          <Text style={styles.empId}>ADMIN001</Text>
         </View>
 
         <View style={styles.divider} />
 
-        {renderSection("HR MANAGEMENT", "HR")}
+        {renderSection("ANALYTICS & REPORTS", "ANALYTICS & REPORTS")}
+        {renderSection("HR OPERATIONS", "HR OPERATIONS")}
+        {renderSection("PAYROLL & COMP", "PAYROLL & COMP")}
+        {renderSection("SUPPORT & HELPDESK", "SUPPORT & HELPDESK")}
+      </DrawerContentScrollView>
 
-{renderSection("EMPLOYEE", "EMPLOYEE")}
-
-{renderSection("ADMINISTRATION", "ADMIN")}
-              </DrawerContentScrollView>
-
-      {/* Bottom */}
-
+      {/* Bottom Logout */}
       <View style={styles.bottomContainer}>
-
         <TouchableOpacity
           activeOpacity={0.85}
           style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <Ionicons
-            name="log-out-outline"
-            size={22}
-            color="#EF4444"
-          />
-
-          <Text style={styles.logoutText}>
-            Logout
-          </Text>
-
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>
-          Version 1.0.0
-        </Text>
-
+        <Text style={styles.version}>Attendance SaaS v1.0.0</Text>
       </View>
-
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: "#F8FAFC",
   },
-
   scrollContent: {
     paddingBottom: 12,
   },
-
   header: {
     alignItems: "center",
-    paddingTop: 8,
-    paddingBottom: 12,
-    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
     backgroundColor: "#FFFFFF",
   },
-
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: "#EEF4FF",
-
     justifyContent: "center",
     alignItems: "center",
-
     position: "relative",
-
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    elevation: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-
   onlineDot: {
     position: "absolute",
-
-    bottom: 8,
-    right: 8,
-
-    width: 16,
-    height: 16,
-
-    borderRadius: 8,
-
+    bottom: 4,
+    right: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: "#22C55E",
-
-    borderWidth: 3,
+    borderWidth: 2.5,
     borderColor: "#FFFFFF",
   },
-
   name: {
-    marginTop: 16,
-
-    fontSize: 21,
-
+    marginTop: 12,
+    fontSize: 18,
     fontWeight: "800",
-
     color: "#0F172A",
   },
-
   roleBadge: {
-    marginTop: 12,
-
+    marginTop: 8,
     backgroundColor: "#EEF4FF",
-
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-
-    borderRadius: 30,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 20,
   },
-
   roleText: {
     color: "#173B8C",
-
     fontWeight: "700",
-
-    fontSize: 13,
+    fontSize: 12,
   },
-
   empId: {
-    marginTop: 10,
-
+    marginTop: 6,
     color: "#94A3B8",
-
-    fontSize: 13,
-
+    fontSize: 12,
     fontWeight: "600",
   },
-
   divider: {
     height: 1,
-
-    backgroundColor: "#EEF2F7",
-
-    marginVertical: 12,
-
-    marginHorizontal: 20,
+    backgroundColor: "#E2E8F0",
+    marginVertical: 10,
+    marginHorizontal: 16,
   },
-
   section: {
-    marginBottom: 10,
-
-    paddingHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 14,
   },
-
   sectionTitle: {
     marginBottom: 6,
-
-    marginLeft: 8,
-
-    fontSize: 11,
-
-    fontWeight: "700",
-
+    marginLeft: 6,
+    fontSize: 10,
+    fontWeight: "800",
     color: "#94A3B8",
-
-    letterSpacing: 1.2,
+    letterSpacing: 1.1,
   },
-
   menuItem: {
-    height: 48,
-
-    borderRadius: 14,
-
-    paddingHorizontal: 16,
-
-    marginBottom: 6,
-
+    height: 44,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 4,
     backgroundColor: "#FFFFFF",
-
     flexDirection: "row",
-
     alignItems: "center",
-
-    shadowColor: "#000",
-
-    shadowOpacity: 0.02,
-
-    shadowRadius: 5,
-
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
     elevation: 1,
   },
-
   activeMenuItem: {
     backgroundColor: "#173B8C",
-
+    borderColor: "#173B8C",
     borderLeftWidth: 4,
-
     borderLeftColor: "#22C55E",
   },
-
   menuText: {
     flex: 1,
-
-    marginLeft: 14,
-
+    marginLeft: 12,
     color: "#0F172A",
-
     fontWeight: "700",
-
-    fontSize: 15,
+    fontSize: 14,
   },
-
   activeMenuText: {
     color: "#FFFFFF",
   },
-
   bottomContainer: {
-    paddingHorizontal: 20,
-
+    paddingHorizontal: 16,
     paddingTop: 8,
-
-    paddingBottom: 18,
-
-    backgroundColor: "#F7F9FC",
+    paddingBottom: 14,
+    backgroundColor: "#F8FAFC",
   },
-
   logoutButton: {
-    marginHorizontal: 20,
-
-    marginTop: 10,
-
-    height: 56,
-
-    borderRadius: 18,
-
+    height: 46,
+    borderRadius: 14,
     backgroundColor: "#FFF5F5",
-
     flexDirection: "row",
-
     justifyContent: "center",
-
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#FEE2E2",
   },
-
   logoutText: {
-    marginLeft: 10,
-
+    marginLeft: 8,
     color: "#EF4444",
-
     fontWeight: "700",
-
-    fontSize: 16,
+    fontSize: 14,
   },
-
   version: {
-    marginTop: 22,
-
-    marginBottom: 20,
-
+    marginTop: 12,
     textAlign: "center",
-
     color: "#94A3B8",
-
-    fontSize: 12,
+    fontSize: 11,
   },
-
 });

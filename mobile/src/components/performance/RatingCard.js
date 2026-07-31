@@ -212,13 +212,15 @@ const styles = StyleSheet.create({
   },
 
   score: {
-    fontSize: 28,
+    fontSize: 22,
 
-    fontWeight: "900",
+    fontWeight: "800",
 
     color: "#173B8C",
 
     marginBottom: 10,
+
+    letterSpacing: -0.4,
   },
 
   progressBg: {

@@ -20,6 +20,13 @@ export const fetchDashboard = () => client.get('/api/dashboard');
 
 export const fetchEmployees = () => client.get('/api/employees');
 
+// ── Admin: Mark Attendance ──────────────────────────────────────────
+export const fetchAttendanceEmployees = (date) =>
+  client.get('/api/bulk_mark_attendance', { params: { date } });
+
+export const markAttendance = (date, records) =>
+  client.post('/api/bulk_mark_attendance', { date, records });
+
 export const fetchHolidays = () => client.get('/api/holidays');
 
 export const fetchMonthlyReport = (year, month) =>

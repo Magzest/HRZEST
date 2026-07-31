@@ -3,22 +3,21 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  View,
+  TouchableOpacity,
+  Text,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 
 import CompOffHeaderCard from "../../components/compoff/CompOffHeaderCard";
 import CompOffStatsGrid from "../../components/compoff/CompOffStatsGrid";
 import CompOffInfoCard from "../../components/compoff/CompOffInfoCard";
 import OvertimeHistoryCard from "../../components/compoff/OvertimeHistoryCard";
 import CompOffApplicationCard from "../../components/compoff/CompOffApplicationCard";
-// import CompOffEmptyState from "../../components/compoff/CompOffEmptyState";
-import {
-  View,
-  TouchableOpacity,
-  Text,
-} from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
+import ProfileHeader from "../../components/profile/ProfileHeader";
+
 export default function CompOffScreen() {
   const navigation = useNavigation();
 const today = new Date();
@@ -76,48 +75,7 @@ const today = new Date();
     style={styles.container}
   >
 
-    {/* SAME HEADER AS ATTENDANCE */}
-
-    <View style={styles.header}>
-
-      <TouchableOpacity
-        style={styles.iconButton}
-        onPress={() => navigation.openDrawer()}
-      >
-        <Ionicons
-          name="menu"
-          size={22}
-          color="#173B8C"
-        />
-      </TouchableOpacity>
-
-      <View style={styles.headerCenter}>
-
-        
-
-        <Text style={styles.title}>
-          Comp-Off
-        </Text>
-
-        <Text style={styles.date}>
-          {today.toLocaleDateString("en-US", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })}
-        </Text>
-
-      </View>
-
-      <TouchableOpacity style={styles.iconButton}>
-        <Ionicons
-          name="person-circle-outline"
-          size={28}
-          color="#173B8C"
-        />
-      </TouchableOpacity>
-
-    </View>
+    <ProfileHeader title="Comp-Off Requests" subtitle="EMPLOYEE PORTAL" />
 
     <ScrollView
       showsVerticalScrollIndicator={false}

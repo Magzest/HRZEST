@@ -211,16 +211,16 @@ const styles = StyleSheet.create({
   },
 
   value: {
-    fontSize: 32,
-    fontWeight: "900",
+    fontSize: 22,
+    fontWeight: "800",
     color: theme.colors.textPrimary,
-    letterSpacing: -1,
+    letterSpacing: -0.4,
   },
 
   title: {
-    marginTop: 8,
-    fontSize: 16,
-    fontWeight: "800",
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: "700",
     color: theme.colors.textPrimary,
   },
 

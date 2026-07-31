@@ -32,3 +32,5 @@ RESET_MYSQL_PASSWORD.bat
 reset_mysql_password.ps1
 hashi/
 blueprints/static/
+pg_data/
+face_models/

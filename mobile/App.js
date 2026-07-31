@@ -1,37 +1,48 @@
-import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { StatusBar } from 'expo-status-bar';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, { useState } from "react";
+import { View, ActivityIndicator } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { StatusBar } from "expo-status-bar";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { AuthProvider, useAuth } from './src/store/AuthContext';
-import LoginScreen      from './src/screens/LoginScreen';
-import AdminDrawerNavigator from './src/navigation/AdminDrawerNavigator';
-import EmployeeDrawerNavigator from './src/navigation/EmployeeDrawerNavigator';
+import { AuthProvider, useAuth } from "./src/store/AuthContext";
+import LaunchCountdownScreen from "./src/screens/LaunchCountdownScreen";
+import LoginScreen from "./src/screens/LoginScreen";
+import AdminDrawerNavigator from "./src/navigation/AdminDrawerNavigator";
+import EmployeeDrawerNavigator from "./src/navigation/EmployeeDrawerNavigator";
 
 function RootNavigator() {
   const { user, loading } = useAuth();
+  const [showLaunch, setShowLaunch] = useState(true);
 
   if (loading) {
     return (
       <View
         style={{
           flex: 1,
-          backgroundColor: "#0f2027",
+          backgroundColor: "#0F172A",
           justifyContent: "center",
           alignItems: "center",
         }}
       >
-        <ActivityIndicator size="large" color="#fff" />
+        <ActivityIndicator size="large" color="#FFFFFF" />
       </View>
     );
   }
 
-  if (!user) return <LoginScreen />;
+  if (!user) {
+    if (showLaunch) {
+      return (
+        <LaunchCountdownScreen
+          onContinue={() => setShowLaunch(false)}
+        />
+      );
+    }
+    return <LoginScreen />;
+  }
 
   if (user.role === "admin") {
-  return <AdminDrawerNavigator />;
-}
+    return <AdminDrawerNavigator />;
+  }
 
   if (user.role === "employee") {
     return <EmployeeDrawerNavigator />;
@@ -39,6 +50,7 @@ function RootNavigator() {
 
   return <LoginScreen />;
 }
+
 export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

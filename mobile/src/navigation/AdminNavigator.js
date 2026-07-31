@@ -42,10 +42,6 @@ export default function AdminNavigator() {
       <Tab.Screen name="Leaves"        component={LeaveRequestsScreen} options={{ tabBarLabel: '📋 Leaves' }} />
       <Tab.Screen name="Resignations"  component={ResignationsScreen}  options={{ tabBarLabel: '📤 Resign' }} />
       <Tab.Screen name="Tickets"       component={AdminTicketsScreen}  options={{ tabBarLabel: '🎫 Tickets' }} />
-      <Tab.Screen
-    name="Payroll"
-    component={SalaryPayslipsScreen}
-/>
       <Tab.Screen name="Notifications" component={NotificationsScreen} options={{ tabBarLabel: '🔔 Alerts' }} />
     </Tab.Navigator>
   );
