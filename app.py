@@ -3049,11 +3049,21 @@ if "core.home" not in app.view_functions:
     from blueprints.email_blast import email_blast_bp
     from blueprints.compliance import compliance_bp
     from blueprints.hr_portal import hr_bp
+    from blueprints.daily_report import daily_report_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp):
+                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp,
+                daily_report_bp):
         app.register_blueprint(_bp)
+
+
+# ── Pricing page ──────────────────────────────────────────────────────────────
+@app.route("/pricing")
+def pricing_page():
+    """Public pricing / plan comparison page."""
+    import datetime as _dt
+    return render_template("pricing.html", now=_dt.datetime.now())
 
 _register_api_v1_aliases()
 

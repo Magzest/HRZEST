@@ -26,6 +26,7 @@ from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
 from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email
 from extensions import app_log, log_security_event, limiter
+from blueprints.plan_guard import require_plan, get_company_plan, _plan_rank
 
 secops_bp = Blueprint("secops", __name__)
 
@@ -138,6 +139,11 @@ _MFA_OTP_TTL_SEC = 300  # 5 minutes
 @limiter.limit("10 per 15 minutes")
 def sp_admin_login():
     """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
+    # Block non-premium plans from SecOps
+    if _plan_rank(get_company_plan()) < _plan_rank("premium"):
+        flash("SecOps Dashboard requires the Premium plan. Please upgrade.", "warning")
+        return redirect("/pricing")
+
     if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
         return redirect("/secops")
 

@@ -19,6 +19,7 @@ from utils.attendance_utils import _td_to_time
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available
 from utils.webauthn_utils import _enroll_fingerprint_from_form
+from blueprints.plan_guard import check_employee_limit
 
 employees_bp = Blueprint("employees", __name__)
 
@@ -934,6 +935,12 @@ def add_employee_page():
         return redirect("/employees")
     if not validate_emp_id(emp_id):
         flash("Employee ID may only contain letters, digits, hyphens and underscores.", "error")
+        return redirect("/employees")
+
+    # Plan limit check — block if employee cap is reached
+    _ok, _msg = check_employee_limit()
+    if not _ok:
+        flash(_msg, "warning")
         return redirect("/employees")
 
     db = get_db_connection()

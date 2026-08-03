@@ -125,6 +125,9 @@ app.register_blueprint(email_blast_bp)
 app.register_blueprint(compliance_bp)
 app.register_blueprint(hr_bp)
 
+from blueprints.daily_report import daily_report_bp
+app.register_blueprint(daily_report_bp)
+
 # ── app.py: shared setup only (init_db, error handlers, before/after_request
 #    hooks, template filters) — no route handlers remain, but it still needs
 #    importing to run that setup code and register those hooks. ─────────────
@@ -141,6 +144,25 @@ with app.app_context():
         load_salary_rules()
     except Exception as _e:
         app_log.warning("Startup init failed (non-fatal): %s", _e)
+
+# ── Nightly daily report scheduler ───────────────────────────────────────────
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from blueprints.daily_report import generate_and_send_daily_report
+    _scheduler = BackgroundScheduler(daemon=True)
+    _scheduler.add_job(
+        func=generate_and_send_daily_report,
+        trigger="cron",
+        hour=23, minute=59,
+        id="daily_attendance_report",
+        replace_existing=True,
+    )
+    _scheduler.start()
+    app_log.info("Daily report scheduler started — fires at 23:59 every night")
+except ImportError:
+    app_log.warning("APScheduler not installed — daily email reports disabled. Run: pip install apscheduler")
+except Exception as _sch_err:
+    app_log.warning("Scheduler failed to start: %s", _sch_err)
 
 # ── WSGI export ───────────────────────────────────────────────────────────────
 application = app   # gunicorn / uWSGI entry point
