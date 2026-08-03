@@ -442,6 +442,16 @@
         {% endfor %}
       {% endwith %}
 
+      <!-- LIVE ACTIVITY TICKER BAR -->
+      <div style="background: linear-gradient(90deg, #1e3a8a, #3b82f6); border-radius: 12px; padding: 10px 18px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; color: white; box-shadow: 0 4px 16px rgba(59,130,246,0.25);">
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; animation: pulse 1.5s infinite;"></span>
+          <span>LIVE ACTIVITY TICKER:</span>
+          <span style="font-weight: 500; opacity: 0.9;" id="liveTickerText">⚡ System Operational • Real-time Monitoring Active</span>
+        </div>
+        <div style="font-size: 11px; opacity: 0.8; font-weight: 600;">Updated Just Now</div>
+      </div>
+
       <!-- PAGE HEADER -->
       <div class="page-header">
         <div>

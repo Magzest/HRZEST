@@ -21,23 +21,39 @@ _SMTP_CONFIG_STORE = {
 }
 
 
+_ALERT_RATE_LIMIT_CACHE = {}
+
 def send_webhook_alert_async(event_type: str, level: str, message: str, ip: str = "", identifier: str = ""):
-    """Send async webhook notification to Slack and Microsoft Teams on ERROR or CRITICAL events."""
+    """Send async webhook notification with HMAC-SHA256 signature & rate-limiting protection."""
     import urllib.request
     import threading
+    import hmac
+    import hashlib
+
     slack_url = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
     teams_url = os.environ.get("TEAMS_WEBHOOK_URL", "").strip()
 
     if not (slack_url or teams_url):
         return
 
+    # Rate limiting: max 1 alert per event_type per 30 seconds
+    now = time.time()
+    last_sent = _ALERT_RATE_LIMIT_CACHE.get(event_type, 0)
+    if now - last_sent < 30:
+        return
+    _ALERT_RATE_LIMIT_CACHE[event_type] = now
+
     def _worker():
         payload_text = f"🚨 *[SecOps {level.upper()}]* `{event_type}`\n*Message:* {message}\n*IP:* `{ip or 'N/A'}` | *User:* `{identifier or 'N/A'}`"
+        secret = os.environ.get("WEBHOOK_SECRET", "").strip().encode("utf-8")
 
         if slack_url:
             try:
                 slack_body = json.dumps({"text": payload_text}).encode("utf-8")
-                req = urllib.request.Request(slack_url, data=slack_body, headers={"Content-Type": "application/json"})
+                headers = {"Content-Type": "application/json"}
+                if secret:
+                    headers["X-SecOps-Signature"] = f"sha256={hmac.new(secret, slack_body, hashlib.sha256).hexdigest()}"
+                req = urllib.request.Request(slack_url, data=slack_body, headers=headers)
                 urllib.request.urlopen(req, timeout=5)
             except Exception as e:
                 app_log.warning("Slack webhook dispatch failed: %s", e)
@@ -52,7 +68,10 @@ def send_webhook_alert_async(event_type: str, level: str, message: str, ip: str 
                     "title": f"🚨 SecOps Alert: {event_type}",
                     "text": payload_text
                 }).encode("utf-8")
-                req = urllib.request.Request(teams_url, data=teams_body, headers={"Content-Type": "application/json"})
+                headers = {"Content-Type": "application/json"}
+                if secret:
+                    headers["X-SecOps-Signature"] = f"sha256={hmac.new(secret, teams_body, hashlib.sha256).hexdigest()}"
+                req = urllib.request.Request(teams_url, data=teams_body, headers=headers)
                 urllib.request.urlopen(req, timeout=5)
             except Exception as e:
                 app_log.warning("Teams webhook dispatch failed: %s", e)
