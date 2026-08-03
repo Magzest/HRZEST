@@ -21,6 +21,45 @@ _SMTP_CONFIG_STORE = {
 }
 
 
+def send_webhook_alert_async(event_type: str, level: str, message: str, ip: str = "", identifier: str = ""):
+    """Send async webhook notification to Slack and Microsoft Teams on ERROR or CRITICAL events."""
+    import urllib.request
+    import threading
+    slack_url = os.environ.get("SLACK_WEBHOOK_URL", "").strip()
+    teams_url = os.environ.get("TEAMS_WEBHOOK_URL", "").strip()
+
+    if not (slack_url or teams_url):
+        return
+
+    def _worker():
+        payload_text = f"🚨 *[SecOps {level.upper()}]* `{event_type}`\n*Message:* {message}\n*IP:* `{ip or 'N/A'}` | *User:* `{identifier or 'N/A'}`"
+
+        if slack_url:
+            try:
+                slack_body = json.dumps({"text": payload_text}).encode("utf-8")
+                req = urllib.request.Request(slack_url, data=slack_body, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=5)
+            except Exception as e:
+                app_log.warning("Slack webhook dispatch failed: %s", e)
+
+        if teams_url:
+            try:
+                teams_body = json.dumps({
+                    "@type": "MessageCard",
+                    "@context": "http://schema.org/extensions",
+                    "themeColor": "FF0000" if level.upper() in ("ERROR", "CRITICAL") else "F59E0B",
+                    "summary": f"SecOps Alert: {event_type}",
+                    "title": f"🚨 SecOps Alert: {event_type}",
+                    "text": payload_text
+                }).encode("utf-8")
+                req = urllib.request.Request(teams_url, data=teams_body, headers={"Content-Type": "application/json"})
+                urllib.request.urlopen(req, timeout=5)
+            except Exception as e:
+                app_log.warning("Teams webhook dispatch failed: %s", e)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def fetch_threat_logs(filter_category="all", severity=None, search_ip=None, user_id=None, limit=60):
     """Fetch original, real security audit events and transactional logs directly from PostgreSQL tables."""
     db = get_db_connection()
