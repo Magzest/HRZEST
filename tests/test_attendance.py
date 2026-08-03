@@ -57,13 +57,22 @@ class TestCheckinGeofencing:
     def test_checkin_office_employee_outside_radius_returns_json_not_500(self, client, db_engine):
         """The exact bug: auth_cfg = get_auth_config() used to be named `cfg`,
         shadowing `import utils.config as cfg` for the whole function. Once
-        an office employee with valid lat/lon hit the
-        is_within_range(..., cfg.OFFICE_LAT, cfg.OFFICE_LON) branch, cfg was
-        a dict (no .OFFICE_LAT attribute) -> AttributeError -> 500.
-        Coordinates near the equator/prime meridian are never within 300m
-        of any real configured office, so this reliably exercises that
-        branch regardless of what OFFICE_LAT/OFFICE_LON are set to."""
+        an office employee with valid lat/lon hit the geofence-distance
+        branch (now utils.attendance_utils.is_within_office_range, reading
+        company_settings.office_lat/office_lon instead of the old
+        process-wide cfg.OFFICE_LAT/OFFICE_LON), cfg was a dict (no
+        .OFFICE_LAT attribute) -> AttributeError -> 500.
+
+        is_within_office_range() is a no-op (never rejects) unless the
+        tenant has actually configured an office location, so this test
+        sets one -- coordinates near the equator/prime meridian are never
+        within radius of it, reliably exercising the distance-check branch."""
+        from utils.helpers import invalidate_settings_cache
         emp_id = _make_office_employee(db_engine)
+        cur = db_engine.cursor()
+        cur.execute("UPDATE company_settings SET location_enabled=1, office_lat=17.4, office_lon=78.4, geo_radius=300")
+        cur.close()
+        invalidate_settings_cache()
         try:
             resp = client.post("/attendance", json={
                 "employee_id": emp_id,
@@ -77,6 +86,10 @@ class TestCheckinGeofencing:
             assert "office premises" in body["msg"]
         finally:
             _cleanup_employee(db_engine, emp_id)
+            cur = db_engine.cursor()
+            cur.execute("UPDATE company_settings SET office_lat=NULL, office_lon=NULL")
+            cur.close()
+            invalidate_settings_cache()
 
     def test_checkin_unknown_employee_returns_not_found(self, client):
         resp = client.post("/attendance", json={
@@ -85,6 +98,68 @@ class TestCheckinGeofencing:
         })
         assert resp.status_code == 200
         assert resp.get_json()["ok"] is False
+
+
+class TestIsWithinOfficeRange:
+    """Direct unit tests for utils.attendance_utils.is_within_office_range,
+    which replaced always-on geofencing against a single process-wide
+    OFFICE_LAT/LON with a per-tenant, opt-in check. See TestCheckinGeofencing
+    above for the route-level regression test.
+
+    get_auth_config() (which this function calls) reads via
+    get_db_connection(), which resolves the tenant schema from
+    flask.g.tenant_db -- a plain function call outside of a real
+    client.get/post() has no before_request hook to set that, so each test
+    establishes it explicitly via test_request_context()."""
+
+    def _in_context(self, client, fn, *args):
+        import os
+        from flask import g as _g
+        with client.application.test_request_context("/"):
+            _g.tenant_db = os.environ.get("DB_NAME")
+            return fn(*args)
+
+    def test_no_op_when_office_location_not_configured(self, client, db_engine):
+        from utils.attendance_utils import is_within_office_range
+        from utils.helpers import invalidate_settings_cache
+        cur = db_engine.cursor()
+        cur.execute("UPDATE company_settings SET location_enabled=1, office_lat=NULL, office_lon=NULL")
+        cur.close()
+        invalidate_settings_cache()
+        # Coordinates nowhere near any real office -- must still pass,
+        # since no office location has been set yet.
+        assert self._in_context(client, is_within_office_range, 1.0, 1.0) is True
+
+    def test_no_op_when_location_disabled_even_if_configured(self, client, db_engine):
+        from utils.attendance_utils import is_within_office_range
+        from utils.helpers import invalidate_settings_cache
+        cur = db_engine.cursor()
+        cur.execute("UPDATE company_settings SET location_enabled=0, office_lat=17.4, office_lon=78.4, geo_radius=300")
+        cur.close()
+        invalidate_settings_cache()
+        try:
+            assert self._in_context(client, is_within_office_range, 1.0, 1.0) is True
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("UPDATE company_settings SET location_enabled=1, office_lat=NULL, office_lon=NULL")
+            cur.close()
+            invalidate_settings_cache()
+
+    def test_rejects_outside_radius_when_configured(self, client, db_engine):
+        from utils.attendance_utils import is_within_office_range
+        from utils.helpers import invalidate_settings_cache
+        cur = db_engine.cursor()
+        cur.execute("UPDATE company_settings SET location_enabled=1, office_lat=17.4, office_lon=78.4, geo_radius=300")
+        cur.close()
+        invalidate_settings_cache()
+        try:
+            assert self._in_context(client, is_within_office_range, 1.0, 1.0) is False
+            assert self._in_context(client, is_within_office_range, 17.4, 78.4) is True
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("UPDATE company_settings SET office_lat=NULL, office_lon=NULL")
+            cur.close()
+            invalidate_settings_cache()
 
     def test_checkin_invalid_auth_combo_rejected(self, client, db_engine):
         emp_id = _make_office_employee(db_engine, "ATT_OFF02")

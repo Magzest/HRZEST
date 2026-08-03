@@ -6,7 +6,7 @@ from database import get_db_connection
 import utils.config as cfg
 
 
-def is_within_range(user_lat, user_lon, office_lat, office_lon):
+def is_within_range(user_lat, user_lon, office_lat, office_lon, radius_m=None):
     R = 6371000
     phi1 = math.radians(user_lat)
     phi2 = math.radians(office_lat)
@@ -17,7 +17,30 @@ def is_within_range(user_lat, user_lon, office_lat, office_lon):
         + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
     )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return (R * c) <= cfg.OFFICE_RADIUS_M
+    if radius_m is None:
+        radius_m = cfg.OFFICE_RADIUS_M
+    return (R * c) <= radius_m
+
+
+def is_within_office_range(user_lat, user_lon):
+    """Per-tenant office geofence check for office-mode (non-WFH)
+    check-ins, replacing the old always-on check against the single
+    process-wide cfg.OFFICE_LAT/LON/RADIUS_M constants (which geofenced
+    every tenant against whichever office the original deploying company
+    configured in .env). Returns True (no enforcement) whenever the
+    tenant hasn't turned location verification on, or hasn't set an
+    office location yet -- geofencing is opt-in per company, not a
+    default every new signup is silently held to."""
+    from utils.helpers import get_auth_config
+    auth_cfg = get_auth_config()
+    if not auth_cfg["location_enabled"]:
+        return True
+    if auth_cfg["office_lat"] is None or auth_cfg["office_lon"] is None:
+        return True
+    return is_within_range(
+        user_lat, user_lon, auth_cfg["office_lat"], auth_cfg["office_lon"],
+        radius_m=auth_cfg["geo_radius"],
+    )
 
 
 def _td_to_time(val):

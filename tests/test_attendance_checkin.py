@@ -431,7 +431,7 @@ class TestKioskAttendance:
             "fingerprint_enabled": False, "location_enabled": True,
             "face_enabled": False, "qr_enabled": True,
         })
-        mocker.patch("blueprints.attendance.is_within_range", return_value=False)
+        mocker.patch("blueprints.attendance.is_within_office_range", return_value=False)
         rv = client.post("/attendance", json={
             "employee_id": seed_employee["employee_id"],
             "auth_combo":  "qr_only",
@@ -514,7 +514,7 @@ class TestApiAdminCheckin:
                     (seed_employee["employee_id"], today))
         cur.close()
 
-        mocker.patch("blueprints.attendance.is_within_range", return_value=False)
+        mocker.patch("blueprints.attendance.is_within_office_range", return_value=False)
         token = _admin_token(client, seed_admin)
         rv = client.post("/api/attendance/checkin",
                          json={"employee_id": seed_employee["employee_id"],
@@ -631,7 +631,7 @@ class TestApiEmployeeCheckin:
                     (seed_employee["employee_id"], today))
         cur.close()
 
-        mocker.patch("blueprints.attendance.is_within_range", return_value=False)
+        mocker.patch("blueprints.employee_portal.is_within_office_range", return_value=False)
         token = _emp_token(client, seed_employee)
         rv = client.post("/api/employee/checkin",
                          json={"lat": 19.0760, "lon": 72.8777},

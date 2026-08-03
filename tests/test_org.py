@@ -1,10 +1,12 @@
 """
 Org blueprint tests — multi-tenant self-registration (/create_org).
 
-_SIGNUP_SECRET is read from the environment once at module import time
-(blueprints/org.py), not per-request, so these tests monkeypatch the
-module attribute directly rather than the env var — the standard way to
-test a value that's already been baked in at import time.
+Signup is open by default now (no shared-secret gate) -- Turnstile
+protects it instead, and turnstile_enabled() is False in tests (no
+TURNSTILE_SITE_KEY/SECRET_KEY configured), so the captcha check no-ops
+here exactly like the rest of the suite's login-flow tests already rely
+on. Plan selection defaults to "starter" and is validated server-side
+against utils.plan_limits.PLAN_TIERS.
 
 The full provisioning path creates a real Postgres schema via
 create_tenant_schema() + init_tenant_db() (which runs the entire init_db()
@@ -16,25 +18,6 @@ Run with:
     python -m pytest tests/test_org.py -v
 """
 import pytest
-import blueprints.org as org_module
-
-
-@pytest.fixture
-def signup_enabled():
-    """Force _SIGNUP_SECRET on for the duration of a test, restoring the
-    real value afterward so other tests see the environment as configured."""
-    original = org_module._SIGNUP_SECRET
-    org_module._SIGNUP_SECRET = "test-signup-secret-123"
-    yield "test-signup-secret-123"
-    org_module._SIGNUP_SECRET = original
-
-
-@pytest.fixture
-def signup_disabled():
-    original = org_module._SIGNUP_SECRET
-    org_module._SIGNUP_SECRET = ""
-    yield
-    org_module._SIGNUP_SECRET = original
 
 
 def _drop_schema(db_engine, schema_name):
@@ -45,74 +28,168 @@ def _drop_schema(db_engine, schema_name):
 
 
 # ===========================================================================
-# Signup-disabled path — the default in production unless SIGNUP_SECRET is
-# explicitly configured. Security-critical: this must fail closed.
+# Signup page / validation paths (no schema creation, fast)
 # ===========================================================================
 
-class TestSignupDisabled:
-    def test_get_page_shows_disabled(self, client, signup_disabled):
+class TestSignupPage:
+    def test_get_page_renders(self, client):
         resp = client.get("/create_org")
         assert resp.status_code == 200
+        assert b"Create Organisation" in resp.data
 
-    def test_post_rejected_even_with_no_secret_submitted(self, client, signup_disabled):
-        resp = client.post("/create_org", data={}, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-
-    def test_post_rejected_even_with_a_guessed_secret(self, client, signup_disabled):
-        """Fail-closed check: an empty _SIGNUP_SECRET must reject every
-        request, not just ones with a wrong-but-present secret field."""
-        resp = client.post("/create_org", data={
-            "signup_secret": "anything", "company_name": "X", "subdomain": "x",
-            "admin_username": "a", "admin_password": "password123",
-        }, follow_redirects=False)
-        assert resp.status_code in (301, 302)
+    def test_page_lists_all_three_plan_tiers(self, client):
+        resp = client.get("/create_org")
+        assert b"Starter" in resp.data
+        assert b"Growth" in resp.data
+        assert b"Enterprise" in resp.data
 
 
-# ===========================================================================
-# Signup-enabled — validation paths (no schema creation, fast)
-# ===========================================================================
+class TestGetStartedPage:
+    """/get-started is the SaaS entry point (login-by-subdomain vs
+    register) -- distinct from "/" (blueprints/core.py's home()), which
+    still serves the existing single-tenant attendance kiosk unchanged."""
+
+    def test_get_page_renders(self, client):
+        resp = client.get("/get-started")
+        assert resp.status_code == 200
+        assert b"Register Your Company" in resp.data
+        assert b"Login to Your Company" in resp.data
+
+    def test_links_to_create_org(self, client):
+        resp = client.get("/get-started")
+        assert b"/create_org" in resp.data
+
 
 class TestSignupValidation:
-    def test_get_page_shows_enabled(self, client, signup_enabled):
-        resp = client.get("/create_org")
-        assert resp.status_code == 200
-
-    def test_wrong_secret_rejected(self, client, signup_enabled):
+    def test_missing_required_fields_rejected(self, client):
         resp = client.post("/create_org", data={
-            "signup_secret": "wrong-secret", "company_name": "X", "subdomain": "x",
-            "admin_username": "a", "admin_password": "password123",
+            "company_name": "", "subdomain": "",
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
 
-    def test_missing_required_fields_rejected(self, client, signup_enabled):
+    def test_missing_admin_email_rejected(self, client):
+        # admin_email is required now (was optional before) -- needed for
+        # password reset and as the tenant's primary contact.
         resp = client.post("/create_org", data={
-            "signup_secret": signup_enabled, "company_name": "", "subdomain": "",
+            "company_name": "Acme", "subdomain": "acme-noemail",
+            "admin_username": "admin", "admin_password": "password123",
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
 
-    def test_invalid_subdomain_format_rejected(self, client, signup_enabled):
+    def test_invalid_admin_email_rejected(self, client):
         resp = client.post("/create_org", data={
-            "signup_secret": signup_enabled, "company_name": "Acme",
-            "subdomain": "Not Valid!", "admin_username": "admin",
-            "admin_password": "password123",
+            "company_name": "Acme", "subdomain": "acme-bademail",
+            "admin_username": "admin", "admin_password": "password123",
+            "admin_email": "not-an-email",
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
 
-    def test_short_password_rejected(self, client, signup_enabled):
+    def test_invalid_subdomain_format_rejected(self, client):
         resp = client.post("/create_org", data={
-            "signup_secret": signup_enabled, "company_name": "Acme",
-            "subdomain": "acme-test", "admin_username": "admin",
-            "admin_password": "short",
+            "company_name": "Acme", "subdomain": "Not Valid!",
+            "admin_username": "admin", "admin_password": "password123",
+            "admin_email": "admin@acme.test",
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
+
+    def test_short_password_rejected(self, client):
+        resp = client.post("/create_org", data={
+            "company_name": "Acme", "subdomain": "acme-test",
+            "admin_username": "admin", "admin_password": "short",
+            "admin_email": "admin@acme.test",
+        }, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+
+    def test_unknown_plan_rejected(self, client):
+        resp = client.post("/create_org", data={
+            "company_name": "Acme", "subdomain": "acme-badplan",
+            "admin_username": "admin", "admin_password": "password123",
+            "admin_email": "admin@acme.test", "plan": "not-a-real-plan",
+        }, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers.get("Location") == "/create_org"
+
+    @pytest.mark.parametrize("subdomain", [
+        "hrms", "www", "api", "admin", "master", "super_admin",
+    ])
+    def test_reserved_subdomain_rejected(self, client, subdomain):
+        # _resolve_tenant() (app.py) parses any 3-label host as
+        # <label1>.<rest> -- registering "hrms" would silently hijack the
+        # bare production domain (hrms.gradzest.com) from that point on.
+        resp = client.post("/create_org", data={
+            "company_name": "Evil Org", "subdomain": subdomain,
+            "admin_username": "evil_admin", "admin_password": "password123",
+            "admin_email": "evil@test.local",
+        }, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers.get("Location") == "/create_org"
 
 
 # ===========================================================================
 # Full provisioning — real schema creation, one end-to-end test
 # ===========================================================================
 
+class TestPortalLinkOnSuccess:
+    """After signup, the success page must show the tenant's OWN dedicated
+    subdomain link -- not a redirect to /admin_login on whatever host the
+    signup form happened to be submitted from, which for a fresh company
+    would never be their real subdomain until wildcard DNS resolves it."""
+
+    def test_success_page_shows_dedicated_portal_link_no_smtp(self, client, db_engine, monkeypatch):
+        import blueprints.org as org_module
+        monkeypatch.setattr(org_module, "get_email_config", lambda: None)
+
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-portal-link"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        _drop_schema(db_engine, schema_name)
+        try:
+            resp = client.post("/create_org", data={
+                "company_name": "Portal Link Org", "subdomain": subdomain,
+                "admin_username": "portal_admin", "admin_password": "password123",
+                "admin_email": "portal@test.local",
+            }, follow_redirects=False)
+            assert resp.status_code == 200
+            assert f"https://{subdomain}.hrms.gradzest.com/admin_login".encode() in resp.data
+            assert b"portal_admin" in resp.data
+            # No SMTP configured -- the page must degrade gracefully to
+            # "bookmark this link" rather than falsely claiming an email
+            # was sent.
+            assert b"Bookmark this link" in resp.data
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+    def test_success_page_notes_email_sent_when_smtp_configured(self, client, db_engine, monkeypatch):
+        import blueprints.org as org_module
+        sent = []
+        monkeypatch.setattr(org_module, "get_email_config", lambda: {"host": "smtp.test"})
+        monkeypatch.setattr(org_module, "send_email_async",
+                             lambda *a, **k: sent.append(a))
+
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-portal-link-email"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        _drop_schema(db_engine, schema_name)
+        try:
+            resp = client.post("/create_org", data={
+                "company_name": "Portal Link Email Org", "subdomain": subdomain,
+                "admin_username": "portal_admin2", "admin_password": "password123",
+                "admin_email": "portal2@test.local",
+            }, follow_redirects=False)
+            assert resp.status_code == 200
+            assert b"We've also emailed this link to" in resp.data
+            assert len(sent) == 1
+            assert sent[0][0] == "portal2@test.local"
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+
 class TestFullProvisioning:
-    def test_create_org_provisions_real_tenant_schema(self, client, db_engine, signup_enabled):
+    def test_create_org_provisions_real_tenant_schema(self, client, db_engine):
         from app import init_master_db
         init_master_db()
 
@@ -121,15 +198,20 @@ class TestFullProvisioning:
         _drop_schema(db_engine, schema_name)
         try:
             resp = client.post("/create_org", data={
-                "signup_secret": signup_enabled,
                 "company_name": "E2E Test Org",
                 "subdomain": subdomain,
                 "admin_username": "e2e_admin",
                 "admin_password": "password123",
                 "admin_email": "e2e@test.local",
+                "plan": "growth",
             }, follow_redirects=False)
-            assert resp.status_code in (301, 302)
-            assert resp.headers.get("Location", "").endswith("/admin_login")
+            # Success now renders the org_created.html page directly (with
+            # the tenant's dedicated portal link) instead of redirecting to
+            # /admin_login on whatever host the signup form was submitted
+            # from -- that host isn't necessarily the new tenant's subdomain.
+            assert resp.status_code == 200
+            assert b"Organisation Created" in resp.data
+            assert subdomain.encode() in resp.data
 
             cur = db_engine.cursor()
             cur.execute(
@@ -138,11 +220,12 @@ class TestFullProvisioning:
             )
             assert cur.fetchone() is not None, "tenant schema was not created"
 
-            cur.execute("SELECT db_name, status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            cur.execute("SELECT db_name, status, plan FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
             row = cur.fetchone()
             assert row is not None, "tenant was not registered in att_master.tenants"
             assert row[0] == schema_name
             assert row[1] == "active"
+            assert row[2] == "growth"
 
             cur.execute(f'SELECT username FROM "{schema_name}".admin_users WHERE username=%s', ("e2e_admin",))
             assert cur.fetchone() is not None, "admin user was not seeded into the new tenant schema"
@@ -150,20 +233,40 @@ class TestFullProvisioning:
         finally:
             _drop_schema(db_engine, schema_name)
 
-    def test_subdomain_colliding_with_master_registry_schema_rejected(self, client, db_engine, signup_enabled):
-        # subdomain "master" derives db_name "att_master" — the tenant
-        # registry schema itself. Previously this only checked the tenants
-        # table (which has no row for "master"), so CREATE SCHEMA IF NOT
-        # EXISTS would silently no-op and the flow would seed an
-        # attacker-controlled admin account straight into the registry
-        # schema. Must be rejected before any provisioning happens.
+    def test_default_plan_is_starter_when_not_selected(self, client, db_engine):
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-default-plan"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        _drop_schema(db_engine, schema_name)
+        try:
+            resp = client.post("/create_org", data={
+                "company_name": "Default Plan Org", "subdomain": subdomain,
+                "admin_username": "dp_admin", "admin_password": "password123",
+                "admin_email": "dp@test.local",
+            }, follow_redirects=False)
+            assert resp.status_code == 200
+            cur = db_engine.cursor()
+            cur.execute("SELECT plan FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            assert cur.fetchone()[0] == "starter"
+            cur.close()
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+    def test_subdomain_colliding_with_master_registry_schema_rejected(self, client, db_engine):
+        # subdomain "master" is now caught by the reserved-subdomain
+        # blocklist before ever reaching the schema-collision check --
+        # kept as its own test since it's the specific vulnerability this
+        # regression-guards (see TestSignupValidation's parametrized
+        # reserved-subdomain test for the general case).
         from app import init_master_db
         init_master_db()
 
         resp = client.post("/create_org", data={
-            "signup_secret": signup_enabled, "company_name": "Evil Org",
-            "subdomain": "master", "admin_username": "evil_admin",
-            "admin_password": "password123",
+            "company_name": "Evil Org", "subdomain": "master",
+            "admin_username": "evil_admin", "admin_password": "password123",
+            "admin_email": "evil@test.local",
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers.get("Location") == "/create_org"
@@ -181,7 +284,7 @@ class TestFullProvisioning:
         cur.close()
         assert not polluted, "tenant schema migration leaked into the master registry schema"
 
-    def test_duplicate_subdomain_rejected(self, client, db_engine, signup_enabled):
+    def test_duplicate_subdomain_rejected(self, client, db_engine):
         from app import init_master_db
         init_master_db()
 
@@ -190,13 +293,13 @@ class TestFullProvisioning:
         _drop_schema(db_engine, schema_name)
         try:
             payload = {
-                "signup_secret": signup_enabled, "company_name": "Dup Org",
-                "subdomain": subdomain, "admin_username": "dup_admin",
-                "admin_password": "password123",
+                "company_name": "Dup Org", "subdomain": subdomain,
+                "admin_username": "dup_admin", "admin_password": "password123",
+                "admin_email": "dup@test.local",
             }
             r1 = client.post("/create_org", data=payload, follow_redirects=False)
-            assert r1.status_code in (301, 302)
-            assert r1.headers.get("Location", "").endswith("/admin_login")
+            assert r1.status_code == 200
+            assert b"Organisation Created" in r1.data
 
             r2 = client.post("/create_org", data=payload, follow_redirects=False)
             assert r2.status_code in (301, 302)

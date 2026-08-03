@@ -192,6 +192,12 @@ def inject_overdue_onboardings():
 
 
 _SESSION_MAX_AGE = 8 * 3600  # 8 hours absolute — stolen cookie cannot be used indefinitely
+# How often _resolve_tenant() re-checks tenants.status for an
+# already-session-cached tenant. Bounds how long a platform-admin
+# suspension (blueprints/platform_admin.py) takes to actually lock out an
+# already-logged-in session, rather than never (cookie sessions have no
+# server-side store to revoke from outside).
+_TENANT_STATUS_RECHECK_SEC = 5 * 60
 
 
 @app.before_request
@@ -220,10 +226,34 @@ def _resolve_tenant():
     if any(request.path.startswith(p) for p in skip_prefixes):
         return
 
-    # 1. Already resolved in this session
+    # 1. Already resolved in this session -- but re-validate status every
+    # _TENANT_STATUS_RECHECK_SEC instead of trusting the cache forever.
+    # Without this, a platform admin suspending a tenant (blueprints/
+    # platform_admin.py) would have no effect on any session that had
+    # already resolved that tenant: this cache is the only thing standing
+    # between "suspended" and "still fully working," since cookie-based
+    # sessions have no server-side store to revoke from outside.
     if session.get("tenant_db"):
-        _g.tenant_db = session["tenant_db"]
-        return
+        last_checked = session.get("_tenant_status_checked_at", 0)
+        if (time.time() - last_checked) < _TENANT_STATUS_RECHECK_SEC:
+            _g.tenant_db = session["tenant_db"]
+            return
+        try:
+            from database import get_master_db
+            conn = get_master_db()
+            cur = conn.cursor(buffered=True)
+            cur.execute("SELECT status FROM tenants WHERE db_name=%s", (session["tenant_db"],))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+        except Exception:
+            row = None  # master DB unreachable -- don't punish the session for it, just skip the recheck this time
+        if row is None or row[0] == "active":
+            session["_tenant_status_checked_at"] = time.time()
+            _g.tenant_db = session["tenant_db"]
+            return
+        session.clear()
+        return jsonify({"ok": False, "msg": "This organisation's access has been suspended. Contact support."}), 403
 
     # 2. Subdomain resolution
     host = request.host.split(":")[0]  # strip port
@@ -1662,6 +1692,13 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS face_auth_enabled SMALLINT DEFAULT 0",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS geo_enabled SMALLINT DEFAULT 0",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS geo_radius INT DEFAULT 100",
+        # NULL = not configured yet, geofencing is a no-op regardless of
+        # location_enabled -- see utils/attendance_utils.py's
+        # is_within_office_range(). Previously every tenant was silently
+        # geofenced against one process-wide OFFICE_LAT/LON env var; this
+        # makes office location a real per-tenant setting.
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS office_lat DOUBLE PRECISION DEFAULT NULL",
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS office_lon DOUBLE PRECISION DEFAULT NULL",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS pin_enabled SMALLINT DEFAULT 1",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS biometric_enabled SMALLINT DEFAULT 0",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS notify_leave SMALLINT DEFAULT 1",
@@ -2082,6 +2119,24 @@ def init_master_db():
                 admin_email VARCHAR(200) DEFAULT NULL,
                 plan VARCHAR(50) DEFAULT 'starter',
                 status VARCHAR(20) DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Platform-operator identity (blueprints/platform_admin.py) --
+        # lives in att_master, not any tenant schema, since tenant
+        # admin_users rows only exist inside their own schema and this
+        # identity must not be tied to one. No totp_secret/totp_enabled
+        # columns: login MFA is a plain emailed one-time code (session-held,
+        # like blueprints/auth.py's _start_login_mfa), not enrolled TOTP --
+        # reusing utils/totp.py's enrollment helpers here would silently
+        # read/write the wrong schema's admin_users table anyway, since
+        # /super_admin/* deliberately has no resolved g.tenant_db.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS platform_admins (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                email VARCHAR(200) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -2913,9 +2968,8 @@ def unhandled_exception(e):
 # ── Tenant Provisioning ──────────────────────────────────────────────────────
 
 # _SUBDOMAIN_RE moved to blueprints/org.py
-# Set SIGNUP_SECRET in .env to restrict who can create new organisations.
-# Anyone who knows this token can provision a new tenant; keep it private.
-# _SIGNUP_SECRET moved to blueprints/org.py
+# Signup is open by default (Turnstile-protected, not gated behind a
+# shared secret) -- see blueprints/org.py and utils/plan_limits.py.
 
 # create_org_page migrated to blueprints/org.py
 
@@ -3049,10 +3103,12 @@ if "core.home" not in app.view_functions:
     from blueprints.email_blast import email_blast_bp
     from blueprints.compliance import compliance_bp
     from blueprints.hr_portal import hr_bp
+    from blueprints.platform_admin import platform_admin_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp):
+                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp,
+                platform_admin_bp):
         app.register_blueprint(_bp)
 
 _register_api_v1_aliases()

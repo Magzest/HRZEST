@@ -51,6 +51,7 @@ from blueprints.secops import secops_bp
 from blueprints.email_blast import email_blast_bp
 from blueprints.compliance import compliance_bp
 from blueprints.hr_portal import hr_bp
+from blueprints.platform_admin import platform_admin_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -71,6 +72,7 @@ flask_app.register_blueprint(secops_bp)
 flask_app.register_blueprint(email_blast_bp)
 flask_app.register_blueprint(compliance_bp)
 flask_app.register_blueprint(hr_bp)
+flask_app.register_blueprint(platform_admin_bp)
 
 # Import app AFTER blueprints are registered so all module-level reads pick
 # up test values AND _register_api_v1_aliases() sees the full route set.
@@ -139,6 +141,22 @@ def _init_test_db(db_engine):
     # (see test_auth_blueprint.py's test_get_when_setup_done_redirects_to_login),
     # so make that true directly instead of depending on env-var seeding.
     cur.execute("UPDATE company_settings SET setup_done=1 WHERE setup_done=0")
+    cur.close()
+    # Register the test schema as an unlimited/all-features tenant so the
+    # rest of the suite (which knows nothing about pricing tiers) isn't
+    # affected by utils/plan_limits.py's employee-count/feature enforcement
+    # -- same reasoning as MANDATORY_LOGIN_MFA being force-disabled above.
+    # tests/test_plan_limits.py exercises the actual tier behavior directly.
+    from app import init_master_db
+    init_master_db()
+    cur = db_engine.cursor()
+    cur.execute("SELECT 1 FROM att_master.tenants WHERE db_name=%s", (os.environ["DB_NAME"],))
+    if not cur.fetchone():
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, plan, status) "
+            "VALUES (%s, %s, %s, 'enterprise', 'active')",
+            ("Test Co", "att-test-suite", os.environ["DB_NAME"]),
+        )
     cur.close()
 
 

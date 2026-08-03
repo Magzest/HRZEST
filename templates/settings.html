@@ -789,12 +789,20 @@
                   </div>
                   <label class="toggle u-fxs-0 u-mt-2"><input type="checkbox" {% if features.geo %}checked{% endif %} onchange="saveToggle('geo_enabled',this.checked,'extra_geo')" /><span class="toggle-slider"></span></label>
                 </div>
-                <div id="extra_geo" style="display:{% if features.geo %}flex{% else %}none{% endif %};align-items:center;gap:8px;padding:10px 12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;">
+                <div id="extra_geo" style="display:{% if features.geo %}flex{% else %}none{% endif %};align-items:center;gap:8px;padding:10px 12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;flex-wrap:wrap;">
                   <form class="u-d-flex u-ai-center u-gap-8 u-fxw-wrap u-w-100pct" method="POST" action="/save_geo_radius">
                     <i class="ti ti-current-location u-c-16a34a u-fs-15"></i>
                     <label class="u-fs-12 u-fw-700 u-c-15803d">Radius</label>
                     <input class="u-w-72 u-p-5-9 u-bd-1-solid-86efac u-br-7 u-fs-13 u-fw-600" type="number" name="geo_radius" value="{{ features.geo_radius }}" min="50" max="5000" />
                     <span class="u-fs-12 u-c-64748b">metres</span>
+                    <label class="u-fs-12 u-fw-700 u-c-15803d">Office lat/lon</label>
+                    <input class="u-w-90 u-p-5-9 u-bd-1-solid-86efac u-br-7 u-fs-13 u-fw-600" type="number" step="any" name="office_lat" value="{{ features.office_lat if features.office_lat is not none else '' }}" placeholder="Latitude" />
+                    <input class="u-w-90 u-p-5-9 u-bd-1-solid-86efac u-br-7 u-fs-13 u-fw-600" type="number" step="any" name="office_lon" value="{{ features.office_lon if features.office_lon is not none else '' }}" placeholder="Longitude" />
+                    <button type="button" class="u-p-5-9 u-bd-1-solid-86efac u-br-7 u-bg-fff u-c-15803d u-fs-12 u-fw-700 u-cur-pointer"
+                            onclick="navigator.geolocation && navigator.geolocation.getCurrentPosition(function(p){document.querySelector('[name=office_lat]').value=p.coords.latitude;document.querySelector('[name=office_lon]').value=p.coords.longitude;})">
+                      <i class="ti ti-map-pin-filled"></i> Use current location
+                    </button>
+                    <span class="u-fs-11 u-c-64748b u-w-100pct">Leave blank to disable distance checking even while Geo-fencing is on.</span>
                     <button class="u-ml-auto u-p-5-14 u-bd-none u-br-7 u-bg-16a34a u-c-fff u-fs-12 u-fw-700 u-cur-pointer" type="submit">Save</button>
                   </form>
                 </div>

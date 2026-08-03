@@ -6,7 +6,7 @@ so these tests pin the exact arithmetic rather than just checking "it
 doesn't crash." cfg.HOLIDAY_PAY / cfg.LEAVE_PAY / cfg.LATE_DEDUCTION_RATE /
 cfg.HALF_DAY_RATE are module-level globals loaded from the DB at startup
 (utils/config.py) — monkeypatched here for deterministic assertions,
-same technique used for blueprints/org.py's _SIGNUP_SECRET.
+same technique used elsewhere for other module-level config constants.
 
 Run with:
     python -m pytest tests/test_salary_utils.py -v

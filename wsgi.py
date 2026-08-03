@@ -103,6 +103,7 @@ from blueprints.secops import secops_bp
 from blueprints.email_blast import email_blast_bp
 from blueprints.compliance import compliance_bp
 from blueprints.hr_portal import hr_bp
+from blueprints.platform_admin import platform_admin_bp
 
 app.register_blueprint(health_bp)
 app.register_blueprint(notifications_bp)
@@ -124,6 +125,7 @@ app.register_blueprint(secops_bp)
 app.register_blueprint(email_blast_bp)
 app.register_blueprint(compliance_bp)
 app.register_blueprint(hr_bp)
+app.register_blueprint(platform_admin_bp)
 
 # ── app.py: shared setup only (init_db, error handlers, before/after_request
 #    hooks, template filters) — no route handlers remain, but it still needs

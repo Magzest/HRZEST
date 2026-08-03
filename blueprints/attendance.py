@@ -22,7 +22,7 @@ from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
     fetch_holidays_set, get_employee_shift, _td_to_time, infer_type_legacy,
-    is_within_range,
+    is_within_range, is_within_office_range,
 )
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified
@@ -1186,7 +1186,7 @@ def attendance():
                     db.close()
                     return jsonify({"ok": False, "msg": "You are outside your registered home location."})
         else:
-            if not is_within_range(float(user_lat), float(user_lon), cfg.OFFICE_LAT, cfg.OFFICE_LON):
+            if not is_within_office_range(float(user_lat), float(user_lon)):
                 cursor.close()
                 db.close()
                 return jsonify({"ok": False, "msg": "You are outside the office premises."})
@@ -1345,7 +1345,7 @@ def api_checkin():
                     db.close()
                     return jsonify({"ok": False, "msg": "You are outside your registered home location."})
         else:
-            if not is_within_range(float(lat), float(lon), cfg.OFFICE_LAT, cfg.OFFICE_LON):
+            if not is_within_office_range(float(lat), float(lon)):
                 cursor.close()
                 db.close()
                 return jsonify({"ok": False, "msg": "You are outside the office premises."})

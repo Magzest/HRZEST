@@ -132,6 +132,85 @@ class TestToggleFingerprint:
         cur.close()
 
 
+class TestPlanGatingOnToggles:
+    """The test tenant is registered as plan='enterprise' by conftest.py
+    (so the rest of the suite is unaffected by plan_limits) -- these tests
+    temporarily downgrade it to exercise the actual gating behavior added
+    in blueprints/admin_views.py's toggle_auth_method/toggle_fingerprint/
+    toggle_feature, then restore 'enterprise' so later tests aren't
+    affected. See tests/test_plan_limits.py for the underlying module's
+    own unit tests."""
+
+    @pytest.fixture
+    def as_starter(self, db_engine):
+        import os
+        schema = os.environ.get("DB_NAME")
+        cur = db_engine.cursor()
+        cur.execute("UPDATE att_master.tenants SET plan='starter' WHERE db_name=%s", (schema,))
+        cur.close()
+        yield
+        cur = db_engine.cursor()
+        cur.execute("UPDATE att_master.tenants SET plan='enterprise' WHERE db_name=%s", (schema,))
+        cur.close()
+
+    def test_starter_blocks_enabling_face_via_toggle_auth_method(self, client, seed_admin, as_starter):
+        _admin_session(client, seed_admin["username"])
+        resp = client.post("/toggle_auth_method", data={"method": "face", "enabled": "1"},
+                           follow_redirects=True)
+        assert b"Starter" in resp.data or b"plan" in resp.data.lower()
+
+    def test_starter_allows_enabling_qr_via_toggle_auth_method(self, client, seed_admin, as_starter, db_engine):
+        _admin_session(client, seed_admin["username"])
+        resp = client.post("/toggle_auth_method", data={"method": "qr", "enabled": "1"},
+                           follow_redirects=False)
+        assert resp.status_code == 302
+        cur = db_engine.cursor()
+        cur.execute("SELECT qr_enabled FROM company_settings LIMIT 1")
+        assert cur.fetchone()[0] == 1
+        cur.close()
+
+    def test_starter_allows_disabling_face_even_though_gated_for_enabling(self, client, seed_admin, as_starter):
+        # Turning a feature OFF is never a billing decision, even on the
+        # most restrictive plan.
+        _admin_session(client, seed_admin["username"])
+        resp = client.post("/toggle_auth_method", data={"method": "face", "enabled": "0"},
+                           follow_redirects=False)
+        assert resp.status_code == 302
+
+    def test_starter_blocks_toggle_fingerprint_route(self, client, seed_admin, as_starter, db_engine):
+        _admin_session(client, seed_admin["username"])
+        resp = client.post("/toggle_fingerprint", data={"enabled": "1"}, follow_redirects=False)
+        assert resp.status_code == 302
+        cur = db_engine.cursor()
+        cur.execute("SELECT fingerprint_enabled FROM company_settings LIMIT 1")
+        assert cur.fetchone()[0] == 0
+        cur.close()
+
+    def test_starter_blocks_toggle_feature_biometric(self, client, seed_admin, as_starter):
+        _admin_session(client, seed_admin["username"])
+        resp = client.post("/toggle_feature", json={"feature": "biometric_enabled", "value": True})
+        assert resp.status_code == 403
+        assert resp.get_json()["ok"] is False
+
+    def test_growth_allows_geo_but_not_biometric(self, client, seed_admin, db_engine):
+        import os
+        schema = os.environ.get("DB_NAME")
+        cur = db_engine.cursor()
+        cur.execute("UPDATE att_master.tenants SET plan='growth' WHERE db_name=%s", (schema,))
+        cur.close()
+        try:
+            _admin_session(client, seed_admin["username"])
+            resp = client.post("/toggle_feature", json={"feature": "geo_enabled", "value": True})
+            assert resp.status_code == 200
+            resp = client.post("/toggle_feature", json={"feature": "biometric_enabled", "value": True})
+            assert resp.status_code == 403
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("UPDATE att_master.tenants SET plan='enterprise' WHERE db_name=%s", (schema,))
+            cur.execute("UPDATE company_settings SET geo_enabled=1")
+            cur.close()
+
+
 class TestSaveCompanyCode:
     def test_saves_uppercased_code(self, client, seed_admin, db_engine):
         _admin_session(client, seed_admin["username"])

@@ -5,7 +5,6 @@ mitigation endpoints (blueprints/secops.py: ban-ip/unban-ip/banned-ips)."""
 import datetime
 import time
 import pytest
-import blueprints.org as org_module
 import utils.totp as totp_module
 
 
@@ -22,27 +21,27 @@ def signup_enabled_org(client, db_engine):
     """Provisions one real tenant schema via the actual /create_org flow —
     the multi-tenant hook-ordering bug this file regression-tests is
     specifically about which physical schema a query lands in, so a mocked
-    tenant wouldn't exercise it. Yields (subdomain, schema_name)."""
+    tenant wouldn't exercise it. Yields (subdomain, schema_name).
+
+    Signup is open by default now (no shared-secret gate, see
+    blueprints/org.py) -- this fixture just provisions directly."""
     from app import init_master_db
     init_master_db()
 
-    original_secret = org_module._SIGNUP_SECRET
-    org_module._SIGNUP_SECRET = "test-ip-ban-signup-secret"
     subdomain = "ipban-test-org"
     schema_name = "att_" + subdomain.replace("-", "_")
     _drop_schema(db_engine, schema_name)
     try:
         resp = client.post("/create_org", data={
-            "signup_secret": org_module._SIGNUP_SECRET,
             "company_name": "IP Ban Test Org",
             "subdomain": subdomain,
             "admin_username": "ipban_admin",
             "admin_password": "password123",
+            "admin_email": "ipban_admin@test.local",
         }, follow_redirects=False)
-        assert resp.status_code in (301, 302), "test setup failed: org provisioning did not succeed"
+        assert resp.status_code == 200, "test setup failed: org provisioning did not succeed"
         yield subdomain, schema_name
     finally:
-        org_module._SIGNUP_SECRET = original_secret
         _drop_schema(db_engine, schema_name)
 
 

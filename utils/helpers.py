@@ -462,6 +462,7 @@ def get_overdue_onboarding_count():
 _AUTH_CONFIG_DEFAULTS = {
     "fingerprint_enabled": False, "qr_enabled": True, "face_enabled": True,
     "location_enabled": True, "employee_password_auth": True,
+    "geo_radius": 100, "office_lat": None, "office_lon": None,
 }
 
 
@@ -475,7 +476,8 @@ def get_auth_config():
         cursor.execute("""
             SELECT COALESCE(fingerprint_enabled,0), COALESCE(qr_enabled,1),
                    COALESCE(face_enabled,1), COALESCE(location_enabled,1),
-                   COALESCE(employee_password_auth,1)
+                   COALESCE(employee_password_auth,1), COALESCE(geo_radius,100),
+                   office_lat, office_lon
             FROM company_settings LIMIT 1
         """)
         row = cursor.fetchone()
@@ -485,7 +487,8 @@ def get_auth_config():
             result = {
                 "fingerprint_enabled": bool(row[0]), "qr_enabled": bool(row[1]),
                 "face_enabled": bool(row[2]), "location_enabled": bool(row[3]),
-                "employee_password_auth": bool(row[4]),
+                "employee_password_auth": bool(row[4]), "geo_radius": row[5],
+                "office_lat": row[6], "office_lon": row[7],
             }
             with _settings_lock:
                 _auth_cache["data"] = result

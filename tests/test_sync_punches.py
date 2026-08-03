@@ -1,6 +1,13 @@
 """Tests for /api/employee/sync_punches — offline punch batch submission,
 including the geo-fence enforcement added to match the live check-in route
-(see blueprints/employee_portal.py::api_employee_sync_punches)."""
+(see blueprints/employee_portal.py::api_employee_sync_punches).
+
+Office-mode geofencing is opt-in per tenant now (utils/attendance_utils.py's
+is_within_office_range) rather than always-on against a process-wide
+OFFICE_LAT/LON env var -- tests that exercise the "outside office, rejected"
+path need an actual office location configured, or is_within_office_range
+is a no-op (see TestSyncPunchesGeofence's office_geofence_configured
+fixture) and every coordinate is silently accepted."""
 import datetime
 import pytest
 import utils.config as cfg
@@ -18,6 +25,27 @@ def _clean_attendance(seed_employee, db_engine):
     yield
 
 
+@pytest.fixture
+def office_geofence_configured(db_engine):
+    """Sets a real office_lat/office_lon (matching cfg.OFFICE_LAT/LON, so
+    existing test coordinates keep meaning "at the office") so office-mode
+    geofence rejection actually has something to reject against, restoring
+    the unconfigured (NULL) default afterward."""
+    from utils.helpers import invalidate_settings_cache
+    cur = db_engine.cursor()
+    cur.execute(
+        "UPDATE company_settings SET location_enabled=1, office_lat=%s, office_lon=%s, geo_radius=300",
+        (cfg.OFFICE_LAT, cfg.OFFICE_LON),
+    )
+    cur.close()
+    invalidate_settings_cache()
+    yield
+    cur = db_engine.cursor()
+    cur.execute("UPDATE company_settings SET office_lat=NULL, office_lon=NULL")
+    cur.close()
+    invalidate_settings_cache()
+
+
 def _login(client, seed_employee):
     r = client.post("/api/employee/login", json={
         "employee_id": seed_employee["employee_id"],
@@ -32,7 +60,7 @@ def _now_str():
 
 
 class TestSyncPunchesGeofence:
-    def test_office_mode_punch_outside_range_rejected(self, client, seed_employee, db_engine):
+    def test_office_mode_punch_outside_range_rejected(self, client, seed_employee, db_engine, office_geofence_configured):
         auth = _login(client, seed_employee)
         # Far from the default office coords (~hundreds of km away)
         r = client.post("/api/employee/sync_punches", headers=auth, json={
@@ -44,7 +72,7 @@ class TestSyncPunchesGeofence:
         assert results[0]["ok"] is False
         assert "office" in results[0]["msg"].lower()
 
-    def test_office_mode_punch_inside_range_accepted(self, client, seed_employee, db_engine):
+    def test_office_mode_punch_inside_range_accepted(self, client, seed_employee, db_engine, office_geofence_configured):
         auth = _login(client, seed_employee)
         r = client.post("/api/employee/sync_punches", headers=auth, json={
             "punches": [{"id": "1", "punched_at": _now_str(),
@@ -112,7 +140,7 @@ class TestSyncPunchesGeofence:
         assert results[0]["ok"] is False
         assert "invalid" in results[0]["msg"].lower()
 
-    def test_mixed_batch_rejects_only_bad_punch(self, client, seed_employee, db_engine):
+    def test_mixed_batch_rejects_only_bad_punch(self, client, seed_employee, db_engine, office_geofence_configured):
         """One punch out of range shouldn't block the others in the same batch."""
         auth = _login(client, seed_employee)
         r = client.post("/api/employee/sync_punches", headers=auth, json={

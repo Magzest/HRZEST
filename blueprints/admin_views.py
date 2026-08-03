@@ -19,7 +19,7 @@ import secrets
 import datetime
 import calendar
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash, abort,
+    Blueprint, request, session, redirect, jsonify, render_template, flash, abort, g,
 )
 
 from database import get_db_connection, transaction
@@ -36,6 +36,7 @@ from utils.helpers import (
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
     _validate_image_file,
 )
+from utils.plan_limits import check_feature_allowed
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
     get_or_create_admin_totp_secret, mark_totp_enabled, verify_totp_code, totp_qr_data_uri,
@@ -59,6 +60,19 @@ _TOGGLE_LABEL_MAP = {
     "face": "Face Recognition",
     "location": "Location Verification",
     "password": "Password Login",
+}
+# Maps toggle_auth_method()'s `method` values to utils/plan_limits.py's
+# tier feature keys. "password" is deliberately absent -- password login
+# stays global/unrestricted regardless of plan (see the _cfs_map comment
+# in toggle_auth_method below).
+_TOGGLE_PLAN_FEATURE_MAP = {
+    "fingerprint": "fingerprint", "qr": "qr", "face": "face", "location": "geo",
+}
+# Same idea for toggle_feature()'s `feature` values.
+_TOGGLE_FEATURE_PLAN_MAP = {
+    "face_auth_enabled": "face", "geo_enabled": "geo", "qr_enabled": "qr",
+    "pin_enabled": "pin", "fingerprint_enabled": "fingerprint",
+    "biometric_enabled": "biometric",
 }
 
 
@@ -593,12 +607,17 @@ def settings_page():
     _active_cid_settings = session.get("active_company_id")
     fr = get_co_features(_active_cid_settings)
     cursor.execute(
-        "SELECT COALESCE(working_days,'Mon,Tue,Wed,Thu,Fri'), COALESCE(company_name,''), COALESCE(timezone,'Asia/Kolkata') FROM company_settings LIMIT 1")
+        "SELECT COALESCE(working_days,'Mon,Tue,Wed,Thu,Fri'), COALESCE(company_name,''), "
+        "COALESCE(timezone,'Asia/Kolkata'), office_lat, office_lon FROM company_settings LIMIT 1")
     _gset = cursor.fetchone()
     features = {
         "face_auth": fr["face_auth_enabled"],
         "geo": fr["geo_enabled"],
         "geo_radius": fr["geo_radius"],
+        # Always schema-wide (one physical office per tenant) -- unlike
+        # everything else in this dict, never sourced from company_feature_settings.
+        "office_lat": _gset[3] if _gset else None,
+        "office_lon": _gset[4] if _gset else None,
         "qr": fr["qr_enabled"],
         "pin": fr["pin_enabled"],
         "fingerprint": fr["fingerprint_enabled"],
@@ -987,6 +1006,16 @@ def toggle_auth_method():
         return redirect("/settings?tab=attendance")
     column = _TOGGLE_COLUMN_MAP[method]
     label = _TOGGLE_LABEL_MAP[method]
+    # Turning a method OFF is always allowed regardless of plan -- only
+    # enabling something new is a billing decision. "password" isn't a
+    # plan_limits feature key (password auth stays global, see _cfs_map
+    # below), so it's never plan-gated.
+    plan_feature_key = _TOGGLE_PLAN_FEATURE_MAP.get(method)
+    if enabled and plan_feature_key:
+        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, plan_feature_key)
+        if not _plan_ok:
+            flash(_plan_err, "danger")
+            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     # Map old column names to company_feature_settings column names
     _cfs_map = {"face_enabled": "face_auth_enabled", "location_enabled": "geo_enabled",
@@ -1014,6 +1043,11 @@ def toggle_auth_method():
 @role_required("admin")
 def toggle_fingerprint():
     enabled = request.form.get("enabled", "0") == "1"
+    if enabled:
+        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, "fingerprint")
+        if not _plan_ok:
+            flash(_plan_err, "danger")
+            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     if active_cid:
         _upsert_co_feature(active_cid, "fingerprint_enabled", 1 if enabled else 0)
@@ -1105,6 +1139,11 @@ def toggle_feature():
     cs_col = _CS_COL_MAP.get(feature)
     if not cs_col:
         return jsonify({"ok": False, "error": "unknown feature"}), 400
+    plan_feature_key = _TOGGLE_FEATURE_PLAN_MAP.get(feature)
+    if value and plan_feature_key:
+        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, plan_feature_key)
+        if not _plan_ok:
+            return jsonify({"ok": False, "error": _plan_err}), 403
     if active_cid:
         _upsert_co_feature(active_cid, cs_col, value)
     else:
@@ -1127,6 +1166,21 @@ def save_geo_radius():
     except (ValueError, TypeError):
         flash("Geo radius must be between 50 and 5000 metres.", "danger")
         return redirect("/settings?tab=attendance")
+    # Office lat/lon are optional -- both blank means "not configured yet",
+    # which utils/attendance_utils.py's is_within_office_range() treats as
+    # geofencing being a no-op regardless of the location_enabled toggle.
+    lat_raw = request.form.get("office_lat", "").strip()
+    lon_raw = request.form.get("office_lon", "").strip()
+    office_lat = office_lon = None
+    if lat_raw or lon_raw:
+        try:
+            office_lat = float(lat_raw)
+            office_lon = float(lon_raw)
+            if not (-90 <= office_lat <= 90 and -180 <= office_lon <= 180):
+                raise ValueError
+        except (ValueError, TypeError):
+            flash("Office location must be a valid latitude/longitude pair.", "danger")
+            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     if active_cid:
         _upsert_co_feature(active_cid, "geo_radius", radius)
@@ -1134,6 +1188,16 @@ def save_geo_radius():
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
         cursor.execute("UPDATE company_settings SET geo_radius=%s", (radius,))
+        db.commit()
+        cursor.close()
+        db.close()
+    # Office coordinates are always schema-wide (one physical office per
+    # tenant), regardless of which sub-company is active -- unlike radius,
+    # which follows the existing per-company_id pattern above.
+    if lat_raw or lon_raw:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute("UPDATE company_settings SET office_lat=%s, office_lon=%s", (office_lat, office_lon))
         db.commit()
         cursor.close()
         db.close()

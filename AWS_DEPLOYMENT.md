@@ -103,7 +103,7 @@ Set:
 - `DB_HOST` = the `rds_endpoint` from step 1
 - `DB_PASS` = the password you generated in step 1
 - `ALLOWED_ORIGINS` = `https://yourdomain.com`
-- Review `SIGNUP_SECRET`, `ADMIN_PASSWORD`, SMTP settings per `.env.example`
+- Review `ADMIN_PASSWORD`, SMTP settings, `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` per `.env.example`
 
 Re-run the bootstrap to pick up the filled-in `.env` and start the stack:
 

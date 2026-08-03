@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Organisation Created — Attendance System</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    body{min-height:100vh;background:linear-gradient(145deg,#0f172a 0%,#1e3a8a 50%,#1e40af 100%);
+      display:flex;align-items:center;justify-content:center;padding:24px;position:relative;overflow:hidden}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:32px 32px}
+    .card{width:100%;max-width:520px;background:rgba(255,255,255,.06);
+      -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+      border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:44px 40px 36px;
+      position:relative;z-index:1;box-shadow:0 32px 80px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.05) inset;
+      text-align:center}
+    .logo-icon{width:68px;height:68px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:20px;
+      display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 18px;
+      box-shadow:0 8px 24px rgba(34,197,94,.4);color:#fff}
+    h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.3px;margin-bottom:8px}
+    .sub{font-size:14px;color:rgba(255,255,255,.55);margin-bottom:28px}
+    .portal-box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
+      border-radius:14px;padding:18px;margin-bottom:22px;text-align:left}
+    .portal-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+      color:rgba(255,255,255,.45);margin-bottom:8px}
+    .portal-link{font-size:15px;color:#93c5fd;word-break:break-all;font-weight:600}
+    .btn{width:100%;padding:15px;border:none;border-radius:12px;
+      background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;font-size:15px;font-weight:700;
+      cursor:pointer;transition:.2s;letter-spacing:.3px;box-shadow:0 6px 20px rgba(59,130,246,.4);
+      text-decoration:none;display:block;margin-bottom:18px}
+    .btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(59,130,246,.5)}
+    .detail-row{display:flex;justify-content:space-between;font-size:13px;padding:8px 0;
+      border-top:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.6);text-align:left}
+    .detail-row strong{color:#fff}
+    .note{font-size:12px;color:rgba(255,255,255,.4);margin-top:18px;line-height:1.5}
+  </style>
+  <link rel="stylesheet" href="/static/shared.min.css" />
+</head>
+<body>
+<div class="card">
+  <div class="logo-icon"><i class="ti ti-check"></i></div>
+  <h1>Organisation Created!</h1>
+  <p class="sub">{{ company_name }} is ready to use the Attendance System.</p>
+
+  <div class="portal-box">
+    <div class="portal-label">Your HRMS Portal</div>
+    <div class="portal-link">{{ portal_url }}</div>
+    <div class="detail-row"><span>Admin username</span><strong>{{ admin_username }}</strong></div>
+  </div>
+
+  <a href="{{ portal_url }}" class="btn">Go to Your Dashboard <i class="ti ti-arrow-right"></i></a>
+
+  {% if email_sent %}
+  <p class="note">We've also emailed this link to <strong>{{ admin_email }}</strong>.</p>
+  {% else %}
+  <p class="note">Bookmark this link — it's how you and your team will reach your company's portal going forward.</p>
+  {% endif %}
+</div>
+<script src="/static/darkmode.min.js"></script>
+</body>
+</html>

@@ -16,6 +16,7 @@ from utils.session_risk import ensure_session_id, evaluate_session_risk
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, infer_type_legacy,
     fetch_holidays_set, get_billable_past_days, _td_to_time, is_within_range,
+    is_within_office_range,
 )
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
@@ -930,7 +931,7 @@ def api_employee_checkin():
                     db.close()
                     return jsonify({"ok": False, "msg": "You are outside your registered home location."})
         else:
-            if not is_within_range(lat_f, lon_f, cfg.OFFICE_LAT, cfg.OFFICE_LON):
+            if not is_within_office_range(lat_f, lon_f):
                 cursor.close()
                 db.close()
                 return jsonify({"ok": False, "msg": "You are outside the office premises."})
@@ -1048,7 +1049,7 @@ def api_employee_sync_punches():
     for punch in punches:
         punched_at_str = punch.get("punched_at", "")
         # Same geo-fence check as the live check-in route (is_within_range
-        # against work_lat/work_lon for wfh, else cfg.OFFICE_LAT/LON) —
+        # against work_lat/work_lon for wfh, else is_within_office_range) —
         # previously captured but never enforced here, unlike the live
         # route. Only checked when the client actually sent coordinates,
         # matching the live route's "if lat and lon:" gate.
@@ -1066,7 +1067,7 @@ def api_employee_sync_punches():
                     results.append({"id": punch.get("id"), "ok": False, "msg": "Outside registered home location."})
                     continue
             else:
-                if not is_within_range(lat_f, lon_f, cfg.OFFICE_LAT, cfg.OFFICE_LON):
+                if not is_within_office_range(lat_f, lon_f):
                     results.append({"id": punch.get("id"), "ok": False, "msg": "Outside office premises."})
                     continue
         try:
@@ -1205,7 +1206,7 @@ def api_employee_qr_face_checkin():
                         db.close()
                         return jsonify({"ok": False, "msg": "You are outside your registered home location."})
             else:
-                if not is_within_range(float(lat), float(lon), cfg.OFFICE_LAT, cfg.OFFICE_LON):
+                if not is_within_office_range(float(lat), float(lon)):
                     cursor.close()
                     db.close()
                     return jsonify({"ok": False, "msg": "You are outside the office premises."})

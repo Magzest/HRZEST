@@ -149,7 +149,6 @@ All variables are documented with examples in [.env.example](.env.example).
 | `SECRET_KEY` | Yes | — | Flask session key |
 | `ENCRYPTION_KEY` | Yes | — | PII field encryption |
 | `APP_ENV` | No | `production` | Set to `development` to disable secure cookies |
-| `SIGNUP_SECRET` | No | *(disabled)* | Enables `/create_org` tenant provisioning |
 | `DB_HOST` / `DB_USER` / `DB_PASS` / `DB_NAME` | Yes | — | PostgreSQL connection |
 | `ADMIN_USERNAME` / `ADMIN_PASSWORD` | Yes | — | Admin account credentials |
 | `OFFICE_LAT` / `OFFICE_LON` | No | — | GPS geo-fence centre |
@@ -197,7 +196,8 @@ employee-attendance-system/
 
 - **Blueprint migration in progress** — all routes currently live in `app.py` and are being incrementally moved to `blueprints/`. `health.py` and `notifications.py` are the first completed migrations. See `wsgi.py` for the migration status of each module.
 - **CSP** — Content-Security-Policy is generated dynamically per-response. Inline event handlers are sha256-hashed at render time; no `'unsafe-inline'` is used.
-- **Multi-tenancy** — subdomain-based tenant routing via `_resolve_tenant()` in `app.py`. Each organisation gets its own PostgreSQL schema within the shared database. Enable with `SIGNUP_SECRET`.
+- **Multi-tenancy** — subdomain-based tenant routing via `_resolve_tenant()` in `app.py`. Each organisation gets its own PostgreSQL schema within the shared database. `/create_org` self-signup is open by default (Turnstile-protected when `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` are set), with pricing tiers enforced from `utils/plan_limits.py`. Company subdomains require wildcard DNS/TLS (not yet configured — see the SaaS pivot plan) to actually route; until then, new tenants provision correctly but aren't reachable by subdomain.
+- **Platform admin console** — `/super_admin` (`blueprints/platform_admin.py`), a cross-tenant operator panel (list all companies, change plan, suspend/reactivate) with its own login identity in `att_master.platform_admins`, separate from any tenant's `admin_users`. No account is seeded automatically — insert one manually: `INSERT INTO att_master.platform_admins (username, password, email) VALUES (...)` with a bcrypt hash from `utils.auth.generate_password_hash`.
 - **Rate limiting** — `flask-limiter` with an in-memory backend (no Redis in this deployment — counters are per-worker, not shared across `GUNICORN_WORKERS`).
 
 ---
