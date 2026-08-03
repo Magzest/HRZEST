@@ -16,7 +16,7 @@ onboarding_bp = Blueprint("onboarding", __name__)
 
 
 @onboarding_bp.route("/api/onboarding", methods=["GET"])
-@api_token_required
+@admin_required
 def api_onboarding():
     """API endpoint to fetch real onboarding records from database."""
     with _db() as (cursor, conn):

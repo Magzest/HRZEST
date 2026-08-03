@@ -42,10 +42,11 @@ def _rating_tier(rating):
 
 
 @performance_bp.route("/api/performance", methods=["GET"])
-@api_token_required
+@admin_required
 def api_performance():
     """JSON API endpoint for employee performance reviews from database."""
-    with _db() as (cursor, conn):
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
         cursor.execute("""
             SELECT e.employee_id, e.name, COALESCE(e.role,'Employee'), COALESCE(e.department,'General'),
                    pr.id, COALESCE(pr.overall_rating, 0.0), COALESCE(pr.status, 'Pending Review'),

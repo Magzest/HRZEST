@@ -681,7 +681,7 @@ def view_employees():
 
 
 @employees_bp.route("/api/departments", methods=["GET"])
-@api_token_required
+@api_required
 def api_departments():
     """API endpoint to fetch real departments and headcounts from database."""
     with _db() as (cursor, conn):
