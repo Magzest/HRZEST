@@ -67,6 +67,13 @@
 {% endblock %}
 
 {% block main %}
+  <!-- ── Unified Hub Sub-Nav ── -->
+  <div style="display:flex;gap:10px;margin-bottom:20px;background:#f8fafc;padding:6px;border-radius:12px;border:1px solid #e2e8f0;">
+    <a href="/secops" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;color:#475569;text-decoration:none;display:flex;align-items:center;gap:6px;"><i class="ti ti-shield-lock"></i> SecOps Telemetry</a>
+    <a href="/compliance" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;color:#fff;background:#2563eb;text-decoration:none;display:flex;align-items:center;gap:6px;"><i class="ti ti-shield-check"></i> Compliance &amp; Audits</a>
+    <a href="/compliance_audit_logs" style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;color:#475569;text-decoration:none;display:flex;align-items:center;gap:6px;"><i class="ti ti-file-text"></i> Audit Logs</a>
+  </div>
+
   <div class="page-header">
     <h1><i class="ti ti-shield-check u-c-3b82f6"></i> Compliance &amp; Security Center</h1>
     <p>Certification attestations, regulatory deadlines, audit trail, and access control overview</p>
