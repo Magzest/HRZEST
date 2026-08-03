@@ -47,8 +47,13 @@ class TestCspReport:
 
 class TestHome:
 
-    def test_get_home_renders_200(self, client):
-        rv = client.get("/")
+    def test_get_home_redirects_to_platform_admin(self, client):
+        rv = client.get("/", follow_redirects=False)
+        assert rv.status_code == 302
+        assert "/super_admin" in rv.headers["Location"]
+
+    def test_get_checkin_renders_200(self, client):
+        rv = client.get("/checkin")
         assert rv.status_code == 200
 
 

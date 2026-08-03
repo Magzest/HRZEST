@@ -210,6 +210,43 @@ def platform_admin_set_plan(tenant_id):
     return redirect("/super_admin")
 
 
+@platform_admin_bp.route("/super_admin/tenants/create", methods=["POST"])
+@_platform_admin_required
+def platform_admin_create_tenant():
+    """Operator-initiated company creation -- the same provisioning core
+    the public /create_org signup uses, so a sales-assisted or manually
+    onboarded company gets an identical, fully-isolated schema rather than
+    a second, softer path into tenant creation."""
+    from blueprints.org import _validate_new_tenant_fields, provision_tenant, send_portal_ready_email
+
+    company_name = request.form.get("company_name", "").strip()
+    subdomain = request.form.get("subdomain", "").strip().lower()
+    admin_username = request.form.get("admin_username", "").strip()
+    admin_password = request.form.get("admin_password", "").strip()
+    admin_email = request.form.get("admin_email", "").strip()
+    plan = request.form.get("plan", "starter").strip()
+
+    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+    if error:
+        flash(error, "error")
+        return redirect("/super_admin")
+
+    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+    if not ok:
+        flash(error, "error")
+        return redirect("/super_admin")
+
+    send_portal_ready_email(admin_email, company_name, admin_username, portal_url)
+
+    log_security_event(
+        "platform_admin.tenant_created",
+        f"Platform admin created tenant '{company_name}' (subdomain={subdomain}, plan={plan})",
+        level="INFO", identifier=session.get("platform_admin_username"), subdomain=subdomain, plan=plan,
+    )
+    flash(f"Company '{company_name}' created. Portal: {portal_url}", "success")
+    return redirect("/super_admin")
+
+
 @platform_admin_bp.route("/super_admin/tenants/<int:tenant_id>/status", methods=["POST"])
 @_platform_admin_required
 def platform_admin_set_status(tenant_id):

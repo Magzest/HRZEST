@@ -6,7 +6,7 @@ last routes drained out of app.py, which now holds only shared setup
 import time
 import secrets
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, Response, g
+from flask import Blueprint, request, session, jsonify, render_template, Response, g, redirect
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import (
@@ -41,6 +41,20 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
+    """Site root is the platform operator's front door: an unauthenticated
+    visitor is bounced through to /super_admin/login (MFA-protected), and
+    an already-logged-in operator lands straight on the console. The
+    per-company attendance kiosk that used to live here moved to
+    /checkin -- see checkin_page() below."""
+    return redirect("/super_admin")
+
+
+@core_bp.route("/checkin")
+def checkin_page():
+    """The QR/PIN/face/fingerprint check-in kiosk -- previously served at
+    site root ("/") before that was handed over to the platform admin
+    login. No auth required: this is the public kiosk screen a company's
+    own employees check in from."""
     return render_template("index.html", auth_cfg=get_auth_config())
 
 

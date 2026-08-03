@@ -46,8 +46,9 @@ class TestSignupPage:
 
 class TestGetStartedPage:
     """/get-started is the SaaS entry point (login-by-subdomain vs
-    register) -- distinct from "/" (blueprints/core.py's home()), which
-    still serves the existing single-tenant attendance kiosk unchanged."""
+    register) -- distinct from "/" (blueprints/core.py's home()), which is
+    the platform operator's own login. The attendance kiosk moved to
+    /checkin (see tests/test_admin_views_coverage.py::TestHome)."""
 
     def test_get_page_renders(self, client):
         resp = client.get("/get-started")

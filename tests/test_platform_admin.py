@@ -197,3 +197,79 @@ class TestPlatformAdminTenantActions:
                            follow_redirects=False)
         assert resp.status_code == 302
         assert resp.headers.get("Location") == "/super_admin/login"
+
+
+def _drop_schema(db_engine, schema_name):
+    cur = db_engine.cursor()
+    cur.execute(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')
+    cur.execute("DELETE FROM att_master.tenants WHERE db_name=%s", (schema_name,))
+    cur.close()
+
+
+class TestPlatformAdminCreateTenant:
+    """/super_admin/tenants/create shares its provisioning core
+    (blueprints/org.py's provision_tenant()) with the public /create_org
+    signup -- same real-schema-creation weight and cleanup as
+    tests/test_org.py's TestFullProvisioning, just reached via the
+    operator console instead of self-serve signup."""
+
+    def test_requires_login(self, client):
+        resp = client.post("/super_admin/tenants/create", data={
+            "company_name": "No Auth Co", "subdomain": "pa-noauth",
+            "admin_username": "noauth_admin", "admin_password": "password123",
+            "admin_email": "noauth@test.local", "plan": "starter",
+        }, follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers.get("Location") == "/super_admin/login"
+
+    def test_create_tenant_provisions_real_schema(self, client, platform_admin, db_engine):
+        _login_and_verify(client, platform_admin)
+
+        subdomain = "pa-e2e-org"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        _drop_schema(db_engine, schema_name)
+        try:
+            resp = client.post("/super_admin/tenants/create", data={
+                "company_name": "PA E2E Org", "subdomain": subdomain,
+                "admin_username": "pa_e2e_admin", "admin_password": "password123",
+                "admin_email": "pa_e2e@test.local", "plan": "growth",
+            }, follow_redirects=False)
+            assert resp.status_code == 302
+            assert resp.headers.get("Location") == "/super_admin"
+
+            cur = db_engine.cursor()
+            cur.execute(
+                "SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s",
+                (schema_name,),
+            )
+            assert cur.fetchone() is not None, "tenant schema was not created"
+
+            cur.execute("SELECT db_name, status, plan FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            row = cur.fetchone()
+            assert row is not None, "tenant was not registered in att_master.tenants"
+            assert row[0] == schema_name
+            assert row[1] == "active"
+            assert row[2] == "growth"
+
+            cur.execute(f'SELECT username FROM "{schema_name}".admin_users WHERE username=%s', ("pa_e2e_admin",))
+            assert cur.fetchone() is not None, "admin user was not seeded into the new tenant schema"
+            cur.close()
+
+            # The new company shows up on the operator's own dashboard.
+            dash = client.get("/super_admin")
+            assert b"PA E2E Org" in dash.data
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+    def test_rejects_reserved_subdomain(self, client, platform_admin, db_engine):
+        _login_and_verify(client, platform_admin)
+        resp = client.post("/super_admin/tenants/create", data={
+            "company_name": "Hijack Co", "subdomain": "www",
+            "admin_username": "hijack_admin", "admin_password": "password123",
+            "admin_email": "hijack@test.local", "plan": "starter",
+        }, follow_redirects=True)
+        assert b"reserved" in resp.data.lower()
+        cur = db_engine.cursor()
+        cur.execute("SELECT 1 FROM att_master.tenants WHERE subdomain='www'")
+        assert cur.fetchone() is None
+        cur.close()

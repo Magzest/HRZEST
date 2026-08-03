@@ -5,6 +5,24 @@ try:
 except Exception:
     pass
 
+# When this file is run directly (`python app.py`, the local-dev entrypoint),
+# Python loads it as module "__main__" -- a *different* module identity than
+# "app". Every lazy `from app import init_tenant_db` (etc.) done deep inside
+# a request handler (blueprints/org.py's provision_tenant() among others)
+# then finds no "app" module cached, so Python re-imports this entire file
+# from scratch as a second "app" module. extensions.app is the same Flask
+# object either way (extensions.py is cached under its own name), so that
+# second execution re-runs every @app.route/@app.context_processor/
+# @app.errorhandler in this file against the one, already-serving Flask
+# instance -- which Flask rejects once it's handled a single request
+# ("The setup method ... can no longer be called"). Registering this
+# execution under the name "app" up front makes any later `from app import
+# X` resolve to this exact already-fully-loaded module instead of
+# re-executing it. wsgi.py already imports this file as "app" normally, so
+# it never hits this branch -- only a bare `python app.py` needs the alias.
+if __name__ == "__main__":
+    sys.modules.setdefault("app", sys.modules[__name__])
+
 import os
 import re
 import psycopg2
@@ -472,8 +490,19 @@ def _enforce_csrf():
         # Browser form submissions: redirect to login so the user gets a fresh session+token
         if request.accept_mimetypes.accept_html and not request.headers.get("X-Requested-With"):
             flash("Your session expired. Please log in again.", "warning")
-            login_url = url_for("auth.employee_login") if request.path.startswith(
-                "/employee") or "employee" in request.path else url_for("auth.admin_login")
+            # Three distinct login identities live at three distinct paths
+            # (tenant admin, platform operator, SecOps) -- bouncing all of
+            # them to auth.admin_login on an expired/missing CSRF token
+            # sent a platform-admin or SecOps session to the wrong login
+            # page entirely.
+            if request.path.startswith("/employee") or "employee" in request.path:
+                login_url = url_for("auth.employee_login")
+            elif request.path.startswith("/super_admin"):
+                login_url = "/super_admin/login"
+            elif request.path.startswith("/sp_admin") or request.path.startswith("/secops"):
+                login_url = "/sp_admin/login"
+            else:
+                login_url = url_for("auth.admin_login")
             return redirect(login_url)
         return jsonify({"ok": False, "msg": "Session expired. Please refresh and try again."}), 403
 

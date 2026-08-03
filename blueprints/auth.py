@@ -363,7 +363,11 @@ def mfa_verify():
 @auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
-    return redirect("/")
+    # "/" is the platform operator's own login (see blueprints/core.py's
+    # home()), not somewhere a tenant admin logging out should land --
+    # send them back to the check-in kiosk instead, same as before "/"
+    # was repurposed.
+    return redirect("/checkin")
 
 
 @auth_bp.route("/change_admin_password", methods=["POST"])
