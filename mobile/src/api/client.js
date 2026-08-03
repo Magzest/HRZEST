@@ -65,6 +65,16 @@ export const fetchResignations = () => client.get('/api/resignation_requests');
 export const resignationAction = (rid, action) =>
   client.post(`/api/resignation_requests/${rid}/action`, { action });
 
+export const fetchOvertime = () => client.get('/api/overtime');
+
+export const fetchCompOff = () => client.get('/api/compoff');
+
+export const fetchPerformance = () => client.get('/api/performance');
+
+export const fetchOnboarding = () => client.get('/api/onboarding');
+
+export const fetchDepartments = () => client.get('/api/departments');
+
 // ── Employee API ───────────────────────────────────────────────────
 export const employeeLogin = (employee_id, password) =>
   client.post('/api/employee/login', { employee_id, password });

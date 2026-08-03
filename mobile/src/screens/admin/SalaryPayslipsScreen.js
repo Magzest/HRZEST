@@ -45,19 +45,14 @@ export default function SalaryPayslipsScreen({ navigation }) {
   const [yearModalVisible, setYearModalVisible] = useState(false);
 
   const [salaryOverview, setSalaryOverview] = useState({
-    totalEmployees: 254,
-    totalGross: 4850000,
-    totalNetPay: 4320000,
-    totalDeductions: 530000,
+    totalEmployees: 0,
+    totalGross: 0,
+    totalNetPay: 0,
+    totalDeductions: 0,
     payrollStatus: "Draft",
   });
 
-  const [employees, setEmployees] = useState([
-    { id: "1", employeeId: "EMP-101", name: "Rahul Sharma", role: "Software Engineer", department: "Engineering", gross: 85000, grossSalary: 85000, net: 76500, netSalary: 76500, deductions: { absent: 8500, late: 0, halfDay: 0 }, workDays: 22, attendance: { full: 20, late: 2, half: 0, absent: 0 }, status: "Paid", payrollStatus: "Paid" },
-    { id: "2", employeeId: "EMP-102", name: "Priya Patel", role: "HR Manager", department: "Human Resources", gross: 95000, grossSalary: 95000, net: 85500, netSalary: 85500, deductions: { absent: 9500, late: 0, halfDay: 0 }, workDays: 22, attendance: { full: 21, late: 1, half: 0, absent: 0 }, status: "Paid", payrollStatus: "Paid" },
-    { id: "3", employeeId: "EMP-103", name: "Amit Verma", role: "UI/UX Designer", department: "Design", gross: 72000, grossSalary: 72000, net: 64800, netSalary: 64800, deductions: { absent: 7200, late: 0, halfDay: 0 }, workDays: 22, attendance: { full: 19, late: 2, half: 0, absent: 1 }, status: "Pending", payrollStatus: "Pending" },
-    { id: "4", employeeId: "EMP-104", name: "Sneha Reddy", role: "QA Engineer", department: "Quality Assurance", gross: 68000, grossSalary: 68000, net: 61200, netSalary: 61200, deductions: { absent: 6800, late: 0, halfDay: 0 }, workDays: 22, attendance: { full: 20, late: 1, half: 1, absent: 0 }, status: "Paid", payrollStatus: "Paid" },
-  ]);
+  const [employees, setEmployees] = useState([]);
 
   useEffect(() => {
     loadSalaryData();
@@ -65,10 +60,11 @@ export default function SalaryPayslipsScreen({ navigation }) {
 
   const loadSalaryData = async () => {
     try {
-      const res = await fetchSalaryReport(selectedMonth, selectedYear);
+      const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+      const res = await fetchSalaryReport(selectedYear, monthIdx);
       if (res?.data) {
         if (res.data.overview) setSalaryOverview(res.data.overview);
-        if (res.data.employees) setEmployees(res.data.employees);
+        if (Array.isArray(res.data.employees)) setEmployees(res.data.employees);
       }
     } catch (_) {}
   };

@@ -15,45 +15,37 @@ import THEME from "../../constants/theme";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 
+import { fetchOnboarding } from "../../api/client";
+
 export default function OnboardingScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [onboardings, setOnboardings] = useState([]);
 
-  const [onboardings, setOnboardings] = useState([
-    {
-      id: "1",
-      employeeName: "David Kim",
-      role: "Frontend Developer",
-      startDate: "Aug 1, 2026",
-      tasksCompleted: 8,
-      totalTasks: 10,
-      status: "In Progress",
-    },
-    {
-      id: "2",
-      employeeName: "Emily Watson",
-      role: "HR Specialist",
-      startDate: "Jul 25, 2026",
-      tasksCompleted: 10,
-      totalTasks: 10,
-      status: "Completed",
-    },
-    {
-      id: "3",
-      employeeName: "Robert Garcia",
-      role: "Backend Developer",
-      startDate: "Aug 5, 2026",
-      tasksCompleted: 3,
-      totalTasks: 10,
-      status: "Pending Start",
-    },
-  ]);
+  const loadData = async () => {
+    try {
+      const res = await fetchOnboarding();
+      if (res?.data?.ok && Array.isArray(res.data.onboardings)) {
+        setOnboardings(res.data.onboardings);
+      } else {
+        setOnboardings([]);
+      }
+    } catch {
+      setOnboardings([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  React.useEffect(() => {
+    loadData();
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    loadData();
   };
 
   const filteredOnboardings = onboardings.filter(

@@ -41,6 +41,37 @@ def _rating_tier(rating):
     return 0
 
 
+@performance_bp.route("/api/performance", methods=["GET"])
+@api_token_required
+def api_performance():
+    """JSON API endpoint for employee performance reviews from database."""
+    with _db() as (cursor, conn):
+        cursor.execute("""
+            SELECT e.employee_id, e.name, COALESCE(e.role,'Employee'), COALESCE(e.department,'General'),
+                   pr.id, COALESCE(pr.overall_rating, 0.0), COALESCE(pr.status, 'Pending Review'),
+                   pr.updated_at
+            FROM employees e
+            LEFT JOIN performance_reviews pr ON pr.employee_id = e.employee_id
+            WHERE e.is_active = 1
+            ORDER BY e.name ASC
+        """)
+        rows = cursor.fetchall()
+        reviews = []
+        for r in rows:
+            reviews.append({
+                "id": str(r[4]) if r[4] else str(r[0]),
+                "employee_id": r[0],
+                "employeeName": r[1],
+                "role": r[2],
+                "department": r[3],
+                "rating": float(r[5]) if r[5] else 0.0,
+                "status": r[6] or "Pending Review",
+                "lastReview": str(r[7]) if r[7] else "N/A",
+                "goalsMet": f"{int(float(r[5]) * 20)}%" if r[5] else "0%"
+            })
+        return jsonify({"ok": True, "reviews": reviews})
+
+
 @performance_bp.route("/performance")
 @admin_required
 def performance():

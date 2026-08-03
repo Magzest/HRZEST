@@ -14,14 +14,13 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
-import { adminLogin, employeeLogin, createOrganisation, employeeSignup } from "../api/client";
+import { adminLogin, employeeLogin, createOrganisation } from "../api/client";
 import { useAuth } from "../store/AuthContext";
 import QRScannerModal from "./QRScannerModal";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
   const [tab, setTab] = useState("admin"); // 'admin' | 'employee' | 'signup'
-  const [signupType, setSignupType] = useState("employee"); // 'employee' | 'org'
 
   // Admin login states
   const [username, setUsername] = useState("");
@@ -31,15 +30,7 @@ export default function LoginScreen() {
   const [empId, setEmpId] = useState("");
   const [empPassword, setEmpPassword] = useState("");
 
-  // Employee Signup states
-  const [empSignupId, setEmpSignupId] = useState("");
-  const [empSignupName, setEmpSignupName] = useState("");
-  const [empSignupEmail, setEmpSignupEmail] = useState("");
-  const [empSignupDept, setEmpSignupDept] = useState("Engineering");
-  const [empSignupRole, setEmpSignupRole] = useState("Software Engineer");
-  const [empSignupPassword, setEmpSignupPassword] = useState("");
-
-  // Org Signup states
+  // Org Signup states (matches create_org.html)
   const [companyName, setCompanyName] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [signupUsername, setSignupUsername] = useState("");
@@ -132,49 +123,6 @@ export default function LoginScreen() {
     setLoading(false);
   };
 
-  const handleEmployeeSignup = async () => {
-    if (!empSignupId.trim() || !empSignupName.trim() || !empSignupPassword.trim()) {
-      Alert.alert("Input Required", "Employee ID, Full Name, and Password are required.");
-      return;
-    }
-    if (empSignupPassword.length < 6) {
-      Alert.alert("Validation Error", "Password must be at least 6 characters long.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await employeeSignup(
-        empSignupId.trim().toUpperCase(),
-        empSignupName.trim(),
-        empSignupPassword.trim(),
-        empSignupEmail.trim(),
-        empSignupRole.trim() || "Employee",
-        empSignupDept.trim() || "Engineering"
-      );
-      if (res?.data?.ok) {
-        Alert.alert(
-          "Registration Successful! 🎉",
-          res.data.msg || "Employee account created! You can now sign in.",
-          [
-            {
-              text: "Sign In Now",
-              onPress: () => {
-                setEmpId(empSignupId.trim().toUpperCase());
-                setTab("employee");
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert("Registration Failed", res?.data?.msg || "Failed to register employee.");
-      }
-    } catch (err) {
-      const errorMsg = err?.response?.data?.msg || err?.message || "Registration failed.";
-      Alert.alert("Registration Error", errorMsg);
-    }
-    setLoading(false);
-  };
-
   const handleOrgSignup = async () => {
     if (!companyName.trim() || !subdomain.trim() || !signupUsername.trim() || !signupPassword.trim()) {
       Alert.alert("Input Required", "Company Name, Subdomain, Admin Username, and Password are required.");
@@ -184,11 +132,13 @@ export default function LoginScreen() {
       Alert.alert("Validation Error", "Password must be at least 8 characters long.");
       return;
     }
+    // Clean subdomain: replace dots/spaces with hyphens
+    const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9\-]/g, "-").replace(/^-+|-+$/g, "");
     setLoading(true);
     try {
       const res = await createOrganisation(
         companyName.trim(),
-        subdomain.trim().toLowerCase(),
+        cleanSubdomain,
         signupUsername.trim(),
         signupPassword.trim(),
         signupEmail.trim(),
@@ -239,7 +189,7 @@ export default function LoginScreen() {
                     ? "shield-checkmark"
                     : tab === "employee"
                     ? "people"
-                    : "add-circle"
+                    : "business"
                 }
                 size={32}
                 color="#173B8C"
@@ -293,12 +243,12 @@ export default function LoginScreen() {
               onPress={() => setTab("signup")}
             >
               <Ionicons
-                name="person-add-outline"
+                name="business-outline"
                 size={14}
                 color={tab === "signup" ? "#173B8C" : "#94A3B8"}
               />
               <Text style={[styles.tabText, tab === "signup" && styles.tabTextActive]}>
-                Sign Up
+                Register Org
               </Text>
             </TouchableOpacity>
           </View>
@@ -432,230 +382,110 @@ export default function LoginScreen() {
               </>
             ) : (
               <>
-                {/* Sign Up Mode Switcher Toggle */}
-                <View style={styles.signupToggleRow}>
-                  <TouchableOpacity
-                    style={[styles.signupToggleBtn, signupType === "employee" && styles.signupToggleBtnActive]}
-                    onPress={() => setSignupType("employee")}
-                  >
-                    <Ionicons name="person" size={14} color={signupType === "employee" ? "#173B8C" : "#64748B"} />
-                    <Text style={[styles.signupToggleText, signupType === "employee" && styles.signupToggleTextActive]}>
-                      Employee
-                    </Text>
-                  </TouchableOpacity>
+                <View style={styles.formHeader}>
+                  <Text style={styles.formTitle}>Register Organisation</Text>
+                  <Text style={styles.formSubtitle}>Create company account & admin login</Text>
+                </View>
 
-                  <TouchableOpacity
-                    style={[styles.signupToggleBtn, signupType === "org" && styles.signupToggleBtnActive]}
-                    onPress={() => setSignupType("org")}
-                  >
-                    <Ionicons name="business" size={14} color={signupType === "org" ? "#173B8C" : "#64748B"} />
-                    <Text style={[styles.signupToggleText, signupType === "org" && styles.signupToggleTextActive]}>
-                      Organisation
-                    </Text>
+                <Text style={styles.label}>COMPANY NAME</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons name="business-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Acme Corporation"
+                    placeholderTextColor="#94A3B8"
+                    value={companyName}
+                    onChangeText={setCompanyName}
+                  />
+                </View>
+
+                <Text style={styles.label}>SUBDOMAIN</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons name="globe-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="acme-corp"
+                    placeholderTextColor="#94A3B8"
+                    value={subdomain}
+                    onChangeText={setSubdomain}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                <Text style={styles.label}>ADMIN USERNAME</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="admin_acme"
+                    placeholderTextColor="#94A3B8"
+                    value={signupUsername}
+                    onChangeText={setSignupUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <Text style={styles.label}>ADMIN PASSWORD</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="At least 8 characters"
+                    placeholderTextColor="#94A3B8"
+                    value={signupPassword}
+                    onChangeText={setSignupPassword}
+                    secureTextEntry={!showPass}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
+                    <Ionicons
+                      name={showPass ? "eye-off-outline" : "eye-outline"}
+                      size={18}
+                      color="#64748B"
+                    />
                   </TouchableOpacity>
                 </View>
 
-                {signupType === "employee" ? (
-                  <>
-                    <View style={styles.formHeader}>
-                      <Text style={styles.formTitle}>Employee Sign Up</Text>
-                      <Text style={styles.formSubtitle}>Create your employee self-service account</Text>
-                    </View>
+                <Text style={styles.label}>ADMIN EMAIL (OPTIONAL)</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons name="mail-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="admin@acme.com"
+                    placeholderTextColor="#94A3B8"
+                    value={signupEmail}
+                    onChangeText={setSignupEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
 
-                    <Text style={styles.label}>EMPLOYEE ID</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="id-card-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. EMP-2045"
-                        placeholderTextColor="#94A3B8"
-                        value={empSignupId}
-                        onChangeText={setEmpSignupId}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                      />
-                    </View>
+                <Text style={styles.label}>SIGNUP CODE (OPTIONAL)</Text>
+                <View style={styles.inputRow}>
+                  <Ionicons name="key-outline" size={18} color="#64748B" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter signup code if required"
+                    placeholderTextColor="#94A3B8"
+                    value={signupSecret}
+                    onChangeText={setSignupSecret}
+                    autoCapitalize="none"
+                  />
+                </View>
 
-                    <Text style={styles.label}>FULL NAME</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Rahul Kumar"
-                        placeholderTextColor="#94A3B8"
-                        value={empSignupName}
-                        onChangeText={setEmpSignupName}
-                      />
-                    </View>
-
-                    <Text style={styles.label}>EMAIL (OPTIONAL)</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="mail-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="rahul@company.com"
-                        placeholderTextColor="#94A3B8"
-                        value={empSignupEmail}
-                        onChangeText={setEmpSignupEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    <Text style={styles.label}>DEPARTMENT</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="business-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Engineering, Design, HR..."
-                        placeholderTextColor="#94A3B8"
-                        value={empSignupDept}
-                        onChangeText={setEmpSignupDept}
-                      />
-                    </View>
-
-                    <Text style={styles.label}>PASSWORD</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="At least 6 characters"
-                        placeholderTextColor="#94A3B8"
-                        value={empSignupPassword}
-                        onChangeText={setEmpSignupPassword}
-                        secureTextEntry={!showPass}
-                        autoCapitalize="none"
-                      />
-                      <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                        <Ionicons
-                          name={showPass ? "eye-off-outline" : "eye-outline"}
-                          size={18}
-                          color="#64748B"
-                        />
-                      </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={styles.submitBtn}
-                      onPress={handleEmployeeSignup}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.submitBtnText}>Sign Up as Employee</Text>
-                      )}
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.formHeader}>
-                      <Text style={styles.formTitle}>Register Organisation</Text>
-                      <Text style={styles.formSubtitle}>Create company account & admin login</Text>
-                    </View>
-
-                    <Text style={styles.label}>COMPANY NAME</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="business-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Acme Corporation"
-                        placeholderTextColor="#94A3B8"
-                        value={companyName}
-                        onChangeText={setCompanyName}
-                      />
-                    </View>
-
-                    <Text style={styles.label}>SUBDOMAIN</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="globe-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="acme-corp"
-                        placeholderTextColor="#94A3B8"
-                        value={subdomain}
-                        onChangeText={setSubdomain}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                    </View>
-
-                    <Text style={styles.label}>ADMIN USERNAME</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="person-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="admin_acme"
-                        placeholderTextColor="#94A3B8"
-                        value={signupUsername}
-                        onChangeText={setSignupUsername}
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    <Text style={styles.label}>ADMIN PASSWORD</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="lock-closed-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="At least 8 characters"
-                        placeholderTextColor="#94A3B8"
-                        value={signupPassword}
-                        onChangeText={setSignupPassword}
-                        secureTextEntry={!showPass}
-                        autoCapitalize="none"
-                      />
-                      <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                        <Ionicons
-                          name={showPass ? "eye-off-outline" : "eye-outline"}
-                          size={18}
-                          color="#64748B"
-                        />
-                      </TouchableOpacity>
-                    </View>
-
-                    <Text style={styles.label}>ADMIN EMAIL (OPTIONAL)</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="mail-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="admin@acme.com"
-                        placeholderTextColor="#94A3B8"
-                        value={signupEmail}
-                        onChangeText={setSignupEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    <Text style={styles.label}>SIGNUP CODE (OPTIONAL)</Text>
-                    <View style={styles.inputRow}>
-                      <Ionicons name="key-outline" size={18} color="#64748B" style={styles.inputIcon} />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Enter signup code if required"
-                        placeholderTextColor="#94A3B8"
-                        value={signupSecret}
-                        onChangeText={setSignupSecret}
-                        autoCapitalize="none"
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      activeOpacity={0.85}
-                      style={styles.submitBtn}
-                      onPress={handleOrgSignup}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.submitBtnText}>Create Organisation</Text>
-                      )}
-                    </TouchableOpacity>
-                  </>
-                )}
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={styles.submitBtn}
+                  onPress={handleOrgSignup}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.submitBtnText}>Create Organisation</Text>
+                  )}
+                </TouchableOpacity>
               </>
             )}
           </View>

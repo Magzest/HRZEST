@@ -1,4 +1,5 @@
 import React, {
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -7,6 +8,9 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+  View,
 } from "react-native";
 
 import AdminHeader from "../../components/admin/AdminHeader";
@@ -27,76 +31,74 @@ import CompOffBottomSheet from "../../components/admin/CompOffBottomSheet";
 import CompOffEmptyState from "../../components/admin/CompOffEmptyState";
 
 import COMPOFF_THEME from "../../constants/compOffTheme";
-
-import {
-  compOffSummary,
-  overtimeHistory,
-  compOffBalances,
-  analytics,
-  compOffPolicies,
-  monthOptions,
-  yearOptions,
-} from "../../data/compOffDummyData";
+import { fetchOvertime, fetchCompOff } from "../../api/client";
 
 export default function CompOffScreen({
-
   navigation,
-
 }) {
+  const [selectedMonth, setSelectedMonth] = useState("August");
+  const [selectedYear, setSelectedYear] = useState("2026");
+  const [selectedTab, setSelectedTab] = useState("overtime");
+  const [filterVisible, setFilterVisible] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedDepartment, setSelectedDepartment] = useState("All");
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [detailsVisible, setDetailsVisible] = useState(false);
 
-  const [selectedMonth, setSelectedMonth] =
-    useState(compOffSummary.month);
+  const [overtimeData, setOvertimeData] = useState([]);
+  const [balancesData, setBalancesData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [selectedYear, setSelectedYear] =
-    useState(compOffSummary.year);
+  const loadData = async () => {
+    try {
+      const [otRes, compRes] = await Promise.all([
+        fetchOvertime().catch(() => null),
+        fetchCompOff().catch(() => null),
+      ]);
+      if (otRes?.data?.ok && Array.isArray(otRes.data.overtime)) {
+        setOvertimeData(otRes.data.overtime);
+      } else {
+        setOvertimeData([]);
+      }
+      if (compRes?.data?.ok && Array.isArray(compRes.data.balances)) {
+        setBalancesData(compRes.data.balances);
+      } else {
+        setBalancesData([]);
+      }
+    } catch {
+      setOvertimeData([]);
+      setBalancesData([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  const [selectedTab, setSelectedTab] =
-    useState("overtime");
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const [filterVisible, setFilterVisible] =
-    useState(false);
-
-  const [selectedStatus, setSelectedStatus] =
-    useState("All");
-
-  const [
-    selectedDepartment,
-    setSelectedDepartment,
-  ] = useState("All");
-
-  const [selectedRecord, setSelectedRecord] =
-    useState(null);
-
-  const [detailsVisible, setDetailsVisible] =
-    useState(false);
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
   const filteredHistory = useMemo(() => {
-
-    return overtimeHistory.filter((item) => {
-
+    return overtimeData.filter((item) => {
       const statusMatch =
         selectedStatus === "All" ||
         item.status === selectedStatus;
-
       const departmentMatch =
         selectedDepartment === "All" ||
         item.department === selectedDepartment;
-
       return statusMatch && departmentMatch;
-
     });
-
-  }, [
-    selectedStatus,
-    selectedDepartment,
-  ]);
+  }, [overtimeData, selectedStatus, selectedDepartment]);
 
   const openRecord = (item) => {
-
     setSelectedRecord(item);
-
     setDetailsVisible(true);
-
   };
 
   return (

@@ -17,56 +17,40 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
+import { fetchPerformance } from "../../api/client";
+
 export default function PerformanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [selectedSort, setSelectedSort] = useState("Rating (High-Low)");
   const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState([]);
 
-  const [reviews, setReviews] = useState([
-    {
-      id: "1",
-      employeeName: "Sarah Jenkins",
-      role: "Senior Software Engineer",
-      rating: 4.8,
-      status: "Completed",
-      lastReview: "Q2 2026",
-      goalsMet: "95%",
-    },
-    {
-      id: "2",
-      employeeName: "Alex Rivera",
-      role: "Product Manager",
-      rating: 4.5,
-      status: "In Progress",
-      lastReview: "Q2 2026",
-      goalsMet: "88%",
-    },
-    {
-      id: "3",
-      employeeName: "Michael Chen",
-      role: "QA Lead",
-      rating: 4.2,
-      status: "Pending Review",
-      lastReview: "Q1 2026",
-      goalsMet: "82%",
-    },
-    {
-      id: "4",
-      employeeName: "Emily Wong",
-      role: "UX Designer",
-      rating: 4.9,
-      status: "Completed",
-      lastReview: "Q2 2026",
-      goalsMet: "98%",
-    },
-  ]);
+  const loadData = async () => {
+    try {
+      const res = await fetchPerformance();
+      if (res?.data?.ok && Array.isArray(res.data.reviews)) {
+        setReviews(res.data.reviews);
+      } else {
+        setReviews([]);
+      }
+    } catch {
+      setReviews([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+    loadData();
   };
 
   const hasActiveFilter = selectedStatus !== "All" || selectedSort !== "Rating (High-Low)";
