@@ -20,7 +20,7 @@ load_dotenv()
 _HASHI_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hashi", ".env")
 load_dotenv(_HASHI_ENV)
 
-from flask import request, session, jsonify, redirect, url_for, flash, current_app
+from flask import request, session, jsonify, redirect, url_for, flash, current_app, render_template
 import datetime
 import html as _html
 from database import get_db_connection
