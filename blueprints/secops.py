@@ -35,8 +35,13 @@ def _is_secops_authorized():
     return bool(session.get("admin_logged_in")) and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin")
 
 
-def _soc_session_and_stepup_or_404():
-    """Full gate for the dashboard and monitoring APIs: role check and fresh step-up window."""
+def _soc_role_or_404():
+    """Role/login check only, no step-up requirement -- used solely by the
+    /secops dashboard route itself, which treats reaching it (already
+    logged in via the SOC email-MFA login) as sufficient and then refreshes
+    the step-up window explicitly right after. Every other protected
+    route below must use _soc_session_and_stepup_or_404 instead, which
+    also enforces that window -- this one deliberately does not."""
     username = session.get("admin_username")
     role = session.get("admin_role")
     logged_in = bool(session.get("admin_logged_in") and username)
@@ -49,8 +54,30 @@ def _soc_session_and_stepup_or_404():
             identifier=username or "anonymous", attempted_role=role or "none",
         )
         abort(404)
-    if not soc_step_up_valid():
-        soc_step_up_refresh()
+    return username, role
+
+
+def _soc_session_and_stepup_or_404():
+    """Full gate for the monitoring/config APIs: role check AND a live
+    step-up window (soc_2fa_verified_at, set at /mfa_login_verify login and
+    refreshed on every /secops dashboard load -- see _soc_role_or_404
+    above). 404, not 401/403, on any failure -- a session that isn't
+    entitled to this sees the exact same response a nonexistent URL would.
+    Must reject outright when step-up is missing/expired, not silently
+    grant it -- these are the sensitive data/config endpoints, not the
+    dashboard shell."""
+    username = session.get("admin_username")
+    role = session.get("admin_role")
+    logged_in = bool(session.get("admin_logged_in") and username)
+    if not logged_in or role not in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin") or not soc_step_up_valid():
+        log_security_event(
+            "access.escalation_attempt" if logged_in else "access.denied",
+            "Unauthorized Escalation Attempt: SOC Security Dashboard accessed without a valid SOC session/step-up"
+            if logged_in else "Unauthenticated request to SOC Security Dashboard",
+            level="ERROR" if logged_in else "INFO",
+            identifier=username or "anonymous", attempted_role=role or "none",
+        )
+        abort(404)
     return username, role
 
 
@@ -232,7 +259,7 @@ def secops_dashboard():
     enrollment, config-derived security posture, an all-time
     security_events summary + paginated/filterable log, application-layer
     IP bans, session-timeout config, and live performance/DB-pool stats."""
-    _soc_session_and_stepup_or_404()
+    _soc_role_or_404()
     soc_step_up_refresh()
 
     db = get_db_connection()

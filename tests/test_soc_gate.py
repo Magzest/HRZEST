@@ -206,21 +206,28 @@ class TestSocDashboardRoute:
 
 class TestSocEventsApi:
     """The paginated/filterable log endpoint backing the dashboard's
-    "complete logs" table — same role+step-up gate as the dashboard,
-    independently tested since the dashboard page load no longer embeds row
-    data."""
+    "complete logs" table — same role gate as the dashboard, but (unlike
+    the dashboard shell itself) still requires a live step-up window since
+    this is one of the sensitive data endpoints, not the /secops page load.
+    Independently tested since the dashboard page load no longer embeds
+    row data."""
 
     def test_anonymous_gets_404(self, client):
         assert client.get("/api/security/soc/events").status_code == 404
 
     def test_regular_admin_authorized(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="admin")
+        with client.session_transaction() as sess:
+            sess["soc_2fa_verified_at"] = time.time()
         assert client.get("/api/security/soc/events").status_code == 200
 
-    def test_soc_role_authorized(self, client, soc_admin):
+    def test_soc_role_authorized(self, client, soc_admin_verified):
+        assert client.get("/api/security/soc/events").status_code == 200
+
+    def test_soc_role_without_stepup_is_404(self, client, soc_admin):
         username, _ = soc_admin
         _admin_session(client, username, role="soc_analyst")
-        assert client.get("/api/security/soc/events").status_code == 200
+        assert client.get("/api/security/soc/events").status_code == 404
 
     def test_soc_role_gets_paginated_results(self, client, soc_admin_verified, db_engine):
         for i in range(3):
