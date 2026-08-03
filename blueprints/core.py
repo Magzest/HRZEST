@@ -258,8 +258,15 @@ def api_employee_login():
             (_hash_token(token), emp_id)
         )
         conn.commit()
-    return jsonify({"ok": True, "token": token, "employee_id": emp_id,
-                    "name": row[0], "email": row[1]})
+    from blueprints.plan_guard import get_company_plan, get_plan_info
+    plan_name = get_company_plan()
+    plan_info = get_plan_info(plan_name)
+
+    return jsonify({
+        "ok": True, "token": token, "employee_id": emp_id,
+        "name": row[0], "email": row[1],
+        "plan": plan_name, "plan_info": plan_info
+    })
 
 
 @core_bp.route("/api/employee/logout", methods=["POST"])

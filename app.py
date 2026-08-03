@@ -3058,7 +3058,17 @@ if "core.home" not in app.view_functions:
         app.register_blueprint(_bp)
 
 
-# ── Pricing page ──────────────────────────────────────────────────────────────
+# ── Pricing page & Plan Context ──────────────────────────────────────────────
+@app.context_processor
+def inject_plan_context():
+    try:
+        from blueprints.plan_guard import get_company_plan, get_plan_info
+        p = get_company_plan()
+        return dict(current_plan=p, plan_info=get_plan_info(p))
+    except Exception:
+        return dict(current_plan="basic", plan_info={})
+
+
 @app.route("/pricing")
 def pricing_page():
     """Public pricing / plan comparison page."""

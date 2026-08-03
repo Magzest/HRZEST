@@ -71,6 +71,8 @@ export default function LoginScreen() {
           role: "employee",
           name: res.data.name || empId.trim(),
           employeeId: res.data.employee_id || empId.trim(),
+          plan: res.data.plan || "basic",
+          planInfo: res.data.plan_info || {},
         });
         setLoading(false);
         return;

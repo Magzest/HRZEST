@@ -63,10 +63,14 @@ def _plan_rank(plan_name: str) -> int:
 def get_company_plan(username: str | None = None) -> str:
     """
     Return the plan for the currently logged-in admin (or a specific username).
-    Falls back to 'basic' if unset or on any error.
+    Falls back to 'basic' if unset or on any error. Uses request-level caching.
     """
+    from flask import g
+    if not username and hasattr(g, "_cached_company_plan"):
+        return g._cached_company_plan
+
     try:
-        user = username or session.get("username")
+        user = username or session.get("admin_username") or session.get("username")
         if not user:
             return "basic"
         db = get_db_connection()
@@ -75,11 +79,19 @@ def get_company_plan(username: str | None = None) -> str:
         row = cursor.fetchone()
         cursor.close()
         db.close()
-        if row and row[0] in PLANS:
-            return row[0]
+        plan_val = row[0] if (row and row[0] in PLANS) else "basic"
+        if not username:
+            g._cached_company_plan = plan_val
+        return plan_val
     except Exception:
         app_log.exception("plan_guard: failed to read plan from DB")
     return "basic"
+
+
+def get_plan_info(plan_name: str | None = None) -> dict:
+    """Return dictionary with label, max_employees, and features list for a plan."""
+    name = (plan_name or get_company_plan()).lower()
+    return PLANS.get(name, PLANS["basic"])
 
 
 def get_employee_count() -> int:

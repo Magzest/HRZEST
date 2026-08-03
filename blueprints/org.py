@@ -117,9 +117,13 @@ def create_org():
         # genuine race (two signups for the same subdomain at once) rather
         # than legitimate reuse — fail loudly via the except below instead of
         # silently overwriting whichever admin_users row won the race.
+        plan = request.form.get("plan", "basic").strip().lower()
+        if plan not in ("basic", "medium", "premium"):
+            plan = "basic"
+
         tcur.execute(
-            "INSERT INTO admin_users (username, password, email) VALUES (%s, %s, %s)",
-            (admin_username, generate_password_hash(admin_password), admin_email)
+            "INSERT INTO admin_users (username, password, email, plan) VALUES (%s, %s, %s, %s)",
+            (admin_username, generate_password_hash(admin_password), admin_email, plan)
         )
         tconn.commit()
         tcur.close()
@@ -145,5 +149,7 @@ def create_org():
         flash(f"Tenant registered in DB but master registry failed: {exc}", "error")
         return redirect("/create_org")
 
-    flash(f"Organisation '{company_name}' created! Subdomain: {subdomain}. You can now log in.", "success")
-    return redirect("/admin_login")
+    plan_label = plan.title()
+    login_link = f"/admin_login?plan={plan}&subdomain={subdomain}"
+    flash(f"🎉 Organisation '{company_name}' onboarded on {plan_label} Plan! Direct login link: {login_link}", "success")
+    return redirect(login_link)
