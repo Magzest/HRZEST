@@ -945,6 +945,31 @@
 
               <div class="py-wrap">
 
+              <!-- Subscription & Plan Card -->
+              <div class="py-card" style="border-left: 4px solid #2563eb; background: #f0f7ff; margin-bottom: 20px;">
+                <div class="py-hdr" style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <div class="py-hdr-title" style="font-size:16px;">Active Plan: <span style="font-size:12px; padding:3px 10px; background:#dbeafe; color:#1d4ed8; border-radius:20px; font-weight:800; display:inline-block;">{{ (current_plan|default('basic'))|upper }}</span></div>
+                    <div class="py-hdr-sub">Manage your subscription, employee limit caps, and unlocked security features.</div>
+                  </div>
+                  <a href="/pricing" style="font-size:12px; padding:8px 16px; background:#2563eb; color:#fff; text-decoration:none; border-radius:8px; font-weight:700;"><i class="ti ti-crown"></i> Compare All Plans</a>
+                </div>
+                <div class="py-row" style="display:flex; align-items:center; justify-content:space-between; padding-top:14px; border-top:1px solid #dbeafe; margin-top:10px;">
+                  <div>
+                    <div class="py-label">Self-Service Upgrade:</div>
+                    <div class="py-hint">Upgrade your organization plan instantly with 1-click:</div>
+                  </div>
+                  <div style="display:flex; gap:8px;">
+                    {% if current_plan != 'medium' %}
+                    <button type="button" style="background:#2563eb; color:#fff; padding:7px 14px; font-size:12px; font-weight:700; border-radius:7px; border:none; cursor:pointer;" onclick="upgradePlan('medium')">Upgrade to Medium 🔵</button>
+                    {% endif %}
+                    {% if current_plan != 'premium' %}
+                    <button type="button" style="background:#7c3aed; color:#fff; padding:7px 14px; font-size:12px; font-weight:700; border-radius:7px; border:none; cursor:pointer;" onclick="upgradePlan('premium')">Upgrade to Premium 🟣</button>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
               <!-- Card 1: Shift Timings -->
               <div class="py-card">
                 <div class="py-hdr">
@@ -1818,20 +1843,43 @@
     document.addEventListener('DOMContentLoaded', updatePreviews);
 
 
+    /* ── PLAN UPGRADE ── */
+    function upgradePlan(planName) {
+      if (!confirm('Upgrade organization plan to ' + planName.toUpperCase() + '?')) return;
+      fetch('/api/admin/upgrade_plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: planName })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.ok) {
+          alert('🎉 ' + d.msg);
+          window.location.reload();
+        } else {
+          alert('❌ ' + (d.msg || 'Upgrade failed'));
+        }
+      })
+      .catch(function() { alert('❌ Network error during upgrade'); });
+    }
+
     /* ── TEST EMAIL ── */
     function sendTestEmail() {
       var email = document.getElementById('testEmail').value.trim();
       var res   = document.getElementById('testResult');
       if (!email) { res.textContent = 'Please enter a recipient email.'; res.className = 'err'; res.style.display = 'block'; return; }
-      res.textContent = '⏳ Sending…'; res.className = ''; res.style.display = 'block';
-      var fd = new FormData(); fd.append('test_to', email);
-      fetch('/test_email', { method: 'POST', body: fd })
+      res.textContent = '⏳ Sending SMTP diagnostic test…'; res.className = ''; res.style.display = 'block';
+      fetch('/api/admin/test_email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to_email: email })
+      })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-          res.textContent = d.ok ? '✅ Test email sent!' : '❌ ' + (d.error || 'Failed');
+          res.textContent = d.ok ? ('✅ ' + d.msg) : ('❌ ' + (d.msg || d.error || 'Failed'));
           res.className   = d.ok ? 'ok' : 'err';
         })
-        .catch(function() { res.textContent = '❌ Network error.'; res.className = 'err'; });
+        .catch(function() { res.textContent = '❌ Network error during SMTP test.'; res.className = 'err'; });
     }
 
     /* ── EMAIL SETTINGS 2FA GATE ──────────────────────────────────────────

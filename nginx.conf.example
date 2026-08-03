@@ -1,0 +1,85 @@
+# ==============================================================================
+# Enterprise NGINX Reverse Proxy & SSL Configuration Template
+# Place in /etc/nginx/sites-available/attendance.conf and link to sites-enabled
+# ==============================================================================
+
+# Rate limiting zones
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/m;
+limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
+
+# HTTP -> HTTPS Redirection
+server {
+    listen 80;
+    listen [::]:80;
+    server_name attendance.yourdomain.com;
+
+    # Certbot Let's Encrypt validation
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS Server Block
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name attendance.yourdomain.com;
+
+    # SSL Certificates (Managed by Let's Encrypt / Certbot)
+    ssl_certificate     /etc/letsencrypt/live/attendance.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/attendance.yourdomain.com/privkey.pem;
+
+    # SSL Security Parameters
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+
+    # Security Headers & WebAuthn / Camera Permissions
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(self), microphone=(), geolocation=(self)" always;
+
+    # Gzip Compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
+    # File upload limit (16MB max)
+    client_max_body_size 16M;
+
+    # Proxy to Gunicorn / WSGI Backend
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 90s;
+    }
+
+    # WebSockets / Server-Sent Events (Session Risk Stream & Real-Time Dashboard)
+    location /api/session/risk-stream {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host $host;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    # Static Assets Caching
+    location /static/ {
+        alias /home/kali/.gemini/antigravity/scratch/employee-attendance/static/;
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+    }
+}

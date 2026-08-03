@@ -2285,3 +2285,66 @@ def api_org_chart_data():
     roots.sort(key=lambda x: x["name"])
     tree = [sort_tree(r) for r in roots]
     return jsonify({"ok": True, "tree": tree, "total": len(emp_map)})
+
+
+# ── Self-Service Plan Upgrade Endpoint ─────────────────────────────────────────
+@admin_views_bp.route("/api/admin/upgrade_plan", methods=["POST"])
+@admin_required
+def api_upgrade_plan():
+    """Self-service endpoint for admins to upgrade their subscription plan."""
+    data = request.get_json() or {}
+    new_plan = data.get("plan", "").strip()
+    if not new_plan:
+        new_plan = request.form.get("plan", "").strip()
+
+    from blueprints.plan_guard import upgrade_company_plan
+    ok, msg = upgrade_company_plan(new_plan)
+    if not ok:
+        return jsonify({"ok": False, "msg": msg}), 400
+
+    flash(msg, "success")
+    return jsonify({"ok": True, "msg": msg, "plan": new_plan.lower()})
+
+
+# ── Instant SMTP Connection Test Endpoint ─────────────────────────────────────
+@admin_views_bp.route("/api/admin/test_email", methods=["POST"])
+@admin_required
+def api_test_email():
+    """Send a diagnostic test email using current SMTP configuration."""
+    data = request.get_json() or {}
+    target_email = data.get("to_email", "").strip() or request.form.get("to_email", "").strip()
+
+    if not target_email:
+        target_email = session.get("admin_email") or session.get("email")
+
+    if not target_email:
+        return jsonify({"ok": False, "msg": "Target email address is required."}), 400
+
+    cfg = get_email_config()
+    if not cfg or not cfg.get("host"):
+        return jsonify({"ok": False, "msg": "No SMTP configuration found in system. Please configure SMTP first."}), 400
+
+    subject = "⚡ SMTP Connection Test — Employee Attendance Platform"
+    now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
+    html_body = f"""
+    <div style="font-family: Arial, sans-serif; padding: 24px; background: #f8fafc; border-radius: 12px;">
+      <h2 style="color: #16a34a; margin-top: 0;">✅ SMTP Connection Test Successful!</h2>
+      <p style="color: #334155; font-size: 14px;">
+        Your email server configuration is working cleanly. Automated daily attendance reports and security alerts are operational.
+      </p>
+      <p style="font-size: 12px; color: #64748b;">
+        <strong>Host:</strong> {cfg.get('host')}:{cfg.get('port')}<br>
+        <strong>Timestamp:</strong> {now_str}
+      </p>
+    </div>
+    """
+
+    try:
+        err = send_email_smtp(target_email, subject, html_body, cfg)
+        if err:
+            return jsonify({"ok": False, "msg": f"SMTP delivery error: {err}"}), 500
+        return jsonify({"ok": True, "msg": f"Test email successfully delivered to {target_email}!"})
+    except Exception as exc:
+        app_log.exception("api_test_email: SMTP delivery exception")
+        return jsonify({"ok": False, "msg": f"SMTP test failed: {exc}"}), 500
+

@@ -65,8 +65,8 @@ def get_company_plan(username: str | None = None) -> str:
     Return the plan for the currently logged-in admin (or a specific username).
     Falls back to 'basic' if unset or on any error. Uses request-level caching.
     """
-    from flask import g
-    if not username and hasattr(g, "_cached_company_plan"):
+    from flask import has_request_context, g
+    if not username and has_request_context() and hasattr(g, "_cached_company_plan"):
         return g._cached_company_plan
 
     try:
@@ -131,6 +131,40 @@ def plan_has_feature(feature: str, username: str | None = None) -> bool:
     """Return True if the current plan includes the given feature key."""
     plan = get_company_plan(username)
     return feature in PLANS[plan]["features"]
+
+
+def upgrade_company_plan(new_plan: str, username: str | None = None) -> tuple[bool, str]:
+    """
+    Upgrade or change the active company plan in the database.
+    Updates admin_users table and invalidates request cache.
+    """
+    from flask import g
+    target_plan = new_plan.lower().strip()
+    if target_plan not in PLANS:
+        return False, f"Invalid plan '{new_plan}'. Must be basic, medium, or premium."
+
+    try:
+        user = username or session.get("admin_username") or session.get("username")
+        if not user:
+            return False, "Not logged in as admin."
+
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute("UPDATE admin_users SET plan=%s WHERE username=%s", (target_plan, user))
+        db.commit()
+        cursor.close()
+        db.close()
+
+        # Invalidate request-level cache if inside an HTTP request context
+        from flask import has_request_context, g
+        if has_request_context() and hasattr(g, "_cached_company_plan"):
+            delattr(g, "_cached_company_plan")
+
+        app_log.info(f"Plan upgraded to '{target_plan}' for user '{user}'")
+        return True, f"Plan successfully updated to {PLANS[target_plan]['label']}."
+    except Exception as exc:
+        app_log.exception("upgrade_company_plan: DB update failed")
+        return False, f"Database error during plan upgrade: {exc}"
 
 
 # ── Decorator ────────────────────────────────────────────────────────────────
