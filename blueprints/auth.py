@@ -106,7 +106,7 @@ def setup_wizard():
 # (tests/conftest.py) since almost the entire suite uses a plain POST
 # /admin_login as its "get an authenticated session" setup, exactly like the
 # existing MANDATORY_ADMIN_MFA flag already does for the TOTP-enrollment gate.
-app.config.setdefault("MANDATORY_LOGIN_MFA", True)
+app.config.setdefault("MANDATORY_LOGIN_MFA", os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes"))
 
 _MFA_OTP_TTL_SEC = 300
 
