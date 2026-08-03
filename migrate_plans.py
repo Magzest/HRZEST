@@ -38,7 +38,7 @@ def run():
     # 3. Seed plan definitions
     plans = [
         ("basic",   "Basic",   60,   "face_login,qr_login,attendance,leave,payroll,portal,dashboard"),
-        ("medium",  "Medium",  150,  "face_login,qr_login,fingerprint,dashboard_qr,daily_email,attendance,leave,payroll,portal,dashboard"),
+        ("medium",  "Medium",  150,  "face_login,qr_login,fingerprint,dashboard_qr,daily_email,secops,attendance,leave,payroll,portal,dashboard"),
         ("premium", "Premium", None, "face_login,qr_login,fingerprint,dashboard_qr,daily_email,mfa,secops,auth_qr_email,mobile,attendance,leave,payroll,portal,dashboard"),
     ]
     for plan_name, label, max_emp, features in plans:

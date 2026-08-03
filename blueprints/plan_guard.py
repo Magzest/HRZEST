@@ -35,7 +35,7 @@ PLANS = {
     "medium": {
         "label": "Medium",
         "max_employees": 150,
-        "features": ["face_login", "qr_login", "fingerprint", "dashboard_qr", "daily_email",
+        "features": ["face_login", "qr_login", "fingerprint", "dashboard_qr", "daily_email", "secops",
                      "attendance", "leave", "payroll", "portal", "dashboard"],
     },
     "premium": {

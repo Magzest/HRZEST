@@ -36,6 +36,7 @@
 - ✅ **Fingerprint Login**
 - ✅ **Dashboard Authentication QR**
 - ✅ **Daily Analysis Email Reports** (auto-sent to admin each night)
+- ✅ **SecOps / SOC Dashboard** (dedicated security command center)
 - ✅ Attendance tracking & reports
 - ✅ Leave management
 - ✅ Salary & payroll
@@ -44,7 +45,6 @@
 - ✅ Admin dashboard
 - ✅ Tickets & resignation management
 - ❌ MFA (Multi-Factor Authentication)
-- ❌ SecOps / SOC Dashboard
 - ❌ Auth QR to Email
 - ❌ Mobile App
 
@@ -59,8 +59,8 @@
 - ✅ Fingerprint Login
 - ✅ Dashboard Authentication QR
 - ✅ Daily Analysis Email Reports
+- ✅ SecOps / SOC Dashboard
 - ✅ **MFA (Multi-Factor Authentication)**
-- ✅ **SecOps / SOC Dashboard** (dedicated security command center)
 - ✅ **Auth QR to Email** (QR-based login link sent to admin email)
 - ✅ **Mobile App** (iOS & Android)
 - ✅ Attendance tracking & reports
@@ -84,8 +84,8 @@
 | Fingerprint Login | ❌ | ✅ | ✅ |
 | Dashboard Auth QR | ❌ | ✅ | ✅ |
 | Daily Email Reports | ❌ | ✅ | ✅ |
+| SecOps Dashboard | ❌ | ✅ | ✅ |
 | MFA | ❌ | ❌ | ✅ |
-| SecOps Dashboard | ❌ | ❌ | ✅ |
 | Auth QR to Email | ❌ | ❌ | ✅ |
 | Mobile App | ❌ | ❌ | ✅ |
 

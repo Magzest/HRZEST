@@ -139,9 +139,9 @@ _MFA_OTP_TTL_SEC = 300  # 5 minutes
 @limiter.limit("10 per 15 minutes")
 def sp_admin_login():
     """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
-    # Block non-premium plans from SecOps
-    if _plan_rank(get_company_plan()) < _plan_rank("premium"):
-        flash("SecOps Dashboard requires the Premium plan. Please upgrade.", "warning")
+    # Block Basic plan from SecOps (requires Medium or Premium)
+    if _plan_rank(get_company_plan()) < _plan_rank("medium"):
+        flash("SecOps Dashboard requires the Medium or Premium plan. Please upgrade.", "warning")
         return redirect("/pricing")
 
     if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
