@@ -20,7 +20,7 @@ load_dotenv()
 _HASHI_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hashi", ".env")
 load_dotenv(_HASHI_ENV)
 
-from flask import request, session, jsonify, redirect, url_for, flash, current_app
+from flask import request, session, jsonify, redirect, url_for, flash, current_app, render_template
 import datetime
 import html as _html
 from database import get_db_connection
@@ -3104,12 +3104,38 @@ if "core.home" not in app.view_functions:
     from blueprints.compliance import compliance_bp
     from blueprints.hr_portal import hr_bp
     from blueprints.platform_admin import platform_admin_bp
+    from blueprints.daily_report import daily_report_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp,
-                platform_admin_bp):
+                platform_admin_bp, daily_report_bp):
         app.register_blueprint(_bp)
+
+
+# ── Pricing page & Plan Context ──────────────────────────────────────────────
+@app.context_processor
+def inject_plan_context():
+    try:
+        from flask import g as _g
+        from utils.plan_limits import get_tenant_plan, PLAN_TIERS
+        p = get_tenant_plan(_g.tenant_db)
+        tier = PLAN_TIERS[p]
+        plan_info = {
+            "display_name": tier["display_name"],
+            "employee_limit": tier["employee_limit"],
+            "features": sorted(tier["features"]),
+        }
+        return dict(current_plan=p, plan_info=plan_info, plan_tiers=PLAN_TIERS)
+    except Exception:
+        return dict(current_plan="starter", plan_info={}, plan_tiers={})
+
+
+@app.route("/pricing")
+def pricing_page():
+    """Public pricing / plan comparison page."""
+    import datetime as _dt
+    return render_template("pricing.html", now=_dt.datetime.now())
 
 _register_api_v1_aliases()
 

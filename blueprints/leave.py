@@ -1204,6 +1204,61 @@ def api_employee_holidays():
     })
 
 
+@leave_bp.route("/api/overtime", methods=["GET"])
+@api_required
+def api_overtime():
+    """API endpoint for fetching real overtime records from database."""
+    with _db() as (cursor, conn):
+        cursor.execute("""
+            SELECT o.id, o.employee_id, e.name, e.department, o.ot_date, o.hours, o.reason, o.status, o.created_at
+            FROM overtime_requests o
+            LEFT JOIN employees e ON o.employee_id = e.employee_id
+            ORDER BY o.created_at DESC
+        """)
+        rows = cursor.fetchall()
+        records = []
+        for r in rows:
+            records.append({
+                "id": r[0],
+                "employee_id": r[1],
+                "name": r[2] or r[1],
+                "department": r[3] or "General",
+                "ot_date": str(r[4]) if r[4] else "",
+                "hours": float(r[5]) if r[5] else 0.0,
+                "reason": r[6] or "",
+                "status": r[7] or "Pending",
+                "created_at": str(r[8]) if r[8] else "",
+            })
+        return jsonify({"ok": True, "overtime": records})
+
+
+@leave_bp.route("/api/compoff", methods=["GET"])
+@api_required
+def api_compoff():
+    """API endpoint for fetching real comp-off balances and summary from database."""
+    with _db() as (cursor, conn):
+        cursor.execute("""
+            SELECT c.id, c.employee_id, e.name, e.department, c.earned_days, c.used_days, c.balance_days
+            FROM compoff_balances c
+            LEFT JOIN employees e ON c.employee_id = e.employee_id
+            ORDER BY e.name ASC
+        """)
+        rows = cursor.fetchall()
+        balances = []
+        for r in rows:
+            balances.append({
+                "id": r[0],
+                "employee_id": r[1],
+                "name": r[2] or r[1],
+                "department": r[3] or "General",
+                "earned_days": float(r[4]) if r[4] else 0.0,
+                "used_days": float(r[5]) if r[5] else 0.0,
+                "balance_days": float(r[6]) if r[6] else 0.0,
+            })
+        return jsonify({"ok": True, "balances": balances})
+
+
+
 @leave_bp.route("/overtime")
 @admin_required
 def overtime():

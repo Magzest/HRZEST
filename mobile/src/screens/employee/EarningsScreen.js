@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   SafeAreaView,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
@@ -15,169 +17,108 @@ import PayslipCard from "../../components/earnings/PayslipCard";
 import StatChip from "../../components/earnings/StatChip";
 
 import { StyleSheet } from "react-native";
+import { fetchEmployeeSalary } from "../../api/client";
 
 export default function EarningsScreen() {
-  const earnings = {
-    month: "June",
-    year: "2026",
+  const today = new Date();
+  const [month, setMonth] = useState(today.getMonth() + 1);
+  const [year, setYear] = useState(today.getFullYear());
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [earnings, setEarnings] = useState(null);
+  const [error, setError] = useState("");
 
-    grossPay: 45000,
-
-    incentives: 2500,
-
-    overtime: 1000,
-
-    total: 48500,
-
-    fullDays: 22,
-
-    halfDays: 1,
-
-    lateDays: 2,
-
-    absent: 0,
-
-    dailyRate: 2000,
+  const loadSalary = async () => {
+    setError("");
+    try {
+      const res = await fetchEmployeeSalary(year, month);
+      if (res?.data?.ok) {
+        // API returns data nested under res.data.salary
+        setEarnings(res.data.salary ?? res.data);
+      } else {
+        setError(res?.data?.msg || "Could not load salary data.");
+      }
+    } catch {
+      setError("Unable to connect to server. Please try again.");
+    }
+    setLoading(false);
+    setRefreshing(false);
   };
+
+  useEffect(() => { loadSalary(); }, [month, year]);
+
+  const monthName = new Date(year, month - 1).toLocaleString("en-IN", { month: "long" });
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator size="large" color="#173B8C" />
+        <Text style={{ marginTop: 12, color: "#64748B", fontWeight: "600" }}>Loading salary data…</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ProfileHeader
-        title="Earnings"
-        showBack={false}
-      />
+      <ProfileHeader title="Earnings" showBack={false} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); loadSalary(); }}
+            colors={["#173B8C"]}
+          />
+        }
       >
-        {/* Earnings Header */}
+        {error ? (
+          <View style={{ backgroundColor: "#FEF2F2", borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: "#FECACA" }}>
+            <Text style={{ color: "#DC2626", fontWeight: "600", textAlign: "center" }}>{error}</Text>
+          </View>
+        ) : null}
 
-        <HeaderCard
-          month={earnings.month}
-          year={earnings.year}
-          total={earnings.total}
-          grossPay={earnings.grossPay}
-          incentives={earnings.incentives}
-          overtime={earnings.overtime}
-        />
+        {earnings ? (
+          <>
+            <HeaderCard
+              month={monthName}
+              year={String(year)}
+              total={earnings.net ?? earnings.gross ?? 0}
+              grossPay={earnings.gross ?? 0}
+              incentives={earnings.incentives ?? 0}
+              overtime={earnings.overtime ?? 0}
+            />
 
-        {/* Status Chips */}
+            <View style={styles.chipContainer}>
+              <StatChip label="Salary Credited" color="#22C55E" background="#ECFDF5" />
+              <StatChip label="Payslip Available" color="#2563EB" background="#EEF4FF" />
+            </View>
 
-        <View style={styles.chipContainer}>
-          <StatChip
-            label="Salary Credited"
-            color="#22C55E"
-            background="#ECFDF5"
-          />
+            <Text style={styles.sectionTitle}>Salary Summary</Text>
 
-          <StatChip
-            label="Payslip Available"
-            color="#2563EB"
-            background="#EEF4FF"
-          />
+            <SummaryCard icon="wallet-outline" title="Gross Pay" value={earnings.gross ?? 0} color="#2563EB" background="#EEF4FF" />
+            <SummaryCard icon="trophy-outline" title="Deductions" value={earnings.deduction ?? 0} color="#EF4444" background="#FEF2F2" />
+            <SummaryCard icon="cash-outline" title="Net Pay" value={earnings.net ?? 0} color="#22C55E" background="#ECFDF5" />
 
-          <StatChip
-            label="Estimated"
-            color="#F59E0B"
-            background="#FFF7ED"
-          />
-        </View>
+            <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
 
-        {/* Summary */}
+            <View style={styles.breakdownCard}>
+              <BreakdownRow icon="checkmark-circle-outline" label="Full Days" value={`${earnings.full_days ?? "--"} Days`} color="#22C55E" background="#ECFDF5" valueColor="#16A34A" />
+              <BreakdownRow icon="remove-circle-outline" label="Half Days" value={`${earnings.half_days ?? "--"} Days`} color="#F59E0B" background="#FFF7ED" valueColor="#D97706" />
+              <BreakdownRow icon="alarm-outline" label="Late Days" value={`${earnings.late_days ?? "--"} Days`} color="#EA580C" background="#FFF7ED" valueColor="#EA580C" />
+              <BreakdownRow icon="close-circle-outline" label="Absent" value={`${earnings.absent ?? "--"} Days`} color="#EF4444" background="#FEF2F2" valueColor="#DC2626" />
+              <BreakdownRow icon="calendar-outline" label="Approved Leaves" value={`${earnings.leave_days ?? "--"} Days`} color="#8B5CF6" background="#EDE9FE" valueColor="#7C3AED" />
+              <BreakdownRow icon="cash-outline" label="Daily Rate" value={earnings.spd ? `₹${Number(earnings.spd).toLocaleString()}` : "--"} color="#173B8C" background="#EEF4FF" valueColor="#173B8C" />
+            </View>
 
-        <Text style={styles.sectionTitle}>
-          Salary Summary
-        </Text>
-
-        <SummaryCard
-          icon="wallet-outline"
-          title="Gross Pay"
-          value={earnings.grossPay}
-          color="#2563EB"
-          background="#EEF4FF"
-        />
-
-        <SummaryCard
-          icon="trophy-outline"
-          title="Incentives"
-          value={earnings.incentives}
-          color="#F59E0B"
-          background="#FFF7ED"
-        />
-
-        <SummaryCard
-          icon="time-outline"
-          title="Overtime"
-          value={earnings.overtime}
-          color="#22C55E"
-          background="#ECFDF5"
-        />
-
-        {/* Attendance Breakdown */}
-
-        <Text style={styles.sectionTitle}>
-          Monthly Breakdown
-        </Text>
-
-        <View style={styles.breakdownCard}>
-          <BreakdownRow
-            icon="checkmark-circle-outline"
-            label="Full Days"
-            value={`${earnings.fullDays} Days`}
-            color="#22C55E"
-            background="#ECFDF5"
-            valueColor="#16A34A"
-          />
-
-          <BreakdownRow
-            icon="remove-circle-outline"
-            label="Half Days"
-            value={`${earnings.halfDays} Day`}
-            color="#F59E0B"
-            background="#FFF7ED"
-            valueColor="#D97706"
-          />
-
-          <BreakdownRow
-            icon="alarm-outline"
-            label="Late Days"
-            value={`${earnings.lateDays} Days`}
-            color="#EA580C"
-            background="#FFF7ED"
-            valueColor="#EA580C"
-          />
-
-          <BreakdownRow
-            icon="close-circle-outline"
-            label="Absent"
-            value={`${earnings.absent} Days`}
-            color="#EF4444"
-            background="#FEF2F2"
-            valueColor="#DC2626"
-          />
-
-          <BreakdownRow
-            icon="cash-outline"
-            label="Daily Rate"
-            value={`₹${earnings.dailyRate.toLocaleString()}`}
-            color="#173B8C"
-            background="#EEF4FF"
-            valueColor="#173B8C"
-          />
-        </View>
-
-        {/* Payslip */}
-
-        <PayslipCard
-          onViewPayslip={(month, year) => {
-            console.log(
-              "View Payslip:",
-              month,
-              year
-            );
-          }}
-        />
+            <PayslipCard onViewPayslip={(m, y) => {}} />
+          </>
+        ) : (
+          <View style={{ alignItems: "center", paddingVertical: 60 }}>
+            <Text style={{ color: "#64748B", fontWeight: "600", fontSize: 15 }}>No salary data available for this month.</Text>
+          </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>

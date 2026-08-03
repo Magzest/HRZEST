@@ -9,15 +9,15 @@ const ACTIONS = [
     icon: "calendar-outline",
     color: "#2563EB",
     bg: "#EEF4FF",
-    screen: "AttendanceHistory",
+    screen: "Attendance",
   },
   {
-    title: "Payslips",
-    subtitle: "Salary",
+    title: "Earnings",
+    subtitle: "Salary & Pay",
     icon: "wallet-outline",
     color: "#7C3AED",
     bg: "#F3E8FF",
-    screen: "Payslips",
+    screen: "Earnings",
   },
   {
     title: "Leave",
@@ -49,9 +49,8 @@ const ACTIONS = [
     icon: "person-circle-outline",
     color: "#0284C7",
     bg: "#F0F9FF",
-    screen: "Profile",
+    screen: "ProfileTab",
   },
-  
 ];
 
 export default function EmployeeQuickActions({ navigation }) {
@@ -69,10 +68,10 @@ export default function EmployeeQuickActions({ navigation }) {
             style={styles.card}
             onPress={() => {
               if (navigation && item.screen) {
-                if (item.screen === "Leave" || item.screen === "Tickets") {
-                  navigation.navigate("EmployeeTabs", { screen: item.screen });
-                } else {
+                try {
                   navigation.navigate(item.screen);
+                } catch (_) {
+                  navigation.navigate("Home");
                 }
               }
             }}

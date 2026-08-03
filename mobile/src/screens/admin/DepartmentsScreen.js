@@ -1,20 +1,56 @@
-import React, { useState } from "react";
-
+import React, { useState, useEffect } from "react";
 import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
+  Text,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import DashboardStatCard from "../../components/admin/DashboardStatCard";
-
 import THEME from "../../constants/theme";
+import { fetchDepartments } from "../../api/client";
 
 export default function DepartmentsScreen() {
   const [search, setSearch] = useState("");
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = async () => {
+    try {
+      const res = await fetchDepartments();
+      if (res?.data?.ok && Array.isArray(res.data.departments)) {
+        setDepartments(res.data.departments);
+      } else {
+        setDepartments([]);
+      }
+    } catch {
+      setDepartments([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const filteredDepts = departments.filter((d) =>
+    d.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalEmployees = departments.reduce((acc, d) => acc + (d.count || 0), 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -23,6 +59,7 @@ export default function DepartmentsScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <AdminSearchBar
           value={search}
@@ -31,11 +68,10 @@ export default function DepartmentsScreen() {
         />
 
         {/* Department Summary */}
-
         <View style={styles.grid}>
           <DashboardStatCard
             title="Departments"
-            value="8"
+            value={String(departments.length)}
             subtitle="Total Departments"
             icon="business-outline"
             iconColor={THEME.colors.primary}
@@ -44,209 +80,37 @@ export default function DepartmentsScreen() {
 
           <DashboardStatCard
             title="Employees"
-            value="248"
+            value={String(totalEmployees)}
             subtitle="Across Departments"
             icon="people-outline"
             iconColor={THEME.colors.success}
             iconBackground={THEME.colors.greenBg}
           />
-
-          <DashboardStatCard
-            title="Managers"
-            value="14"
-            subtitle="Department Heads"
-            icon="person-outline"
-            iconColor={THEME.colors.payroll}
-            iconBackground={THEME.colors.purpleBg}
-          />
-
-          <DashboardStatCard
-            title="Budget"
-            value="₹18.6L"
-            subtitle="Monthly Budget"
-            icon="cash-outline"
-            iconColor={THEME.colors.warning}
-            iconBackground={THEME.colors.yellowBg}
-          />
         </View>
 
-        {/* Department Cards */}
-                <View style={styles.departmentCard}>
-          <View style={styles.departmentInfo}>
-            <Text style={styles.departmentName}>
-              Engineering
-            </Text>
-
-            <Text style={styles.departmentHead}>
-              Head: Rahul Verma
-            </Text>
-
-            <Text style={styles.departmentDetails}>
-              Employees: 82
-            </Text>
-
-            <Text style={styles.departmentBudget}>
-              Monthly Budget: ₹8.4L
-            </Text>
+        {loading ? (
+          <ActivityIndicator size="large" color={THEME.colors.primary} style={{ marginTop: 40 }} />
+        ) : filteredDepts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No departments found.</Text>
           </View>
+        ) : (
+          filteredDepts.map((d, i) => (
+            <View key={i} style={styles.departmentCard}>
+              <View style={styles.departmentInfo}>
+                <Text style={styles.departmentName}>{d.name}</Text>
+                <Text style={styles.departmentDetails}>Active Employees: {d.count}</Text>
+              </View>
 
-          <View style={styles.rightSection}>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    THEME.colors.greenBg,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  {
-                    color:
-                      THEME.colors.success,
-                  },
-                ]}
-              >
-                Active
-              </Text>
+              <View style={styles.rightSection}>
+                <View style={[styles.statusBadge, { backgroundColor: THEME.colors.greenBg }]}>
+                  <Text style={[styles.statusText, { color: THEME.colors.success }]}>Active</Text>
+                </View>
+              </View>
             </View>
-          </View>
-        </View>
-
-        <View style={styles.departmentCard}>
-          <View style={styles.departmentInfo}>
-            <Text style={styles.departmentName}>
-              Human Resources
-            </Text>
-
-            <Text style={styles.departmentHead}>
-              Head: Priya Sharma
-            </Text>
-
-            <Text style={styles.departmentDetails}>
-              Employees: 18
-            </Text>
-
-            <Text style={styles.departmentBudget}>
-              Monthly Budget: ₹1.8L
-            </Text>
-          </View>
-
-          <View style={styles.rightSection}>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    THEME.colors.greenBg,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  {
-                    color:
-                      THEME.colors.success,
-                  },
-                ]}
-              >
-                Active
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.departmentCard}>
-          <View style={styles.departmentInfo}>
-            <Text style={styles.departmentName}>
-              Finance
-            </Text>
-
-            <Text style={styles.departmentHead}>
-              Head: Arjun Mehta
-            </Text>
-
-            <Text style={styles.departmentDetails}>
-              Employees: 26
-            </Text>
-
-            <Text style={styles.departmentBudget}>
-              Monthly Budget: ₹2.6L
-            </Text>
-          </View>
-
-          <View style={styles.rightSection}>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    THEME.colors.greenBg,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  {
-                    color:
-                      THEME.colors.success,
-                  },
-                ]}
-              >
-                Active
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.departmentCard}>
-          <View style={styles.departmentInfo}>
-            <Text style={styles.departmentName}>
-              Marketing
-            </Text>
-
-            <Text style={styles.departmentHead}>
-              Head: Neha Kapoor
-            </Text>
-
-            <Text style={styles.departmentDetails}>
-              Employees: 15
-            </Text>
-
-            <Text style={styles.departmentBudget}>
-              Monthly Budget: ₹1.5L
-            </Text>
-          </View>
-
-          <View style={styles.rightSection}>
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    THEME.colors.yellowBg,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.statusText,
-                  {
-                    color:
-                      THEME.colors.warning,
-                  },
-                ]}
-              >
-                Inactive
-              </Text>
-            </View>
-          </View>
-        </View>
-                <View style={{ height: 110 }} />
+          ))
+        )}
+        <View style={{ height: 110 }} />
       </ScrollView>
     </SafeAreaView>
   );

@@ -15,63 +15,63 @@ import { Ionicons } from "@expo/vector-icons";
 import THEME from "../../constants/theme";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
+
+import { fetchPerformance } from "../../api/client";
 
 export default function PerformanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedSort, setSelectedSort] = useState("Rating (High-Low)");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState([]);
 
-  const [reviews, setReviews] = useState([
-    {
-      id: "1",
-      employeeName: "Sarah Jenkins",
-      role: "Senior Software Engineer",
-      rating: 4.8,
-      status: "Completed",
-      lastReview: "Q2 2026",
-      goalsMet: "95%",
-    },
-    {
-      id: "2",
-      employeeName: "Alex Rivera",
-      role: "Product Manager",
-      rating: 4.5,
-      status: "In Progress",
-      lastReview: "Q2 2026",
-      goalsMet: "88%",
-    },
-    {
-      id: "3",
-      employeeName: "Michael Chen",
-      role: "UI/UX Designer",
-      rating: 4.9,
-      status: "Completed",
-      lastReview: "Q2 2026",
-      goalsMet: "98%",
-    },
-    {
-      id: "4",
-      employeeName: "David Miller",
-      role: "DevOps Engineer",
-      rating: 4.2,
-      status: "Pending Self-Review",
-      lastReview: "Q1 2026",
-      goalsMet: "82%",
-    },
-  ]);
+  const loadData = async () => {
+    try {
+      const res = await fetchPerformance();
+      if (res?.data?.ok && Array.isArray(res.data.reviews)) {
+        setReviews(res.data.reviews);
+      } else {
+        setReviews([]);
+      }
+    } catch {
+      setReviews([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    loadData();
   };
 
-  const filteredReviews = reviews.filter(
-    (r) =>
-      r.employeeName.toLowerCase().includes(search.toLowerCase()) ||
-      r.role.toLowerCase().includes(search.toLowerCase())
-  );
+  const hasActiveFilter = selectedStatus !== "All" || selectedSort !== "Rating (High-Low)";
+
+  const statuses = ["All", "Completed", "In Progress", "Pending Review"];
+  const sortOptions = ["Rating (High-Low)", "Rating (Low-High)", "Name (A-Z)"];
+
+  const filteredReviews = reviews
+    .filter((r) => {
+      const matchesSearch =
+        r.employeeName.toLowerCase().includes(search.toLowerCase()) ||
+        r.role.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus =
+        selectedStatus === "All" || r.status === selectedStatus;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (selectedSort === "Rating (Low-High)") return a.rating - b.rating;
+      if (selectedSort === "Name (A-Z)") return a.employeeName.localeCompare(b.employeeName);
+      return b.rating - a.rating;
+    });
 
   return (
     <LinearGradient
@@ -129,6 +129,9 @@ export default function PerformanceScreen({ navigation }) {
             value={search}
             onChangeText={setSearch}
             placeholder="Search employee performance..."
+            onFilterPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={hasActiveFilter}
+            onClear={() => setSearch("")}
           />
 
           <View style={styles.sectionHeader}>
@@ -196,6 +199,24 @@ export default function PerformanceScreen({ navigation }) {
 
           <View style={{ height: 100 }} />
         </ScrollView>
+
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Performance Reviews"
+          statusOptions={statuses}
+          selectedStatus={selectedStatus}
+          onSelectStatus={setSelectedStatus}
+          sortOptions={sortOptions}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setSelectedStatus("All");
+            setSelectedSort("Rating (High-Low)");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );

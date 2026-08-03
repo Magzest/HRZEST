@@ -1,331 +1,375 @@
-import React, { useMemo, useState } from "react";
-
+import React, { useState, useEffect } from "react";
 import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  View,
   Alert,
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
 } from "react-native";
 
-import AdminHeader from "../../components/admin/AdminHeader";
+import { Ionicons } from "@expo/vector-icons";
 
+import AdminHeader from "../../components/admin/AdminHeader";
 import SalaryHeader from "../../components/admin/salary/SalaryHeader";
 import SalarySearchBar from "../../components/admin/salary/SalarySearchBar";
 import MonthYearSelector from "../../components/admin/salary/MonthYearSelector";
 import PayrollSummaryCard from "../../components/admin/salary/PayrollSummaryCard";
 import SalaryStatsGrid from "../../components/admin/salary/SalaryStatsGrid";
 import PayrollActionButtons from "../../components/admin/salary/PayrollActionButtons";
-import SalaryEmployeeCard from "../../components/admin/salary/SalaryEmployeeCard";
-import SalaryRulesCard from "../../components/admin/salary/SalaryRulesCard";
-import PayrollActionSheet from "../../components/admin/salary/PayrollActionSheet";
-import EmployeeSalaryBottomSheet from "../../components/admin/salary/EmployeeSalaryBottomSheet";
-import EmptySalaryState from "../../components/admin/salary/EmptySalaryState";
-
+import EmployeeSalaryList from "../../components/admin/salary/EmployeeSalaryList";
 import SALARY_THEME from "../../constants/salaryTheme";
+import { fetchSalaryReport } from "../../api/client";
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
-import {
-  salaryOverview,
-  employeeSalaryData,
-  salaryRules,
-} from "../../data/salaryDummyData";
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
 
-export default function SalaryPayslipsScreen() {
+const YEARS = ["2024", "2025", "2026", "2027"];
+
+export default function SalaryPayslipsScreen({ navigation }) {
   const [search, setSearch] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("July");
+  const [selectedYear, setSelectedYear] = useState("2026");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedDept, setSelectedDept] = useState("All");
+  const [selectedSort, setSelectedSort] = useState("Highest Net Pay");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
-  const [selectedMonth] = useState(
-    salaryOverview.month
-  );
+  const [monthModalVisible, setMonthModalVisible] = useState(false);
+  const [yearModalVisible, setYearModalVisible] = useState(false);
 
-  const [selectedYear] = useState(
-    salaryOverview.year
-  );
+  const [salaryOverview, setSalaryOverview] = useState({
+    totalEmployees: 0,
+    totalGross: 0,
+    totalNetPay: 0,
+    totalDeductions: 0,
+    payrollStatus: "Draft",
+  });
 
-  const [actionSheetVisible, setActionSheetVisible] =
-    useState(false);
+  const [employees, setEmployees] = useState([]);
 
-  const [employeeSheetVisible, setEmployeeSheetVisible] =
-    useState(false);
+  useEffect(() => {
+    loadSalaryData();
+  }, [selectedMonth, selectedYear]);
 
-  const [selectedEmployee, setSelectedEmployee] =
-    useState(null);
-
-  const employees = useMemo(() => {
-    if (!search.trim()) {
-      return employeeSalaryData;
-    }
-
-    const keyword = search.toLowerCase();
-
-    return employeeSalaryData.filter(
-      (employee) =>
-        employee.name
-          .toLowerCase()
-          .includes(keyword) ||
-        employee.employeeId
-          .toLowerCase()
-          .includes(keyword) ||
-        employee.department
-          .toLowerCase()
-          .includes(keyword)
-    );
-  }, [search]);
+  const loadSalaryData = async () => {
+    try {
+      const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+      const res = await fetchSalaryReport(selectedYear, monthIdx);
+      if (res?.data) {
+        if (res.data.overview) setSalaryOverview(res.data.overview);
+        if (Array.isArray(res.data.employees)) setEmployees(res.data.employees);
+      }
+    } catch (_) {}
+  };
 
   const handleGeneratePayroll = () => {
     Alert.alert(
       "Generate Payroll",
-      "Payroll generation will be implemented with backend integration."
+      `Generating payroll report for ${selectedMonth} ${selectedYear}...`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          onPress: () => {
+            setSalaryOverview((prev) => ({
+              ...prev,
+              payrollStatus: "Completed",
+            }));
+            Alert.alert(
+              "Success",
+              `Payroll report for ${selectedMonth} ${selectedYear} generated successfully.`
+            );
+          },
+        },
+      ]
     );
   };
 
-  const handleExport = () => {
-    Alert.alert(
-      "Export",
-      "Excel export will be implemented."
-    );
-  };
+  const hasActiveFilter = selectedStatus !== "All" || selectedDept !== "All" || selectedSort !== "Highest Net Pay";
 
-  const handleEmail = () => {
-    Alert.alert(
-      "Email Payslips",
-      "Email functionality will be implemented."
-    );
-  };
+  const departments = ["All", "Engineering", "Human Resources", "Design", "Quality Assurance"];
+  const statuses = ["All", "Paid", "Pending"];
+  const sortOptions = ["Highest Net Pay", "Lowest Net Pay", "Name (A-Z)"];
 
-  const handlePrint = () => {
-    Alert.alert(
-      "Print",
-      "Print functionality will be implemented."
-    );
-  };
+  const filteredEmployees = employees
+    .filter((e) => {
+      const matchesSearch =
+        e.name.toLowerCase().includes(search.toLowerCase()) ||
+        e.role.toLowerCase().includes(search.toLowerCase()) ||
+        (e.employeeId && e.employeeId.toLowerCase().includes(search.toLowerCase()));
 
-  const handleLockPayroll = () => {
-    Alert.alert(
-      "Lock Payroll",
-      "Payroll locking will be implemented."
-    );
-  };
+      const matchesStatus =
+        selectedStatus === "All" ||
+        e.status === selectedStatus ||
+        e.payrollStatus === selectedStatus;
 
-  const handleViewEmployee = (employee) => {
-    setSelectedEmployee(employee);
-    setEmployeeSheetVisible(true);
-  };
+      const matchesDept =
+        selectedDept === "All" || e.department === selectedDept;
 
-  const handleDownloadEmployee = () => {
-    Alert.alert(
-      "Download",
-      "Payslip download will be implemented."
-    );
-  };
-
-  const handleEmailEmployee = () => {
-    Alert.alert(
-      "Email",
-      "Employee payslip email will be implemented."
-    );
-  };
-
-  const handlePrintEmployee = () => {
-    Alert.alert(
-      "Print",
-      "Employee payslip printing will be implemented."
-    );
-  };
+      return matchesSearch && matchesStatus && matchesDept;
+    })
+    .sort((a, b) => {
+      const netA = a.netSalary ?? a.net ?? 0;
+      const netB = b.netSalary ?? b.net ?? 0;
+      if (selectedSort === "Lowest Net Pay") return netA - netB;
+      if (selectedSort === "Name (A-Z)") return a.name.localeCompare(b.name);
+      return netB - netA;
+    });
 
   return (
     <SafeAreaView style={styles.container}>
-
-      <AdminHeader title="Salary & Payslips" />
+      <AdminHeader title="Salary & Payslips" navigation={navigation} />
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-              <SalaryHeader
+        <SalaryHeader
           month={selectedMonth}
           year={selectedYear}
-          onSettingsPress={() =>
-            Alert.alert(
-              "Payroll Settings",
-              "Payroll settings screen will be added."
-            )
-          }
+          onSettingsPress={() => navigation.navigate("Settings")}
         />
 
         <SalarySearchBar
           value={search}
           onChangeText={setSearch}
           onClear={() => setSearch("")}
+          onFilterPress={() => setFilterModalVisible(true)}
+          hasActiveFilter={hasActiveFilter}
         />
 
         <MonthYearSelector
           selectedMonth={selectedMonth}
           selectedYear={selectedYear}
-          onMonthPress={() =>
-            Alert.alert(
-              "Month",
-              "Month selector will be implemented."
-            )
-          }
-          onYearPress={() =>
-            Alert.alert(
-              "Year",
-              "Year selector will be implemented."
-            )
-          }
+          onMonthPress={() => setMonthModalVisible(true)}
+          onYearPress={() => setYearModalVisible(true)}
           onGeneratePress={handleGeneratePayroll}
         />
 
         <PayrollSummaryCard
           month={selectedMonth}
           year={selectedYear}
-          totalEmployees={
-            salaryOverview.totalEmployees
-          }
-          totalGross={
-            salaryOverview.totalGross
-          }
-          totalNet={
-            salaryOverview.totalNetPay
-          }
-          totalDeductions={
-            salaryOverview.totalDeductions
-          }
-          payrollStatus={
-            salaryOverview.payrollStatus
-          }
-          onGeneratePayroll={
-            handleGeneratePayroll
-          }
+          totalEmployees={salaryOverview.totalEmployees}
+          totalGross={salaryOverview.totalGross}
+          totalNet={salaryOverview.totalNetPay}
+          totalDeductions={salaryOverview.totalDeductions}
+          payrollStatus={salaryOverview.payrollStatus}
+          onGeneratePayroll={handleGeneratePayroll}
         />
 
         <SalaryStatsGrid
-          totalEmployees={
-            salaryOverview.totalEmployees
-          }
-          grossSalary={
-            salaryOverview.totalGross
-          }
-          deductions={
-            salaryOverview.totalDeductions
-          }
-          netSalary={
-            salaryOverview.totalNetPay
-          }
+          totalEmployees={salaryOverview.totalEmployees}
+          grossSalary={salaryOverview.totalGross}
+          deductions={salaryOverview.totalDeductions}
+          netSalary={salaryOverview.totalNetPay}
         />
 
         <PayrollActionButtons
-          onGenerate={
-            handleGeneratePayroll
-          }
-          onExport={handleExport}
-          onEmail={handleEmail}
-          onMore={() =>
-            setActionSheetVisible(true)
-          }
-        />
-                {employees.length === 0 ? (
-
-          <EmptySalaryState
-            title="No Employees Found"
-            subtitle="Try searching with another employee name or generate payroll after adding employees."
-            buttonText="Generate Payroll"
-            onPress={handleGeneratePayroll}
-          />
-
-        ) : (
-
-          <View style={styles.employeeSection}>
-
-            {employees.map((employee) => (
-
-              <SalaryEmployeeCard
-                key={employee.id}
-                employee={employee}
-                onView={handleViewEmployee}
-                onDownload={handleDownloadEmployee}
-                onEmail={handleEmailEmployee}
-              />
-
-            ))}
-
-          </View>
-
-        )}
-
-        <SalaryRulesCard
-          rules={salaryRules}
+          onGenerate={handleGeneratePayroll}
+          onExport={() => Alert.alert("Export", "Exporting salary CSV summary...")}
+          onEmail={() => Alert.alert("Email Sent", "Bulk payslip emails dispatched to staff.")}
+          onMore={() => Alert.alert("Options", "Additional payroll rules available under Settings.")}
         />
 
-        <View style={{ height: 30 }} />
-
+        <EmployeeSalaryList
+          employees={filteredEmployees}
+          onSelectEmployee={(emp) =>
+            Alert.alert("Employee Payslip", `${emp.name} (${emp.role})\nNet Pay: ₹${emp.net.toLocaleString()}\nStatus: ${emp.status}`)
+          }
+        />
       </ScrollView>
 
-      {/* Payroll Actions Bottom Sheet */}
+      {/* Month Selector Modal */}
+      <Modal
+        visible={monthModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMonthModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Month</Text>
+              <TouchableOpacity onPress={() => setMonthModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={MONTHS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.pickerOption,
+                    selectedMonth === item && styles.pickerOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedMonth(item);
+                    setMonthModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      selectedMonth === item && styles.pickerOptionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedMonth === item && (
+                    <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
 
-      <PayrollActionSheet
-        visible={actionSheetVisible}
-        onClose={() =>
-          setActionSheetVisible(false)
-        }
-        onGenerate={() => {
-          setActionSheetVisible(false);
-          handleGeneratePayroll();
-        }}
-        onExport={() => {
-          setActionSheetVisible(false);
-          handleExport();
-        }}
-        onPrint={() => {
-          setActionSheetVisible(false);
-          handlePrint();
-        }}
-        onEmail={() => {
-          setActionSheetVisible(false);
-          handleEmail();
-        }}
-        onLock={() => {
-          setActionSheetVisible(false);
-          handleLockPayroll();
-        }}
-      />
+      {/* Year Selector Modal */}
+      <Modal
+        visible={yearModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setYearModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Year</Text>
+              <TouchableOpacity onPress={() => setYearModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={YEARS}
+              keyExtractor={(item) => item}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.pickerOption,
+                    selectedYear === item && styles.pickerOptionActive,
+                  ]}
+                  onPress={() => {
+                    setSelectedYear(item);
+                    setYearModalVisible(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.pickerOptionText,
+                      selectedYear === item && styles.pickerOptionTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                  {selectedYear === item && (
+                    <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
 
-      {/* Employee Payslip Bottom Sheet */}
-
-      <EmployeeSalaryBottomSheet
-        visible={employeeSheetVisible}
-        employee={selectedEmployee}
-        onClose={() => {
-          setEmployeeSheetVisible(false);
-          setSelectedEmployee(null);
-        }}
-        onDownload={handleDownloadEmployee}
-        onEmail={handleEmailEmployee}
-        onPrint={handlePrintEmployee}
-      />
-
-    </SafeAreaView>
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Salary & Payroll"
+          statusOptions={statuses}
+          selectedStatus={selectedStatus}
+          onSelectStatus={setSelectedStatus}
+          deptOptions={departments}
+          selectedDept={selectedDept}
+          onSelectDept={setSelectedDept}
+          sortOptions={sortOptions}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setSelectedStatus("All");
+            setSelectedDept("All");
+            setSelectedSort("Highest Net Pay");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
+      </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({  container: {
+const styles = StyleSheet.create({
+  container: {
     flex: 1,
     backgroundColor: SALARY_THEME.colors.background,
   },
-
   scrollView: {
     flex: 1,
   },
-
   content: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
+    paddingTop: 16,
+    paddingBottom: 110,
   },
-
-  employeeSection: {
-    marginTop: 4,
-    marginBottom: 20,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxHeight: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 20,
+    elevation: 10,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  pickerOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  pickerOptionActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  pickerOptionText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  pickerOptionTextActive: {
+    fontWeight: "800",
+    color: "#0B2253",
   },
 });

@@ -3,7 +3,7 @@ const LEAVE_THEME = {
     background: "#F8FAFC",
     surface: "#FFFFFF",
 
-    primary: "#2563EB",
+    primary: "#0B2253",
     primaryLight: "#DBEAFE",
 
     success: "#16A34A",

@@ -31,6 +31,21 @@ PLAN_TIERS = {
 
 _DEFAULT_PLAN = "starter"
 
+# Ordered low-to-high, for "requires at least tier X" checks (e.g. SecOps
+# gating, the nightly digest email) -- distinct from check_feature_allowed's
+# per-feature membership checks below, which don't have a linear ordering.
+PLAN_ORDER = ["starter", "growth", "enterprise"]
+
+
+def plan_rank(plan_name: str) -> int:
+    """Numeric rank for minimum-tier comparisons. Unknown plan names rank
+    lowest (0) rather than raising, matching this module's fail-restrictive
+    posture elsewhere."""
+    try:
+        return PLAN_ORDER.index(plan_name)
+    except ValueError:
+        return 0
+
 
 def get_tenant_plan(schema_name: str) -> str:
     """Look up a tenant's plan from the registry. Fails to the most
@@ -81,6 +96,18 @@ def check_employee_limit(schema_name: str):
             "Upgrade your plan to add more."
         )
     return True, ""
+
+
+def set_tenant_plan(schema_name: str, new_plan: str):
+    """Self-service plan change (no payment gateway yet -- see module
+    docstring), a straight write with no billing side effect. Callers must
+    validate new_plan against PLAN_TIERS.keys() themselves before calling."""
+    conn = get_master_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE tenants SET plan=%s WHERE db_name=%s", (new_plan, schema_name))
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 def check_feature_allowed(schema_name: str, feature_key: str):

@@ -6,7 +6,7 @@ import os
 import secrets
 import datetime
 import ipaddress
-from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, abort
+from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, abort, g, flash
 from database import get_db_connection, pool_stats, transaction
 from utils.security_logs import (
     fetch_threat_logs,
@@ -26,6 +26,7 @@ from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
 from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email
 from extensions import app_log, log_security_event, limiter
+from utils.plan_limits import get_tenant_plan, plan_rank
 
 secops_bp = Blueprint("secops", __name__)
 
@@ -138,6 +139,11 @@ _MFA_OTP_TTL_SEC = 300  # 5 minutes
 @limiter.limit("10 per 15 minutes")
 def sp_admin_login():
     """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
+    # Block Starter plan from SecOps (requires Growth or Enterprise)
+    if plan_rank(get_tenant_plan(g.tenant_db)) < plan_rank("growth"):
+        flash("SecOps Dashboard requires the Growth or Enterprise plan. Please upgrade.", "warning")
+        return redirect("/pricing")
+
     if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
         return redirect("/secops")
 

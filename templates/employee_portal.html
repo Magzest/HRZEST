@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -703,6 +703,18 @@
           <div class="sb-role">{{ emp[2] or 'Employee' }}</div>
           <div class="sb-id">ID: {{ emp[0] }}</div>
         </div>
+      </div>
+
+      <!-- Language Switcher & Touch ID -->
+      <div style="display:flex;gap:6px;margin-bottom:14px;padding:0 2px;">
+        <select id="langSelector" onchange="i18n.setLanguage(this.value)" style="flex:1;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.2);font-size:11px;font-weight:700;outline:none;cursor:pointer;">
+          <option value="en" style="color:#000;">🌐 EN (English)</option>
+          <option value="es" style="color:#000;">🌐 ES (Español)</option>
+          <option value="hi" style="color:#000;">🌐 HI (हिन्दी)</option>
+        </select>
+        <button type="button" onclick="enrollTouchID()" style="padding:6px 10px;border-radius:8px;background:rgba(34,197,94,0.25);color:#86efac;border:1px solid rgba(34,197,94,0.4);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;" title="Register Touch ID / Biometric">
+          <i class="ti ti-fingerprint"></i> Touch ID
+        </button>
       </div>
 
       <div class="sb-scroll-nav">
@@ -4533,5 +4545,16 @@
   })();
   </script>
   <!-- /DEVICE POSTURE RELAY -->
+  <script src="/static/js/i18n.js"></script>
+  <script>
+    function enrollTouchID() {
+      if (!window.PublicKeyCredential) {
+        alert('❌ Touch ID / WebAuthn is not supported by your current browser.');
+        return;
+      }
+      alert('👉 To enroll Touch ID or Windows Hello, please follow your device biometric prompt.');
+      window.location.href = '/webauthn/registration-options';
+    }
+  </script>
 </body>
 </html>

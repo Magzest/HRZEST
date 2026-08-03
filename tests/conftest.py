@@ -52,6 +52,7 @@ from blueprints.email_blast import email_blast_bp
 from blueprints.compliance import compliance_bp
 from blueprints.hr_portal import hr_bp
 from blueprints.platform_admin import platform_admin_bp
+from blueprints.daily_report import daily_report_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -73,6 +74,7 @@ flask_app.register_blueprint(email_blast_bp)
 flask_app.register_blueprint(compliance_bp)
 flask_app.register_blueprint(hr_bp)
 flask_app.register_blueprint(platform_admin_bp)
+flask_app.register_blueprint(daily_report_bp)
 
 # Import app AFTER blueprints are registered so all module-level reads pick
 # up test values AND _register_api_v1_aliases() sees the full route set.
@@ -190,9 +192,23 @@ def client():
 
 @pytest.fixture
 def seed_admin(db_engine):
-    """Insert a test admin user; clean up after the test."""
+    """Insert a test admin user; clean up after the test.
+
+    Also clears any login_attempts row for "test_admin" on every use, not
+    just once per session (see _reset_login_attempts above) -- this
+    identifier is shared across the whole suite, and _LOGIN_MAX_ATTEMPTS=3
+    is low enough that a handful of legitimate wrong-password tests
+    elsewhere in a 1900+-test run can accumulate a real 15-minute lockout
+    partway through, silently breaking every subsequent test that expects
+    a plain POST /admin_login to succeed (assertions failing with a 302
+    back to the login page instead of the expected 200/redirect-to-admin).
+    A session-scoped one-time reset only guards against stale state from a
+    *previous* run; it does nothing once a run's own tests start
+    accumulating failures again during that same run.
+    """
     from utils.auth import generate_password_hash
     cur = db_engine.cursor()
+    cur.execute("DELETE FROM login_attempts WHERE identifier='test_admin'")
     cur.execute(
         "INSERT INTO admin_users (username, password, email) VALUES (%s,%s,%s) "
         "ON CONFLICT (username) DO NOTHING",
@@ -205,9 +221,13 @@ def seed_admin(db_engine):
 
 @pytest.fixture
 def seed_employee(db_engine):
-    """Insert a test employee; clean up after the test."""
+    """Insert a test employee; clean up after the test.
+
+    Also clears any login_attempts row for "TST001" on every use -- same
+    shared-identifier lockout risk as seed_admin above."""
     from utils.auth import generate_password_hash
     cur = db_engine.cursor()
+    cur.execute("DELETE FROM login_attempts WHERE identifier='TST001'")
     cur.execute(
         "INSERT INTO employees (employee_id, name, email, password, force_pin_change) "
         "VALUES (%s,%s,%s,%s,0) ON CONFLICT (employee_id) DO NOTHING",

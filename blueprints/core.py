@@ -6,7 +6,7 @@ last routes drained out of app.py, which now holds only shared setup
 import time
 import secrets
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, Response
+from flask import Blueprint, request, session, jsonify, render_template, Response, g
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import (
@@ -258,8 +258,20 @@ def api_employee_login():
             (_hash_token(token), emp_id)
         )
         conn.commit()
-    return jsonify({"ok": True, "token": token, "employee_id": emp_id,
-                    "name": row[0], "email": row[1]})
+    from utils.plan_limits import get_tenant_plan, PLAN_TIERS
+    plan_name = get_tenant_plan(g.tenant_db)
+    _tier = PLAN_TIERS[plan_name]
+    plan_info = {
+        "display_name": _tier["display_name"],
+        "employee_limit": _tier["employee_limit"],
+        "features": sorted(_tier["features"]),  # frozenset isn't JSON-serializable
+    }
+
+    return jsonify({
+        "ok": True, "token": token, "employee_id": emp_id,
+        "name": row[0], "email": row[1],
+        "plan": plan_name, "plan_info": plan_info
+    })
 
 
 @core_bp.route("/api/employee/logout", methods=["POST"])
@@ -270,3 +282,62 @@ def api_employee_logout():
             cursor.execute("DELETE FROM api_tokens WHERE token=%s", (_hash_token(auth[7:]),))
             conn.commit()
     return jsonify({"ok": True})
+
+
+@core_bp.route("/api/employee/signup", methods=["POST"])
+@limiter.limit("5 per minute")
+def api_employee_signup():
+    """API endpoint for employee self-registration / sign up."""
+    data = request.get_json() or {}
+    emp_id = data.get("employee_id", "").strip().upper()
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip() or None
+    password = data.get("password", "").strip()
+    role = data.get("role", "Employee").strip()
+    department = data.get("department", "Engineering").strip()
+
+    if not emp_id or not name or not password:
+        return jsonify({"ok": False, "msg": "Employee ID, Full Name, and Password are required."}), 400
+
+    if len(password) < 6:
+        return jsonify({"ok": False, "msg": "Password must be at least 6 characters."}), 400
+
+    db = None
+    cursor = None
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
+        if cursor.fetchone():
+            cursor.close()
+            db.close()
+            return jsonify({"ok": False, "msg": f"Employee ID '{emp_id}' is already registered."}), 400
+
+        hashed_pw = generate_password_hash(password)
+        cursor.execute(
+            "INSERT INTO employees (employee_id, name, email, role, department, password, date_of_joining) "
+            "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+            (emp_id, name, email, role, department, hashed_pw)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+        return jsonify({
+            "ok": True,
+            "msg": f"Employee account for {name} ({emp_id}) created successfully! You can now sign in.",
+            "employee_id": emp_id
+        })
+    except Exception as exc:
+        app_log.error("api_employee_signup failed: %s", exc)
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if db:
+            try:
+                db.close()
+            except Exception:
+                pass
+        return jsonify({"ok": False, "msg": f"Failed to register employee: {exc}"}), 500
+

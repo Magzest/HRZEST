@@ -1,6 +1,6 @@
 """Org blueprint — multi-tenant org self-registration."""
 import re
-from flask import Blueprint, request, redirect, render_template, flash
+from flask import Blueprint, request, redirect, render_template, flash, jsonify
 from extensions import app_log
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
 from utils.plan_limits import PLAN_TIERS
@@ -43,9 +43,15 @@ def get_started_page():
 
 @org_bp.route("/create_org", methods=["GET"])
 def create_org_page():
+    # ?plan= lets the /pricing page's "Get Started" CTAs pre-select a tier
+    # (see templates/pricing.html); an unrecognized/missing value just
+    # falls back to the template's own 'starter' default.
+    requested_plan = request.args.get("plan", "").strip().lower()
+    selected_plan = requested_plan if requested_plan in PLAN_TIERS else None
     return render_template(
         "create_org.html",
         plan_tiers=PLAN_TIERS,
+        selected_plan=selected_plan,
         show_captcha=turnstile_enabled(),
         turnstile_site_key=_TURNSTILE_SITE_KEY,
     )
@@ -223,3 +229,134 @@ def create_org():
         admin_username=admin_username, admin_email=admin_email,
         portal_url=portal_url, email_sent=email_sent,
     )
+
+
+@org_bp.route("/api/create_org", methods=["POST"])
+def api_create_org():
+    """JSON API Endpoint to create a new Organisation / Tenant (mobile app's
+    registration flow). Mirrors /create_org's validation -- particularly
+    the reserved-subdomain check and required, format-checked admin email --
+    since this is a second, independent path into the same tenant-creation
+    logic and must not be a softer bypass of those protections."""
+    try:
+        data = request.get_json() or {}
+        company_name = data.get("company_name", "").strip()
+        raw_subdomain = data.get("subdomain", "").strip().lower()
+        # Clean subdomain: convert dots, spaces, special chars to hyphens
+        subdomain = re.sub(r'[^a-z0-9\-]', '-', raw_subdomain).strip('-')
+        admin_username = data.get("admin_username", "").strip()
+        admin_password = data.get("admin_password", "").strip()
+        admin_email = data.get("admin_email", "").strip()
+        plan = data.get("plan", "starter").strip().lower()
+
+        if not all([company_name, subdomain, admin_username, admin_password, admin_email]):
+            return jsonify({
+                "ok": False,
+                "msg": "Company Name, Subdomain, Admin Email, Admin Username, and Password are required."
+            }), 400
+
+        if not _EMAIL_RE.match(admin_email):
+            return jsonify({"ok": False, "msg": "Enter a valid admin email address."}), 400
+
+        if not _SUBDOMAIN_RE.match(subdomain):
+            return jsonify({
+                "ok": False,
+                "msg": "Subdomain may only contain lowercase letters, numbers, and hyphens (e.g. magzest-tech)."
+            }), 400
+
+        if subdomain in _RESERVED_SUBDOMAINS:
+            return jsonify({"ok": False, "msg": f"Subdomain '{subdomain}' is reserved. Choose another."}), 400
+
+        if len(admin_password) < 8:
+            return jsonify({
+                "ok": False,
+                "msg": "Admin password must be at least 8 characters long."
+            }), 400
+
+        if plan not in PLAN_TIERS:
+            return jsonify({"ok": False, "msg": "Choose a valid plan."}), 400
+
+        db_name = "att_" + subdomain.replace("-", "_")
+
+        # Check tenant availability
+        try:
+            from database import get_master_db
+            mconn = get_master_db()
+            mcur = mconn.cursor(buffered=True)
+            mcur.execute("SELECT id FROM tenants WHERE subdomain=%s", (subdomain,))
+            taken = mcur.fetchone() is not None
+            if not taken:
+                mcur.execute("SELECT 1 FROM information_schema.schemata WHERE schema_name=%s", (db_name,))
+                taken = mcur.fetchone() is not None
+            mcur.close()
+            mconn.close()
+            if taken:
+                return jsonify({
+                    "ok": False,
+                    "msg": f"Subdomain '{subdomain}' is already taken. Please choose another subdomain."
+                }), 400
+        except Exception as exc:
+            app_log.error("api_create_org subdomain check error: %s", exc)
+
+        # Create Tenant Schema
+        try:
+            from database import create_tenant_schema
+            create_tenant_schema(db_name)
+        except Exception as exc:
+            app_log.error("api_create_org DB creation error: %s", exc)
+            return jsonify({"ok": False, "msg": f"Failed to create organisation database: {exc}"}), 500
+
+        # Initialize tenant schema
+        try:
+            from flask import g as _g
+            _g.tenant_db = db_name
+            from app import init_tenant_db
+            init_tenant_db(db_name)
+        except Exception as exc:
+            app_log.error("api_create_org schema init error: %s", exc)
+
+        # Seed Admin User & Company Settings
+        try:
+            from database import get_tenant_db
+            tconn = get_tenant_db(db_name)
+            tcur = tconn.cursor()
+            tcur.execute(
+                "UPDATE company_settings SET company_name=%s, setup_done=1 WHERE id=1",
+                (company_name,)
+            )
+            tcur.execute(
+                "INSERT INTO admin_users (username, password, email) VALUES (%s, %s, %s)",
+                (admin_username, generate_password_hash(admin_password), admin_email)
+            )
+            tconn.commit()
+            tcur.close()
+            tconn.close()
+        except Exception as exc:
+            app_log.error("api_create_org seed error: %s", exc)
+            return jsonify({"ok": False, "msg": f"Failed to seed admin credentials: {exc}"}), 500
+
+        # Master Registry
+        try:
+            from database import get_master_db
+            mconn = get_master_db()
+            mcur = mconn.cursor()
+            mcur.execute(
+                "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, status) "
+                "VALUES (%s, %s, %s, %s, %s, 'active')",
+                (company_name, subdomain, db_name, admin_email, plan)
+            )
+            mconn.commit()
+            mcur.close()
+            mconn.close()
+        except Exception as exc:
+            app_log.error("api_create_org master registry error: %s", exc)
+
+        return jsonify({
+            "ok": True,
+            "msg": f"Organisation '{company_name}' created successfully! You can now sign in as {admin_username}.",
+            "subdomain": subdomain,
+            "username": admin_username
+        })
+    except Exception as global_exc:
+        app_log.error("api_create_org global exception: %s", global_exc)
+        return jsonify({"ok": False, "msg": f"Server error: {global_exc}"}), 500

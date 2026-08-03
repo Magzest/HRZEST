@@ -723,6 +723,28 @@ def view_employees():
                            )
 
 
+@employees_bp.route("/api/departments", methods=["GET"])
+@api_required
+def api_departments():
+    """API endpoint to fetch real departments and headcounts from database."""
+    with _db() as (cursor, conn):
+        cursor.execute("""
+            SELECT department, COUNT(*) AS count
+            FROM employees
+            WHERE department IS NOT NULL AND department != '' AND is_active = 1
+            GROUP BY department
+            ORDER BY count DESC
+        """)
+        rows = cursor.fetchall()
+        depts = []
+        for r in rows:
+            depts.append({
+                "name": r[0],
+                "count": r[1]
+            })
+        return jsonify({"ok": True, "departments": depts})
+
+
 @employees_bp.route("/employee_detail/<emp_id>")
 @admin_required
 def employee_detail(emp_id):

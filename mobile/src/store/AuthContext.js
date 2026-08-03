@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { adminLogout, employeeLogout } from '../api/client';
+
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
@@ -24,7 +26,14 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
-    await AsyncStorage.multiRemove(['token', 'user']);
+    try {
+      if (user?.role === 'admin') {
+        await adminLogout();
+      } else if (user?.role === 'employee') {
+        await employeeLogout();
+      }
+    } catch (_) {}
+    await AsyncStorage.multiRemove(['token', 'user', 'user_role', 'user_id']);
     setUser(null);
   };
 

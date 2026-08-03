@@ -6,8 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   FlatList,
+  Modal,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,11 +15,25 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"
+];
+
+const YEARS = ["2024", "2025", "2026", "2027"];
 
 export default function AttendanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
-  const [month, setMonth] = useState("July");
-  const [year, setYear] = useState("2026");
+  const [selectedMonth, setSelectedMonth] = useState("July");
+  const [selectedYear, setSelectedYear] = useState("2026");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [selectedSort, setSelectedSort] = useState("Default");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  const [monthModalVisible, setMonthModalVisible] = useState(false);
+  const [yearModalVisible, setYearModalVisible] = useState(false);
 
   const summary = {
     employees: 254,
@@ -29,17 +43,32 @@ export default function AttendanceScreen({ navigation }) {
   };
 
   const employees = [
-    { id: "EMP001", name: "Rahul Kumar", full: 24, late: 1, half: 1, absent: 0, working: 26, percent: 96 },
-    { id: "EMP002", name: "Priya Sharma", full: 22, late: 2, half: 0, absent: 2, working: 26, percent: 88 },
-    { id: "EMP003", name: "Arjun Joshi", full: 25, late: 1, half: 0, absent: 0, working: 26, percent: 98 },
-    { id: "EMP004", name: "Vikram Nair", full: 20, late: 3, half: 2, absent: 1, working: 26, percent: 85 },
+    { id: "EMP001", name: "Rahul Kumar", full: 24, late: 1, half: 1, absent: 0, working: 26, percent: 96, status: "Present" },
+    { id: "EMP002", name: "Priya Sharma", full: 22, late: 2, half: 0, absent: 2, working: 26, percent: 88, status: "Absent" },
+    { id: "EMP003", name: "Arjun Joshi", full: 25, late: 1, half: 0, absent: 0, working: 26, percent: 98, status: "Present" },
+    { id: "EMP004", name: "Vikram Nair", full: 20, late: 3, half: 2, absent: 1, working: 26, percent: 85, status: "Late" },
   ];
 
-  const filteredEmployees = employees.filter(
-    (e) =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.id.toLowerCase().includes(search.toLowerCase())
-  );
+  const hasActiveFilter = statusFilter !== "All" || selectedSort !== "Default";
+
+  const filteredEmployees = employees
+    .filter((e) => {
+      const matchesSearch =
+        e.name.toLowerCase().includes(search.toLowerCase()) ||
+        e.id.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus =
+        statusFilter === "All" ||
+        (statusFilter === "Present" && (e.status === "Present" || e.full > 20)) ||
+        (statusFilter === "Late" && (e.status === "Late" || e.late > 0)) ||
+        (statusFilter === "Absent" && (e.status === "Absent" || e.absent > 0));
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (selectedSort === "Attendance (High-Low)") return b.percent - a.percent;
+      if (selectedSort === "Attendance (Low-High)") return a.percent - b.percent;
+      if (selectedSort === "Name (A-Z)") return a.name.localeCompare(b.name);
+      return 0;
+    });
 
   const renderEmployee = ({ item }) => (
     <View style={styles.employeeCard}>
@@ -107,17 +136,66 @@ export default function AttendanceScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
           </TouchableOpacity>
 
+          {/* Month & Year Selectors */}
+          <View style={styles.selectorRow}>
+            <TouchableOpacity
+              style={styles.selectorPill}
+              activeOpacity={0.8}
+              onPress={() => setMonthModalVisible(true)}
+            >
+              <Ionicons name="calendar-outline" size={16} color="#0B2253" />
+              <Text style={styles.selectorPillText}>{selectedMonth}</Text>
+              <Ionicons name="chevron-down" size={14} color="#64748B" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.selectorPill}
+              activeOpacity={0.8}
+              onPress={() => setYearModalVisible(true)}
+            >
+              <Ionicons name="time-outline" size={16} color="#0B2253" />
+              <Text style={styles.selectorPillText}>{selectedYear}</Text>
+              <Ionicons name="chevron-down" size={14} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
           {/* Search */}
           <AdminSearchBar
             value={search}
             onChangeText={setSearch}
             placeholder="Search employee by name or ID..."
+            onFilterPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={hasActiveFilter}
+            onClear={() => setSearch("")}
           />
+
+          {/* Status Filter Chips */}
+          <View style={styles.filterRow}>
+            {["All", "Present", "Late", "Absent"].map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[
+                  styles.filterChip,
+                  statusFilter === f && styles.filterChipActive,
+                ]}
+                onPress={() => setStatusFilter(f)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    statusFilter === f && styles.filterChipTextActive,
+                  ]}
+                >
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
           {/* Summary Grid */}
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
-              <Ionicons name="people" size={24} color="#2563EB" />
+              <Ionicons name="people" size={24} color="#0B2253" />
               <Text style={styles.summaryValue}>{summary.employees}</Text>
               <Text style={styles.summaryLabel}>Total Staff</Text>
             </View>
@@ -155,44 +233,254 @@ export default function AttendanceScreen({ navigation }) {
 
           <View style={{ height: 110 }} />
         </ScrollView>
+
+        {/* Month Selector Modal */}
+        <Modal
+          visible={monthModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setMonthModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Month</Text>
+                <TouchableOpacity onPress={() => setMonthModalVisible(false)}>
+                  <Ionicons name="close" size={22} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={MONTHS}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.pickerOption,
+                      selectedMonth === item && styles.pickerOptionActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedMonth(item);
+                      setMonthModalVisible(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.pickerOptionText,
+                        selectedMonth === item && styles.pickerOptionTextActive,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                    {selectedMonth === item && (
+                      <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* Year Selector Modal */}
+        <Modal
+          visible={yearModalVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setYearModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Year</Text>
+                <TouchableOpacity onPress={() => setYearModalVisible(false)}>
+                  <Ionicons name="close" size={22} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+              <FlatList
+                data={YEARS}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[
+                      styles.pickerOption,
+                      selectedYear === item && styles.pickerOptionActive,
+                    ]}
+                    onPress={() => {
+                      setSelectedYear(item);
+                      setYearModalVisible(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.pickerOptionText,
+                        selectedYear === item && styles.pickerOptionTextActive,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                    {selectedYear === item && (
+                      <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Attendance Records"
+          statusOptions={["All", "Present", "Late", "Absent"]}
+          selectedStatus={statusFilter}
+          onSelectStatus={setStatusFilter}
+          sortOptions={["Default", "Attendance (High-Low)", "Attendance (Low-High)", "Name (A-Z)"]}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setStatusFilter("All");
+            setSelectedSort("Default");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 10 },
+  container: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
   markBanner: {
-    backgroundColor: "#173B8C",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "#0B2253",
     borderRadius: 20,
     padding: 16,
+    marginBottom: 16,
+    elevation: 4,
+    shadowColor: "#0B2253",
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  markBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  markBannerTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  markBannerSub: {
+    fontSize: 12,
+    color: "rgba(255, 255, 255, 0.8)",
+    marginTop: 2,
+  },
+  selectorRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  selectorPill: {
+    flex: 0.48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 14,
-    elevation: 3,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  markBannerLeft: { flexDirection: "row", alignItems: "center" },
-  markBannerTitle: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
-  markBannerSub: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginTop: 2 },
-  summaryGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginVertical: 14 },
+  selectorPillText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  filterRow: {
+    flexDirection: "row",
+    marginVertical: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#FFFFFF",
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  filterChipActive: {
+    backgroundColor: "#0B2253",
+    borderColor: "#0B2253",
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#64748B",
+  },
+  filterChipTextActive: {
+    color: "#FFFFFF",
+  },
+  summaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
   summaryCard: {
-    width: "48%",
+    width: "48.5%",
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
-    paddingVertical: 16,
-    alignItems: "center",
+    padding: 16,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    elevation: 2,
+    alignItems: "center",
   },
-  summaryValue: { marginTop: 8, fontSize: 24, fontWeight: "800", color: "#0F172A" },
-  summaryLabel: { marginTop: 4, fontSize: 12, color: "#64748B", fontWeight: "600" },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
-  sectionBadge: { fontSize: 13, fontWeight: "700", color: "#173B8C" },
+  summaryValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginTop: 8,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginVertical: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  sectionBadge: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0B2253",
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
   employeeCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -200,20 +488,142 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    elevation: 2,
   },
-  employeeHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  employeeName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
-  employeeId: { marginTop: 2, fontSize: 12, color: "#64748B", fontWeight: "500" },
-  percentBadge: { borderRadius: 14, backgroundColor: "#DBEAFE", paddingHorizontal: 10, paddingVertical: 4 },
-  percentText: { color: "#173B8C", fontWeight: "800", fontSize: 13 },
-  progressBackground: { width: "100%", height: 8, borderRadius: 4, backgroundColor: "#E2E8F0", overflow: "hidden", marginBottom: 14 },
-  progressFill: { height: "100%", borderRadius: 4, backgroundColor: "#22C55E" },
-  statsRow: { flexDirection: "row", justifyContent: "space-between" },
-  statChipGreen: { width: "23%", borderRadius: 12, backgroundColor: "#ECFDF5", alignItems: "center", paddingVertical: 8 },
-  statChipOrange: { width: "23%", borderRadius: 12, backgroundColor: "#FFF7ED", alignItems: "center", paddingVertical: 8 },
-  statChipBlue: { width: "23%", borderRadius: 12, backgroundColor: "#EFF6FF", alignItems: "center", paddingVertical: 8 },
-  statChipRed: { width: "23%", borderRadius: 12, backgroundColor: "#FEF2F2", alignItems: "center", paddingVertical: 8 },
-  chipValue: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
-  chipLabel: { marginTop: 2, fontSize: 11, color: "#64748B", fontWeight: "600" },
+  employeeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  employeeName: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  employeeId: {
+    fontSize: 12,
+    color: "#64748B",
+    marginTop: 2,
+  },
+  percentBadge: {
+    backgroundColor: "#ECFDF5",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  percentText: {
+    color: "#16A34A",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  progressBackground: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F1F5F9",
+    marginBottom: 14,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#22C55E",
+    borderRadius: 3,
+  },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  statChipGreen: {
+    flex: 1,
+    backgroundColor: "#ECFDF5",
+    borderRadius: 10,
+    paddingVertical: 6,
+    alignItems: "center",
+    marginRight: 4,
+  },
+  statChipOrange: {
+    flex: 1,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 10,
+    paddingVertical: 6,
+    alignItems: "center",
+    marginRight: 4,
+  },
+  statChipBlue: {
+    flex: 1,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 10,
+    paddingVertical: 6,
+    alignItems: "center",
+    marginRight: 4,
+  },
+  statChipRed: {
+    flex: 1,
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  chipValue: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  chipLabel: {
+    fontSize: 10,
+    color: "#64748B",
+    fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxHeight: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    padding: 20,
+    elevation: 10,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  pickerOption: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  pickerOptionActive: {
+    backgroundColor: "#EFF6FF",
+  },
+  pickerOptionText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#334155",
+  },
+  pickerOptionTextActive: {
+    fontWeight: "800",
+    color: "#0B2253",
+  },
 });

@@ -4,17 +4,19 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { DrawerContentScrollView } from "@react-navigation/drawer";
 import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { employeeLogout } from "../../api/client";
 import { useAuth } from "../../store/AuthContext";
 
 export default function EmployeeDrawerContent(props) {
   const { navigation, state } = props;
   const { signOut, user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const drawerRoute = state.routes[state.index];
   const activeRoute =
@@ -27,12 +29,6 @@ export default function EmployeeDrawerContent(props) {
     signOut();
   };
 
-  // ─────────────────────────────────────────────────────────────
-  //  ZERO DUPLICATION POLICY FOR EMPLOYEES:
-  //  Items present in the Bottom Tab Bar (Home, Leave, Scan,
-  //  Tickets, Notifications) are EXCLUDED from the drawer so that
-  //  no menu item repeats in both places.
-  // ─────────────────────────────────────────────────────────────
   const menuItems = [
     // ATTENDANCE & TIME
     {
@@ -41,9 +37,12 @@ export default function EmployeeDrawerContent(props) {
       iconFocused: "calendar",
       route: "Attendance",
       section: "ATTENDANCE & TIME",
+      badge: "LIVE",
+      badgeBg: "#DCFCE7",
+      badgeColor: "#15803D",
     },
     {
-      title: "Comp-Off & OT",
+      title: "Comp-Off & Overtime",
       icon: "time-outline",
       iconFocused: "time",
       route: "CompOff",
@@ -68,14 +67,14 @@ export default function EmployeeDrawerContent(props) {
 
     // CAREER & PERFORMANCE
     {
-      title: "My Performance",
+      title: "My Performance & Goals",
       icon: "trending-up-outline",
       iconFocused: "trending-up",
       route: "Performance",
       section: "CAREER & PERFORMANCE",
     },
     {
-      title: "My Onboarding",
+      title: "My Onboarding Checklist",
       icon: "briefcase-outline",
       iconFocused: "briefcase",
       route: "Onboarding",
@@ -84,14 +83,14 @@ export default function EmployeeDrawerContent(props) {
 
     // SELF-SERVICE & POLICIES
     {
-      title: "My Profile & Info",
+      title: "My Profile & Personal Info",
       icon: "person-circle-outline",
       iconFocused: "person-circle",
       route: "Profile",
       section: "SELF SERVICE",
     },
     {
-      title: "Company Policies",
+      title: "Company Policies & Guidelines",
       icon: "document-text-outline",
       iconFocused: "document-text",
       route: "Policies",
@@ -112,7 +111,7 @@ export default function EmployeeDrawerContent(props) {
     return (
       <TouchableOpacity
         key={item.title}
-        activeOpacity={0.85}
+        activeOpacity={0.88}
         style={[styles.menuItem, active && styles.activeMenuItem]}
         onPress={() => {
           navigation.navigate("EmployeeTabs", {
@@ -121,21 +120,33 @@ export default function EmployeeDrawerContent(props) {
           navigation.closeDrawer();
         }}
       >
-        <Ionicons
-          name={active ? item.iconFocused : item.icon}
-          size={20}
-          color={active ? "#FFFFFF" : "#173B8C"}
-        />
+        <View style={[styles.iconBg, active && styles.activeIconBg]}>
+          <Ionicons
+            name={active ? item.iconFocused : item.icon}
+            size={18}
+            color={active ? "#FFFFFF" : "#0B2253"}
+          />
+        </View>
 
-        <Text style={[styles.menuText, active && styles.activeMenuText]}>
+        <Text style={[styles.menuText, active && styles.activeMenuText]} numberOfLines={1}>
           {item.title}
         </Text>
 
-        <Ionicons
-          name="chevron-forward"
-          size={16}
-          color={active ? "#FFFFFF" : "#94A3B8"}
-        />
+        {item.badge && !active && (
+          <View style={[styles.pillBadge, { backgroundColor: item.badgeBg }]}>
+            <Text style={[styles.pillBadgeText, { color: item.badgeColor }]}>
+              {item.badge}
+            </Text>
+          </View>
+        )}
+
+        <View style={[styles.chevronContainer, active && styles.activeChevronContainer]}>
+          <Ionicons
+            name={active ? "checkmark-circle" : "chevron-forward"}
+            size={16}
+            color={active ? "#22C55E" : "#94A3B8"}
+          />
+        </View>
       </TouchableOpacity>
     );
   };
@@ -153,52 +164,67 @@ export default function EmployeeDrawerContent(props) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Executive Hero Header */}
+      <LinearGradient
+        colors={["#0B2253", "#173B8C"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={styles.headerTopRow}>
+          <View style={styles.avatarBorder}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {user && user.name ? user.name.charAt(0).toUpperCase() : "E"}
+              </Text>
+            </View>
+            <View style={styles.onlineDot} />
+          </View>
+
+          <View style={styles.userInfo}>
+            <Text style={styles.name} numberOfLines={1}>
+              {user?.name || "Employee Portal"}
+            </Text>
+            <Text style={styles.empId}>
+              ID: {user?.employeeId || "EMP-1001"}
+            </Text>
+            <View style={styles.roleBadgeRow}>
+              <View style={styles.roleBadge}>
+                <Ionicons name="shield-checkmark" size={12} color="#38BDF8" style={{ marginRight: 4 }} />
+                <Text style={styles.roleText}>Staff Member</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* Menu Items Scroll View */}
       <DrawerContentScrollView
         {...props}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user && user.name ? user.name.charAt(0) : "E"}
-            </Text>
-            <View style={styles.onlineDot} />
-          </View>
-
-          <Text style={styles.name}>{user?.name || "Employee Portal"}</Text>
-
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleText}>Staff Employee</Text>
-          </View>
-
-          <Text style={styles.empId}>{user?.employeeId || "EMP-1001"}</Text>
-        </View>
-
-        <View style={styles.divider} />
-
         {renderSection("ATTENDANCE & TIME", "ATTENDANCE & TIME")}
         {renderSection("PAYROLL & EARNINGS", "PAYROLL & EARNINGS")}
         {renderSection("CAREER & PERFORMANCE", "CAREER & PERFORMANCE")}
         {renderSection("SELF SERVICE", "SELF SERVICE")}
       </DrawerContentScrollView>
 
-      {/* Bottom Logout */}
-      <View style={styles.bottomContainer}>
+      {/* Bottom Logout Button */}
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <TouchableOpacity
-          activeOpacity={0.85}
+          activeOpacity={0.88}
           style={styles.logoutButton}
           onPress={handleLogout}
         >
           <Ionicons name="log-out-outline" size={20} color="#EF4444" />
-          <Text style={styles.logoutText}>Logout</Text>
+          <Text style={styles.logoutText}>Sign Out Account</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>Attendance SaaS Employee v1.0.0</Text>
+        <Text style={styles.version}>Magzest HRMS Mobile • v1.0.0</Text>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -207,105 +233,143 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
-  scrollContent: {
-    paddingBottom: 12,
-  },
   header: {
-    alignItems: "center",
-    paddingTop: 12,
-    paddingBottom: 16,
     paddingHorizontal: 20,
-    backgroundColor: "#FFFFFF",
+    paddingTop: 22,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+    elevation: 10,
+    shadowColor: "#0B2253",
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  avatarBorder: {
+    padding: 3,
+    borderRadius: 36,
+    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    position: "relative",
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#EEF4FF",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-    position: "relative",
+    elevation: 4,
     shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
   },
   avatarText: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "800",
-    color: "#173B8C",
+    color: "#0B2253",
   },
   onlineDot: {
     position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    bottom: 2,
+    right: 2,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
     backgroundColor: "#22C55E",
     borderWidth: 2.5,
     borderColor: "#FFFFFF",
   },
+  userInfo: {
+    marginLeft: 14,
+    flex: 1,
+  },
   name: {
-    marginTop: 12,
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
-  },
-  roleBadge: {
-    marginTop: 8,
-    backgroundColor: "#EEF4FF",
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  roleText: {
-    color: "#173B8C",
-    fontWeight: "700",
-    fontSize: 12,
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
   },
   empId: {
-    marginTop: 6,
-    color: "#94A3B8",
+    color: "rgba(255, 255, 255, 0.8)",
     fontSize: 12,
     fontWeight: "600",
+    marginTop: 2,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#E2E8F0",
-    marginVertical: 10,
-    marginHorizontal: 16,
+  roleBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  roleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.25)",
+  },
+  roleText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 11,
+  },
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 16,
   },
   section: {
-    marginBottom: 8,
-    paddingHorizontal: 14,
+    marginBottom: 14,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
-    marginBottom: 6,
-    marginLeft: 6,
+    marginBottom: 8,
+    marginLeft: 4,
     fontSize: 10,
     fontWeight: "800",
-    color: "#94A3B8",
-    letterSpacing: 1.1,
+    color: "#64748B",
+    letterSpacing: 1.2,
   },
   menuItem: {
-    height: 44,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 14,
     paddingHorizontal: 14,
-    marginBottom: 4,
+    marginBottom: 6,
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#F1F5F9",
-    elevation: 1,
+    borderColor: "#E2E8F0",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
   },
   activeMenuItem: {
-    backgroundColor: "#173B8C",
-    borderColor: "#173B8C",
-    borderLeftWidth: 4,
-    borderLeftColor: "#22C55E",
+    backgroundColor: "#0B2253",
+    borderColor: "#0B2253",
+    elevation: 6,
+    shadowColor: "#0B2253",
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  iconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  activeIconBg: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   menuText: {
     flex: 1,
@@ -317,16 +381,37 @@ const styles = StyleSheet.create({
   activeMenuText: {
     color: "#FFFFFF",
   },
+  pillBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  pillBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  chevronContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  activeChevronContainer: {
+    backgroundColor: "transparent",
+  },
   bottomContainer: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 14,
-    backgroundColor: "#F8FAFC",
+    paddingTop: 12,
+    backgroundColor: "#FFFFFF",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
   },
   logoutButton: {
-    height: 46,
+    height: 48,
     borderRadius: 14,
-    backgroundColor: "#FFF5F5",
+    backgroundColor: "#FEF2F2",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -340,9 +425,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   version: {
-    marginTop: 12,
+    marginTop: 10,
     textAlign: "center",
     color: "#94A3B8",
     fontSize: 11,
+    fontWeight: "600",
   },
 });

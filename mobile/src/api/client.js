@@ -10,11 +10,31 @@ client.interceptors.request.use(async (config) => {
   return config;
 });
 
+client.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response && error.response.status === 401) {
+      await AsyncStorage.multiRemove(['token', 'user_role', 'user_id']);
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ── Admin API ──────────────────────────────────────────────────────
 export const adminLogin = (username, password) =>
   client.post('/api/login', { username, password });
 
 export const adminLogout = () => client.post('/api/logout');
+
+export const createOrganisation = (company_name, subdomain, admin_username, admin_password, admin_email = '', signup_secret = '') =>
+  client.post('/api/create_org', {
+    company_name,
+    subdomain,
+    admin_username,
+    admin_password,
+    admin_email,
+    signup_secret,
+  });
 
 export const fetchDashboard = () => client.get('/api/dashboard');
 
@@ -45,9 +65,29 @@ export const fetchResignations = () => client.get('/api/resignation_requests');
 export const resignationAction = (rid, action) =>
   client.post(`/api/resignation_requests/${rid}/action`, { action });
 
+export const fetchOvertime = () => client.get('/api/overtime');
+
+export const fetchCompOff = () => client.get('/api/compoff');
+
+export const fetchPerformance = () => client.get('/api/performance');
+
+export const fetchOnboarding = () => client.get('/api/onboarding');
+
+export const fetchDepartments = () => client.get('/api/departments');
+
 // ── Employee API ───────────────────────────────────────────────────
 export const employeeLogin = (employee_id, password) =>
   client.post('/api/employee/login', { employee_id, password });
+
+export const employeeSignup = (employee_id, name, password, email = '', role = 'Employee', department = 'Engineering') =>
+  client.post('/api/employee/signup', {
+    employee_id,
+    name,
+    password,
+    email,
+    role,
+    department,
+  });
 
 export const changePassword = (current_password, new_password) =>
   client.post('/api/employee/change-password', { current_password, new_password });

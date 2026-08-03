@@ -3,68 +3,33 @@ import { createDrawerNavigator } from "@react-navigation/drawer";
 import AttendanceScreen from "../screens/employee/AttendanceScreen";
 import EmployeeNavigator from "./EmployeeNavigator";
 import EmployeeDrawerContent from "../screens/employee/EmployeeDrawerContent";
+
 const Drawer = createDrawerNavigator();
 
 export default function EmployeeDrawerNavigator() {
   return (
     <Drawer.Navigator
       initialRouteName="EmployeeTabs"
-      drawerContent={(props) => (
-        <EmployeeDrawerContent {...props} />
-      )}
+      drawerContent={(props) => <EmployeeDrawerContent {...props} />}
       screenOptions={{
         headerShown: false,
         drawerType: "slide",
         drawerPosition: "left",
         swipeEnabled: true,
-
-        overlayColor: "rgba(15,23,42,0.25)",
-
+        overlayColor: "rgba(15, 23, 42, 0.4)",
         drawerStyle: {
           width: 310,
-          backgroundColor: "#F7F9FC",
-          borderTopRightRadius: 28,
-          borderBottomRightRadius: 28,
+          backgroundColor: "#F8FAFC",
+          borderTopRightRadius: 24,
+          borderBottomRightRadius: 24,
         },
-
         sceneContainerStyle: {
-          backgroundColor: "#F7F9FC",
+          backgroundColor: "#F8FAFC",
         },
       }}
     >
-      {/* Bottom Tab Navigator */}
-      <Drawer.Screen
-        name="EmployeeTabs"
-        component={EmployeeNavigator}
-      />
-
-      {/* Future Screens */}
-
-    
-      <Drawer.Screen
-        name="Attendance"
-        component={AttendanceScreen}
-      />
-{/*
-      <Drawer.Screen
-        name="Profile"
-        component={ProfileScreen}
-      />
-
-      <Drawer.Screen
-        name="Payslips"
-        component={PayslipsScreen}
-      />
-
-      <Drawer.Screen
-        name="Holidays"
-        component={HolidayScreen}
-      />
-
-      <Drawer.Screen
-        name="Settings"
-        component={SettingsScreen}
-      />
-      */}
-    </Drawer.Navigator>);
+      <Drawer.Screen name="EmployeeTabs" component={EmployeeNavigator} />
+      <Drawer.Screen name="Attendance" component={AttendanceScreen} />
+    </Drawer.Navigator>
+  );
 }

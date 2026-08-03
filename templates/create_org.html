@@ -106,8 +106,8 @@
 
     <div class="plan-grid">
       {% for key, tier in plan_tiers.items() %}
-      <label class="plan-card{{ ' selected' if key == 'starter' else '' }}" data-plan-card>
-        <input type="radio" name="plan" value="{{ key }}" {% if key == 'starter' %}checked{% endif %} onchange="document.querySelectorAll('[data-plan-card]').forEach(function(c){c.classList.remove('selected')});this.closest('[data-plan-card]').classList.add('selected')" />
+      <label class="plan-card{{ ' selected' if key == (selected_plan or 'starter') else '' }}" data-plan-card>
+        <input type="radio" name="plan" value="{{ key }}" {% if key == (selected_plan or 'starter') %}checked{% endif %} onchange="document.querySelectorAll('[data-plan-card]').forEach(function(c){c.classList.remove('selected')});this.closest('[data-plan-card]').classList.add('selected')" />
         <div class="plan-name">{{ tier.display_name }}</div>
         <div class="plan-limit">{{ tier.employee_limit if tier.employee_limit else 'Unlimited' }} employees</div>
         <div class="plan-features">{{ tier.features | join(', ') | upper }}</div>

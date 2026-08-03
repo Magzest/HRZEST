@@ -61,7 +61,7 @@ def _db():
 # in production — adopted as canonical here rather than the 10 this module
 # used before consolidation, to avoid silently loosening lockout as a side
 # effect of removing the duplicate.
-_LOGIN_MAX_ATTEMPTS = 5
+_LOGIN_MAX_ATTEMPTS = 3
 _LOGIN_LOCKOUT_MINUTES = 15
 
 # ── CAPTCHA gate (Cloudflare Turnstile) ────────────────────────────────────────

@@ -7,12 +7,50 @@ import psycopg2
 from flask import Blueprint, request, session, redirect, render_template, flash
 from database import get_db_connection
 from werkzeug.utils import secure_filename
-from utils.auth import admin_required, employee_required
-from utils.helpers import get_company_settings, _safe_app_url
+from utils.auth import admin_required, employee_required, api_required
+from utils.helpers import get_company_settings, _safe_app_url, _db
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async
 from extensions import limiter
 
 onboarding_bp = Blueprint("onboarding", __name__)
+
+
+@onboarding_bp.route("/api/onboarding", methods=["GET"])
+@api_required
+def api_onboarding():
+    """API endpoint to fetch real onboarding records from database."""
+    with _db() as (cursor, conn):
+        cursor.execute("""
+            SELECT eo.id, e.employee_id, e.name, COALESCE(e.role,'Role'), COALESCE(e.department,'General'),
+                   ot.name AS template_name, eo.assigned_date, eo.due_date, COALESCE(eo.status,'In Progress'),
+                   COUNT(eot.id) AS total_tasks,
+                   SUM(CASE WHEN eot.status='Done' THEN 1 ELSE 0 END) AS done_tasks
+            FROM employee_onboarding eo
+            JOIN employees e ON e.employee_id = eo.employee_id
+            LEFT JOIN onboarding_templates ot ON ot.id = eo.template_id
+            LEFT JOIN employee_onboarding_tasks eot ON eot.onboarding_id = eo.id
+            GROUP BY eo.id, e.employee_id, e.name, e.role, e.department, ot.name, eo.assigned_date, eo.due_date, eo.status
+            ORDER BY eo.assigned_date DESC
+        """)
+        rows = cursor.fetchall()
+        records = []
+        for r in rows:
+            done = int(r[10]) if r[10] else 0
+            total = int(r[9]) if r[9] else 0
+            records.append({
+                "id": str(r[0]),
+                "employee_id": r[1],
+                "employeeName": r[2],
+                "role": r[3],
+                "department": r[4],
+                "template": r[5] or "Standard Onboarding",
+                "startDate": str(r[6]) if r[6] else "",
+                "dueDate": str(r[7]) if r[7] else "",
+                "status": r[8] or "In Progress",
+                "tasksCompleted": done,
+                "totalTasks": total,
+            })
+        return jsonify({"ok": True, "onboardings": records})
 
 
 @onboarding_bp.route("/onboarding")
