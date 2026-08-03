@@ -1,20 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
+  Text,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 
 import THEME from "../../constants/theme";
+import { fetchDashboard, fetchLeaveRequests } from "../../api/client";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import DashboardHeroCard from "../../components/admin/DashboardHeroCard";
-
 import PendingApprovalCard from "../../components/admin/PendingApprovalCard";
 import AttendanceOverviewCard from "../../components/admin/AttendanceOverviewCard";
 import QuickActionGrid from "../../components/admin/QuickActionGrid";
@@ -23,65 +26,74 @@ import AnnouncementCard from "../../components/admin/AnnouncementCard";
 import AnalyticsOverviewCard from "../../components/admin/AnalyticsOverviewCard";
 
 export default function AdminDashboard({ navigation }) {
-
   const [search, setSearch] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [dashData, setDashData] = useState(null);
+  const [pendingLeaves, setPendingLeaves] = useState(0);
 
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1200);
+  const loadData = async () => {
+    try {
+      const [dashRes, leaveRes] = await Promise.all([
+        fetchDashboard(),
+        fetchLeaveRequests(),
+      ]);
+      if (dashRes?.data?.ok) setDashData(dashRes.data);
+      if (leaveRes?.data?.ok) {
+        const pending = (leaveRes.data.leave_requests || []).filter(
+          (r) => r.status === "Pending"
+        ).length;
+        setPendingLeaves(pending);
+      }
+    } catch {}
+    setLoading(false);
+    setRefreshing(false);
   };
 
-  return (
+  useFocusEffect(useCallback(() => { loadData(); }, []));
 
+  const onRefresh = () => { setRefreshing(true); loadData(); };
+
+  if (loading) {
+    return (
+      <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+        <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color={THEME.colors.primary} />
+          <Text style={{ marginTop: 12, color: "#64748B", fontWeight: "600" }}>Loading dashboard…</Text>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  return (
     <LinearGradient
-      colors={[
-        "#F8FAFC",
-        "#F3F7FD",
-        "#EDF4FF",
-      ]}
+      colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-
       <SafeAreaView style={{ flex: 1 }}>
-
         <AdminHeader
-    title="Dashboard"
-    onMenu={() =>
-        navigation.dispatch(
-            DrawerActions.openDrawer()
-        )
-    }
-/>
+          title="Dashboard"
+          onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
+        />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={
-            styles.content
-          }
+          contentContainerStyle={styles.content}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[
-                THEME.colors.primary,
-              ]}
+              colors={[THEME.colors.primary]}
             />
           }
         >
-
           <DashboardHeroCard
-            adminName="Administrator"
-            company="HR Management System"
-            totalEmployees={254}
-            present={228}
+            adminName={dashData?.admin_name || "Administrator"}
+            company={dashData?.company_name || "HR Management System"}
+            totalEmployees={dashData?.total ?? "--"}
+            present={dashData?.present ?? "--"}
           />
 
           <AdminSearchBar
@@ -92,43 +104,26 @@ export default function AdminDashboard({ navigation }) {
 
           <View style={styles.sectionSpacing} />
 
-        
-
           <AttendanceOverviewCard />
 
-          <QuickActionGrid
-            navigation={navigation}
-          />
+          <QuickActionGrid navigation={navigation} />
 
           <PendingApprovalCard
             title="Leave Requests"
-            pending={8}
-            subtitle="Requires your approval"
+            pending={pendingLeaves}
+            subtitle={pendingLeaves > 0 ? "Requires your approval" : "All up to date"}
             icon="document-text-outline"
             color="#F59E0B"
             background="#FEF3C7"
           />
 
-          <PendingApprovalCard
-            title="Payroll Approval"
-            pending={3}
-            subtitle="Waiting for verification"
-            icon="wallet-outline"
-            color="#8B5CF6"
-            background="#EDE9FE"
-          />
-                    <AnalyticsOverviewCard />
-
+          <AnalyticsOverviewCard />
           <AnnouncementCard />
-
           <RecentActivityList />
 
           <View style={styles.bottomSpacing} />
-
         </ScrollView>
-
       </SafeAreaView>
-
     </LinearGradient>
   );
 }

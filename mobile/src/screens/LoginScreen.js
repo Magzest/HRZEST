@@ -27,52 +27,62 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [error, setError] = useState("");
 
   const handleAdminLogin = async () => {
+    if (!username.trim() || !password.trim()) {
+      setError("Please enter your username and password.");
+      return;
+    }
+    setError("");
     setLoading(true);
     try {
-      if (username.trim() && password.trim()) {
-        const res = await adminLogin(username.trim(), password.trim());
-        if (res?.data?.ok) {
-          await signIn(res.data.token, {
-            role: "admin",
-            name: res.data.username || "Administrator",
-          });
-          setLoading(false);
-          return;
-        }
+      const res = await adminLogin(username.trim(), password.trim());
+      if (res?.data?.ok) {
+        await signIn(res.data.token, {
+          role: "admin",
+          name: res.data.username || "Administrator",
+        });
+        setLoading(false);
+        return;
       }
-    } catch (_) {}
-    // Test mode fallback
-    await signIn("test-admin-token", {
-      role: "admin",
-      name: username.trim() || "Administrator",
-    });
+      setError(res?.data?.msg || "Invalid username or password.");
+    } catch (e) {
+      const isNetwork = !e.response;
+      setError(isNetwork
+        ? "Cannot connect to server. Please check your connection."
+        : e.response?.data?.msg || "Invalid username or password."
+      );
+    }
     setLoading(false);
   };
 
   const handleEmployeeLogin = async () => {
+    if (!empId.trim() || !empPassword.trim()) {
+      setError("Please enter your Employee ID and password.");
+      return;
+    }
+    setError("");
     setLoading(true);
     try {
-      if (empId.trim() && empPassword.trim()) {
-        const res = await employeeLogin(empId.trim(), empPassword.trim());
-        if (res?.data?.ok) {
-          await signIn(res.data.token, {
-            role: "employee",
-            name: res.data.name || "Rahul Kumar",
-            employeeId: res.data.employee_id || empId.trim(),
-          });
-          setLoading(false);
-          return;
-        }
+      const res = await employeeLogin(empId.trim(), empPassword.trim());
+      if (res?.data?.ok) {
+        await signIn(res.data.token, {
+          role: "employee",
+          name: res.data.name || empId.trim(),
+          employeeId: res.data.employee_id || empId.trim(),
+        });
+        setLoading(false);
+        return;
       }
-    } catch (_) {}
-    // Test mode fallback
-    await signIn("test-emp-token", {
-      role: "employee",
-      name: "Rahul Kumar",
-      employeeId: empId.trim() || "EMP-1001",
-    });
+      setError(res?.data?.msg || "Invalid Employee ID or password.");
+    } catch (e) {
+      const isNetwork = !e.response;
+      setError(isNetwork
+        ? "Cannot connect to server. Please check your connection."
+        : e.response?.data?.msg || "Invalid Employee ID or password."
+      );
+    }
     setLoading(false);
   };
 
@@ -142,6 +152,12 @@ export default function LoginScreen() {
 
           {/* Form Card */}
           <View style={styles.card}>
+            {error ? (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={16} color="#DC2626" style={{ marginRight: 8 }} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
             {tab === "admin" ? (
               <>
                 <View style={styles.formHeader}>
@@ -428,6 +444,22 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEF2F2",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
