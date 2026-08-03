@@ -115,6 +115,7 @@ export default function AdminDashboard({ navigation }) {
             icon="document-text-outline"
             color="#F59E0B"
             background="#FEF3C7"
+            onPress={() => navigation.navigate("LeaveRequests")}
           />
 
           <AnalyticsOverviewCard />

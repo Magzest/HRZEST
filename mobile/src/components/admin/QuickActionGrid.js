@@ -15,7 +15,7 @@ const ACTIONS = [
     icon: "person-add",
     color: "#2563EB",
     background: "#DBEAFE",
-    screen: "AddEmployee",
+    screen: "Employees",
   },
   {
     title: "Attendance",

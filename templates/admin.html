@@ -376,7 +376,12 @@
         <div class="brand-icon"><i class="ti ti-layout-dashboard u-fs-18"></i></div>
         <div>
           <div class="brand">Admin Panel</div>
-          <div class="brand-sub">{{ co.company_name }}</div>
+          <div class="brand-sub">
+            {{ co.company_name }}
+            <span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:800;background:rgba(255,255,255,0.18);color:#60a5fa;margin-left:4px;letter-spacing:0.5px;">
+              {{ (current_plan|default('basic'))|upper }}
+            </span>
+          </div>
         </div>
       </div>
 
