@@ -214,6 +214,7 @@ def update_deadline_status(deadline_id):
 
 
 @compliance_bp.route("/compliance/audit-logs")
+@compliance_bp.route("/compliance_audit_logs")
 @role_required("admin")
 def audit_log_explorer():
     actor = (request.args.get("actor") or "").strip()
