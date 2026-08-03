@@ -1,5 +1,7 @@
 import React from "react";
+import { View, StyleSheet } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import AdminDashboard from "../screens/admin/AdminDashboard";
@@ -22,6 +24,9 @@ import DepartmentsScreen from "../screens/admin/DepartmentsScreen";
 const Tab = createBottomTabNavigator();
 
 export default function AdminBottomNavigator() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 16);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -33,27 +38,35 @@ export default function AdminBottomNavigator() {
           left: 0,
           right: 0,
           bottom: 0,
-          height: 72,
-          backgroundColor: "#173B8C",
-          borderTopWidth: 0,
-          borderTopLeftRadius: 26,
-          borderTopRightRadius: 26,
-          elevation: 15,
+          height: 58 + bottomInset,
+          backgroundColor: "#0B2253",
+          borderTopWidth: 1,
+          borderTopColor: "rgba(255, 255, 255, 0.15)",
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          elevation: 25,
           shadowColor: "#000",
-          shadowOpacity: 0.12,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: -3 },
-          paddingTop: 8,
-          paddingBottom: 8,
+          shadowOpacity: 0.3,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: -4 },
+          paddingTop: 6,
+          paddingBottom: bottomInset,
+        },
+
+        tabBarItemStyle: {
+          justifyContent: "center",
+          alignItems: "center",
+          height: 52,
         },
 
         tabBarActiveTintColor: "#FFFFFF",
-        tabBarInactiveTintColor: "rgba(255,255,255,0.72)",
+        tabBarInactiveTintColor: "rgba(255, 255, 255, 0.65)",
 
         tabBarLabelStyle: {
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: "600",
-          marginTop: 2,
+          letterSpacing: 0.2,
+          marginTop: 1,
         },
 
         tabBarIcon: ({ focused, color }) => {
@@ -79,11 +92,16 @@ export default function AdminBottomNavigator() {
               icon = "ellipse";
           }
 
-          return <Ionicons name={icon} size={22} color={color} />;
+          return (
+            <View style={styles.iconContainer}>
+              <Ionicons name={icon} size={22} color={color} />
+              {focused && <View style={styles.activeDot} />}
+            </View>
+          );
         },
       })}
     >
-      {/* 5 Daily Quick-Access Tabs */}
+      {/* 5 Visible Tabs */}
       <Tab.Screen
         name="Dashboard"
         component={AdminDashboard}
@@ -99,7 +117,7 @@ export default function AdminBottomNavigator() {
       <Tab.Screen
         name="Attendance"
         component={AttendanceScreen}
-        options={{ tabBarLabel: "Attendance" }}
+        options={{ tabBarLabel: "Logs" }}
       />
 
       <Tab.Screen
@@ -114,66 +132,82 @@ export default function AdminBottomNavigator() {
         options={{ tabBarLabel: "Settings" }}
       />
 
-      {/* Hidden Screens - Accessible via Drawer Menu */}
+      {/* Hidden Screens */}
       <Tab.Screen
         name="Payroll"
         component={SalaryPayslipsScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Analytics"
         component={AnalyticsScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="CompOff"
         component={CompOffScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="MarkAttendance"
         component={MarkAttendanceScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Resignations"
         component={ResignationsScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Tickets"
         component={AdminTicketsScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Performance"
         component={PerformanceScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Onboarding"
         component={OnboardingScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="OrgChart"
         component={OrgChartScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Departments"
         component={DepartmentsScreen}
-        options={{ tabBarButton: () => null }}
+        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
       />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 26,
+  },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#FFFFFF",
+    position: "absolute",
+    bottom: -4,
+  },
+});

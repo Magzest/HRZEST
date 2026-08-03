@@ -1,295 +1,314 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
   View,
   Text,
-  RefreshControl,
-  ActivityIndicator,
+  StyleSheet,
+  ScrollView,
+  SafeAreaView,
+  TouchableOpacity,
+  Modal,
+  FlatList,
 } from "react-native";
-import { DrawerActions } from "@react-navigation/native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "@react-navigation/native";
 
-import THEME from "../../constants/theme";
-import { fetchDashboard, fetchLeaveRequests } from "../../api/client";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import DashboardHeroCard from "../../components/admin/DashboardHeroCard";
-import PendingApprovalCard from "../../components/admin/PendingApprovalCard";
 import AttendanceOverviewCard from "../../components/admin/AttendanceOverviewCard";
 import QuickActionGrid from "../../components/admin/QuickActionGrid";
-import RecentActivityList from "../../components/admin/RecentActivityList";
-import AnnouncementCard from "../../components/admin/AnnouncementCard";
+import PendingApprovalCard from "../../components/admin/PendingApprovalCard";
 import AnalyticsOverviewCard from "../../components/admin/AnalyticsOverviewCard";
+import AnnouncementCard from "../../components/admin/AnnouncementCard";
+import RecentActivityList from "../../components/admin/RecentActivityList";
+
+import { fetchDashboard } from "../../api/client";
+
+const ALL_ANNOUNCEMENTS = [
+  {
+    id: "1",
+    title: "Company Quarterly All-Hands Meeting",
+    message:
+      "Monthly all-hands meeting scheduled for tomorrow at 10:00 AM in Conference Room A & Zoom link.",
+    date: "Tomorrow, 10:00 AM",
+    category: "Meeting",
+    icon: "people",
+    color: "#16A34A",
+    bg: "#DCFCE7",
+  },
+  {
+    id: "2",
+    title: "Independence Day Public Holiday Notice",
+    message:
+      "Office will remain closed on 15th August for Independence Day. Emergency support remains on standby.",
+    date: "15 Aug 2026",
+    category: "Holiday",
+    icon: "airplane",
+    color: "#0B2253",
+    bg: "#EFF6FF",
+  },
+  {
+    id: "3",
+    title: "Monthly Salary Disbursement Status",
+    message:
+      "Payroll for current month has been processed. Salary slips are available for download under Payslips & Earnings.",
+    date: "End of Month",
+    category: "Payroll",
+    icon: "wallet",
+    color: "#7C3AED",
+    bg: "#EDE9FE",
+  },
+  {
+    id: "4",
+    title: "Updated Office Health & Security Policy",
+    message:
+      "All staff members must scan individual QR codes or geofence check-in upon entering company premises.",
+    date: "Active Policy",
+    category: "Policy",
+    icon: "shield-checkmark",
+    color: "#F59E0B",
+    bg: "#FEF3C7",
+  },
+];
 
 export default function AdminDashboard({ navigation }) {
   const [search, setSearch] = useState("");
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [dashData, setDashData] = useState(null);
-  const [pendingLeaves, setPendingLeaves] = useState(0);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [announcementModalVisible, setAnnouncementModalVisible] = useState(false);
 
-  const loadData = async () => {
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  const loadDashboard = async () => {
     try {
-      const [dashRes, leaveRes] = await Promise.all([
-        fetchDashboard(),
-        fetchLeaveRequests(),
-      ]);
-      if (dashRes?.data?.ok) setDashData(dashRes.data);
-      if (leaveRes?.data?.ok) {
-        const pending = (leaveRes.data.leave_requests || []).filter(
-          (r) => r.status === "Pending"
-        ).length;
-        setPendingLeaves(pending);
+      const res = await fetchDashboard();
+      if (res?.data) {
+        setDashboardData(res.data);
       }
-    } catch {}
-    setLoading(false);
-    setRefreshing(false);
+    } catch (_) {}
   };
 
-  useFocusEffect(useCallback(() => { loadData(); }, []));
-
-  const onRefresh = () => { setRefreshing(true); loadData(); };
-
-  if (loading) {
-    return (
-      <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
-        <SafeAreaView style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color={THEME.colors.primary} />
-          <Text style={{ marginTop: 12, color: "#64748B", fontWeight: "600" }}>Loading dashboard…</Text>
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
   return (
-    <LinearGradient
-      colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.container}
-    >
-      <SafeAreaView style={{ flex: 1 }}>
-        <AdminHeader
-          title="Dashboard"
-          onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
-        />
+    <LinearGradient colors={["#F8FAFC", "#F1F5F9"]} style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <AdminHeader title="Admin Dashboard" navigation={navigation} />
 
         <ScrollView
-          showsVerticalScrollIndicator={false}
+          style={styles.container}
           contentContainerStyle={styles.content}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={[THEME.colors.primary]}
-            />
-          }
+          showsVerticalScrollIndicator={false}
         >
           <DashboardHeroCard
-            adminName={dashData?.admin_name || "Administrator"}
-            company={dashData?.company_name || "HR Management System"}
-            totalEmployees={dashData?.total ?? "--"}
-            present={dashData?.present ?? "--"}
+            present={dashboardData?.present || 228}
+            total={dashboardData?.total_employees || 252}
           />
 
           <AdminSearchBar
             value={search}
             onChangeText={setSearch}
-            placeholder="Search employees..."
+            placeholder="Search employees or features..."
+            onFilterPress={() => navigation.navigate("Employees")}
+            onClear={() => setSearch("")}
           />
 
           <View style={styles.sectionSpacing} />
 
-          <AttendanceOverviewCard />
+          <AttendanceOverviewCard
+            present={dashboardData?.present || 228}
+            absent={dashboardData?.absent || 18}
+            late={dashboardData?.late || 8}
+            onLeave={dashboardData?.onLeave || 6}
+            navigation={navigation}
+          />
 
           <QuickActionGrid navigation={navigation} />
 
+          {/* Pending Leave Approval Card */}
           <PendingApprovalCard
             title="Leave Requests"
-            pending={pendingLeaves}
-            subtitle={pendingLeaves > 0 ? "Requires your approval" : "All up to date"}
+            pending={8}
+            subtitle="Requires your approval"
             icon="document-text-outline"
             color="#F59E0B"
             background="#FEF3C7"
             onPress={() => navigation.navigate("LeaveRequests")}
           />
 
-          <AnalyticsOverviewCard />
-          <AnnouncementCard />
+          {/* Pending Payroll Approval Card */}
+          <PendingApprovalCard
+            title="Payroll Approval"
+            pending={3}
+            subtitle="Waiting for verification"
+            icon="wallet-outline"
+            color="#7C3AED"
+            background="#EDE9FE"
+            onPress={() => navigation.navigate("Payroll")}
+          />
+
+          <AnalyticsOverviewCard navigation={navigation} />
+
+          {/* Announcements Card with Working View All */}
+          <AnnouncementCard
+            onViewAll={() => setAnnouncementModalVisible(true)}
+          />
+
           <RecentActivityList />
 
           <View style={styles.bottomSpacing} />
         </ScrollView>
+
+        {/* Announcements Modal */}
+        <Modal
+          visible={announcementModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setAnnouncementModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons name="megaphone" size={22} color="#0B2253" />
+                  <Text style={styles.modalTitle}>Company Announcements</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => setAnnouncementModalVisible(false)}
+                >
+                  <Ionicons name="close" size={20} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                data={ALL_ANNOUNCEMENTS}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                renderItem={({ item }) => (
+                  <View style={styles.announcementItem}>
+                    <View style={[styles.itemIconBox, { backgroundColor: item.bg }]}>
+                      <Ionicons name={item.icon} size={22} color={item.color} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <View style={styles.itemMetaRow}>
+                        <Text style={styles.itemTitle}>{item.title}</Text>
+                        <View style={[styles.categoryBadge, { backgroundColor: item.bg }]}>
+                          <Text style={[styles.categoryText, { color: item.color }]}>
+                            {item.category}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.itemMsg}>{item.message}</Text>
+                      <Text style={styles.itemDate}>📅 {item.date}</Text>
+                    </View>
+                  </View>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
   },
-
   content: {
     paddingHorizontal: 20,
     paddingBottom: 120,
   },
-
   sectionSpacing: {
-    height: 20,
+    height: 16,
   },
-
-  statsGrid: {
-    flexDirection: "row",
-
-    flexWrap: "wrap",
-
-    justifyContent: "space-between",
-
-    marginBottom: 24,
+  bottomSpacing: {
+    height: 40,
   },
-
-  heroSpacing: {
-    marginBottom: 24,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.5)",
+    justifyContent: "flex-end",
   },
-
-  cardSpacing: {
-    marginBottom: 22,
-  },
-
-  row: {
-    flexDirection: "row",
-
-    justifyContent: "space-between",
-
-    alignItems: "center",
-  },
-
-  sectionHeader: {
-    flexDirection: "row",
-
-    justifyContent: "space-between",
-
-    alignItems: "center",
-
-    marginBottom: 18,
-  },
-
-  sectionTitle: {
-    fontSize: 22,
-
-    fontWeight: "800",
-
-    color: "#0F172A",
-  },
-
-  sectionSubtitle: {
-    marginTop: 6,
-
-    fontSize: 13,
-
-    color: "#64748B",
-
-    fontWeight: "500",
-  },
-
-  viewAll: {
-    color: THEME.colors.primary,
-
-    fontSize: 14,
-
-    fontWeight: "700",
-  },
-
-  dashboardCard: {
+  modalContent: {
     backgroundColor: "#FFFFFF",
-
-    borderRadius: 24,
-
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    maxHeight: "82%",
     padding: 20,
-
-    borderWidth: 1,
-
-    borderColor: "#E8EDF5",
-
-    shadowColor: "#000",
-
-    shadowOpacity: 0.05,
-
-    shadowRadius: 12,
-
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-
-    elevation: 4,
   },
-    statsCard: {
-    width: "48%",
-    marginBottom: 16,
-  },
-
-  quickActionSpacing: {
-    marginTop: 8,
-    marginBottom: 28,
-  },
-
-  analyticsSpacing: {
-    marginBottom: 28,
-  },
-
-  announcementSpacing: {
-    marginBottom: 28,
-  },
-
-  activitySpacing: {
-    marginBottom: 28,
-  },
-
-  pendingSpacing: {
-    marginBottom: 20,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#E8EDF5",
-    marginVertical: 24,
-  },
-
-  emptyContainer: {
-    backgroundColor: "#FFFFFF",
-
-    borderRadius: 22,
-
-    padding: 24,
-
-    justifyContent: "center",
-
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-
-    borderWidth: 1,
-
-    borderColor: "#E8EDF5",
+    marginBottom: 18,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
   },
-
-  emptyText: {
-    marginTop: 12,
-
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginLeft: 10,
+  },
+  closeBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  announcementItem: {
+    flexDirection: "row",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  itemIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  itemMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  itemTitle: {
+    flex: 1,
     fontSize: 15,
-
-    color: "#64748B",
-
+    fontWeight: "700",
+    color: "#0F172A",
+    marginRight: 6,
+  },
+  categoryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  categoryText: {
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  itemMsg: {
+    marginTop: 6,
+    fontSize: 13,
+    color: "#475569",
+    lineHeight: 18,
+  },
+  itemDate: {
+    marginTop: 8,
+    fontSize: 11,
+    color: "#94A3B8",
     fontWeight: "600",
   },
-
-  bottomSpacing: {
-    height: 120,
-  },
-
 });

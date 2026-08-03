@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -8,6 +8,7 @@ export default function AttendanceOverviewCard({
   absent = 18,
   late = 8,
   onLeave = 6,
+  navigation,
 }) {
   const [timeStr, setTimeStr] = useState("");
   const [dateStr, setDateStr] = useState("");
@@ -77,16 +78,22 @@ export default function AttendanceOverviewCard({
       label: "On Leave",
       value: onLeave,
       icon: "airplane",
-      color: "#2563EB",
+      color: "#0B2253",
       bg: "#EFF6FF",
     },
   ];
 
   return (
-    <View style={styles.card}>
-      {/* Real-time Clock Banner matching Web Scanner */}
+    <TouchableOpacity
+      activeOpacity={0.92}
+      style={styles.card}
+      onPress={() => {
+        if (navigation) navigation.navigate("Attendance");
+      }}
+    >
+      {/* Real-time Clock Banner */}
       <LinearGradient
-        colors={["#0F2460", "#1E3A8A", "#2563EB"]}
+        colors={["#0B2253", "#173B8C"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.clockBanner}
@@ -136,36 +143,36 @@ export default function AttendanceOverviewCard({
           </View>
         ))}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 20,
+    borderRadius: 22,
+    padding: 18,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
 
   // Clock Banner
   clockBanner: {
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 18,
     alignItems: "center",
-    shadowColor: "#1E3A8A",
+    shadowColor: "#0B2253",
     shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    elevation: 4,
   },
   clockTopRow: {
     width: "100%",
@@ -228,7 +235,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   title: {
     fontSize: 17,
@@ -246,7 +253,7 @@ const styles = StyleSheet.create({
   score: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#173B8C",
+    color: "#0B2253",
     letterSpacing: -0.4,
   },
   scoreLabel: {
@@ -260,11 +267,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "#F1F5F9",
     overflow: "hidden",
-    marginBottom: 18,
+    marginBottom: 16,
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#173B8C",
+    backgroundColor: "#0B2253",
     borderRadius: 4,
   },
   list: {

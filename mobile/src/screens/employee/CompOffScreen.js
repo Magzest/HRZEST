@@ -10,6 +10,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { fetchMyOvertime, requestOvertime } from "../../api/client";
 
 import CompOffHeaderCard from "../../components/compoff/CompOffHeaderCard";
 import CompOffStatsGrid from "../../components/compoff/CompOffStatsGrid";
@@ -20,7 +21,24 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 
 export default function CompOffScreen() {
   const navigation = useNavigation();
-const today = new Date();
+  const today = new Date();
+  const [loading, setLoading] = React.useState(false);
+  const [overtimeData, setOvertimeData] = React.useState(null);
+
+  const loadOvertime = async () => {
+    setLoading(true);
+    try {
+      const res = await fetchMyOvertime();
+      if (res.data && res.data.ok) {
+        setOvertimeData(res.data);
+      }
+    } catch {}
+    setLoading(false);
+  };
+
+  React.useEffect(() => {
+    loadOvertime();
+  }, []);
   const overtimeRecords = [
     {
       date: "12 Jun 2026",

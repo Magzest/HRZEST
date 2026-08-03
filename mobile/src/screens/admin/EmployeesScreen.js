@@ -19,9 +19,14 @@ import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import { fetchEmployees } from "../../api/client";
 import THEME from "../../constants/theme";
 
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
+
 export default function EmployeesScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedSort, setSelectedSort] = useState("Name (A-Z)");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
@@ -61,17 +66,31 @@ export default function EmployeesScreen({ navigation }) {
   };
 
   const departments = ["All", "Engineering", "Design", "HR", "Testing"];
+  const statuses = ["All", "Active", "On Leave", "Inactive"];
+  const sortOptions = ["Name (A-Z)", "Name (Z-A)", "Role"];
 
-  const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      emp.name.toLowerCase().includes(search.toLowerCase()) ||
-      (emp.employee_id && emp.employee_id.toLowerCase().includes(search.toLowerCase())) ||
-      (emp.role && emp.role.toLowerCase().includes(search.toLowerCase()));
+  const hasActiveFilter = selectedDept !== "All" || selectedStatus !== "All" || selectedSort !== "Name (A-Z)";
 
-    const matchesDept = selectedDept === "All" || emp.department === selectedDept;
+  const filteredEmployees = employees
+    .filter((emp) => {
+      const matchesSearch =
+        emp.name.toLowerCase().includes(search.toLowerCase()) ||
+        (emp.employee_id && emp.employee_id.toLowerCase().includes(search.toLowerCase())) ||
+        (emp.role && emp.role.toLowerCase().includes(search.toLowerCase()));
 
-    return matchesSearch && matchesDept;
-  });
+      const matchesDept = selectedDept === "All" || emp.department === selectedDept;
+      const matchesStatus =
+        selectedStatus === "All" ||
+        emp.status === selectedStatus ||
+        (selectedStatus === "On Leave" && emp.status === "Leave");
+
+      return matchesSearch && matchesDept && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (selectedSort === "Name (Z-A)") return b.name.localeCompare(a.name);
+      if (selectedSort === "Role") return (a.role || "").localeCompare(b.role || "");
+      return a.name.localeCompare(b.name);
+    });
 
   return (
     <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
@@ -109,11 +128,14 @@ export default function EmployeesScreen({ navigation }) {
             </Text>
           </View>
 
-          {/* Search */}
+          {/* Search & Filter */}
           <AdminSearchBar
             value={search}
             onChangeText={setSearch}
             placeholder="Search by name, ID, or role..."
+            onFilterPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={hasActiveFilter}
+            onClear={() => setSearch("")}
           />
 
           {/* Department Filter Chips */}
@@ -239,6 +261,28 @@ export default function EmployeesScreen({ navigation }) {
             </View>
           </View>
         </Modal>
+
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Staff Directory"
+          statusOptions={statuses}
+          selectedStatus={selectedStatus}
+          onSelectStatus={setSelectedStatus}
+          deptOptions={departments}
+          selectedDept={selectedDept}
+          onSelectDept={setSelectedDept}
+          sortOptions={sortOptions}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setSelectedDept("All");
+            setSelectedStatus("All");
+            setSelectedSort("Name (A-Z)");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );

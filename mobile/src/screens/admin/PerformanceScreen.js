@@ -15,9 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import THEME from "../../constants/theme";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
 export default function PerformanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedSort, setSelectedSort] = useState("Rating (High-Low)");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -43,35 +47,47 @@ export default function PerformanceScreen({ navigation }) {
     {
       id: "3",
       employeeName: "Michael Chen",
-      role: "UI/UX Designer",
+      role: "QA Lead",
+      rating: 4.2,
+      status: "Pending Review",
+      lastReview: "Q1 2026",
+      goalsMet: "82%",
+    },
+    {
+      id: "4",
+      employeeName: "Emily Wong",
+      role: "UX Designer",
       rating: 4.9,
       status: "Completed",
       lastReview: "Q2 2026",
       goalsMet: "98%",
     },
-    {
-      id: "4",
-      employeeName: "David Miller",
-      role: "DevOps Engineer",
-      rating: 4.2,
-      status: "Pending Self-Review",
-      lastReview: "Q1 2026",
-      goalsMet: "82%",
-    },
   ]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    setTimeout(() => setRefreshing(false), 800);
   };
 
-  const filteredReviews = reviews.filter(
-    (r) =>
-      r.employeeName.toLowerCase().includes(search.toLowerCase()) ||
-      r.role.toLowerCase().includes(search.toLowerCase())
-  );
+  const hasActiveFilter = selectedStatus !== "All" || selectedSort !== "Rating (High-Low)";
+
+  const statuses = ["All", "Completed", "In Progress", "Pending Review"];
+  const sortOptions = ["Rating (High-Low)", "Rating (Low-High)", "Name (A-Z)"];
+
+  const filteredReviews = reviews
+    .filter((r) => {
+      const matchesSearch =
+        r.employeeName.toLowerCase().includes(search.toLowerCase()) ||
+        r.role.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus =
+        selectedStatus === "All" || r.status === selectedStatus;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (selectedSort === "Rating (Low-High)") return a.rating - b.rating;
+      if (selectedSort === "Name (A-Z)") return a.employeeName.localeCompare(b.employeeName);
+      return b.rating - a.rating;
+    });
 
   return (
     <LinearGradient
@@ -129,6 +145,9 @@ export default function PerformanceScreen({ navigation }) {
             value={search}
             onChangeText={setSearch}
             placeholder="Search employee performance..."
+            onFilterPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={hasActiveFilter}
+            onClear={() => setSearch("")}
           />
 
           <View style={styles.sectionHeader}>
@@ -196,6 +215,24 @@ export default function PerformanceScreen({ navigation }) {
 
           <View style={{ height: 100 }} />
         </ScrollView>
+
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Performance Reviews"
+          statusOptions={statuses}
+          selectedStatus={selectedStatus}
+          onSelectStatus={setSelectedStatus}
+          sortOptions={sortOptions}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setSelectedStatus("All");
+            setSelectedSort("Rating (High-Low)");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );

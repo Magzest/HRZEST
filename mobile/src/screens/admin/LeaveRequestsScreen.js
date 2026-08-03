@@ -16,12 +16,16 @@ import { Ionicons } from "@expo/vector-icons";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 import { fetchLeaveRequests, leaveAction } from "../../api/client";
 import THEME from "../../constants/theme";
 
 export default function LeaveRequestsScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("Pending");
+  const [selectedLeaveType, setSelectedLeaveType] = useState("All");
+  const [selectedSort, setSelectedSort] = useState("Newest First");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState([]);
@@ -70,13 +74,24 @@ export default function LeaveRequestsScreen({ navigation }) {
     );
   };
 
-  const filteredRequests = requests.filter((r) => {
-    const matchesSearch =
-      r.employee_name.toLowerCase().includes(search.toLowerCase()) ||
-      r.leave_type.toLowerCase().includes(search.toLowerCase());
-    const matchesTab = activeTab === "All" || r.status === activeTab;
-    return matchesSearch && matchesTab;
-  });
+  const hasActiveFilter = activeTab !== "Pending" || selectedLeaveType !== "All" || selectedSort !== "Newest First";
+
+  const leaveTypes = ["All", "Casual Leave", "Sick Leave", "Earned Leave", "Comp-Off"];
+
+  const filteredRequests = requests
+    .filter((r) => {
+      const matchesSearch =
+        r.employee_name.toLowerCase().includes(search.toLowerCase()) ||
+        r.leave_type.toLowerCase().includes(search.toLowerCase());
+      const matchesTab = activeTab === "All" || r.status === activeTab;
+      const matchesType = selectedLeaveType === "All" || r.leave_type === selectedLeaveType;
+      return matchesSearch && matchesTab && matchesType;
+    })
+    .sort((a, b) => {
+      if (selectedSort === "Oldest First") return a.id.localeCompare(b.id);
+      if (selectedSort === "Name (A-Z)") return a.employee_name.localeCompare(b.employee_name);
+      return b.id.localeCompare(a.id);
+    });
 
   const pendingCount = requests.filter((r) => r.status === "Pending").length;
   const approvedCount = requests.filter((r) => r.status === "Approved").length;
@@ -117,11 +132,14 @@ export default function LeaveRequestsScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Search */}
+          {/* Search & Filter */}
           <AdminSearchBar
             value={search}
             onChangeText={setSearch}
             placeholder="Search leave requests..."
+            onFilterPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={hasActiveFilter}
+            onClear={() => setSearch("")}
           />
 
           {/* Status Tabs */}
@@ -219,6 +237,28 @@ export default function LeaveRequestsScreen({ navigation }) {
 
           <View style={{ height: 110 }} />
         </ScrollView>
+
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Leave Requests"
+          statusOptions={["All", "Pending", "Approved", "Rejected"]}
+          selectedStatus={activeTab}
+          onSelectStatus={setActiveTab}
+          deptOptions={leaveTypes}
+          selectedDept={selectedLeaveType}
+          onSelectDept={setSelectedLeaveType}
+          sortOptions={["Newest First", "Oldest First", "Name (A-Z)"]}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setActiveTab("Pending");
+            setSelectedLeaveType("All");
+            setSelectedSort("Newest First");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );

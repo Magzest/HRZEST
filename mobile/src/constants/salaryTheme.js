@@ -8,9 +8,9 @@ const SALARY_THEME = {
 
     divider: "#EEF2F7",
 
-    primary: "#2563EB",
+    primary: "#0B2253",
 
-    primaryLight: "#DBEAFE",
+    primaryLight: "#EEF4FF",
 
     success: "#16A34A",
 

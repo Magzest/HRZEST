@@ -9,7 +9,7 @@ import {
 
 import { Ionicons } from "@expo/vector-icons";
 
-import LEAVE_THEME from "../../constants/leaveTheme";
+import LEAVE_THEME from "../../../constants/leaveTheme";
 
 export default function LeaveQuotaScroller({
   balances = [],

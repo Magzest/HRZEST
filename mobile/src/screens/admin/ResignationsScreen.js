@@ -16,11 +16,14 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
+import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 import { fetchResignations, resignationAction } from "../../api/client";
 
 export default function ResignationsScreen() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("Pending");
+  const [selectedSort, setSelectedSort] = useState("Newest First");
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [resignations, setResignations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -97,21 +100,29 @@ export default function ResignationsScreen() {
     );
   };
 
-  const filtered = resignations.filter((r) => {
-    const name = (r.name || r.employee_name || "").toLowerCase();
-    const empId = (r.employee_id || "").toLowerCase();
-    const reason = (r.reason || "").toLowerCase();
-    const q = search.toLowerCase();
-    const matchesSearch = name.includes(q) || empId.includes(q) || reason.includes(q);
+  const hasActiveFilter = activeTab !== "Pending" || selectedSort !== "Newest First";
 
-    const matchesTab =
-      activeTab === "All" ||
-      (activeTab === "Pending" && (r.status === "Pending" || !r.status)) ||
-      (activeTab === "Accepted" && (r.status === "Accepted" || r.status === "Approved")) ||
-      (activeTab === "Declined" && (r.status === "Declined" || r.status === "Rejected"));
+  const filtered = resignations
+    .filter((r) => {
+      const name = (r.name || r.employee_name || "").toLowerCase();
+      const empId = (r.employee_id || "").toLowerCase();
+      const reason = (r.reason || "").toLowerCase();
+      const q = search.toLowerCase();
+      const matchesSearch = name.includes(q) || empId.includes(q) || reason.includes(q);
 
-    return matchesSearch && matchesTab;
-  });
+      const matchesTab =
+        activeTab === "All" ||
+        (activeTab === "Pending" && (r.status === "Pending" || !r.status)) ||
+        (activeTab === "Accepted" && (r.status === "Accepted" || r.status === "Approved")) ||
+        (activeTab === "Declined" && (r.status === "Declined" || r.status === "Rejected"));
+
+      return matchesSearch && matchesTab;
+    })
+    .sort((a, b) => {
+      if (selectedSort === "Oldest First") return a.id.localeCompare(b.id);
+      if (selectedSort === "Name (A-Z)") return (a.name || a.employee_name || "").localeCompare(b.name || b.employee_name || "");
+      return b.id.localeCompare(a.id);
+    });
 
   const pendingCount = resignations.filter((r) => r.status === "Pending" || !r.status).length;
   const acceptedCount = resignations.filter((r) => r.status === "Accepted" || r.status === "Approved").length;
@@ -188,6 +199,9 @@ export default function ResignationsScreen() {
             value={search}
             onChangeText={setSearch}
             placeholder="Search by name, ID or reason..."
+            onFilterPress={() => setFilterModalVisible(true)}
+            hasActiveFilter={hasActiveFilter}
+            onClear={() => setSearch("")}
           />
 
           {/* Segment Filter Tabs */}
@@ -311,6 +325,24 @@ export default function ResignationsScreen() {
             })
           )}
         </ScrollView>
+
+        {/* Professional SaaS Filter Modal */}
+        <SaasFilterSheet
+          visible={filterModalVisible}
+          title="Filter Resignation Requests"
+          statusOptions={["All", "Pending", "Accepted", "Declined"]}
+          selectedStatus={activeTab}
+          onSelectStatus={setActiveTab}
+          sortOptions={["Newest First", "Oldest First", "Name (A-Z)"]}
+          selectedSort={selectedSort}
+          onSelectSort={setSelectedSort}
+          onApply={() => setFilterModalVisible(false)}
+          onReset={() => {
+            setActiveTab("Pending");
+            setSelectedSort("Newest First");
+          }}
+          onClose={() => setFilterModalVisible(false)}
+        />
       </SafeAreaView>
     </LinearGradient>
   );

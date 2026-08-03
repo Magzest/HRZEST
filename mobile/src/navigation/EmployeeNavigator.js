@@ -1,6 +1,7 @@
 import React, { useState } from "react";
-import { View } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import AttendanceScannerModal from "../screens/AttendanceScannerModal";
@@ -24,6 +25,8 @@ const Tab = createBottomTabNavigator();
 
 export default function EmployeeNavigator() {
   const [showScanner, setShowScanner] = useState(false);
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 16);
 
   return (
     <>
@@ -42,44 +45,54 @@ export default function EmployeeNavigator() {
             left: 0,
             right: 0,
             bottom: 0,
-            height: 72,
-            backgroundColor: "#173B8C",
-            borderTopWidth: 0,
-            borderTopLeftRadius: 26,
-            borderTopRightRadius: 26,
-            elevation: 15,
+            height: 58 + bottomInset,
+            backgroundColor: "#0B2253",
+            borderTopWidth: 1,
+            borderTopColor: "rgba(255, 255, 255, 0.15)",
+            borderTopLeftRadius: 22,
+            borderTopRightRadius: 22,
+            elevation: 25,
             shadowColor: "#000",
-            shadowOpacity: 0.12,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: -3 },
-            paddingTop: 8,
-            paddingBottom: 8,
+            shadowOpacity: 0.3,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: -4 },
+            paddingTop: 6,
+            paddingBottom: bottomInset,
+          },
+          tabBarItemStyle: {
+            justifyContent: "center",
+            alignItems: "center",
+            height: 52,
           },
           tabBarLabelStyle: {
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: "600",
-            marginTop: 2,
+            letterSpacing: 0.2,
+            marginTop: 1,
           },
           tabBarActiveTintColor: "#FFFFFF",
-          tabBarInactiveTintColor: "rgba(255,255,255,0.72)",
+          tabBarInactiveTintColor: "rgba(255, 255, 255, 0.65)",
           tabBarIcon: ({ focused, color }) => {
+            let iconName = "ellipse";
             if (route.name === "Home") {
-              return <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />;
+              iconName = focused ? "home" : "home-outline";
+            } else if (route.name === "Leave") {
+              iconName = focused ? "calendar" : "calendar-outline";
+            } else if (route.name === "Tickets") {
+              iconName = focused ? "chatbubbles" : "chatbubbles-outline";
+            } else if (route.name === "Notifications") {
+              iconName = focused ? "notifications" : "notifications-outline";
             }
-            if (route.name === "Leave") {
-              return <Ionicons name={focused ? "document-text" : "document-text-outline"} size={22} color={color} />;
-            }
-            if (route.name === "Tickets") {
-              return <Ionicons name={focused ? "ticket" : "ticket-outline"} size={22} color={color} />;
-            }
-            if (route.name === "Notifications") {
-              return <Ionicons name={focused ? "notifications" : "notifications-outline"} size={22} color={color} />;
-            }
-            return <Ionicons name="ellipse" size={22} color={color} />;
+            return (
+              <View style={styles.iconContainer}>
+                <Ionicons name={iconName} size={22} color={color} />
+                {focused && <View style={styles.activeDot} />}
+              </View>
+            );
           },
         })}
       >
-        {/* 5 Visible Bottom Bar Items */}
+        {/* 5 Main Tabs */}
         <Tab.Screen
           name="Home"
           component={EmployeeDashboard}
@@ -103,22 +116,9 @@ export default function EmployeeNavigator() {
           }}
           options={{
             tabBarLabel: "",
-            tabBarItemStyle: { top: 3 },
             tabBarIcon: () => (
-              <View
-                style={{
-                  width: 62,
-                  height: 62,
-                  borderRadius: 31,
-                  backgroundColor: "#22C55E",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderWidth: 3,
-                  borderColor: "#FFFFFF",
-                  elevation: 10,
-                }}
-              >
-                <Ionicons name="qr-code" size={28} color="#FFFFFF" />
+              <View style={styles.scanButton}>
+                <Ionicons name="qr-code" size={29} color="#FFFFFF" />
               </View>
             ),
           }}
@@ -136,67 +136,99 @@ export default function EmployeeNavigator() {
           options={{ tabBarLabel: "Alerts" }}
         />
 
-        {/* Hidden Screens - Accessible via Drawer Menu */}
+        {/* Hidden Drawer Screens */}
         <Tab.Screen
           name="Attendance"
           component={AttendanceScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="CompOff"
           component={CompOffScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Holidays"
           component={HolidaysScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Earnings"
           component={EarningsScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Payslips"
           component={PayslipsScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Performance"
           component={PerformanceScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Onboarding"
           component={OnboardingScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Profile"
           component={ProfileNavigator}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Policies"
           component={PoliciesScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Resignation"
           component={ResignScreen}
-          options={{ tabBarButton: () => null }}
+          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
         />
       </Tab.Navigator>
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 26,
+  },
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#FFFFFF",
+    position: "absolute",
+    bottom: -4,
+  },
+  scanButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#22C55E",
+    justifyContent: "center",
+    alignItems: "center",
+    top: -10,
+    borderWidth: 3.5,
+    borderColor: "#FFFFFF",
+    elevation: 14,
+    shadowColor: "#22C55E",
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+});

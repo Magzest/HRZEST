@@ -174,7 +174,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "company" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="business" size={22} color="#173B8C" />
+                <Ionicons name="business" size={22} color="#0B2253" />
                 <Text style={styles.cardHeaderTitle}>Company & Organization Profile</Text>
               </View>
 
@@ -268,14 +268,14 @@ export default function SettingsScreen({ navigation, route }) {
             <View style={styles.card}>
               <View style={styles.cardHeaderBetween}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="time" size={22} color="#173B8C" />
+                  <Ionicons name="time" size={22} color="#0B2253" />
                   <Text style={[styles.cardHeaderTitle, { marginLeft: 8 }]}>Work Shifts & Grace Timings</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.smallAddBtn}
                   onPress={() => setAddShiftModal(true)}
                 >
-                  <Ionicons name="add-circle" size={16} color="#173B8C" />
+                  <Ionicons name="add-circle" size={16} color="#0B2253" />
                   <Text style={styles.smallAddBtnText}>Add Shift</Text>
                 </TouchableOpacity>
               </View>
@@ -306,7 +306,7 @@ export default function SettingsScreen({ navigation, route }) {
               {shifts.map((s) => (
                 <View key={s.id} style={styles.shiftCardItem}>
                   <View style={styles.shiftIconBox}>
-                    <Ionicons name="alarm-outline" size={20} color="#173B8C" />
+                    <Ionicons name="alarm-outline" size={20} color="#0B2253" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.shiftName}>{s.name}</Text>
@@ -335,7 +335,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "attendance" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="location" size={22} color="#173B8C" />
+                <Ionicons name="location" size={22} color="#0B2253" />
                 <Text style={styles.cardHeaderTitle}>GPS Geofence & Facial Verification</Text>
               </View>
 
@@ -348,7 +348,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={geofenceEnabled}
                   onValueChange={setGeofenceEnabled}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={geofenceEnabled ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={geofenceEnabled ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -396,7 +396,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={faceRecog}
                   onValueChange={setFaceRecog}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={faceRecog ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={faceRecog ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -409,7 +409,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={livenessCheck}
                   onValueChange={setLivenessCheck}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={livenessCheck ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={livenessCheck ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -422,7 +422,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={autoCheckout}
                   onValueChange={setAutoCheckout}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={autoCheckout ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={autoCheckout ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -437,35 +437,12 @@ export default function SettingsScreen({ navigation, route }) {
             </View>
           )}
 
-          {/* TAB 4: SECURITY & 2FA */}
+          {/* TAB 4: SECURITY */}
           {activeTab === "security" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="shield-checkmark" size={22} color="#173B8C" />
-                <Text style={styles.cardHeaderTitle}>Security & Two-Factor Authentication</Text>
-              </View>
-
-              <View style={styles.securityStatusBox}>
-                <View style={styles.securityStatusIcon}>
-                  <Ionicons name="shield-checkmark-sharp" size={28} color="#10B981" />
-                </View>
-                <View style={{ marginLeft: 14, flex: 1 }}>
-                  <Text style={styles.securityStatusTitle}>Two-Factor Auth (2FA) Active</Text>
-                  <Text style={styles.securityStatusSub}>System encrypted with Fernet PII tokens</Text>
-                </View>
-              </View>
-
-              <View style={styles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Enforce 2FA for Admin Portal</Text>
-                  <Text style={styles.settingRowSub}>Requires TOTP authenticator code</Text>
-                </View>
-                <Switch
-                  value={twoFactorActive}
-                  onValueChange={setTwoFactorActive}
-                  trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={twoFactorActive ? "#173B8C" : "#F1F5F9"}
-                />
+                <Ionicons name="shield-checkmark" size={22} color="#0B2253" />
+                <Text style={styles.cardHeaderTitle}>Security & Access Control</Text>
               </View>
 
               <View style={styles.inputGroup}>
@@ -530,7 +507,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "notifications" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="notifications" size={22} color="#173B8C" />
+                <Ionicons name="notifications" size={22} color="#0B2253" />
                 <Text style={styles.cardHeaderTitle}>Notification Preferences & Alerts</Text>
               </View>
 
@@ -543,7 +520,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={pushNotifs}
                   onValueChange={setPushNotifs}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={pushNotifs ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={pushNotifs ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -556,7 +533,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={emailAlerts}
                   onValueChange={setEmailAlerts}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={emailAlerts ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={emailAlerts ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -569,7 +546,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={dailyDigest}
                   onValueChange={setDailyDigest}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={dailyDigest ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={dailyDigest ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -582,7 +559,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={lateAlerts}
                   onValueChange={setLateAlerts}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={lateAlerts ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={lateAlerts ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -595,7 +572,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={payslipAlerts}
                   onValueChange={setPayslipAlerts}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={payslipAlerts ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={payslipAlerts ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -614,7 +591,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "payroll" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="wallet" size={22} color="#173B8C" />
+                <Ionicons name="wallet" size={22} color="#0B2253" />
                 <Text style={styles.cardHeaderTitle}>Payroll & Compensation Rules</Text>
               </View>
 
@@ -658,7 +635,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={autoTax}
                   onValueChange={setAutoTax}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={autoTax ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={autoTax ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -671,7 +648,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={autoEmailPayslip}
                   onValueChange={setAutoEmailPayslip}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={autoEmailPayslip ? "#173B8C" : "#F1F5F9"}
+                  thumbColor={autoEmailPayslip ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
@@ -692,7 +669,7 @@ export default function SettingsScreen({ navigation, route }) {
               {/* Profile Top Banner Card */}
               <View style={styles.profileCard}>
                 <LinearGradient
-                  colors={["#0F2460", "#173B8C"]}
+                  colors={["#0F2460", "#0B2253"]}
                   style={styles.profileHeaderBanner}
                 >
                   <View style={styles.avatarLarge}>
@@ -706,7 +683,7 @@ export default function SettingsScreen({ navigation, route }) {
 
                   <View style={styles.roleBadgeRow}>
                     <View style={styles.roleBadge}>
-                      <Ionicons name="star" size={12} color="#173B8C" />
+                      <Ionicons name="star" size={12} color="#0B2253" />
                       <Text style={styles.roleText}>SUPER ADMIN</Text>
                     </View>
                     <View style={styles.verifiedBadge}>
@@ -722,7 +699,7 @@ export default function SettingsScreen({ navigation, route }) {
                     </View>
                     <View style={styles.statSep} />
                     <View style={styles.statItem}>
-                      <Text style={styles.statVal}>2FA</Text>
+                      <Text style={styles.statVal}>Active</Text>
                       <Text style={styles.statLbl}>Auth Status</Text>
                     </View>
                     <View style={styles.statSep} />
@@ -744,7 +721,7 @@ export default function SettingsScreen({ navigation, route }) {
                   onPress={() => setActiveTab("security")}
                 >
                   <View style={styles.actionIconBox}>
-                    <Ionicons name="key-outline" size={20} color="#173B8C" />
+                    <Ionicons name="key-outline" size={20} color="#0B2253" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.actionTitle}>Change Password</Text>
@@ -759,7 +736,7 @@ export default function SettingsScreen({ navigation, route }) {
                   onPress={() => setActiveTab("company")}
                 >
                   <View style={styles.actionIconBox}>
-                    <Ionicons name="business-outline" size={20} color="#173B8C" />
+                    <Ionicons name="business-outline" size={20} color="#0B2253" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.actionTitle}>Organization Info</Text>
@@ -774,7 +751,7 @@ export default function SettingsScreen({ navigation, route }) {
                   onPress={() => setActiveTab("notifications")}
                 >
                   <View style={styles.actionIconBox}>
-                    <Ionicons name="notifications-outline" size={20} color="#173B8C" />
+                    <Ionicons name="notifications-outline" size={20} color="#0B2253" />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.actionTitle}>Alert Preferences</Text>
@@ -884,7 +861,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   tabButtonActive: {
-    backgroundColor: "#173B8C",
+    backgroundColor: "#0B2253",
   },
   tabText: {
     fontSize: 12,
@@ -973,8 +950,8 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
   },
   chipBtnActive: {
-    backgroundColor: "#173B8C",
-    borderColor: "#173B8C",
+    backgroundColor: "#0B2253",
+    borderColor: "#0B2253",
   },
   chipText: {
     fontSize: 12,
@@ -987,7 +964,7 @@ const styles = StyleSheet.create({
 
   // Buttons
   saveButton: {
-    backgroundColor: "#173B8C",
+    backgroundColor: "#0B2253",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -1038,7 +1015,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   smallAddBtnText: {
-    color: "#173B8C",
+    color: "#0B2253",
     fontSize: 12,
     fontWeight: "700",
     marginLeft: 4,
@@ -1133,7 +1110,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: "#173B8C",
+    backgroundColor: "#0B2253",
     borderWidth: 4,
     borderColor: "#FFFFFF",
     justifyContent: "center",
@@ -1171,7 +1148,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   roleText: {
-    color: "#173B8C",
+    color: "#0B2253",
     fontSize: 11,
     fontWeight: "800",
     marginLeft: 4,
@@ -1209,7 +1186,7 @@ const styles = StyleSheet.create({
   statVal: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#173B8C",
+    color: "#0B2253",
   },
   statLbl: {
     fontSize: 11,

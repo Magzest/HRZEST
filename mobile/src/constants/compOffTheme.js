@@ -194,7 +194,7 @@ export const yearOptions = [
 const COMPOFF_THEME = {
   colors: {
     // Primary
-    primary: "#2563EB",
+    primary: "#0B2253",
     primaryLight: "#DBEAFE",
 
     // Secondary
