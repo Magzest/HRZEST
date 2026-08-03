@@ -235,6 +235,7 @@ def admin_login():
             session["admin_username"] = identifier
             session["admin_role"] = admin_row[1]
             session["_session_created"] = time.time()
+            session["soc_step_up_until"] = time.time() + 600
             session.permanent = True
             ensure_session_id(session)
             if admin_row[2]:
