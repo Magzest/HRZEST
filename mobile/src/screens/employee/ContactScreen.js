@@ -17,14 +17,14 @@ export default function ContactScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [contactInfo, setContactInfo] = useState({
-    workEmail: user?.email || `${user?.employeeId || "emp"}@company.com`,
+    workEmail: user?.email || "",
     phone: user?.phone || "Not Provided",
-    address: user?.address || "Corporate HQ Address",
-    city: user?.city || "Hyderabad",
-    state: user?.state || "Telangana",
-    pincode: user?.pincode || "500081",
-    country: "India",
-    emergencyContact: user?.emergency_contact_name || "Family Contact",
+    address: user?.address || "Not Provided",
+    city: user?.city || "Not Provided",
+    state: user?.state || "Not Provided",
+    pincode: user?.pincode || "Not Provided",
+    country: "Not Provided",
+    emergencyContact: user?.emergency_contact_name || "Not Provided",
     emergencyPhone: user?.emergency_contact_phone || "Not Provided",
   });
 
@@ -34,15 +34,15 @@ export default function ContactScreen() {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
           setContactInfo({
-            workEmail: p.email || user?.email || `${p.employee_id}@company.com`,
-            phone: p.phone || "Not Provided",
-            address: p.address || "Corporate HQ Address",
-            city: p.city || "Hyderabad",
-            state: p.state || "Telangana",
-            pincode: p.pincode || "500081",
-            country: "India",
-            emergencyContact: p.emergency_contact_name || "Family Contact",
-            emergencyPhone: p.emergency_contact_phone || "Not Provided",
+            workEmail: p.email || user?.email || "",
+            phone: p.phone || user?.phone || "Not Provided",
+            address: p.address || user?.address || "Not Provided",
+            city: p.city || user?.city || "Not Provided",
+            state: p.state || user?.state || "Not Provided",
+            pincode: p.pincode || user?.pincode || "Not Provided",
+            country: "Not Provided",
+            emergencyContact: p.emergency_contact_name || user?.emergency_contact_name || "Not Provided",
+            emergencyPhone: p.emergency_contact_phone || user?.emergency_contact_phone || "Not Provided",
           });
         }
       })

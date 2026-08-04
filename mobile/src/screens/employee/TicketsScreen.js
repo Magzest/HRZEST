@@ -164,12 +164,12 @@ export default function TicketsScreen() {
           ticketList.map((item, idx) => (
             <TicketCard
               key={item.id || idx.toString()}
-              id={item.id || `TK-${idx + 1001}`}
-              category={item.category || "General"}
+              id={item.id || ""}
+              category={item.category || ""}
               subject={item.subject}
-              priority={item.priority || "Medium"}
-              status={item.status || "Open"}
-              createdAt={item.created_at || item.createdAt || "Recently"}
+              priority={item.priority || ""}
+              status={item.status || ""}
+              createdAt={item.created_at || item.createdAt || ""}
             />
           ))
         )}

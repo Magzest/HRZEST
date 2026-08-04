@@ -14,35 +14,7 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 import SaveButton from "../../components/profile/SaveButton";
 
 export default function EducationScreen() {
-  const [education] = useState([
-    {
-      id: 1,
-      degree: "Bachelor of Technology (B.Tech)",
-      specialization: "Computer Science & Engineering",
-      institution: "IIIT Basar",
-      duration: "2021 - 2025",
-      grade: "CGPA: 8.75",
-      status: "Completed",
-    },
-    {
-      id: 2,
-      degree: "Intermediate",
-      specialization: "MPC",
-      institution: "RGUKT Pre-University Course",
-      duration: "2019 - 2021",
-      grade: "CGPA: 9.10",
-      status: "Completed",
-    },
-    {
-      id: 3,
-      degree: "Secondary School Certificate",
-      specialization: "General Education",
-      institution: "ZP High School",
-      duration: "2018 - 2019",
-      grade: "GPA: 10.0",
-      status: "Completed",
-    },
-  ]);
+  const [education] = useState([]);
 
   const EducationCard = ({ item }) => (
     <View style={styles.card}>
@@ -134,7 +106,7 @@ export default function EducationScreen() {
             </Text>
 
             <Text style={styles.summarySubtitle}>
-              3 Qualifications Added
+              {education.length} Qualifications Added
             </Text>
           </View>
 

@@ -17,13 +17,13 @@ export default function PersonalInfoScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState({
-    employeeId: user?.employeeId || user?.employee_id || "EMP-1001",
-    fullName: user?.name || "Staff Member",
+    employeeId: user?.employeeId || user?.employee_id || "",
+    fullName: user?.name || "",
     gender: user?.gender || "Not Specified",
     dob: user?.dob || "Not Specified",
     bloodGroup: user?.blood_group || "Not Specified",
-    maritalStatus: "Single",
-    nationality: "Indian",
+    maritalStatus: "Not Specified",
+    nationality: "Not Specified",
     fatherName: "Not Specified",
   });
 
@@ -33,13 +33,13 @@ export default function PersonalInfoScreen() {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
           setProfile({
-            employeeId: p.employee_id || user?.employeeId || "EMP-1001",
-            fullName: p.name || user?.name || "Staff Member",
+            employeeId: p.employee_id || user?.employeeId || "",
+            fullName: p.name || user?.name || "",
             gender: p.gender || "Not Specified",
             dob: p.dob || "Not Specified",
             bloodGroup: p.blood_group || "Not Specified",
-            maritalStatus: p.marital_status || "Single",
-            nationality: p.nationality || "Indian",
+            maritalStatus: p.marital_status || "Not Specified",
+            nationality: p.nationality || "Not Specified",
             fatherName: p.father_name || "Not Specified",
           });
         }

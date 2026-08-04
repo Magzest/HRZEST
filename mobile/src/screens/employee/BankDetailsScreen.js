@@ -17,12 +17,12 @@ export default function BankDetailsScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [bankInfo, setBankInfo] = useState({
-    accountName: user?.name || "Staff Member",
-    bankName: user?.bank_name || "Primary Corporate Bank",
-    accountNumber: user?.bank_account || "•••• •••• 9876",
-    ifscCode: user?.bank_ifsc || "SBIN0001234",
-    panNumber: user?.pan_number || "ABCDE1234F",
-    aadharNumber: user?.aadhar_number || "•••• •••• 4321",
+    accountName: user?.name || "",
+    bankName: user?.bank_name || "Not Provided",
+    accountNumber: user?.bank_account || "Not Provided",
+    ifscCode: user?.bank_ifsc || "Not Provided",
+    panNumber: user?.pan_number || "Not Provided",
+    aadharNumber: user?.aadhar_number || "Not Provided",
   });
 
   useEffect(() => {
@@ -31,12 +31,12 @@ export default function BankDetailsScreen() {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
           setBankInfo({
-            accountName: p.name || user?.name || "Staff Member",
-            bankName: p.bank_name || user?.bank_name || "Primary Corporate Bank",
-            accountNumber: p.bank_account || user?.bank_account || "•••• •••• 9876",
-            ifscCode: p.bank_ifsc || user?.bank_ifsc || "SBIN0001234",
-            panNumber: p.pan_number || user?.pan_number || "ABCDE1234F",
-            aadharNumber: p.aadhar_number || user?.aadhar_number || "•••• •••• 4321",
+            accountName: p.name || user?.name || "",
+            bankName: p.bank_name || user?.bank_name || "Not Provided",
+            accountNumber: p.bank_account || user?.bank_account || "Not Provided",
+            ifscCode: p.bank_ifsc || user?.bank_ifsc || "Not Provided",
+            panNumber: p.pan_number || user?.pan_number || "Not Provided",
+            aadharNumber: p.aadhar_number || user?.aadhar_number || "Not Provided",
           });
         }
       })

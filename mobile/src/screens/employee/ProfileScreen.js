@@ -33,11 +33,11 @@ export default function ProfileScreen() {
 
   // Profile Form States
   const [profileData, setProfileData] = useState({
-    name: user?.name || user?.employeeId || "Staff Member",
-    employeeId: user?.employeeId || user?.employee_id || "EMP-1001",
-    designation: user?.role || "Staff Member",
-    department: user?.department || "General",
-    email: user?.email || (user?.employeeId ? `${user.employeeId}@company.com` : "employee@company.com"),
+    name: user?.name || user?.employeeId || "",
+    employeeId: user?.employeeId || user?.employee_id || "",
+    designation: user?.role || "",
+    department: user?.department || "",
+    email: user?.email || "",
     phone: user?.phone || "Not Provided",
     address: user?.address || "Not Provided",
     emergencyContact: user?.emergency_contact || "Not Provided",
@@ -56,11 +56,11 @@ export default function ProfileScreen() {
       if (res?.data?.ok && res?.data?.profile) {
         const p = res.data.profile;
         const updated = {
-          name: p.name || user?.name || user?.employeeId || "Staff Member",
-          employeeId: p.employee_id || user?.employeeId || "EMP-1001",
-          designation: p.role || user?.role || "Staff Member",
-          department: p.department || user?.department || "General",
-          email: p.email || user?.email || `${p.employee_id}@company.com`,
+          name: p.name || user?.name || user?.employeeId || "",
+          employeeId: p.employee_id || user?.employeeId || "",
+          designation: p.role || user?.role || "",
+          department: p.department || user?.department || "",
+          email: p.email || user?.email || "",
           phone: p.phone || user?.phone || "Not Provided",
           address: p.address || user?.address || "Not Provided",
           emergencyContact: p.emergency_contact_phone || user?.emergency_contact || "Not Provided",

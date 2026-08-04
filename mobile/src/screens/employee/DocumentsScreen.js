@@ -13,50 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 
 export default function DocumentsScreen() {
-  const [documents] = useState([
-    {
-      id: 1,
-      title: "Aadhaar Card",
-      number: "XXXX XXXX 4567",
-      status: "Verified",
-      icon: "card-outline",
-    },
-    {
-      id: 2,
-      title: "PAN Card",
-      number: "ABCDE1234F",
-      status: "Verified",
-      icon: "document-text-outline",
-    },
-    {
-      id: 3,
-      title: "Passport",
-      number: "P1234567",
-      status: "Pending",
-      icon: "book-outline",
-    },
-    {
-      id: 4,
-      title: "Driving License",
-      number: "TS09 2024 123456",
-      status: "Verified",
-      icon: "car-outline",
-    },
-    {
-      id: 5,
-      title: "Resume",
-      number: "Resume.pdf",
-      status: "Uploaded",
-      icon: "document-outline",
-    },
-    {
-      id: 6,
-      title: "Experience Letter",
-      number: "Company Letter.pdf",
-      status: "Uploaded",
-      icon: "folder-open-outline",
-    },
-  ]);
+  const [documents] = useState([]);
 
   const DocumentCard = ({ item }) => (
     <View style={styles.card}>
@@ -148,7 +105,7 @@ export default function DocumentsScreen() {
             </Text>
 
             <Text style={styles.summarySubtitle}>
-              6 Documents Available
+              {documents.length} Documents Available
             </Text>
           </View>
 

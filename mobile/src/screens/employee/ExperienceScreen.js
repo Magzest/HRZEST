@@ -14,28 +14,7 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 import SaveButton from "../../components/profile/SaveButton";
 
 export default function ExperienceScreen() {
-  const [experiences] = useState([
-    {
-      id: 1,
-      company: "Codebook Technologies",
-      designation: "Software Engineer",
-      duration: "Jan 2024 - Present",
-      location: "Hyderabad",
-      employmentType: "Full Time",
-      description:
-        "Developing scalable React Native applications, REST APIs and maintaining production deployments.",
-    },
-    {
-      id: 2,
-      company: "Tech Solutions Pvt Ltd",
-      designation: "Software Developer Intern",
-      duration: "Jun 2023 - Dec 2023",
-      location: "Hyderabad",
-      employmentType: "Internship",
-      description:
-        "Worked on React, Node.js, MongoDB and collaborated with senior developers on live client projects.",
-    },
-  ]);
+  const [experiences] = useState([]);
 
   const ExperienceCard = ({ item }) => (
     <View style={styles.card}>
@@ -129,7 +108,7 @@ export default function ExperienceScreen() {
             </Text>
 
             <Text style={styles.summarySubtitle}>
-              Total Experience: 2+ Years
+              Total Experience: {experiences.length > 0 ? "2+ Years" : "0 Years"}
             </Text>
           </View>
 

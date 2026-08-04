@@ -17,17 +17,17 @@ export default function WorkInfoScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [workInfo, setWorkInfo] = useState({
-    employeeId: user?.employeeId || user?.employee_id || "EMP-1001",
-    employeeName: user?.name || "Staff Member",
-    designation: user?.role || "Software Engineer",
-    department: user?.department || "Engineering",
-    employmentType: "Full Time",
-    joiningDate: user?.joining_date || "Recently Joined",
-    reportingManager: user?.manager_name || "Department Head",
-    employeeStatus: "Active",
-    workLocation: "Corporate HQ",
-    workMode: user?.work_mode || "Office",
-    officeEmail: user?.email || `${user?.employeeId || "emp"}@company.com`,
+    employeeId: user?.employeeId || user?.employee_id || "",
+    employeeName: user?.name || "",
+    designation: user?.role || "",
+    department: user?.department || "",
+    employmentType: "",
+    joiningDate: user?.joining_date || "Not Provided",
+    reportingManager: user?.manager_name || "Not Provided",
+    employeeStatus: "",
+    workLocation: "Not Provided",
+    workMode: user?.work_mode || "Not Provided",
+    officeEmail: user?.email || "",
   });
 
   useEffect(() => {
@@ -36,17 +36,17 @@ export default function WorkInfoScreen() {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
           setWorkInfo({
-            employeeId: p.employee_id || user?.employeeId || "EMP-1001",
-            employeeName: p.name || user?.name || "Staff Member",
-            designation: p.role || user?.role || "Software Engineer",
-            department: p.department || user?.department || "Engineering",
-            employmentType: p.employment_type || "Full Time",
-            joiningDate: p.date_of_joining || p.joining_date || "Recently Joined",
-            reportingManager: p.manager_name || "Department Head",
-            employeeStatus: p.status || "Active",
-            workLocation: p.work_location || "Corporate HQ",
-            workMode: p.work_mode || "Office",
-            officeEmail: p.email || `${p.employee_id}@company.com`,
+            employeeId: p.employee_id || user?.employeeId || "",
+            employeeName: p.name || user?.name || "",
+            designation: p.role || user?.role || "",
+            department: p.department || user?.department || "",
+            employmentType: p.employment_type || "Not Provided",
+            joiningDate: p.date_of_joining || p.joining_date || "Not Provided",
+            reportingManager: p.manager_name || "Not Provided",
+            employeeStatus: p.status || "Not Provided",
+            workLocation: p.work_location || "Not Provided",
+            workMode: p.work_mode || "Not Provided",
+            officeEmail: p.email || "",
           });
         }
       })

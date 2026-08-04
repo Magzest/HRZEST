@@ -18,6 +18,8 @@ import {
   employeeLogout,
   syncOfflinePunches,
   getPhotoUrl,
+  fetchEmployeeAttendance,
+  fetchEmployeeLeaves,
 } from "../../api/client";
 import { queuePunch, getPendingPunches, clearQueue } from "../../utils/offlineQueue";
 
@@ -46,6 +48,7 @@ export default function EmployeeDashboard({ navigation }) {
   const [refreshing, setRefreshing]   = useState(false);
   const [checking, setChecking]       = useState(false);
   const [data, setData]               = useState(null);
+  const [metrics, setMetrics]         = useState({ hours: "0h 00m", attendance: "0%", leaveBalance: "0", performance: "N/A" });
   const [showScanner, setShowScanner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing]         = useState(false);
@@ -54,10 +57,67 @@ export default function EmployeeDashboard({ navigation }) {
 
   const loadDashboard = async () => {
     try {
-      const res = await fetchEmployeePortal();
-      if (res.data.ok) setData(res.data);
+      const portalRes = await fetchEmployeePortal();
+      if (portalRes.data.ok) setData(portalRes.data);
+
+      const now = new Date();
+      const [attRes, leaveRes] = await Promise.all([
+        fetchEmployeeAttendance(now.getFullYear(), now.getMonth() + 1),
+        fetchEmployeeLeaves()
+      ]);
+
+      let calculatedAttendance = "0%";
+      let performanceGrade = "N/A";
+      if (attRes.data?.ok && attRes.data?.salary) {
+        const { billable, full_days, half_days } = attRes.data.salary;
+        const present = full_days + (half_days * 0.5);
+        const pct = billable > 0 ? Math.round((present / billable) * 100) : 0;
+        calculatedAttendance = `${pct}%`;
+        if (pct >= 95) performanceGrade = "A+";
+        else if (pct >= 90) performanceGrade = "A";
+        else if (pct >= 80) performanceGrade = "B";
+        else if (pct >= 70) performanceGrade = "C";
+        else performanceGrade = "D";
+      }
+
+      let calculatedLeave = "0";
+      if (leaveRes.data?.ok && leaveRes.data?.summary) {
+        const approved = leaveRes.data.summary.approved || 0;
+        const standardQuota = 20;
+        calculatedLeave = Math.max(0, standardQuota - approved).toString().padStart(2, '0');
+      }
+
+      let calculatedHours = "0h 00m";
+      if (portalRes.data?.today_attendance?.login_time) {
+        const loginStr = portalRes.data.today_attendance.login_time; // "HH:MM:SS"
+        const logoutStr = portalRes.data.today_attendance.logout_time;
+        
+        const loginParts = loginStr.split(':');
+        const loginDt = new Date();
+        loginDt.setHours(parseInt(loginParts[0], 10), parseInt(loginParts[1], 10), parseInt(loginParts[2] || 0, 10));
+
+        let logoutDt = new Date(); // current time if not logged out
+        if (logoutStr) {
+          const outParts = logoutStr.split(':');
+          logoutDt = new Date();
+          logoutDt.setHours(parseInt(outParts[0], 10), parseInt(outParts[1], 10), parseInt(outParts[2] || 0, 10));
+        }
+        
+        const diffMs = Math.max(0, logoutDt - loginDt);
+        const hrs = Math.floor(diffMs / (1000 * 60 * 60));
+        const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        calculatedHours = `${hrs.toString().padStart(2, '0')}h ${mins.toString().padStart(2, '0')}m`;
+      }
+
+      setMetrics({
+        hours: calculatedHours,
+        attendance: calculatedAttendance,
+        leaveBalance: calculatedLeave,
+        performance: performanceGrade
+      });
+
     } catch {
-      Alert.alert("Error", "Unable to load dashboard.");
+      Alert.alert("Error", "Unable to load some dashboard data.");
     }
     setLoading(false);
     setRefreshing(false);
@@ -204,10 +264,10 @@ export default function EmployeeDashboard({ navigation }) {
   <EmployeeAttendanceCard attendance={attendance} />
 
         <EmployeeSummaryCards
-          hours={data?.today_hours || "08h 20m"}
-          attendance={data?.attendance_percentage || "98%"}
-          leaveBalance={data?.leave_balance || "08"}
-          performance={data?.performance || "A+"}
+          hours={metrics.hours}
+          attendance={metrics.attendance}
+          leaveBalance={metrics.leaveBalance}
+          performance={metrics.performance}
         />
 
         <EmployeeQuickActions navigation={navigation} />
