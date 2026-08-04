@@ -39,49 +39,8 @@ export default function CompOffScreen() {
   React.useEffect(() => {
     loadOvertime();
   }, []);
-  const overtimeRecords = [
-    {
-      date: "12 Jun 2026",
-      day: "Friday",
-      hours: "3h 20m",
-      compOff: "0.5 Day",
-      approvedBy: "Manager",
-      status: "Approved",
-    },
-    {
-      date: "20 Jun 2026",
-      day: "Saturday",
-      hours: "8h 00m",
-      compOff: "1 Day",
-      approvedBy: "HR",
-      status: "Approved",
-    },
-    {
-      date: "25 Jun 2026",
-      day: "Thursday",
-      hours: "2h 30m",
-      compOff: "0 Day",
-      approvedBy: "Pending",
-      status: "Pending",
-    },
-  ];
-
-  const applications = [
-    {
-      date: "18 Jun 2026",
-      reason: "Weekend Production Support",
-      days: "1 Day",
-      approvedBy: "HR",
-      status: "Approved",
-    },
-    {
-      date: "26 Jun 2026",
-      reason: "Release Deployment",
-      days: "0.5 Day",
-      approvedBy: "--",
-      status: "Pending",
-    },
-  ];
+  const overtimeRecords = overtimeData?.overtime_records || overtimeData?.records || [];
+  const applications = overtimeData?.compoff_applications || overtimeData?.applications || [];
 
   return (
   <LinearGradient

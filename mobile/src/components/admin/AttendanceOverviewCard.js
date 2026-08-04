@@ -4,10 +4,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 export default function AttendanceOverviewCard({
-  present = 228,
-  absent = 18,
-  late = 8,
-  onLeave = 6,
+  present = 0,
+  absent = 0,
+  late = 0,
+  onLeave = 0,
   navigation,
 }) {
   const [timeStr, setTimeStr] = useState("");
@@ -50,7 +50,7 @@ export default function AttendanceOverviewCard({
   }, []);
 
   const total = present + absent + late + onLeave;
-  const percentage = Math.round((present / total) * 100);
+  const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
 
   const data = [
     {

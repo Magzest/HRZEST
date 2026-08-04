@@ -30,23 +30,16 @@ export default function LeaveRequestsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState([]);
 
-  const fallbackRequests = [
-    { id: "1", employee_name: "Rahul Kumar", leave_type: "Casual Leave", start_date: "2026-08-01", end_date: "2026-08-02", reason: "Family Event", status: "Pending" },
-    { id: "2", employee_name: "Priya Sharma", leave_type: "Sick Leave", start_date: "2026-07-28", end_date: "2026-07-29", reason: "Viral Fever", status: "Approved" },
-    { id: "3", employee_name: "Arjun Joshi", leave_type: "Earned Leave", start_date: "2026-08-10", end_date: "2026-08-15", reason: "Personal Travel", status: "Pending" },
-    { id: "4", employee_name: "Vikram Nair", leave_type: "Comp-Off", start_date: "2026-07-20", end_date: "2026-07-20", reason: "Overtime Work", status: "Rejected" },
-  ];
-
   const loadData = async () => {
     try {
       const res = await fetchLeaveRequests();
       if (res && res.data && Array.isArray(res.data.requests)) {
         setRequests(res.data.requests);
       } else {
-        setRequests(fallbackRequests);
+        setRequests([]);
       }
     } catch (e) {
-      setRequests(fallbackRequests);
+      setRequests([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

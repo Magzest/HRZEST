@@ -6,6 +6,7 @@ import {
   Alert,
   View,
   Text,
+  TouchableOpacity,
 } from "react-native";
 
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,6 +23,7 @@ import { queuePunch, getPendingPunches, clearQueue } from "../../utils/offlineQu
 
 import { useAuth } from "../../store/AuthContext";
 
+import { Ionicons } from "@expo/vector-icons";
 import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
 import EmptyState from "../../components/ui/EmptyState";
 import AttendanceScannerModal from "../AttendanceScannerModal";
@@ -33,10 +35,12 @@ import EmployeeQuickActions from "../../components/employee/EmployeeQuickActions
 import EmployeeRecentAttendance from "../../components/employee/EmployeeRecentAttendance";
 import EmployeeAnnouncementCard from "../../components/employee/EmployeeAnnouncementCard";
 import EmployeeUpcomingEvents from "../../components/employee/EmployeeUpcomingEvents";
+import AiHelpdeskModal from "../../components/common/AiHelpdeskModal";
+import DigitalIdCardModal from "../../components/employee/DigitalIdCardModal";
 
 export default function EmployeeDashboard({ navigation }) {
 
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
 
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
@@ -45,6 +49,8 @@ export default function EmployeeDashboard({ navigation }) {
   const [showScanner, setShowScanner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing]         = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [showIdCardModal, setShowIdCardModal] = useState(false);
 
   const loadDashboard = async () => {
     try {
@@ -181,20 +187,20 @@ export default function EmployeeDashboard({ navigation }) {
           />
         }
       >
-       <EmployeeHeroCard
-  employeeName={data?.name}
-  designation={data?.role || data?.designation}
-  employeeId={data?.employee_id}
-  date={data?.today}
-  attendance={attendance}
-  checking={checking}
-  onCheckIn={handleCheckIn}
-  onLogout={handleLogout}
-  photoUrl={photoUrl}
-  onScanQR={() => setShowScanner(true)}
-  onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
-  companyName={data?.company_name}
-/>
+        <EmployeeHeroCard
+          employeeName={data?.name || user?.name}
+          designation={data?.role || data?.designation || user?.role}
+          employeeId={data?.employee_id || user?.employeeId}
+          date={data?.today}
+          attendance={attendance}
+          checking={checking}
+          onCheckIn={handleCheckIn}
+          onLogout={handleLogout}
+          photoUrl={photoUrl}
+          onScanQR={() => setShowScanner(true)}
+          onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
+          companyName={data?.company_name || user?.company}
+        />
   <EmployeeAttendanceCard attendance={attendance} />
 
         <EmployeeSummaryCards
@@ -223,6 +229,33 @@ export default function EmployeeDashboard({ navigation }) {
         <View style={styles.bottomSpacing} />
 
       </ScrollView>
+
+      {/* Floating Action Button for AI HRMS Helpdesk */}
+      <TouchableOpacity
+        activeOpacity={0.88}
+        style={{
+          position: "absolute",
+          right: 20,
+          bottom: 75,
+          backgroundColor: "#173B8C",
+          width: 56,
+          height: 56,
+          borderRadius: 28,
+          justifyContent: "center",
+          alignItems: "center",
+          elevation: 8,
+          shadowColor: "#173B8C",
+          shadowOpacity: 0.4,
+          shadowRadius: 10,
+          shadowOffset: { width: 0, height: 4 },
+        }}
+        onPress={() => setShowAiModal(true)}
+      >
+        <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      <AiHelpdeskModal visible={showAiModal} onClose={() => setShowAiModal(false)} />
+      <DigitalIdCardModal visible={showIdCardModal} employee={data} onClose={() => setShowIdCardModal(false)} />
     </LinearGradient>
   );
 }

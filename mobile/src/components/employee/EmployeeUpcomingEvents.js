@@ -39,34 +39,31 @@ const EVENTS = [
 ];
 
 export default function EmployeeUpcomingEvents({
-
-  events = EVENTS,
-
+  events = [],
 }) {
-
   return (
-
     <View style={styles.container}>
-
       <View style={styles.header}>
-
         <View>
-
           <Text style={styles.title}>
-            Upcoming
+            Upcoming Events
           </Text>
-
           <Text style={styles.subtitle}>
-            Holidays, birthdays & meetings
+            Holidays, events & announcements
           </Text>
-
         </View>
-
+        <Ionicons name="calendar-outline" size={20} color="#173B8C" />
       </View>
 
-      {
-
-        events.map((item,index)=>(
+      {events.length === 0 ? (
+        <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 24, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+          <Ionicons name="calendar-outline" size={36} color="#94A3B8" />
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
+            No Upcoming Events Scheduled
+          </Text>
+        </View>
+      ) : (
+        events.map((item, index) => (
 
           <View
             key={index}
@@ -113,8 +110,7 @@ export default function EmployeeUpcomingEvents({
           </View>
 
         ))
-
-      }
+      )}
 
     </View>
 

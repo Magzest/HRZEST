@@ -49,7 +49,7 @@ const DEFAULT_ACTIVITIES = [
 ];
 
 export default function RecentActivityList({
-  activities = DEFAULT_ACTIVITIES,
+  activities = [],
   onViewAll = () => {},
 }) {
   return (
@@ -69,7 +69,15 @@ export default function RecentActivityList({
         </TouchableOpacity>
       </View>
 
-      {activities.map((item) => (
+      {activities.length === 0 ? (
+        <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 24, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+          <Ionicons name="time-outline" size={36} color="#94A3B8" />
+          <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
+            No Recent System Activity
+          </Text>
+        </View>
+      ) : (
+        activities.map((item) => (
         <View
           key={item.id}
           style={styles.card}
@@ -109,7 +117,7 @@ export default function RecentActivityList({
             {item.time}
           </Text>
         </View>
-      ))}
+      )))}
     </View>
   );
 }

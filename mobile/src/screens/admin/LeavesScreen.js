@@ -1,3 +1,3 @@
-import LeaveRequestsScreen from "./LeaveRequestsScreen";
+import LeavesHolidaysScreen from "./LeavesHolidaysScreen";
 
-export default LeaveRequestsScreen;
+export default LeavesHolidaysScreen;

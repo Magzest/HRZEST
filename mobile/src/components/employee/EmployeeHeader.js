@@ -8,22 +8,19 @@ import {
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../../store/AuthContext";
 
 export default function EmployeeHeader({
-
   employeeName = "John Doe",
-
   designation = "Software Engineer",
-
   employeeId = "EMP001",
-
   date = "",
-
   profileImage,
-
   onLogout,
-
 }) {
+  const { user } = useAuth();
+  const companyName = user?.company || "Organisation Portal";
+  const logoUri = user?.logo;
 
   const hour = new Date().getHours();
 
@@ -70,6 +67,16 @@ export default function EmployeeHeader({
           </View>
 
           <View style={styles.info}>
+            <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+              {logoUri ? (
+                <Image source={{ uri: logoUri }} style={{ width: 14, height: 14, borderRadius: 7, marginRight: 4, backgroundColor: "#FFFFFF" }} />
+              ) : (
+                <Ionicons name="business" size={12} color="#173B8C" style={{ marginRight: 4 }} />
+              )}
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#173B8C", textTransform: "uppercase" }} numberOfLines={1}>
+                {companyName}
+              </Text>
+            </View>
 
             <Text style={styles.greeting}>
               {greeting}

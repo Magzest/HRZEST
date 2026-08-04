@@ -132,9 +132,8 @@ export default function MarkAttendanceScreen({ navigation }) {
           throw new Error("API error");
         }
       } catch {
-        // Fallback to dummy data
-        setEmployees(DUMMY_EMPLOYEES);
-        initAttendance(DUMMY_EMPLOYEES);
+        setEmployees([]);
+        initAttendance([]);
       }
     }
     setLoading(false);

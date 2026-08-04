@@ -97,10 +97,18 @@ export default function PayslipsScreen({ navigation }) {
 
         {loading ? (
           <View style={styles.center}><ActivityIndicator size="large" color="#173B8C" /></View>
-        ) : !s ? null : (
+        ) : !s ? (
+          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 20, padding: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0", marginTop: 20 }}>
+            <Ionicons name="document-text-outline" size={48} color="#94A3B8" />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginTop: 12 }}>No Payslip Generated Yet</Text>
+            <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 6 }}>
+              Payslips for {MONTHS[month - 1]} {year} have not been published by payroll administration yet.
+            </Text>
+          </View>
+        ) : (
           <>
             {/* Net Pay Hero */}
-            <LinearGradient colors={["#173B8C", "#2563EB"]} style={styles.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <LinearGradient colors={["#0B2253", "#173B8C"]} style={styles.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
               <Text style={styles.heroLabel}>Net Pay — {data.month_name}</Text>
               <Text style={styles.heroAmount}>{fmt(s.net)}</Text>
               <Text style={styles.heroSub}>{s.name} · {s.emp_id}</Text>

@@ -137,6 +137,19 @@ export default function OvertimeHistoryCard({
         ItemSeparatorComponent={() => (
           <View style={{ height: 16 }} />
         )}
+        ListEmptyComponent={() => (
+          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 18, padding: 22, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0" }}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#F1F5F9", justifyContent: "center", alignItems: "center", marginBottom: 8 }}>
+              <Ionicons name="time-outline" size={24} color="#173B8C" />
+            </View>
+            <Text style={{ fontSize: 15, fontWeight: "700", color: "#0F172A" }}>
+              No Overtime Records Found
+            </Text>
+            <Text style={{ fontSize: 13, fontWeight: "500", color: "#64748B", marginTop: 4, textAlign: "center" }}>
+              Your approved overtime logs will be listed here.
+            </Text>
+          </View>
+        )}
       />
     </View>
   );
@@ -148,18 +161,17 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: "800",
     color: "#0F172A",
   },
 
   subtitle: {
-    marginTop: 4,
-    marginBottom: 18,
-
+    marginTop: 2,
+    marginBottom: 12,
     color: "#64748B",
-
     fontSize: 13,
+    fontWeight: "600",
   },
 
   card: {

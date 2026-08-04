@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   SafeAreaView,
   View,
@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
+import { fetchEmployees, fetchDashboard } from "../../api/client";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -26,7 +27,7 @@ const YEARS = ["2024", "2025", "2026", "2027"];
 
 export default function AttendanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("July");
+  const [selectedMonth, setSelectedMonth] = useState("August");
   const [selectedYear, setSelectedYear] = useState("2026");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedSort, setSelectedSort] = useState("Default");
@@ -35,19 +36,52 @@ export default function AttendanceScreen({ navigation }) {
   const [monthModalVisible, setMonthModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
 
-  const summary = {
-    employees: 254,
+  const [employees, setEmployees] = useState([]);
+  const [summary, setSummary] = useState({
+    employees: 0,
     workingDays: 26,
-    attendance: 94,
-    holidays: 2,
-  };
+    attendance: 0,
+    holidays: 0,
+  });
 
-  const employees = [
-    { id: "EMP001", name: "Rahul Kumar", full: 24, late: 1, half: 1, absent: 0, working: 26, percent: 96, status: "Present" },
-    { id: "EMP002", name: "Priya Sharma", full: 22, late: 2, half: 0, absent: 2, working: 26, percent: 88, status: "Absent" },
-    { id: "EMP003", name: "Arjun Joshi", full: 25, late: 1, half: 0, absent: 0, working: 26, percent: 98, status: "Present" },
-    { id: "EMP004", name: "Vikram Nair", full: 20, late: 3, half: 2, absent: 1, working: 26, percent: 85, status: "Late" },
-  ];
+  useEffect(() => {
+    loadData();
+  }, [selectedMonth, selectedYear]);
+
+  const loadData = async () => {
+    try {
+      const [empRes, dashRes] = await Promise.all([fetchEmployees(), fetchDashboard()]);
+      const empList = empRes?.data?.employees || [];
+      const dash = dashRes?.data || {};
+
+      const total = empList.length || dash.total_employees || 0;
+      const present = dash.present || 0;
+      const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+
+      setSummary({
+        employees: total,
+        workingDays: dash.working_days || 26,
+        attendance: pct,
+        holidays: dash.holidays || 0,
+      });
+
+      const mapped = empList.map((emp, i) => ({
+        id: emp.employee_id || `EMP-${1001 + i}`,
+        name: emp.name,
+        full: emp.status === "Active" ? 22 : 0,
+        late: 0,
+        half: 0,
+        absent: emp.status === "Active" ? 0 : 1,
+        working: 26,
+        percent: emp.status === "Active" ? 100 : 0,
+        status: emp.status === "Active" ? "Present" : "Absent",
+      }));
+      setEmployees(mapped);
+    } catch (e) {
+      setEmployees([]);
+      setSummary({ employees: 0, workingDays: 26, attendance: 0, holidays: 0 });
+    }
+  };
 
   const hasActiveFilter = statusFilter !== "All" || selectedSort !== "Default";
 

@@ -79,6 +79,29 @@ export default function CompOffScreen({
     loadData();
   }, []);
 
+  const compOffSummary = useMemo(() => {
+    const totalOtHours = overtimeData.reduce((acc, curr) => acc + Number(curr.hours || curr.ot_hours || 0), 0);
+    const approvedRequests = overtimeData.filter((item) => item.status === "Approved").length;
+    const pendingApproval = overtimeData.filter((item) => item.status === "Pending").length;
+    const rejectedRequests = overtimeData.filter((item) => item.status === "Rejected").length;
+    const compOffAvailable = balancesData.reduce((acc, curr) => acc + Number(curr.balance || 0), 0);
+    const otPay = totalOtHours * 250;
+    return {
+      totalOtHours,
+      approvedRequests,
+      pendingApproval,
+      rejectedRequests,
+      compOffAvailable,
+      otPay: "₹" + otPay.toLocaleString("en-IN"),
+    };
+  }, [overtimeData, balancesData]);
+
+  const analytics = useMemo(() => {
+    const totalRecords = overtimeData.length;
+    const averageHours = totalRecords > 0 ? (compOffSummary.totalOtHours / totalRecords).toFixed(1) : "0.0";
+    return { averageHours };
+  }, [overtimeData, compOffSummary]);
+
   const onRefresh = () => {
     setRefreshing(true);
     loadData();

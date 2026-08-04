@@ -52,15 +52,10 @@ const CARDS = [
 ];
 
 export default function EmployeeSummaryCards({
-
-  hours = "08h 20m",
-
-  attendance = "98%",
-
-  leaveBalance = "08",
-
-  performance = "A+",
-
+  hours = "0h 00m",
+  attendance = "0%",
+  leaveBalance = "0",
+  performance = "N/A",
 }) {
 
   const values = {

@@ -171,20 +171,15 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 18,
-
+    fontSize: 16,
     fontWeight: "800",
-
     color: "#0F172A",
   },
 
   day: {
-    marginTop: 4,
-
-    fontSize: 14,
-
+    marginTop: 2,
+    fontSize: 13,
     color: "#64748B",
-
     fontWeight: "600",
   },
 

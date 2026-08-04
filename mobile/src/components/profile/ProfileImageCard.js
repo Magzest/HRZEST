@@ -10,10 +10,10 @@ import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileImageCard({
   image = null,
-  employeeName = "John Doe",
-  employeeId = "EMP001",
-  designation = "Software Engineer",
-  department = "Engineering",
+  employeeName = "Staff Member",
+  employeeId = "EMP-1001",
+  designation = "Staff Member",
+  department = "General",
   onChangePhoto = () => {},
   onEditProfile = () => {},
 }) {

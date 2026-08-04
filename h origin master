@@ -1,0 +1,15 @@
+* [33m096dcfb1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m Update mobile HRMS features and backend improvements
+* [33m2e24b6a6[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix(auth): set soc_step_up_until on admin login so SecOps opens cleanly
+* [33mc766803f[m fix(pricing): wire up CTA buttons on pricing page to redirect to /create_org with selected plan
+* [33m5503beb5[m Improve mobile app functionality and professional SaaS UI
+* [33mf39709eb[m feat(next-gen): add Slack/Teams security webhooks, Docker Compose stack, WebAuthn Touch ID self-enrollment, and i18n multi-language switcher
+[31m|[m * [33m4d530949[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/mobile/axios-1.19.0[m[33m)[m Bump axios from 1.18.0 to 1.19.0 in /mobile
+[31m|[m[31m/[m  
+[31m|[m * [33m9a00545d[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/mobile/expo/metro-runtime-57.0.8[m[33m)[m Bump @expo/metro-runtime from 4.0.1 to 57.0.8 in /mobile
+[31m|[m[31m/[m  
+[31m|[m * [33m87ac595a[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/mobile/expo-location-57.0.7[m[33m)[m Bump expo-location from 18.0.10 to 57.0.7 in /mobile
+[31m|[m[31m/[m  
+[31m|[m * [33m548f53d4[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/mobile/expo-image-picker-57.0.7[m[33m)[m Bump expo-image-picker from 16.0.6 to 57.0.7 in /mobile
+[31m|[m[31m/[m  
+[31m|[m * [33m8de66dca[m[33m ([m[1;31morigin/dependabot/npm_and_yarn/mobile/expo-modules-core-57.0.8[m[33m)[m Bump expo-modules-core from 2.2.3 to 57.0.8 in /mobile
+[31m|[m[31m/[m  

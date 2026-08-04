@@ -127,7 +127,7 @@ function TicketCard({ ticket, onUpdate }) {
             <Ionicons
               name={expanded ? "chevron-up" : "chevron-down"}
               size={14}
-              color="#2563EB"
+              color="#173B8C"
               style={{ marginLeft: 2 }}
             />
           </View>
@@ -216,42 +216,16 @@ export default function AdminTicketsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fallbackTickets = [
-    {
-      id: "101",
-      name: "Rohan Gupta",
-      employee_id: "EMP012",
-      subject: "Salary slip discrepancy for June",
-      category: "Payroll",
-      priority: "High",
-      status: "Open",
-      description: "My June payslip shows incorrect allowance deductions. Please review and update.",
-      created_at: "2026-07-28 10:30",
-    },
-    {
-      id: "102",
-      name: "Kavita Reddy",
-      employee_id: "EMP045",
-      subject: "Unable to mark attendance via WebAuthn",
-      category: "Technical",
-      priority: "Medium",
-      status: "In Progress",
-      description: "Getting timeout error when verifying fingerprint passkey on mobile.",
-      admin_response: "IT team is investigating the WebAuthn challenge endpoint.",
-      created_at: "2026-07-26 14:15",
-    },
-  ];
-
   const loadData = useCallback(async () => {
     try {
       const res = await fetchAllTickets();
       if (res && res.data && Array.isArray(res.data.tickets)) {
         setTickets(res.data.tickets);
       } else {
-        setTickets(fallbackTickets);
+        setTickets([]);
       }
     } catch (_) {
-      setTickets(fallbackTickets);
+      setTickets([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -296,13 +270,13 @@ export default function AdminTicketsScreen() {
                 setRefreshing(true);
                 loadData();
               }}
-              tintColor="#2563EB"
+              tintColor="#173B8C"
             />
           }
         >
           {/* Stats Metric Row */}
           <View style={styles.statsRow}>
-            <View style={[styles.statCard, { borderLeftColor: "#2563EB" }]}>
+            <View style={[styles.statCard, { borderLeftColor: "#173B8C" }]}>
               <Text style={styles.statNumber}>{openCount}</Text>
               <Text style={styles.statLabel}>Open</Text>
             </View>
@@ -351,7 +325,7 @@ export default function AdminTicketsScreen() {
           {/* Tickets List */}
           {loading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="large" color="#2563EB" />
+              <ActivityIndicator size="large" color="#173B8C" />
               <Text style={styles.loadingText}>Loading support tickets...</Text>
             </View>
           ) : filtered.length === 0 ? (
@@ -421,7 +395,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E2E8F0",
   },
   filterChipActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#173B8C",
   },
   filterChipText: {
     fontSize: 12,

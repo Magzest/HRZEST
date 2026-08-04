@@ -95,30 +95,27 @@ export default function PerformanceScreen({ navigation }) {
             />
           }
         >
-          {/* Summary Hero Card */}
+          {/* Dynamic Performance Metric Header */}
           <View style={styles.heroCard}>
-            <View style={styles.heroHeader}>
-              <View>
-                <Text style={styles.heroSub}>Performance Cycle 2026</Text>
-                <Text style={styles.heroTitle}>Company Avg Rating: 4.6 ★</Text>
-              </View>
-              <View style={styles.heroIconBadge}>
-                <Ionicons name="trending-up" size={28} color="#FFFFFF" />
-              </View>
-            </View>
+            <Text style={styles.heroTitle}>Performance Overview</Text>
+            <Text style={styles.heroSub}>Appraisals & Key Performance Indicators</Text>
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatValue}>84%</Text>
+                <Text style={styles.heroStatValue}>
+                  {reviews.length > 0 ? Math.round((reviews.filter(r => r.status === "Completed").length / reviews.length) * 100) + "%" : "0%"}
+                </Text>
                 <Text style={styles.heroStatLabel}>Reviews Done</Text>
               </View>
               <View style={styles.heroStatDivider} />
               <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatValue}>91%</Text>
-                <Text style={styles.heroStatLabel}>Goal Completion</Text>
+                <Text style={styles.heroStatValue}>{reviews.length}</Text>
+                <Text style={styles.heroStatLabel}>Total Staff</Text>
               </View>
               <View style={styles.heroStatDivider} />
               <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatValue}>12</Text>
+                <Text style={styles.heroStatValue}>
+                  {reviews.filter(r => Number(r.rating || 0) >= 4.0).length}
+                </Text>
                 <Text style={styles.heroStatLabel}>Top Performers</Text>
               </View>
             </View>
@@ -140,6 +137,20 @@ export default function PerformanceScreen({ navigation }) {
               {filteredReviews.length} Records
             </Text>
           </View>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 30 }} />
+          ) : filteredReviews.length === 0 ? (
+            <View style={{ padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Ionicons name="ribbon-outline" size={48} color="#94A3B8" />
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 12 }}>
+                No Performance Reviews Found
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 4 }}>
+                Performance appraisal cycles and KPI reviews will appear here once initiated.
+              </Text>
+            </View>
+          ) : null}
 
           {/* Review List */}
           {filteredReviews.map((item) => (

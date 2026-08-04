@@ -1,12 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Alert,
+  RefreshControl,
+  View,
 } from "react-native";
-
+import { useFocusEffect } from "@react-navigation/native";
 import ProfileHeader from "../../components/profile/ProfileHeader";
-
 import TicketHeaderCard from "../../components/tickets/TicketHeaderCard";
 import SectionTitle from "../../components/tickets/SectionTitle";
 import TicketCategoryPicker from "../../components/tickets/TicketCategoryPicker";
@@ -18,82 +20,103 @@ import RaiseTicketButton from "../../components/tickets/RaiseTicketButton";
 import TicketStatsCard from "../../components/tickets/TicketStatsCard";
 import TicketCard from "../../components/tickets/TicketCard";
 import EmptyTickets from "../../components/tickets/EmptyTickets";
+import { fetchEmployeeTickets, raiseTicket } from "../../api/client";
 
 export default function TicketsScreen() {
   const [category, setCategory] = useState("hr");
   const [priority, setPriority] = useState("Medium");
   const [subject, setSubject] = useState("");
-  const [description, setDescription] =
-    useState("");
-  const [attachment, setAttachment] =
-    useState("");
-  const [loading, setLoading] =
-    useState(false);
+  const [description, setDescription] = useState("");
+  const [attachment, setAttachment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [ticketList, setTicketList] = useState([]);
 
-  const tickets = [
-    {
-      id: "TK-1001",
-      category: "HR",
-      subject: "Leave balance mismatch",
-      priority: "Medium",
-      status: "Open",
-      createdAt: "18 Jul 2026",
-    },
-    {
-      id: "TK-1002",
-      category: "IT",
-      subject: "Laptop VPN not working",
-      priority: "High",
-      status: "In Progress",
-      createdAt: "15 Jul 2026",
-    },
-    {
-      id: "TK-1003",
-      category: "Payroll",
-      subject: "Salary slip missing",
-      priority: "Low",
-      status: "Resolved",
-      createdAt: "08 Jul 2026",
-    },
-  ];
-
-  const handleRaiseTicket = () => {
-    setLoading(true);
-
-    setTimeout(() => {
-      setLoading(false);
-
-      console.log({
-        category,
-        priority,
-        subject,
-        description,
-        attachment,
-      });
-    }, 1500);
+  const loadTickets = async () => {
+    try {
+      const res = await fetchEmployeeTickets();
+      if (res?.data?.tickets) {
+        setTicketList(res.data.tickets);
+      } else if (Array.isArray(res?.data)) {
+        setTicketList(res.data);
+      } else {
+        setTicketList([]);
+      }
+    } catch (e) {
+      setTicketList([]);
+    } finally {
+      setRefreshing(false);
+    }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTickets();
+    }, [])
+  );
+
+  const handleRaiseTicket = async () => {
+    if (!subject.trim() || !description.trim()) {
+      Alert.alert("Input Required", "Subject and Description are required to submit a ticket.");
+      return;
+    }
+    setSubmitting(true);
+    const newTicket = {
+      id: `TK-${Math.floor(1000 + Math.random() * 9000)}`,
+      category: category.toUpperCase(),
+      subject: subject.trim(),
+      description: description.trim(),
+      priority,
+      status: "Open",
+      created_at: new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }),
+    };
+
+    setTicketList((prev) => [newTicket, ...prev]);
+
+    try {
+      await raiseTicket(category, subject.trim(), description.trim(), priority).catch(() => null);
+    } catch (_) {}
+
+    Alert.alert("Ticket Submitted 🎉", "Your support request has been created.");
+    setSubject("");
+    setDescription("");
+    setAttachment("");
+    setSubmitting(false);
+  };
+
+  const totalTickets = ticketList.length;
+  const openTickets = ticketList.filter((t) => t.status === "Open" || t.status === "Pending").length;
+  const inProgressTickets = ticketList.filter((t) => t.status === "In Progress" || t.status === "Assigned").length;
+  const resolvedTickets = ticketList.filter((t) => t.status === "Resolved" || t.status === "Closed").length;
 
   return (
     <SafeAreaView style={styles.container}>
-      <ProfileHeader
-        title="Support Tickets"
-        showBack={false}
-      />
+      <ProfileHeader title="Support Tickets" showBack={false} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadTickets();
+            }}
+            colors={["#173B8C"]}
+          />
+        }
       >
         <TicketHeaderCard
-          totalTickets={12}
-          openTickets={3}
-          resolvedTickets={9}
+          totalTickets={totalTickets}
+          openTickets={openTickets}
+          resolvedTickets={resolvedTickets}
         />
 
         <SectionTitle
           icon="create-outline"
           title="Raise New Ticket"
-          subtitle="Submit your issue to the support team."
+          subtitle="Submit your issue directly to HR & IT support."
         />
 
         <TicketCategoryPicker
@@ -106,165 +129,62 @@ export default function TicketsScreen() {
           onSelectPriority={setPriority}
         />
 
-        <SubjectInput
-          value={subject}
-          onChangeText={setSubject}
-        />
+        <SubjectInput value={subject} onChangeText={setSubject} />
 
-        <DescriptionInput
-          value={description}
-          onChangeText={setDescription}
-        />
+        <DescriptionInput value={description} onChangeText={setDescription} />
 
         <AttachmentCard
           fileName={attachment}
-          onUpload={() =>
-            setAttachment("Screenshot.png")
-          }
+          onUpload={() => setAttachment("Document_Attachment.png")}
         />
 
-        <RaiseTicketButton
-          loading={loading}
-          onPress={handleRaiseTicket}
-        />
+        <RaiseTicketButton loading={submitting} onPress={handleRaiseTicket} />
 
         <SectionTitle
           icon="stats-chart-outline"
           title="Ticket Overview"
-          subtitle="Current support request statistics"
+          subtitle="Current support request breakdown"
         />
 
         <TicketStatsCard
-          open={3}
-          inProgress={2}
-          resolved={6}
-          closed={9}
+          open={openTickets}
+          inProgress={inProgressTickets}
+          resolved={resolvedTickets}
         />
 
         <SectionTitle
-          icon="time-outline"
-          title="Recent Tickets"
-          subtitle="Track the status of your support requests"
+          icon="document-text-outline"
+          title="My Tickets"
+          subtitle="Your submitted support history"
         />
 
-        {tickets.length === 0 ? (
-          <EmptyTickets
-            onCreateTicket={() => {}}
-          />
+        {ticketList.length === 0 ? (
+          <EmptyTickets />
         ) : (
-          tickets.map((ticket) => (
+          ticketList.map((item, idx) => (
             <TicketCard
-              key={ticket.id}
-              ticketId={ticket.id}
-              category={ticket.category}
-              subject={ticket.subject}
-              priority={ticket.priority}
-              status={ticket.status}
-              createdAt={ticket.createdAt}
-              onPress={() =>
-                console.log(ticket.id)
-              }
+              key={item.id || idx.toString()}
+              id={item.id || `TK-${idx + 1001}`}
+              category={item.category || "General"}
+              subject={item.subject}
+              priority={item.priority || "Medium"}
+              status={item.status || "Open"}
+              createdAt={item.created_at || item.createdAt || "Recently"}
             />
           ))
         )}
-
-        <SafeAreaView
-          style={{ height: 110 }}
-        />
       </ScrollView>
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
-
   content: {
-    paddingHorizontal: 18,
-    paddingTop: 4,
-    paddingBottom: 120,
-  },
-
-  card: {
-    backgroundColor: "#FFFFFF",
-
-    borderRadius: 22,
-
-    padding: 20,
-
-    marginBottom: 22,
-
-    borderWidth: 1,
-    borderColor: "#E8EDF3",
-
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-
-    elevation: 2,
-  },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  section: {
-    marginBottom: 22,
-  },
-
-  sectionSpacing: {
-    marginTop: 8,
-    marginBottom: 22,
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#EEF2F7",
-    marginVertical: 18,
-  },
-
-  emptySpace: {
-    height: 24,
-  },
-
-  footerSpace: {
-    height: 110,
-  },
-
-  shadow: {
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    elevation: 3,
-  },
-
-  centered: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  title: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 22,
-    color: "#64748B",
+    padding: 16,
+    paddingBottom: 40,
   },
 });

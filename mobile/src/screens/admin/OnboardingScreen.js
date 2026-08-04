@@ -54,6 +54,11 @@ export default function OnboardingScreen({ navigation }) {
       o.role.toLowerCase().includes(search.toLowerCase())
   );
 
+  const activeCount = onboardings.length;
+  const totalTasks = onboardings.reduce((sum, item) => sum + Number(item.totalTasks || 0), 0);
+  const completedTasks = onboardings.reduce((sum, item) => sum + Number(item.tasksCompleted || 0), 0);
+  const avgProgress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
   return (
     <LinearGradient
       colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]}
@@ -77,21 +82,26 @@ export default function OnboardingScreen({ navigation }) {
           }
         >
           {/* Summary Hero Card */}
-          <View style={styles.heroCard}>
+          <LinearGradient
+            colors={["#0B2253", "#173B8C"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
             <Text style={styles.heroSub}>New Hire Workflow</Text>
-            <Text style={styles.heroTitle}>3 Active Onboardings</Text>
+            <Text style={styles.heroTitle}>{activeCount} Active Onboardings</Text>
             <View style={styles.heroStatsRow}>
               <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatValue}>21 / 30</Text>
+                <Text style={styles.heroStatValue}>{completedTasks} / {totalTasks}</Text>
                 <Text style={styles.heroStatLabel}>Tasks Done</Text>
               </View>
               <View style={styles.heroStatDivider} />
               <View style={styles.heroStatItem}>
-                <Text style={styles.heroStatValue}>70%</Text>
+                <Text style={styles.heroStatValue}>{avgProgress}%</Text>
                 <Text style={styles.heroStatLabel}>Avg Progress</Text>
               </View>
             </View>
-          </View>
+          </LinearGradient>
 
           <AdminSearchBar
             value={search}
@@ -106,70 +116,84 @@ export default function OnboardingScreen({ navigation }) {
             </Text>
           </View>
 
-          {filteredOnboardings.map((item) => {
-            const progress = (item.tasksCompleted / item.totalTasks) * 100;
+          {loading ? (
+            <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 24 }} />
+          ) : filteredOnboardings.length === 0 ? (
+            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 32, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0", marginTop: 10 }}>
+              <Ionicons name="person-add-outline" size={48} color="#94A3B8" />
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 12 }}>
+                No Active Onboardings
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 4 }}>
+                Newly registered staff members undergoing onboarding tasks will appear here.
+              </Text>
+            </View>
+          ) : (
+            filteredOnboardings.map((item) => {
+              const progress = (item.tasksCompleted / item.totalTasks) * 100;
 
-            return (
-              <View key={item.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.iconCircle}>
-                    <Ionicons name="person-add-outline" size={20} color="#173B8C" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.name}>{item.employeeName}</Text>
-                    <Text style={styles.role}>{item.role}</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.statusPill,
-                      item.status === "Completed"
-                        ? styles.pillCompleted
-                        : item.status === "In Progress"
-                        ? styles.pillProgress
-                        : styles.pillPending,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        item.status === "Completed"
-                          ? styles.textCompleted
-                          : item.status === "In Progress"
-                          ? styles.textProgress
-                          : styles.textPending,
-                      ]}
-                    >
-                      {item.status}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.progressContainer}>
-                  <View style={styles.progressLabelRow}>
-                    <Text style={styles.progressLabel}>Task Completion</Text>
-                    <Text style={styles.progressValue}>
-                      {item.tasksCompleted} / {item.totalTasks} ({progress.toFixed(0)}%)
-                    </Text>
-                  </View>
-                  <View style={styles.progressBarTrack}>
+              return (
+                <View key={item.id} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.iconCircle}>
+                      <Ionicons name="person-add-outline" size={20} color="#173B8C" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.name}>{item.employeeName}</Text>
+                      <Text style={styles.role}>{item.role}</Text>
+                    </View>
                     <View
                       style={[
-                        styles.progressBarFill,
-                        { width: `${progress}%` },
+                        styles.statusPill,
+                        item.status === "Completed"
+                          ? styles.pillCompleted
+                          : item.status === "In Progress"
+                          ? styles.pillProgress
+                          : styles.pillPending,
                       ]}
-                    />
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          item.status === "Completed"
+                            ? styles.textCompleted
+                            : item.status === "In Progress"
+                            ? styles.textProgress
+                            : styles.textPending,
+                        ]}
+                      >
+                        {item.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.progressContainer}>
+                    <View style={styles.progressLabelRow}>
+                      <Text style={styles.progressLabel}>Task Completion</Text>
+                      <Text style={styles.progressValue}>
+                        {item.tasksCompleted} / {item.totalTasks} ({progress.toFixed(0)}%)
+                      </Text>
+                    </View>
+                    <View style={styles.progressBarTrack}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          { width: `${progress}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.cardFooter}>
+                    <Ionicons name="calendar-outline" size={14} color="#64748B" />
+                    <Text style={styles.footerText}>
+                      Join Date: {item.startDate}
+                    </Text>
                   </View>
                 </View>
-
-                <View style={styles.cardFooter}>
-                  <Ionicons name="calendar-outline" size={14} color="#64748B" />
-                  <Text style={styles.footerText}>
-                    Join Date: {item.startDate}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
+              );
+            })
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -199,7 +223,7 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.1)",
   },
   heroStatItem: { alignItems: "center" },
-  heroStatValue: { color: "#38BDF8", fontSize: 18, fontWeight: "800" },
+  heroStatValue: { color: "#60A5FA", fontSize: 18, fontWeight: "800" },
   heroStatLabel: { color: "#94A3B8", fontSize: 12, marginTop: 2 },
   heroStatDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.1)" },
   sectionHeader: {

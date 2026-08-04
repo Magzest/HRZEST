@@ -29,37 +29,16 @@ export default function ResignationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actingId, setActingId] = useState(null);
 
-  const fallbackResignations = [
-    {
-      id: "1",
-      name: "Anand Verma",
-      employee_id: "EMP042",
-      last_working_day: "2026-08-31",
-      reason: "Pursuing higher education abroad.",
-      requested_at: "2026-07-25",
-      status: "Pending",
-    },
-    {
-      id: "2",
-      name: "Sneha Patel",
-      employee_id: "EMP089",
-      last_working_day: "2026-08-15",
-      reason: "Relocating to another city due to personal reasons.",
-      requested_at: "2026-07-20",
-      status: "Accepted",
-    },
-  ];
-
   const loadData = async () => {
     try {
       const res = await fetchResignations();
       if (res && res.data && Array.isArray(res.data.resignations)) {
         setResignations(res.data.resignations);
       } else {
-        setResignations(fallbackResignations);
+        setResignations([]);
       }
     } catch (_) {
-      setResignations(fallbackResignations);
+      setResignations([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

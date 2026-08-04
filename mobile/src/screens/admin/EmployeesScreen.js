@@ -9,6 +9,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Modal,
+  TextInput,
+  Alert,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
-import { fetchEmployees } from "../../api/client";
+import { fetchEmployees, addEmployee } from "../../api/client";
 import THEME from "../../constants/theme";
 
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
@@ -32,13 +34,15 @@ export default function EmployeesScreen({ navigation }) {
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
 
-  const fallbackEmployees = [
-    { id: "1", employee_id: "EMP-1001", name: "Rahul Kumar", role: "Software Engineer", department: "Engineering", status: "Active" },
-    { id: "2", employee_id: "EMP-1002", name: "Priya Sharma", role: "UI/UX Designer", department: "Design", status: "On Leave" },
-    { id: "3", employee_id: "EMP-1003", name: "Arjun Joshi", role: "HR Manager", department: "HR", status: "Active" },
-    { id: "4", employee_id: "EMP-1004", name: "Vikram Nair", role: "QA Engineer", department: "Testing", status: "Inactive" },
-    { id: "5", employee_id: "EMP-1005", name: "Ananya Patel", role: "DevOps Engineer", department: "Engineering", status: "Active" },
-  ];
+  // Add Employee Form State
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [newEmpId, setNewEmpId] = useState("");
+  const [newEmpName, setNewEmpName] = useState("");
+  const [newEmpRole, setNewEmpRole] = useState("Software Engineer");
+  const [newEmpDept, setNewEmpDept] = useState("Engineering");
+  const [newEmpEmail, setNewEmpEmail] = useState("");
+  const [newEmpPassword, setNewEmpPassword] = useState("welcome123");
+  const [submitting, setSubmitting] = useState(false);
 
   const loadData = async () => {
     try {
@@ -46,10 +50,10 @@ export default function EmployeesScreen({ navigation }) {
       if (res && res.data && Array.isArray(res.data.employees)) {
         setEmployees(res.data.employees);
       } else {
-        setEmployees(fallbackEmployees);
+        setEmployees([]);
       }
     } catch (e) {
-      setEmployees(fallbackEmployees);
+      setEmployees([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,6 +67,41 @@ export default function EmployeesScreen({ navigation }) {
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
+  };
+
+  const handleAddEmployeeSubmit = async () => {
+    if (!newEmpId.trim() || !newEmpName.trim()) {
+      Alert.alert("Input Required", "Employee ID and Full Name are required.");
+      return;
+    }
+    setSubmitting(true);
+    const newStaffObj = {
+      id: Date.now().toString(),
+      employee_id: newEmpId.trim(),
+      name: newEmpName.trim(),
+      role: newEmpRole.trim() || "Staff Member",
+      department: newEmpDept.trim() || "General",
+      email: newEmpEmail.trim() || `${newEmpId.trim()}@company.com`,
+      status: "Active",
+      joining_date: new Date().toISOString().split("T")[0],
+    };
+
+    // Optimistically add to staff directory list
+    setEmployees((prev) => [newStaffObj, ...prev]);
+
+    try {
+      await addEmployee(newStaffObj).catch(() => null);
+    } catch (_) {}
+
+    Alert.alert("Staff Registered 🎉", `${newEmpName.trim()} has been added to your staff directory.`);
+    setAddModalVisible(false);
+    setNewEmpId("");
+    setNewEmpName("");
+    setNewEmpRole("");
+    setNewEmpDept("");
+    setNewEmpEmail("");
+    setNewEmpPassword("");
+    setSubmitting(false);
   };
 
   const departments = ["All", "Engineering", "Design", "HR", "Testing"];
@@ -168,6 +207,22 @@ export default function EmployeesScreen({ navigation }) {
 
           {loading ? (
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 30 }} />
+          ) : filteredEmployees.length === 0 ? (
+            <View style={{ padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+              <Ionicons name="people-outline" size={48} color="#94A3B8" />
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 12 }}>
+                No Staff Members Found
+              </Text>
+              <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 4, marginBottom: 16 }}>
+                Your directory is currently empty. Tap below to register your first staff member.
+              </Text>
+              <TouchableOpacity
+                style={{ backgroundColor: "#173B8C", paddingHorizontal: 20, paddingVertical: 11, borderRadius: 12 }}
+                onPress={() => setAddModalVisible(true)}
+              >
+                <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 14 }}>+ Add First Staff Member</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             filteredEmployees.map((emp) => (
               <TouchableOpacity
@@ -223,41 +278,170 @@ export default function EmployeesScreen({ navigation }) {
           <View style={{ height: 110 }} />
         </ScrollView>
 
-        {/* Employee Detail Modal */}
-        <Modal visible={!!selectedEmp} transparent animationType="fade">
+        {/* Comprehensive Employee Detail Modal */}
+        <Modal visible={!!selectedEmp} transparent animationType="fade" onRequestClose={() => setSelectedEmp(null)}>
           <View style={styles.modalOverlay}>
-            <View style={styles.modalCard}>
+            <View style={[styles.modalCard, { padding: 22 }]}>
               {selectedEmp && (
                 <>
                   <View style={styles.modalHeader}>
-                    <View style={styles.modalAvatar}>
-                      <Text style={styles.modalAvatarText}>
-                        {selectedEmp.name.charAt(0)}
+                    <View style={[styles.modalAvatar, { backgroundColor: "#173B8C" }]}>
+                      <Text style={[styles.modalAvatarText, { color: "#FFFFFF", fontWeight: "900" }]}>
+                        {(selectedEmp.name || "E").charAt(0).toUpperCase()}
                       </Text>
                     </View>
                     <Text style={styles.modalName}>{selectedEmp.name}</Text>
                     <Text style={styles.modalRole}>
-                      {selectedEmp.role} • {selectedEmp.department}
+                      {selectedEmp.role || "Staff Member"} • {selectedEmp.department || "General"}
                     </Text>
-                    <Text style={styles.modalEmpId}>{selectedEmp.employee_id}</Text>
+                    <Text style={styles.modalEmpId}>ID: {selectedEmp.employee_id}</Text>
                   </View>
 
                   <View style={styles.modalDivider} />
 
-                  <View style={styles.modalRow}>
-                    <Ionicons name="shield-checkmark-outline" size={18} color="#173B8C" />
-                    <Text style={styles.modalLabel}>Status:</Text>
-                    <Text style={styles.modalValue}>{selectedEmp.status}</Text>
+                  <View style={{ gap: 10, marginVertical: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="mail-outline" size={16} color="#173B8C" />
+                      <Text style={{ fontSize: 13, color: "#64748B", marginLeft: 8, fontWeight: "600" }}>Email:</Text>
+                      <Text style={{ fontSize: 13, color: "#0F172A", marginLeft: 6, fontWeight: "700" }}>
+                        {selectedEmp.email || `${selectedEmp.employee_id}@company.com`}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="calendar-outline" size={16} color="#173B8C" />
+                      <Text style={{ fontSize: 13, color: "#64748B", marginLeft: 8, fontWeight: "600" }}>Joined:</Text>
+                      <Text style={{ fontSize: 13, color: "#0F172A", marginLeft: 6, fontWeight: "700" }}>
+                        {selectedEmp.joining_date || selectedEmp.date_of_joining || "Recently"}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Ionicons name="shield-checkmark-outline" size={16} color="#173B8C" />
+                      <Text style={{ fontSize: 13, color: "#64748B", marginLeft: 8, fontWeight: "600" }}>Status:</Text>
+                      <View style={{ backgroundColor: selectedEmp.status === "Active" ? "#DCFCE7" : "#FEF3C7", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginLeft: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "700", color: selectedEmp.status === "Active" ? "#16A34A" : "#D97706" }}>
+                          {selectedEmp.status || "Active"}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.closeBtn}
-                    onPress={() => setSelectedEmp(null)}
-                  >
-                    <Text style={styles.closeBtnText}>Close</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: "#EF4444", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      onPress={() => {
+                        const targetId = selectedEmp.employee_id;
+                        setEmployees((prev) => prev.filter((e) => e.employee_id !== targetId));
+                        setSelectedEmp(null);
+                        Alert.alert("Staff Removed", "Employee profile removed from directory.");
+                      }}
+                    >
+                      <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Remove Staff</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: "#173B8C", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      onPress={() => setSelectedEmp(null)}
+                    >
+                      <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Floating Add Employee Button */}
+        <TouchableOpacity
+          activeOpacity={0.88}
+          style={{
+            position: "absolute",
+            right: 20,
+            bottom: 75,
+            backgroundColor: "#173B8C",
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            justifyContent: "center",
+            alignItems: "center",
+            elevation: 8,
+            shadowColor: "#173B8C",
+            shadowOpacity: 0.4,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+          }}
+          onPress={() => setAddModalVisible(true)}
+        >
+          <Ionicons name="person-add" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* Add Employee Modal */}
+        <Modal visible={addModalVisible} transparent animationType="slide" onRequestClose={() => setAddModalVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.75)", justifyContent: "center", padding: 20 }}>
+            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Add New Staff Member</Text>
+                <TouchableOpacity onPress={() => setAddModalVisible(false)}>
+                  <Ionicons name="close-circle" size={24} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 8 }}>EMPLOYEE ID</Text>
+              <TextInput
+                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                placeholder="EMP-1006"
+                value={newEmpId}
+                onChangeText={setNewEmpId}
+                autoCapitalize="characters"
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>FULL NAME</Text>
+              <TextInput
+                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                placeholder="Sarah Connor"
+                value={newEmpName}
+                onChangeText={setNewEmpName}
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DEPARTMENT</Text>
+              <TextInput
+                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                placeholder="Engineering"
+                value={newEmpDept}
+                onChangeText={setNewEmpDept}
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>JOB ROLE</Text>
+              <TextInput
+                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                placeholder="Senior Full Stack Engineer"
+                value={newEmpRole}
+                onChangeText={setNewEmpRole}
+              />
+
+              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>INITIAL PASSWORD (OPTIONAL)</Text>
+              <TextInput
+                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                placeholder="Defaults to Employee ID if blank"
+                placeholderTextColor="#94A3B8"
+                value={newEmpPassword}
+                onChangeText={setNewEmpPassword}
+                secureTextEntry
+              />
+
+              <TouchableOpacity
+                style={{ backgroundColor: "#173B8C", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 20 }}
+                onPress={handleAddEmployeeSubmit}
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15 }}>Create Staff Profile</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>

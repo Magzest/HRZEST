@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, DrawerActions } from "@react-navigation/native";
+import { useAuth } from "../../store/AuthContext";
 
 export default function AdminHeader({
   title = "Dashboard",
@@ -21,6 +22,8 @@ export default function AdminHeader({
   onProfile,
 }) {
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const logoUri = profileImage || user?.logo;
 
   const handleMenuPress = () => {
     if (typeof onMenu === "function") {
@@ -71,7 +74,7 @@ export default function AdminHeader({
         <View style={styles.titleSection}>
           {!!subtitle && (
             <View style={styles.tagBadge}>
-              <Text style={styles.tagText}>{subtitle.toUpperCase()}</Text>
+              <Text style={styles.tagText}>{(user?.company || subtitle).toUpperCase()}</Text>
             </View>
           )}
           <Text numberOfLines={1} style={styles.title}>
@@ -107,18 +110,17 @@ export default function AdminHeader({
             style={styles.avatarButton}
             onPress={handleProfilePress}
           >
-            {profileImage ? (
+            {logoUri ? (
               <Image
-                source={{ uri: profileImage }}
-                style={styles.avatarImage}
+                source={{ uri: logoUri }}
+                style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "#FFFFFF" }}
+                resizeMode="cover"
               />
             ) : (
-              <View style={styles.avatarFallback}>
-                <Ionicons
-                  name="person-sharp"
-                  size={18}
-                  color="#2563EB"
-                />
+              <View style={[styles.avatarFallback, { backgroundColor: "#173B8C" }]}>
+                <Text style={{ color: "#FFFFFF", fontWeight: "900", fontSize: 14 }}>
+                  {(user?.company || user?.name || "A").charAt(0).toUpperCase()}
+                </Text>
               </View>
             )}
           </TouchableOpacity>

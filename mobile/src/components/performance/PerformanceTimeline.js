@@ -26,7 +26,7 @@ export default function PerformanceTimeline({
 
       {timeline.map((item, index) => (
         <View
-          key={item.quarter}
+          key={`${item.quarter}-${item.year || index}`}
           style={[
             styles.row,
             index === timeline.length - 1 && {

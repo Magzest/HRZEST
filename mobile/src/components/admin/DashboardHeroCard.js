@@ -10,21 +10,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
 export default function DashboardHeroCard({
-
   adminName = "Administrator",
-
-  company = "HR Management System",
-
-  totalEmployees = 254,
-
-  present = 228,
-
-  attendance = "90%",
-
-  payroll = "₹8.2L",
-
+  company = "Workforce Portal",
+  totalEmployees = 0,
+  present = 0,
+  attendance = "0%",
+  payroll = "₹0",
   profileImage,
-
 }) {
 
   return (
@@ -91,17 +83,11 @@ export default function DashboardHeroCard({
           />
 
         ) : (
-
-          <View style={styles.avatarPlaceholder}>
-
-            <Ionicons
-              name="person"
-              size={38}
-              color="#FFFFFF"
-            />
-
+          <View style={[styles.avatarPlaceholder, { backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" }]}>
+            <Text style={{ color: "#FFFFFF", fontWeight: "900", fontSize: 24 }}>
+              {(company || adminName || "A").charAt(0).toUpperCase()}
+            </Text>
           </View>
-
         )}
 
       </View>

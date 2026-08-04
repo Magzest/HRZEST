@@ -24,58 +24,14 @@ import AnnouncementCard from "../../components/admin/AnnouncementCard";
 import RecentActivityList from "../../components/admin/RecentActivityList";
 
 import { fetchDashboard } from "../../api/client";
-
-const ALL_ANNOUNCEMENTS = [
-  {
-    id: "1",
-    title: "Company Quarterly All-Hands Meeting",
-    message:
-      "Monthly all-hands meeting scheduled for tomorrow at 10:00 AM in Conference Room A & Zoom link.",
-    date: "Tomorrow, 10:00 AM",
-    category: "Meeting",
-    icon: "people",
-    color: "#16A34A",
-    bg: "#DCFCE7",
-  },
-  {
-    id: "2",
-    title: "Independence Day Public Holiday Notice",
-    message:
-      "Office will remain closed on 15th August for Independence Day. Emergency support remains on standby.",
-    date: "15 Aug 2026",
-    category: "Holiday",
-    icon: "airplane",
-    color: "#0B2253",
-    bg: "#EFF6FF",
-  },
-  {
-    id: "3",
-    title: "Monthly Salary Disbursement Status",
-    message:
-      "Payroll for current month has been processed. Salary slips are available for download under Payslips & Earnings.",
-    date: "End of Month",
-    category: "Payroll",
-    icon: "wallet",
-    color: "#7C3AED",
-    bg: "#EDE9FE",
-  },
-  {
-    id: "4",
-    title: "Updated Office Health & Security Policy",
-    message:
-      "All staff members must scan individual QR codes or geofence check-in upon entering company premises.",
-    date: "Active Policy",
-    category: "Policy",
-    icon: "shield-checkmark",
-    color: "#F59E0B",
-    bg: "#FEF3C7",
-  },
-];
+import { useAuth } from "../../store/AuthContext";
 
 export default function AdminDashboard({ navigation }) {
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
   const [announcementModalVisible, setAnnouncementModalVisible] = useState(false);
+  const [activityModalVisible, setActivityModalVisible] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -90,6 +46,17 @@ export default function AdminDashboard({ navigation }) {
     } catch (_) {}
   };
 
+  const totalEmps = dashboardData?.total_employees ?? dashboardData?.employees_count ?? 0;
+  const presentEmps = dashboardData?.present ?? dashboardData?.present_count ?? 0;
+  const absentEmps = dashboardData?.absent ?? dashboardData?.absent_count ?? 0;
+  const lateEmps = dashboardData?.late ?? dashboardData?.late_count ?? 0;
+  const leaveEmps = dashboardData?.onLeave ?? dashboardData?.leave_count ?? 0;
+  const pendingLeaves = dashboardData?.pending_leaves ?? 0;
+  const pendingPayroll = dashboardData?.pending_payroll ?? 0;
+
+  const attendancePct = totalEmps > 0 ? Math.round((presentEmps / totalEmps) * 100) + "%" : "0%";
+  const payrollFormatted = dashboardData?.total_payroll ? "₹" + (dashboardData.total_payroll / 100000).toFixed(1) + "L" : "₹0";
+
   return (
     <LinearGradient colors={["#F8FAFC", "#F1F5F9"]} style={styles.container}>
       <SafeAreaView style={styles.container}>
@@ -101,8 +68,13 @@ export default function AdminDashboard({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <DashboardHeroCard
-            present={dashboardData?.present || 228}
-            total={dashboardData?.total_employees || 252}
+            adminName={user?.name || dashboardData?.admin_name || "Administrator"}
+            company={user?.company || dashboardData?.company_name || "Workforce Portal"}
+            present={presentEmps}
+            totalEmployees={totalEmps}
+            attendance={attendancePct}
+            payroll={payrollFormatted}
+            profileImage={user?.logo || dashboardData?.company_logo}
           />
 
           <AdminSearchBar
@@ -116,10 +88,10 @@ export default function AdminDashboard({ navigation }) {
           <View style={styles.sectionSpacing} />
 
           <AttendanceOverviewCard
-            present={dashboardData?.present || 228}
-            absent={dashboardData?.absent || 18}
-            late={dashboardData?.late || 8}
-            onLeave={dashboardData?.onLeave || 6}
+            present={presentEmps}
+            absent={absentEmps}
+            late={lateEmps}
+            onLeave={leaveEmps}
             navigation={navigation}
           />
 
@@ -128,8 +100,8 @@ export default function AdminDashboard({ navigation }) {
           {/* Pending Leave Approval Card */}
           <PendingApprovalCard
             title="Leave Requests"
-            pending={8}
-            subtitle="Requires your approval"
+            pending={pendingLeaves}
+            subtitle={pendingLeaves > 0 ? "Requires your approval" : "No pending approvals"}
             icon="document-text-outline"
             color="#F59E0B"
             background="#FEF3C7"
@@ -139,8 +111,8 @@ export default function AdminDashboard({ navigation }) {
           {/* Pending Payroll Approval Card */}
           <PendingApprovalCard
             title="Payroll Approval"
-            pending={3}
-            subtitle="Waiting for verification"
+            pending={pendingPayroll}
+            subtitle={pendingPayroll > 0 ? "Waiting for verification" : "All payroll clear"}
             icon="wallet-outline"
             color="#7C3AED"
             background="#EDE9FE"
@@ -154,7 +126,9 @@ export default function AdminDashboard({ navigation }) {
             onViewAll={() => setAnnouncementModalVisible(true)}
           />
 
-          <RecentActivityList />
+          <RecentActivityList
+            onViewAll={() => setActivityModalVisible(true)}
+          />
 
           <View style={styles.bottomSpacing} />
         </ScrollView>
@@ -182,25 +156,86 @@ export default function AdminDashboard({ navigation }) {
               </View>
 
               <FlatList
-                data={ALL_ANNOUNCEMENTS}
-                keyExtractor={(item) => item.id}
+                data={dashboardData?.announcements || []}
+                keyExtractor={(item, index) => item.id || String(index)}
                 showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={{ padding: 24, alignItems: "center" }}>
+                    <Ionicons name="notifications-off-outline" size={36} color="#94A3B8" />
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
+                      No Company Announcements Yet
+                    </Text>
+                  </View>
+                }
                 renderItem={({ item }) => (
                   <View style={styles.announcementItem}>
-                    <View style={[styles.itemIconBox, { backgroundColor: item.bg }]}>
-                      <Ionicons name={item.icon} size={22} color={item.color} />
+                    <View style={[styles.itemIconBox, { backgroundColor: item.bg || "#EFF6FF" }]}>
+                      <Ionicons name={item.icon || "megaphone-outline"} size={22} color={item.color || "#173B8C"} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 14 }}>
                       <View style={styles.itemMetaRow}>
                         <Text style={styles.itemTitle}>{item.title}</Text>
-                        <View style={[styles.categoryBadge, { backgroundColor: item.bg }]}>
-                          <Text style={[styles.categoryText, { color: item.color }]}>
-                            {item.category}
-                          </Text>
-                        </View>
+                        {item.category ? (
+                          <View style={[styles.categoryBadge, { backgroundColor: item.bg || "#EFF6FF" }]}>
+                            <Text style={[styles.categoryText, { color: item.color || "#173B8C" }]}>
+                              {item.category}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text style={styles.itemMsg}>{item.message}</Text>
-                      <Text style={styles.itemDate}>📅 {item.date}</Text>
+                      {item.date ? <Text style={styles.itemDate}>📅 {item.date}</Text> : null}
+                    </View>
+                  </View>
+                )}
+              />
+            </View>
+          </View>
+        </Modal>
+
+        {/* System Recent Activity & Audit Logs Modal */}
+        <Modal
+          visible={activityModalVisible}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setActivityModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons name="time" size={22} color="#0B2253" />
+                  <Text style={styles.modalTitle}>System Activity & Audit Logs</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeBtn}
+                  onPress={() => setActivityModalVisible(false)}
+                >
+                  <Ionicons name="close" size={20} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              <FlatList
+                data={dashboardData?.recent_activities || []}
+                keyExtractor={(item, index) => item.id || String(index)}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={{ padding: 24, alignItems: "center" }}>
+                    <Ionicons name="time-outline" size={36} color="#94A3B8" />
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
+                      No System Activities Logged Yet
+                    </Text>
+                  </View>
+                }
+                renderItem={({ item }) => (
+                  <View style={styles.announcementItem}>
+                    <View style={[styles.itemIconBox, { backgroundColor: "#F1F5F9" }]}>
+                      <Ionicons name={item.icon || "list"} size={20} color={item.color || "#173B8C"} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={styles.itemTitle}>{item.title}</Text>
+                      <Text style={styles.itemMsg}>{item.description || item.subtitle || "System activity event"}</Text>
+                      {item.time ? <Text style={styles.itemDate}>⏱ {item.time}</Text> : null}
                     </View>
                   </View>
                 )}

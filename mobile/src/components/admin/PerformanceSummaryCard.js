@@ -145,9 +145,7 @@ export default function PerformanceSummaryCard({
 
       subtitle: "Rate",
 
-      value: `${Math.round(
-        submitted / totalEmployees * 100
-      )}%`,
+      value: `${totalEmployees > 0 ? Math.round((submitted / totalEmployees) * 100) : 0}%`,
 
       icon: "analytics-outline",
 

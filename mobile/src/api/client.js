@@ -26,7 +26,7 @@ export const adminLogin = (username, password) =>
 
 export const adminLogout = () => client.post('/api/logout');
 
-export const createOrganisation = (company_name, subdomain, admin_username, admin_password, admin_email = '', signup_secret = '') =>
+export const createOrganisation = (company_name, subdomain, admin_username, admin_password, admin_email = '', signup_secret = '', company_logo = '') =>
   client.post('/api/create_org', {
     company_name,
     subdomain,
@@ -34,6 +34,7 @@ export const createOrganisation = (company_name, subdomain, admin_username, admi
     admin_password,
     admin_email,
     signup_secret,
+    company_logo,
   });
 
 export const fetchDashboard = () => client.get('/api/dashboard');
@@ -164,3 +165,16 @@ export const fetchNotifications = () => client.get('/api/notifications');
 export const markNotificationsRead = () => client.post('/api/notifications/mark_read');
 export const fetchEmployeeNotifications = () => client.get('/api/employee/notifications');
 export const markEmployeeNotificationsRead = () => client.post('/api/employee/notifications/mark_read');
+
+// ── Admin: Staff & Settings & AI ──────────────────────────────────
+export const addEmployee = (employeeData) => client.post('/api/employees/add', employeeData);
+export const editEmployee = (empId, employeeData) => client.post(`/api/employees/${empId}/edit`, employeeData);
+export const deleteEmployee = (empId) => client.post(`/api/employees/${empId}/delete`);
+export const forgotPassword = (email, role = 'employee') => client.post('/api/forgot-password', { email, role });
+export const resetPassword = (email, token, new_password, role = 'employee') => client.post('/api/reset-password', { email, token, new_password, role });
+export const verifyMfaOtp = (otpCode) => client.post('/api/mfa/verify', { otp: otpCode });
+export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai_hrms', { query });
+export const addHoliday = (holidayData) => client.post('/api/holidays/add', holidayData);
+export const deleteHoliday = (hid) => client.post(`/api/holidays/${hid}/delete`);
+export const compoffAction = (cid, action) => client.post(`/api/compoff/${cid}/action`, { action });
+export const updateSettings = (settingsData) => client.post('/api/settings/update', settingsData);

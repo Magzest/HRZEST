@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import { DrawerContentScrollView } from "@react-navigation/drawer";
 import { getFocusedRouteNameFromRoute } from "@react-navigation/native";
@@ -14,7 +15,7 @@ import { useAuth } from "../../store/AuthContext";
 
 export default function AdminDrawerContent(props) {
   const { navigation, state } = props;
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const insets = useSafeAreaInsets();
 
   const drawerRoute = state.routes[state.index];
@@ -170,23 +171,33 @@ export default function AdminDrawerContent(props) {
       >
         <View style={styles.headerTopRow}>
           <View style={styles.avatarBorder}>
-            <View style={styles.avatar}>
-              <Ionicons name="shield-checkmark" size={32} color="#0B2253" />
-            </View>
+            {user?.logo ? (
+              <Image
+                source={{ uri: user.logo }}
+                style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#FFFFFF" }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: "#FFFFFF" }]}>
+                <Text style={{ fontSize: 22, fontWeight: "900", color: "#0B2253" }}>
+                  {(user?.company || user?.name || "A").charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <View style={styles.onlineDot} />
           </View>
 
           <View style={styles.userInfo}>
             <Text style={styles.name} numberOfLines={1}>
-              Administrator
+              {user?.company || user?.name || "Organisation Admin"}
             </Text>
-            <Text style={styles.empId}>
-              ID: ADMIN-001
+            <Text style={styles.empId} numberOfLines={1}>
+              {user?.name || "Administrator"}
             </Text>
             <View style={styles.roleBadgeRow}>
               <View style={styles.roleBadge}>
-                <Ionicons name="ribbon" size={12} color="#F59E0B" style={{ marginRight: 4 }} />
-                <Text style={styles.roleText}>Super Administrator</Text>
+                <Ionicons name="shield-checkmark" size={12} color="#F59E0B" style={{ marginRight: 4 }} />
+                <Text style={styles.roleText}>Verified Organisation</Text>
               </View>
             </View>
           </View>

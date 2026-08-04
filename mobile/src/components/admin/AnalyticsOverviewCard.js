@@ -7,40 +7,44 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-const DATA = [
-  {
-    title: "Productivity",
-    value: "94%",
-    icon: "trending-up",
-    color: "#16A34A",
-    background: "#DCFCE7",
-    screen: "Analytics",
-  },
-  {
-    title: "Performance",
-    value: "A+",
-    icon: "ribbon",
-    color: "#0B2253",
-    background: "#EFF6FF",
-    screen: "Performance",
-  },
-  {
-    title: "Attrition",
-    value: "3%",
-    icon: "people",
-    color: "#F59E0B",
-    background: "#FEF3C7",
-    screen: "Analytics",
-  },
-];
-
-export default function AnalyticsOverviewCard({ navigation }) {
+export default function AnalyticsOverviewCard({
+  navigation,
+  productivity = "0%",
+  performance = "N/A",
+  attrition = "0%",
+}) {
+  const cards = [
+    {
+      title: "Productivity",
+      value: productivity,
+      icon: "trending-up",
+      color: "#16A34A",
+      background: "#DCFCE7",
+      screen: "Analytics",
+    },
+    {
+      title: "Performance",
+      value: performance,
+      icon: "ribbon",
+      color: "#0B2253",
+      background: "#EFF6FF",
+      screen: "Performance",
+    },
+    {
+      title: "Attrition",
+      value: attrition,
+      icon: "people",
+      color: "#F59E0B",
+      background: "#FEF3C7",
+      screen: "Analytics",
+    },
+  ];
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Analytics Overview</Text>
 
       <View style={styles.row}>
-        {DATA.map((item) => (
+        {cards.map((item) => (
           <TouchableOpacity
             key={item.title}
             activeOpacity={0.85}

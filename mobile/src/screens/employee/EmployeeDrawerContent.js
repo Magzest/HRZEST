@@ -172,6 +172,18 @@ export default function EmployeeDrawerContent(props) {
         end={{ x: 1, y: 1 }}
         style={styles.header}
       >
+        {/* Company Branding Pill */}
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14, backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, alignSelf: "flex-start" }}>
+          {user?.logo ? (
+            <Image source={{ uri: user.logo }} style={{ width: 20, height: 20, borderRadius: 10, marginRight: 8, backgroundColor: "#FFFFFF" }} />
+          ) : (
+            <Ionicons name="business" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+          )}
+          <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 13 }} numberOfLines={1}>
+            {user?.company || "Organisation Portal"}
+          </Text>
+        </View>
+
         <View style={styles.headerTopRow}>
           <View style={styles.avatarBorder}>
             <View style={styles.avatar}>
@@ -192,7 +204,7 @@ export default function EmployeeDrawerContent(props) {
             <View style={styles.roleBadgeRow}>
               <View style={styles.roleBadge}>
                 <Ionicons name="shield-checkmark" size={12} color="#38BDF8" style={{ marginRight: 4 }} />
-                <Text style={styles.roleText}>Staff Member</Text>
+                <Text style={styles.roleText}>Verified Staff</Text>
               </View>
             </View>
           </View>
