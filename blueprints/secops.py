@@ -139,13 +139,14 @@ _MFA_OTP_TTL_SEC = 300  # 5 minutes
 @limiter.limit("10 per 15 minutes")
 def sp_admin_login():
     """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
-    # Block Starter plan from SecOps (requires Growth or Enterprise)
+    # If already logged in with the right role, go straight to SecOps dashboard
+    if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
+        return redirect("/secops")
+
+    # Block plans below Growth from SecOps access
     if plan_rank(get_tenant_plan(g.tenant_db)) < plan_rank("growth"):
         flash("SecOps Dashboard requires the Growth or Enterprise plan. Please upgrade.", "warning")
         return redirect("/pricing")
-
-    if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
-        return redirect("/secops")
 
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip()

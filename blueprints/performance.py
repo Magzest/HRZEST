@@ -6,7 +6,7 @@ literal chosen by a bool (`dept`/`active_cid`) — never user input. Actual
 values are always %s-bound params.
 """
 import datetime
-from flask import Blueprint, request, session, redirect, render_template, flash
+from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required
 from utils.helpers import co_scope_column, _db
@@ -42,9 +42,28 @@ def _rating_tier(rating):
 
 
 @performance_bp.route("/api/performance", methods=["GET"])
-@api_required
 def api_performance():
-    """JSON API endpoint for employee performance reviews from database."""
+    """JSON API endpoint for employee performance reviews from database.
+
+    Accepts both Bearer API tokens (@api_required) and active admin sessions
+    so the Performance page can fetch data without requiring an API token.
+    """
+    # Allow active admin sessions to access this endpoint
+    if not session.get("admin_logged_in"):
+        # Fall back to Bearer token check
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+        from utils.auth import _hash_token
+        from utils.helpers import _db as _authdb
+        token_hash = _hash_token(auth[7:])
+        with _authdb() as (cursor, _conn):
+            cursor.execute(
+                "SELECT identity FROM api_tokens WHERE token=%s AND token_type='admin' AND expires_at > NOW()",
+                (token_hash,)
+            )
+            if not cursor.fetchone():
+                return jsonify({"ok": False, "msg": "Invalid or expired token"}), 401
     with _db() as (cursor, conn):
         cursor.execute("""
             SELECT e.employee_id, e.name, COALESCE(e.role,'Employee'), COALESCE(e.department,'General'),

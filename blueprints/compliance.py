@@ -328,3 +328,13 @@ def export_compliance_pdf(framework):
     </html>
     """
     return html_content, 200, {"Content-Type": "text/html"}
+
+
+@compliance_bp.route("/generate_attestation_pdf")
+@role_required("admin")
+def generate_attestation_pdf():
+    """Convenience alias used by the SecOps Compliance & Reports tab.
+    Redirects to the SOC2 attestation PDF generation endpoint."""
+    from flask import redirect
+    return redirect("/compliance/export_pdf/SOC2")
+

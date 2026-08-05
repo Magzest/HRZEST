@@ -637,10 +637,7 @@
             </div>
           </div>
           <div style="background:#070b14; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:16px; font-family:monospace; font-size:12px; color:#4ade80; height:360px; overflow-y:auto; line-height:1.6;" id="liveLogConsole">
-            [SYS_INIT 02:04:32] Real-time SecOps event stream initialized via SSE.<br>
-            [AUTH 02:04:35] User 'superadmin' authenticated successfully from 127.0.0.1.<br>
-            [WAF 02:04:40] Rate limit check passed for endpoint /api/session/risk-stream.<br>
-            [SIEM 02:04:48] Risk score evaluated: 0.0 (HEALTHY).<br>
+            <span style="color:#64748b;">[CONSOLE READY] Click Toggle Stream to begin live SSE log feed.</span><br>
           </div>
         </div>
       </div>
@@ -650,7 +647,7 @@
         <div class="card-panel">
           <div class="panel-hdr">
             <div class="panel-title"><i class="ti ti-file-text" style="color: #a78bfa;"></i> Automated Security &amp; Audit Report Generator</div>
-            <a href="/generate_attestation_pdf" class="btn btn-primary" target="_blank"><i class="ti ti-download"></i> Download Full Attestation (PDF)</a>
+            <a href="/compliance/export_pdf/SOC2" class="btn btn-primary" target="_blank"><i class="ti ti-download"></i> Download SOC2 Attestation (PDF)</a>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
             <div style="background:rgba(15,23,42,0.6); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
@@ -717,6 +714,63 @@ Mitigation Status: Resolved via WAF auto-quarantine.</textarea>
         socEventsReload();
         loadQuarantineFiles();
         showToast('SecOps data updated', 'success');
+      }
+
+      /* ── Live Log Console SSE Stream ── */
+      let _logEventSource = null;
+      let _logRunning = false;
+
+      function _logColor(line) {
+        if (line.includes('ERROR') || line.includes('CRITICAL') || line.includes('FAIL')) return '#f87171';
+        if (line.includes('WARNING') || line.includes('WARN')) return '#fbbf24';
+        if (line.includes('AUTH') || line.includes('LOGIN')) return '#60a5fa';
+        if (line.includes('WAF') || line.includes('BAN')) return '#f97316';
+        return '#4ade80';
+      }
+
+      function _appendLog(text) {
+        const console = document.getElementById('liveLogConsole');
+        const filter = (document.getElementById('logSearchInput').value || '').toLowerCase();
+        if (filter && !text.toLowerCase().includes(filter)) return;
+        const ts = new Date().toLocaleTimeString();
+        const color = _logColor(text);
+        const span = document.createElement('span');
+        span.style.color = color;
+        span.textContent = `[${ts}] ${text}`;
+        console.appendChild(span);
+        console.appendChild(document.createElement('br'));
+        console.scrollTop = console.scrollHeight;
+        // cap at 500 lines
+        while (console.childElementCount > 1000) { console.removeChild(console.firstChild); }
+      }
+
+      function toggleLogStream() {
+        const btn = document.querySelector('#tab-live-console .btn-primary');
+        if (_logRunning) {
+          if (_logEventSource) { _logEventSource.close(); _logEventSource = null; }
+          _logRunning = false;
+          if (btn) { btn.innerHTML = '<i class="ti ti-player-play"></i> Start Stream'; btn.style.background = ''; }
+          _appendLog('--- Stream paused ---');
+        } else {
+          _logRunning = true;
+          if (btn) { btn.innerHTML = '<i class="ti ti-player-stop"></i> Stop Stream'; btn.style.background = '#ef4444'; }
+          _appendLog('--- Connecting to /api/session/risk-stream ---');
+          try {
+            _logEventSource = new EventSource('/api/session/risk-stream');
+            _logEventSource.onmessage = function(e) {
+              try {
+                const d = JSON.parse(e.data);
+                const msg = d.event || d.message || JSON.stringify(d);
+                _appendLog(msg);
+              } catch(_) { _appendLog(e.data); }
+            };
+            _logEventSource.onerror = function() {
+              _appendLog('[SSE] Connection error or stream ended.');
+            };
+          } catch(err) {
+            _appendLog('[ERROR] SSE not supported: ' + err.message);
+          }
+        }
       }
 
       /* ── Banned IPs ── */

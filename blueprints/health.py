@@ -22,8 +22,9 @@ def favicon():
 
 
 @health_bp.route("/healthz")
+@health_bp.route("/api/health")
 def healthz():
-    """Health check endpoint used by Podman, nginx, and load balancers."""
+    """Health check endpoint used by Podman, nginx, load balancers, and SecOps monitoring."""
     try:
         conn = get_db_connection()
         cur = conn.cursor()

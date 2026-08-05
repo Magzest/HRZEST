@@ -236,10 +236,43 @@ def my_id_card():
                      download_name=f"IDCard_{emp_id}.png", mimetype="image/png")
 
 
+@employee_portal_bp.route("/my_attendance")
+@employee_required
+def my_attendance():
+    """Deep-link redirect → employee portal attendance tab."""
+    from flask import redirect
+    return redirect("/employee_portal#tab-attendance")
+
+
+@employee_portal_bp.route("/my_leaves")
+@employee_required
+def my_leaves():
+    """Deep-link redirect → employee portal leaves tab."""
+    from flask import redirect
+    return redirect("/employee_portal#tab-leaves")
+
+
+@employee_portal_bp.route("/my_salary")
+@employee_required
+def my_salary():
+    """Deep-link redirect → employee portal salary tab."""
+    from flask import redirect
+    return redirect("/employee_portal#tab-salary")
+
+
+@employee_portal_bp.route("/my_profile")
+@employee_required
+def my_profile():
+    """Deep-link redirect → employee portal profile tab."""
+    from flask import redirect
+    return redirect("/employee_portal#tab-profile")
+
+
 @employee_portal_bp.route("/employee_portal")
 @employee_required
 def employee_portal():
     emp_id = session["employee_id"]
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
