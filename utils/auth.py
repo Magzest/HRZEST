@@ -339,7 +339,8 @@ def role_required(*allowed_roles):
             _killed = _reject_if_compromised("auth.admin_login")
             if _killed:
                 return _killed
-            if session.get("admin_role", "admin") not in allowed_roles:
+            user_role = session.get("admin_role", "admin")
+            if user_role not in allowed_roles and user_role != "superadmin":
                 log_security_event("access.denied", "Insufficient role for restricted route",
                                    level="ERROR", required="|".join(allowed_roles),
                                    actual_role=session.get("admin_role"),
