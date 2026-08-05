@@ -7,6 +7,7 @@ Run this after editing static/shared.css or static/darkmode.js:
 Only minifies first-party source — vendored libraries under static/ (chart,
 jsQR, tabler-icons) already ship pre-minified upstream.
 """
+import os
 import rcssmin
 import rjsmin
 
@@ -19,6 +20,9 @@ _TARGETS = [
 
 if __name__ == "__main__":
     for src_path, out_path, minify in _TARGETS:
+        if not os.path.exists(src_path):
+            print(f"Skipping {src_path} (source file not present)")
+            continue
         with open(src_path, encoding="utf-8") as f:
             source = f.read()
         minified = minify(source)
@@ -27,3 +31,4 @@ if __name__ == "__main__":
         before, after = len(source.encode()), len(minified.encode())
         print(f"{src_path} -> {out_path}: {before:,}B -> {after:,}B "
               f"({100 * (1 - after / before):.0f}% smaller)")
+
