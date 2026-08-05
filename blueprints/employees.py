@@ -612,6 +612,7 @@ def view_employees():
                      e.work_mode, e.work_lat, e.work_lon, e.face_image, e.qr_code,
                      e.department, e.phone, e.gender, s.name, e.shift_id
             ORDER BY e.name
+            LIMIT 500
         """, (active_cid,))
     else:
         cursor.execute("""
@@ -629,6 +630,7 @@ def view_employees():
                      e.work_mode, e.work_lat, e.work_lon, e.face_image, e.qr_code,
                      e.department, e.phone, e.gender, s.name, e.shift_id
             ORDER BY e.name
+            LIMIT 500
         """)
     employees_raw = cursor.fetchall()
 
