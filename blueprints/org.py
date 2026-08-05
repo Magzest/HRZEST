@@ -1,6 +1,6 @@
 """Org blueprint — multi-tenant org self-registration."""
 import re
-from flask import Blueprint, request, redirect, render_template, flash, jsonify
+from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
 from utils.plan_limits import PLAN_TIERS
@@ -292,10 +292,10 @@ def superadmin_dashboard():
     db = get_db_connection()
     cur = db.cursor()
     cur.execute("""
-        SELECT a.username, a.email, COALESCE(a.plan, 'basic'), COALESCE(c.company_name, 'Main Org'), a.created_at
+        SELECT a.username, a.email, COALESCE(a.plan, 'basic'), COALESCE(c.company_name, 'Main Org'), 'Active'
         FROM admin_users a
         LEFT JOIN company_settings c ON 1=1
-        ORDER BY a.created_at DESC
+        ORDER BY a.username ASC
     """)
     tenants = cur.fetchall()
     cur.close()
