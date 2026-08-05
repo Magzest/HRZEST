@@ -288,9 +288,11 @@
       <div class="tab-nav">
         <button class="tab-btn active" onclick="switchTab('overview', this)"><i class="ti ti-layout-dashboard"></i> Overview &amp; Posture</button>
         <button class="tab-btn" onclick="switchTab('siem-logs', this)"><i class="ti ti-list-check"></i> SIEM Threat Logs</button>
+        <button class="tab-btn" onclick="switchTab('live-console', this)"><i class="ti ti-terminal-2"></i> Live Real-Time Console</button>
         <button class="tab-btn" onclick="switchTab('waf-ip', this)"><i class="ti ti-shield-half"></i> WAF &amp; IP Controls</button>
         <button class="tab-btn" onclick="switchTab('lockouts', this)"><i class="ti ti-lock-access"></i> Lockouts &amp; Risk Sessions</button>
         <button class="tab-btn" onclick="switchTab('quarantine', this)"><i class="ti ti-virus"></i> Malware &amp; Quarantine</button>
+        <button class="tab-btn" onclick="switchTab('reports', this)"><i class="ti ti-file-text"></i> Compliance &amp; Reports</button>
         <button class="tab-btn" onclick="switchTab('config', this)"><i class="ti ti-adjustments"></i> Operations &amp; Performance</button>
       </div>
 
@@ -620,6 +622,63 @@
           </div>
           <div class="form-grid" id="perf-grid">
             <div class="empty-state">Click Refresh Stats to load performance telemetry.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 7: LIVE REAL-TIME CONSOLE ── -->
+      <div id="tab-live-console" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-terminal-2" style="color: #38bdf8;"></i> High-Throughput Live Log Streamer</div>
+            <div style="display:flex; gap:10px;">
+              <input type="text" placeholder="Regex / Fuzzy Search Logs..." id="logSearchInput" style="background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 12px; color:#fff; font-size:12px;" />
+              <button class="btn btn-primary" onclick="toggleLogStream()"><i class="ti ti-player-play"></i> Toggle Stream</button>
+            </div>
+          </div>
+          <div style="background:#070b14; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:16px; font-family:monospace; font-size:12px; color:#4ade80; height:360px; overflow-y:auto; line-height:1.6;" id="liveLogConsole">
+            [SYS_INIT 02:04:32] Real-time SecOps event stream initialized via SSE.<br>
+            [AUTH 02:04:35] User 'superadmin' authenticated successfully from 127.0.0.1.<br>
+            [WAF 02:04:40] Rate limit check passed for endpoint /api/session/risk-stream.<br>
+            [SIEM 02:04:48] Risk score evaluated: 0.0 (HEALTHY).<br>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 8: COMPLIANCE & REPORTS GENERATOR ── -->
+      <div id="tab-reports" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-file-text" style="color: #a78bfa;"></i> Automated Security &amp; Audit Report Generator</div>
+            <a href="/generate_attestation_pdf" class="btn btn-primary" target="_blank"><i class="ti ti-download"></i> Download Full Attestation (PDF)</a>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+            <div style="background:rgba(15,23,42,0.6); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+              <h4 style="color:#38bdf8; margin-bottom:12px;"><i class="ti ti-calendar-event"></i> Schedule Automated Reports</h4>
+              <div style="margin-bottom:12px;">
+                <label style="font-size:12px; color:#94a3b8; display:block; margin-bottom:4px;">REPORT TYPE</label>
+                <select style="width:100%; padding:8px; background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;">
+                  <option>SOC2 Type II Security Attestation</option>
+                  <option>ISO 27001 Access Audit Log</option>
+                  <option>GDPR Data Access Incident Summary</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px; color:#94a3b8; display:block; margin-bottom:4px;">RECURRING SCHEDULE</label>
+                <select style="width:100%; padding:8px; background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;">
+                  <option>Daily at Midnight (23:59 PM)</option>
+                  <option>Weekly (Mondays at 00:00 AM)</option>
+                  <option>Monthly (1st of Month)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="background:rgba(15,23,42,0.6); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+              <h4 style="color:#a78bfa; margin-bottom:12px;"><i class="ti ti-edit"></i> Incident Template Editor</h4>
+              <textarea style="width:100%; height:110px; background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#cbd5e1; font-family:monospace; padding:10px; font-size:12px;" placeholder="Dynamic tags: {incident_summary}, {affected_nodes}, {mitigation_steps}">Incident Summary: {incident_summary}
+Affected Systems: {affected_nodes}
+Mitigation Status: Resolved via WAF auto-quarantine.</textarea>
+            </div>
           </div>
         </div>
       </div>
