@@ -573,7 +573,7 @@ def api_quarantine_purge():
             cur.close()
         log_security_event("secops.quarantine_purged", f"Quarantined file payload #{file_id} permanently purged", level="INFO", identifier=session.get("admin_username"), ip=request.remote_addr, path="/api/secops/quarantine/purge", method="POST")
         return jsonify({"ok": True, "msg": f"Quarantined payload #{file_id} permanently purged from storage."})
-    except Exception as e:
+    except Exception:
         return jsonify({"ok": True, "msg": f"Quarantined file payload #{file_id} purged from disk storage."})
 
 
@@ -1066,7 +1066,6 @@ def api_secops_emergency_lockdown():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    val = "1" if enable else "0"
     cursor.execute(
         "INSERT INTO company_settings (session_timeout) VALUES (5) ON CONFLICT DO NOTHING"
     )

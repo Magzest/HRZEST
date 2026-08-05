@@ -3,7 +3,6 @@ import os
 import re
 import datetime
 import threading
-import hashlib
 from contextlib import contextmanager
 
 _SAFE_IDENT_RE = re.compile(r'^[a-z][a-z0-9_]*$')

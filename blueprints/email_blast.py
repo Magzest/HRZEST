@@ -101,7 +101,7 @@ def api_email_blast():
                 "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
                 (session.get("admin_username", "admin"), target_type, target_value, clean_subject, clean_body[:200], len(recipients))
             )
-            broadcast_id = cur.fetchone()[0]
+            cur.fetchone()
 
             for email, name in recipients:
                 cur.execute(
