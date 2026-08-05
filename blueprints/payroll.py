@@ -1451,4 +1451,59 @@ def payroll_settings():
                            )
 
 
+# ---------------- TAX & FORM 16 / W-2 GENERATOR ----------------
+@payroll_bp.route("/download_tax_statement/<emp_id>/<int:year>")
+@employee_required
+def download_tax_statement(emp_id, year):
+    """Generate executive Tax & Form 16 / W-2 annual statement."""
+    session_emp = session.get("employee_id")
+    if session_emp != emp_id and session.get("admin_role") != "admin":
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 403
+
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute("SELECT name, email, role, department FROM employees WHERE employee_id=%s", (emp_id,))
+    emp = cur.fetchone()
+    cur.execute("SELECT COALESCE(monthly_ctc, 0) FROM salary_config WHERE employee_id=%s", (emp_id,))
+    row = cur.fetchone()
+    ctc = float(row[0]) if row else 0.0
+    cur.close()
+    db.close()
+
+    annual_gross = ctc * 12
+    tds = round(annual_gross * 0.05, 2)
+    pf = round(annual_gross * 0.12, 2)
+    net_taxable = round(annual_gross - pf, 2)
+
+    html_content = f"""
+    <!doctype html>
+    <html>
+    <head>
+      <title>Form 16 / Tax Statement - {year}</title>
+      <style>
+        body {{ font-family: Arial, sans-serif; padding: 30px; color: #0f172a; }}
+        .header {{ border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px; }}
+        .box {{ background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 16px; }}
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h2>ANNUAL TAX & FORM 16 / W-2 STATEMENT ({year})</h2>
+        <p>Employee: <strong>{emp[0] if emp else emp_id}</strong> ({emp_id})</p>
+      </div>
+      <div class="box">
+        <h3>Earnings & Deductions Summary</h3>
+        <p>• Annual Gross CTC: ${annual_gross:,.2f}</p>
+        <p>• Provident Fund (PF) Contribution: ${pf:,.2f}</p>
+        <p>• Net Taxable Income: ${net_taxable:,.2f}</p>
+        <p>• Estimated Tax Deducted (TDS): ${tds:,.2f}</p>
+      </div>
+      <p style="font-size:12px; color:#64748b;">This statement is digitally generated for tax filing compliance.</p>
+    </body>
+    </html>
+    """
+    return html_content, 200, {"Content-Type": "text/html"}
+
+
+
 # ---------------- API: SHIFTS (JSON) ----------------

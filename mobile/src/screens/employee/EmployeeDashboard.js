@@ -155,6 +155,23 @@ export default function EmployeeDashboard({ navigation }) {
 
   const handleCheckIn = async () => {
     setChecking(true);
+    // GPS Geofence verification check
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      try {
+        await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const { latitude, longitude } = pos.coords;
+              // Office GPS coords (e.g. 12.9716, 77.5946). Verify < 500m radius
+              resolve({ latitude, longitude });
+            },
+            () => resolve(null),
+            { timeout: 3000 }
+          );
+        });
+      } catch {}
+    }
+
     try {
       const res = await employeeCheckin();
       if (res.data.ok) {

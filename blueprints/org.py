@@ -278,3 +278,28 @@ def api_create_org():
     except Exception as global_exc:
         app_log.error("api_create_org global exception: %s", global_exc)
         return jsonify({"ok": False, "msg": f"Server error: {global_exc}"}), 500
+
+
+# ── Super Admin Command Center ────────────────────────────────────────────────
+@org_bp.route("/superadmin")
+def superadmin_dashboard():
+    """Global Super Admin Command Center for tenant and subscription management."""
+    if session.get("admin_role") != "superadmin":
+        flash("Super Admin access required.", "error")
+        return redirect("/admin_login")
+
+    from database import get_db_connection
+    db = get_db_connection()
+    cur = db.cursor()
+    cur.execute("""
+        SELECT a.username, a.email, COALESCE(a.plan, 'basic'), COALESCE(c.company_name, 'Main Org'), a.created_at
+        FROM admin_users a
+        LEFT JOIN company_settings c ON 1=1
+        ORDER BY a.created_at DESC
+    """)
+    tenants = cur.fetchall()
+    cur.close()
+    db.close()
+
+    return render_template("superadmin_dashboard.html", tenants=tenants, total_tenants=len(tenants))
+
