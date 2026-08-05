@@ -240,6 +240,8 @@ def admin_login():
             ensure_session_id(session)
             if admin_row[2]:
                 notify_if_new_login_ip(identifier, "admin", request.remote_addr, identifier, admin_row[2])
+            if admin_row[1] == "superadmin":
+                return redirect("/superadmin")
             return redirect("/admin")
         # Try employee credentials
         with _db() as (cursor, db):
