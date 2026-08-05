@@ -124,6 +124,14 @@
   <a class="nav-item {{ 'active' if active_nav == 'compliance' }}" href="/compliance">
     <span class="nav-icon"><i class="ti ti-shield-check"></i></span>Compliance &amp; Security
   </a>
+  {% if session.get('admin_role') == 'superadmin' %}
+  <a class="nav-item" href="/superadmin" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;">
+    <span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal
+  </a>
+  {% endif %}
+  <a class="nav-item" href="/download_tax_statement/EMP-1001/2026" target="_blank">
+    <span class="nav-icon"><i class="ti ti-file-text"></i></span>Tax Form 16 / W-2
+  </a>
   <a class="nav-item {{ 'active' if active_nav == 'admin_tools' }}" href="/admin_tools">
     <span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools
   </a>
