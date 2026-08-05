@@ -224,7 +224,6 @@ def create_tenant_schema(schema_name: str):
     """
     if not re.match(r'^[a-zA-Z0-9_]+$', schema_name):
         raise ValueError(f"Invalid tenant schema name: {schema_name!r}")
-    global _pool
     if _pool is None:
         _create_pool()
     conn = _pool.getconn()

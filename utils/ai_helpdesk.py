@@ -4,7 +4,6 @@ Answers employee inquiries regarding leave policies, health benefits, and payrol
 and provides automatic escalation to HR support tickets when queries are unresolved.
 """
 import os
-import re
 import json
 import urllib.request
 import urllib.error

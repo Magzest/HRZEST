@@ -8,9 +8,7 @@ Enforces:
 import time
 from functools import wraps
 from flask import session, redirect, request, jsonify
-from utils.auth import _db
-from utils.totp import verify_totp_code
-from extensions import app_log, log_security_event
+from extensions import log_security_event
 
 _STEP_UP_VALIDITY_SECONDS = 900  # 15 minutes validity for step-up verification
 

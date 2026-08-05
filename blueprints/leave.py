@@ -836,9 +836,30 @@ def bulk_leave_action():
     return redirect("/leave_holidays?tab=leaves")
 
 
-@leave_bp.route("/api/holidays", methods=["GET"])
+@leave_bp.route("/api/holidays", methods=["GET", "POST"])
 @api_required
 def api_holidays():
+    if request.method == "POST":
+        data = request.get_json() or {}
+        date = data.get("date")
+        name = data.get("name")
+        if not date or not name:
+            return jsonify({"ok": False, "msg": "date and name required"}), 400
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        try:
+            cursor.execute("INSERT INTO holidays (date, name) VALUES (%s,%s)", (date, name))
+            db.commit()
+        except Exception:
+            app_log.error("API holiday insert failed", exc_info=True)
+            db.rollback()
+            cursor.close()
+            db.close()
+            return jsonify({"ok": False, "msg": "Failed to add holiday. Check for duplicate dates."}), 400
+        cursor.close()
+        db.close()
+        return jsonify({"ok": True})
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT date, name FROM holidays ORDER BY date")
@@ -846,6 +867,7 @@ def api_holidays():
     cursor.close()
     db.close()
     return jsonify({"ok": True, "holidays": [{"date": str(r[0]), "name": r[1]} for r in rows]})
+
 
 
 

@@ -8,7 +8,7 @@ values are always %s-bound params.
 import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
-from utils.auth import admin_required, employee_required, api_required
+from utils.auth import admin_required, employee_required
 from utils.helpers import co_scope_column, _db
 from extensions import limiter
 

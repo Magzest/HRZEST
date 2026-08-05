@@ -1,12 +1,11 @@
 """Blueprint for Dedicated SecOps & SP Admin Portal with MFA, SIEM Log Engine & Threat Telemetry."""
 
 import time
-import re
 import os
 import secrets
 import datetime
 import ipaddress
-from flask import Blueprint, request, jsonify, render_template, session, redirect, url_for, abort, g, flash
+from flask import Blueprint, request, jsonify, render_template, session, redirect, abort, g, flash
 from database import get_db_connection, pool_stats, transaction
 from utils.security_logs import (
     fetch_threat_logs,
@@ -18,10 +17,9 @@ from utils.security_logs import (
 )
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
-    SOC_ANALYST_ROLE, soc_step_up_valid, soc_step_up_refresh, soc_step_up_clear,
+    SOC_ANALYST_ROLE, soc_step_up_valid, soc_step_up_refresh,
     turnstile_enabled,
 )
-from utils.helpers import get_co_features, _upsert_co_feature
 from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
 from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email

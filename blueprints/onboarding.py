@@ -4,7 +4,7 @@ import hashlib
 import html as _html
 import secrets
 import psycopg2
-from flask import Blueprint, request, session, redirect, render_template, flash
+from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, employee_required, api_required

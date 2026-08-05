@@ -8,12 +8,10 @@ Provides routes for broadcasting emails to:
 Out-of-band delivery is handled via the asynchronous DB-backed email queue,
 returning an immediate HTTP 202 Queue Confirmation response (<50ms).
 """
-import re
 import html
-from flask import Blueprint, request, jsonify, render_template, session
+from flask import Blueprint, request, jsonify, session
 from database import get_db_connection, transaction
-from utils.auth import _db
-from utils.email_utils import send_email_async, get_email_config
+from utils.email_utils import get_email_config
 from extensions import app_log, log_security_event, limiter
 
 email_blast_bp = Blueprint("email_blast", __name__)

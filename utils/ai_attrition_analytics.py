@@ -3,9 +3,7 @@
 Parses employee attendance logs, overtime metrics, and performance scores
 to calculate burnout risk indicators and predict turnover trends.
 """
-import datetime
 from database import get_db_connection
-from extensions import app_log
 
 
 def compute_attrition_and_burnout_analytics(company_id=None):

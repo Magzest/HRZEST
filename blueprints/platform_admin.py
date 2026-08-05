@@ -21,7 +21,7 @@ from flask import Blueprint, request, session, redirect, render_template, flash
 
 from database import get_master_db, get_tenant_db
 from extensions import app_log, log_security_event, limiter
-from utils.auth import generate_password_hash, check_password_hash
+from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
 from utils.plan_limits import PLAN_TIERS
 

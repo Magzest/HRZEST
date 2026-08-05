@@ -4,7 +4,7 @@ import time
 import os
 import json
 import socket
-from database import get_db_connection, transaction
+from database import get_db_connection
 from extensions import app_log
 
 _SERVER_START_TIME = time.time()
@@ -691,7 +691,6 @@ def get_malware_analysis_telemetry():
         for root, _, files in os.walk(upload_dir):
             for f in files:
                 scanned_count += 1
-                filepath = os.path.join(root, f)
                 ext = os.path.splitext(f)[1].lower()
                 if ext in (".exe", ".sh", ".php", ".py", ".elf", ".bat"):
                     suspicious_found += 1

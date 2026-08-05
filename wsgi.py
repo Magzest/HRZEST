@@ -170,7 +170,6 @@ except Exception as _sch_err:
 application = app   # gunicorn / uWSGI entry point
 
 if __name__ == "__main__":
-    import os as _os
     _cert = _os.environ.get("SSL_CERT_PATH") or _os.path.join(_os.path.dirname(__file__), "cert.pem")
     _key = _os.environ.get("SSL_KEY_PATH") or _os.path.join(_os.path.dirname(__file__), "key.pem")
     if _os.path.exists(_cert) and _os.path.exists(_key):
