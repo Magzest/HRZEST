@@ -140,9 +140,6 @@ def decrypt_pii_date(value):
         return None
 
 
-# ── Token hashing ─────────────────────────────────────────────────────────────
-def _hash_token(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
 
 
 # ── DB context manager ────────────────────────────────────────────────────────
