@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -1119,8 +1119,7 @@
             return;
           }
           const opts = await optR.json();
-          console.log("Enrolment options:", JSON.stringify(opts));
-          console.log("RP ID from server:", opts.rp && opts.rp.id, "| Browser origin:", window.location.origin);
+
           if (opts.ok === false) {
             $("fpHint").textContent = "❌ " + (opts.msg || "Could not start enrolment.");
             $("fpHint").style.color = "#f59e0b";
@@ -1149,7 +1148,7 @@
 
           $("fpHint").textContent = "⏳ Saving your fingerprint…";
           const credJson = regCredToJSON(cred);
-          console.log("Sending credential type:", credJson.type, "id length:", (credJson.id || "").length);
+
           const regR = await fetch("/api/employee/webauthn-register-kiosk", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
