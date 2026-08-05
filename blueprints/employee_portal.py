@@ -833,10 +833,24 @@ def api_employee_change_password():
 
 
 @employee_portal_bp.route("/api/employee/portal", methods=["GET"])
-@employee_api_required
 def api_employee_portal():
     from flask import g as _g
-    emp_id = _g.api_emp_id
+    emp_id = session.get("employee_id") or getattr(_g, "api_emp_id", None)
+    if not emp_id:
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Bearer "):
+            from utils.auth import _hash_token
+            token_hash = _hash_token(auth[7:])
+            with _db() as (cursor, _conn):
+                cursor.execute(
+                    "SELECT identity FROM api_tokens WHERE token=%s AND token_type='employee' AND expires_at > NOW()",
+                    (token_hash,)
+                )
+                row = cursor.fetchone()
+                if row: emp_id = row[0]
+    if not emp_id:
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     today = datetime.date.today()
