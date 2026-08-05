@@ -477,35 +477,35 @@
 
       <!-- STAT CARDS -->
       <div class="stats">
-        <a class="stat-card" href="/employees">
+        <a class="stat-card cyber-glass card-3d" href="/employees">
           <div class="stat-icon si-blue"><i class="ti ti-users" style="color:#2563eb"></i></div>
           <div>
             <div class="stat-num sn-blue" id="statTotal">{{ total }}</div>
             <div class="stat-lbl">Total Employees</div>
           </div>
         </a>
-        <a class="stat-card" href="/today_present">
+        <a class="stat-card cyber-glass card-3d" href="/today_present">
           <div class="stat-icon si-green"><i class="ti ti-check" style="color:#16a34a"></i></div>
           <div>
             <div class="stat-num sn-green" id="statPresent">{{ present }}</div>
             <div class="stat-lbl">Present Today</div>
           </div>
         </a>
-        <a class="stat-card" href="/today_absent">
+        <a class="stat-card cyber-glass card-3d" href="/today_absent">
           <div class="stat-icon si-red"><i class="ti ti-x" style="color:#dc2626"></i></div>
           <div>
             <div class="stat-num sn-red" id="statAbsent">{{ absent }}</div>
             <div class="stat-lbl">Absent Today</div>
           </div>
         </a>
-        <a class="stat-card" href="/today_late">
+        <a class="stat-card cyber-glass card-3d" href="/today_late">
           <div class="stat-icon si-yellow"><i class="ti ti-alert-triangle" style="color:#d97706"></i></div>
           <div>
             <div class="stat-num sn-yellow" id="statLate">{{ late }}</div>
             <div class="stat-lbl">Late Logins</div>
           </div>
         </a>
-        <a class="stat-card" href="/overtime" style="border-color:{% if pending_ot|default(0) > 0 %}#fca5a5{% endif %};">
+        <a class="stat-card cyber-glass card-3d" href="/overtime" style="border-color:{% if pending_ot|default(0) > 0 %}#fca5a5{% endif %};">
           <div class="stat-icon u-bg-fff7ed"><i class="ti ti-clock-bolt u-fs-24 u-c-ea580c"></i></div>
           <div>
             <div class="stat-num u-c-ea580c">{{ pending_ot|default(0) }}</div>
