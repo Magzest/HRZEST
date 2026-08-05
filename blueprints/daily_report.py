@@ -238,7 +238,44 @@ def _run_report():
     app_log.info(f"daily_report: done — sent to {len(admin_emails)} admins (plan={plan})")
 
 
-# ── Manual trigger route (for testing) ──────────────────────────────────────
+def send_weekly_employee_digests():
+    """Generates and sends weekly personal attendance summary digests to employees."""
+    with _report_lock:
+        app_log.info("weekly_digest: starting employee digest run")
+        try:
+            db = get_db_connection()
+            cursor = db.cursor(buffered=True)
+            cursor.execute("SELECT employee_id, name, email FROM employees WHERE is_active=1 AND email IS NOT NULL AND email != ''")
+            employees = cursor.fetchall()
+            cursor.close()
+            db.close()
+
+            cfg = get_email_config()
+            if not cfg or not cfg.get("host"):
+                app_log.warning("weekly_digest: SMTP not configured, skipping send")
+                return
+
+            for emp in employees:
+                emp_id, emp_name, emp_email = emp
+                subject = f"✨ Your Weekly Attendance Summary — {emp_name}"
+                html = f"""
+                <div style="font-family:sans-serif;max-width:550px;margin:20px auto;background:#fff;padding:24px;border-radius:12px;border:1px solid #e2e8f0;">
+                  <h2 style="color:#1e3a8a;margin-top:0;">Weekly Digest for {emp_name}</h2>
+                  <p style="color:#475569;font-size:14px;">Here is your weekly attendance and leave balance update.</p>
+                  <div style="background:#f8fafc;padding:16px;border-radius:8px;margin:16px 0;">
+                    <strong>Employee ID:</strong> {emp_id}<br>
+                    <strong>Status:</strong> Active &amp; Up-to-date
+                  </div>
+                  <p style="font-size:13px;color:#64748b;">Log into your <a href="http://localhost:5000/employee_portal" style="color:#3b82f6;">Employee Portal</a> to view detailed payslips and apply for leave.</p>
+                </div>
+                """
+                send_email_async(emp_email, subject, html, cfg)
+            app_log.info(f"weekly_digest: sent to {len(employees)} active employees")
+        except Exception as err:
+            app_log.error("weekly_digest error: %s", err)
+
+
+# ── Manual trigger routes (for testing) ──────────────────────────────────────
 
 @daily_report_bp.route("/api/admin/trigger_daily_report", methods=["POST"])
 @admin_required
@@ -251,3 +288,14 @@ def trigger_daily_report():
     t = threading.Thread(target=generate_and_send_daily_report, daemon=True)
     t.start()
     return jsonify({"ok": True, "msg": "Daily report generation started. Check admin email shortly."})
+
+
+@daily_report_bp.route("/api/admin/trigger_weekly_digest", methods=["POST"])
+@admin_required
+def trigger_weekly_digest():
+    """Triggers the weekly employee email digest."""
+    from flask import jsonify
+    t = threading.Thread(target=send_weekly_employee_digests, daemon=True)
+    t.start()
+    return jsonify({"ok": True, "msg": "Weekly employee digest generation started."})
+

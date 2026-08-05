@@ -3,7 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <!-- Redirect raw-IP loopback → localhost so WebAuthn rpId matches origin -->
-    <script>if(location.hostname==="127.0.0.1"||location.hostname==="::1"){location.replace(location.href.replace(location.hostname,"localhost"));}</script>
+    <script>
+      (function(){
+        var s = localStorage.getItem('dm');
+        if(s === '1' || (s === null && window.matchMedia('(prefers-color-scheme: dark)').matches)){
+          document.documentElement.classList.add('dark-mode');
+          document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('dark-mode'); });
+        }
+      })();
+      if(location.hostname==="127.0.0.1"||location.hostname==="::1"){location.replace(location.href.replace(location.hostname,"localhost"));}
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Portal — {{ emp[1] }}</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />

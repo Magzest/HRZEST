@@ -61,10 +61,34 @@
         <label for="f-date-to">To</label>
         <input type="date" id="f-date-to" name="date_to" value="{{ date_to }}" placeholder="YYYY-MM-DD">
       </div>
-      <div>
+      <div style="display:flex;gap:8px;">
         <button type="submit" class="btn">Filter</button>
+        <button type="button" class="btn" onclick="exportAuditCsv()" style="background:#15803d;"><i class="ti ti-download"></i> CSV</button>
       </div>
     </form>
+
+    <script>
+      function exportAuditCsv() {
+        const rows = document.querySelectorAll('table tr');
+        let csv = [];
+        rows.forEach(r => {
+          let cols = r.querySelectorAll('th, td');
+          let rowData = [];
+          cols.forEach(c => {
+            let txt = c.innerText.replace(/"/g, '""').trim();
+            rowData.push('"' + txt + '"');
+          });
+          if (rowData.length > 0) csv.push(rowData.join(','));
+        });
+        const blob = new Blob([csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `audit_logs_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    </script>
 
     <table>
       <thead>
