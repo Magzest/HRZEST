@@ -364,10 +364,13 @@ def get_company_settings():
         cursor = db.cursor(buffered=True)
         cursor.execute("SELECT * FROM company_settings LIMIT 1")
         row = cursor.fetchone()
-        
-        # Get column names from cursor description
-        cols = [desc[0].lower() for desc in cursor.description] if cursor.description else []
-        row_dict = dict(zip(cols, row)) if (row and cols) else {}
+        row_dict = {}
+        if row:
+            if hasattr(row, "keys"):
+                row_dict = {k.lower(): row[k] for k in row.keys()}
+            elif cursor.description:
+                cols = [desc[0].lower() for desc in cursor.description]
+                row_dict = dict(zip(cols, row))
         cursor.close()
         db.close()
         

@@ -144,6 +144,13 @@ class _SqliteCursor:
         except Exception:
             return []
 
+    @property
+    def description(self):
+        return self._cur.description
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
     def close(self):
         try:
             self._cur.close()
