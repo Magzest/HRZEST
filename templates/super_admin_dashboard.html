@@ -86,6 +86,30 @@
         background: var(--primary); border: none; color: white; padding: 10px 20px;
         border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
       }
+      .plan-details-card { margin-bottom: 20px; }
+      .plan-details-card > h2 {
+        font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px;
+        margin-bottom: 16px;
+      }
+      .plan-details-card > h2 i { color: var(--primary); }
+      .plan-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+      .plan-tile {
+        border: 1px solid var(--border-color); border-radius: 12px; padding: 16px;
+        background: rgba(255,255,255,0.02);
+      }
+      .plan-tile.tier-starter { border-top: 3px solid #22c55e; }
+      .plan-tile.tier-growth { border-top: 3px solid #3b82f6; }
+      .plan-tile.tier-enterprise { border-top: 3px solid #a855f7; }
+      .plan-tile .plan-tile-name { font-size: 15px; font-weight: 800; margin-bottom: 2px; }
+      .plan-tile .plan-tile-price { font-size: 20px; font-weight: 800; color: var(--text-bright); margin-bottom: 2px; }
+      .plan-tile .plan-tile-price small { font-size: 11px; font-weight: 600; color: var(--text-dim); }
+      .plan-tile .plan-tile-metered { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+      .plan-tile .plan-tile-limit { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+      .plan-tile ul { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+      .plan-tile li { font-size: 12px; display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+      .plan-tile li.included { color: var(--text-bright); }
+      .plan-tile li i.ti-check { color: var(--success); }
+      .plan-tile li i.ti-x { color: var(--text-dim); }
     </style>
   </head>
   <body>
@@ -110,6 +134,34 @@
         </div>
         {% endfor %}
       {% endwith %}
+
+      <div class="card plan-details-card">
+        <h2><i class="ti ti-list-details"></i> Plan tiers at a glance</h2>
+        <div class="plan-details-grid">
+          {% for key, tier in plan_tiers.items() %}
+          <div class="plan-tile tier-{{ key }}">
+            <div class="plan-tile-name">{{ tier.display_name }}</div>
+            <div class="plan-tile-price">{{ tier.base_price_paise | plan_price }}<small>/mo</small></div>
+            {% if tier.employee_band %}
+            <div class="plan-tile-metered">+ {{ tier.per_employee_paise | plan_price }}/employee beyond {{ tier.employee_band }}</div>
+            {% else %}
+            <div class="plan-tile-metered">Flat price, no per-employee metering</div>
+            {% endif %}
+            <div class="plan-tile-limit">
+              <i class="ti ti-users"></i>
+              {% if tier.employee_limit %}Up to {{ tier.employee_limit }} employees{% else %}Unlimited employees{% endif %}
+            </div>
+            <ul>
+              {% for fkey, flabel in feature_labels.items() %}
+              <li class="{{ 'included' if fkey in tier.features else '' }}">
+                <i class="ti {{ 'ti-check' if fkey in tier.features else 'ti-x' }}"></i> {{ flabel }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
 
       <details class="new-co card" id="newCoPanel">
         <summary><strong><i class="ti ti-building-plus"></i> Create a new company</strong></summary>

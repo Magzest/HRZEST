@@ -22,6 +22,7 @@ from utils.auth import (
 )
 from utils.helpers import get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
+from utils.plan_limits import check_feature_allowed
 from utils.session_risk import ensure_session_id
 from utils.totp import verify_totp_code, send_mfa_login_email, mark_totp_enabled
 from utils.face_utils import verify_uploaded_face
@@ -1103,6 +1104,9 @@ def api_mobile_biometric_nonce():
     """Mobile app calls this (with its employee Bearer token) right before
     prompting the device's local biometric/PIN check. The returned nonce
     must be echoed back to /mobile-biometric-attest within 60s."""
+    allowed, _msg = check_feature_allowed(g.tenant_db, "mobile_app")
+    if not allowed:
+        return jsonify({"ok": False, "msg": "Mobile app access requires the Prime plan."}), 403
     nonce = _mobile_biometric_issue_nonce(g.api_emp_id)
     return jsonify({"ok": True, "nonce": nonce})
 
@@ -1115,6 +1119,9 @@ def api_mobile_biometric_attest():
     LocalAuthentication.authenticateAsync(), turning that local-only signal
     into a server-side, employee-bound, single-use, time-boxed proof that
     /api/employee/qr-face-checkin will accept for fingerprint combos."""
+    allowed, _msg = check_feature_allowed(g.tenant_db, "mobile_app")
+    if not allowed:
+        return jsonify({"ok": False, "msg": "Mobile app access requires the Prime plan."}), 403
     data = request.get_json(force=True, silent=True) or {}
     nonce = (data.get("nonce") or "").strip()
     ok, err = _mobile_biometric_attest(g.api_emp_id, nonce)

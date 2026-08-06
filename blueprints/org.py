@@ -171,6 +171,51 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
         return False
 
 
+def send_payment_confirmation_email(admin_email, company_name, portal_url, set_password_url,
+                                     plan_display_name, amount_paise, razorpay_payment_id):
+    """Post-payment welcome email for the paid /create_org flow
+    (blueprints/billing.py's verify_payment). Like send_portal_ready_email,
+    never includes a plaintext password -- instead links to a one-time
+    "set your password" reset-token URL, plus a payment receipt summary.
+    Never raises; billing.py doesn't gate the API response on this
+    succeeding, same best-effort contract as send_portal_ready_email."""
+    try:
+        email_cfg = get_email_config()
+        if not email_cfg:
+            return False
+        from utils.plan_limits import format_price_inr
+        import datetime as _dt
+        amount_display = format_price_inr(amount_paise)
+        paid_on = _dt.datetime.now().strftime("%d %b %Y")
+        html_body = f"""
+<div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
+  <div style="background:#1e3a8a;padding:24px 28px;color:white;">
+    <div style="font-size:20px;font-weight:700;">Payment received — your HRMS portal is ready</div>
+    <div style="font-size:13px;opacity:0.75;margin-top:4px;">{company_name}</div>
+  </div>
+  <div style="padding:28px;">
+    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRMS portal has been created.</p>
+    <a href="{set_password_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
+      Set Your Password &amp; Sign In
+    </a>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">This link expires in 1 hour. Or copy it: {set_password_url}</p>
+    <div style="background:#f1f5f9;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">Payment Receipt</div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Plan</span><strong>{plan_display_name}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Amount Paid</span><strong>{amount_display}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Date</span><strong>{paid_on}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;"><span>Payment ID</span><strong>{razorpay_payment_id}</strong></div>
+    </div>
+    <p style="font-size:12px;color:#94a3b8;">Your portal: {portal_url}</p>
+  </div>
+</div>"""
+        send_email_async(admin_email, f"Payment confirmed — set up your HRMS portal for {company_name}", html_body, email_cfg)
+        return True
+    except Exception as exc:
+        app_log.error("send_payment_confirmation_email failed: %s", exc)
+        return False
+
+
 @org_bp.route("/get-started", methods=["GET"])
 def get_started_page():
     """Public entry point for the SaaS product: 'login to your existing
@@ -200,6 +245,22 @@ def create_org_page():
 
 @org_bp.route("/create_org", methods=["POST"])
 def create_org():
+    """Direct-POST provisioning path. templates/create_org.html's JS no
+    longer submits here directly when Razorpay is configured (it goes
+    through blueprints/billing.py's create_order/verify_payment instead,
+    and no longer collects a password at all) -- but this route stays live
+    as a free fallback whenever RAZORPAY_KEY_ID/SECRET aren't set (local
+    dev, CI, and every test fixture that provisions a real tenant via this
+    exact endpoint, e.g. tests/test_ip_ban.py's signup_enabled_org). Once
+    real Razorpay keys are configured, hitting this directly with a
+    crafted POST (bypassing payment) is rejected -- the JSON /api/create_org
+    endpoint below is unrelated (mobile app's own registration flow) and is
+    untouched either way."""
+    from utils.razorpay_utils import razorpay_configured
+    if razorpay_configured():
+        flash("Please use the signup form to complete payment and create your organisation.", "error")
+        return redirect("/create_org")
+
     # Signup has no prior-failure signal to key a captcha off (unlike
     # login's CAPTCHA_AFTER_ATTEMPTS) -- it's shown unconditionally
     # whenever Turnstile is configured, since this is the one endpoint
@@ -237,6 +298,19 @@ def create_org():
         admin_username=admin_username, admin_email=admin_email,
         portal_url=portal_url, email_sent=email_sent,
     )
+
+
+@org_bp.route("/org_payment_success", methods=["GET"])
+def org_payment_success():
+    """Landing page after templates/create_org.html's JS successfully
+    verifies payment (blueprints/billing.py's verify_payment) -- portal_url
+    and email are just for display, Jinja auto-escapes both so a tampered
+    query string can't inject anything, and no sensitive data (order ID,
+    amount) is exposed here since those already went out in the
+    confirmation email, not the URL."""
+    portal_url = request.args.get("portal_url", "")
+    email = request.args.get("email", "")
+    return render_template("org_payment_success.html", portal_url=portal_url, email=email)
 
 
 @org_bp.route("/api/create_org", methods=["POST"])

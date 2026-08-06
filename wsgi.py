@@ -104,6 +104,7 @@ from blueprints.email_blast import email_blast_bp
 from blueprints.compliance import compliance_bp
 from blueprints.hr_portal import hr_bp
 from blueprints.platform_admin import platform_admin_bp
+from blueprints.billing import billing_bp
 
 app.register_blueprint(health_bp)
 app.register_blueprint(notifications_bp)
@@ -126,6 +127,7 @@ app.register_blueprint(email_blast_bp)
 app.register_blueprint(compliance_bp)
 app.register_blueprint(hr_bp)
 app.register_blueprint(platform_admin_bp)
+app.register_blueprint(billing_bp)
 
 from blueprints.daily_report import daily_report_bp
 app.register_blueprint(daily_report_bp)

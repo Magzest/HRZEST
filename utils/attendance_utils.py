@@ -160,3 +160,90 @@ def fetch_holidays_set(year, month):
 def get_billable_past_days(year, month):
     today = datetime.date.today()
     return [d for d in get_working_days(year, month) if d <= today]
+
+
+# ── Attendance lockout (Medium/Prime plans only) ────────────────────────────
+# Mirrors utils/auth.py's _check_login_lockout/_record_login_failure/
+# _clear_login_failures pattern, keyed by (employee_id, date) instead of
+# (identifier, attempt_type) and backed by its own attendance_lockouts
+# table rather than the attendance table itself -- a row in `attendance`
+# for a given (employee_id, date) doesn't exist until the FIRST SUCCESSFUL
+# check-in (see blueprints/attendance.py's attendance() route), so a failed
+# attempt has nowhere to persist on that table. Written synchronously (no
+# async_writer queue like the login-lockout path) since attendance check-in
+# isn't brute-forced at login-brute-force scale and this already runs
+# inside the check-in request handler.
+ATTENDANCE_LOCKOUT_MAX_ATTEMPTS = 4
+
+
+def check_attendance_lockout(employee_id, date):
+    """Returns (locked: bool, reason: str)."""
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute(
+            "SELECT locked, lock_reason FROM attendance_lockouts WHERE employee_id=%s AND date=%s",
+            (employee_id, date)
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        db.close()
+        if row and row[0]:
+            return True, row[1] or "Attendance marking is locked for today. Contact your admin."
+    except Exception:
+        pass
+    return False, ""
+
+
+def record_attendance_failure(employee_id, date, reason):
+    """Called on every failed kiosk check-in attempt (face mismatch,
+    fingerprint verify failure) for a Medium/Prime tenant. At
+    ATTENDANCE_LOCKOUT_MAX_ATTEMPTS, locks online attendance for that
+    employee/date -- only an admin can mark it after that (correct_attendance/
+    bulk_mark_attendance, which also clear the lock on a successful write)."""
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute(
+            "INSERT INTO attendance_lockouts (employee_id, date, failed_count) "
+            "VALUES (%s, %s, 1) "
+            "ON CONFLICT (employee_id, date) DO UPDATE SET "
+            "failed_count=attendance_lockouts.failed_count+1",
+            (employee_id, date)
+        )
+        db.commit()
+        cursor.execute(
+            "SELECT failed_count FROM attendance_lockouts WHERE employee_id=%s AND date=%s",
+            (employee_id, date)
+        )
+        row = cursor.fetchone()
+        if row and row[0] >= ATTENDANCE_LOCKOUT_MAX_ATTEMPTS:
+            cursor.execute(
+                "UPDATE attendance_lockouts SET locked=1, lock_reason=%s, locked_at=NOW() "
+                "WHERE employee_id=%s AND date=%s",
+                (reason, employee_id, date)
+            )
+            db.commit()
+        cursor.close()
+        db.close()
+    except Exception:
+        pass
+
+
+def clear_attendance_lockout(employee_id, date, admin_username=None):
+    """Called after an admin manually marks attendance for that day
+    (correct_attendance/bulk_mark_attendance) -- marking attendance IS the
+    unlock action, no separate unlock UI needed."""
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute(
+            "UPDATE attendance_lockouts SET locked=0, unlocked_by=%s "
+            "WHERE employee_id=%s AND date=%s",
+            (admin_username, employee_id, date)
+        )
+        db.commit()
+        cursor.close()
+        db.close()
+    except Exception:
+        pass
