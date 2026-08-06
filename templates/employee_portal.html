@@ -2873,7 +2873,7 @@
               });
               if (saveR.status === 401) {
                 showMsg('&#9888; Session expired — please log in again.', true);
-                setTimeout(() => { window.location.href = '/employee_login'; }, 2000);
+                setTimeout(() => { window.location.href = '/login'; }, 2000);
                 return;
               }
               const saved = await saveR.json();
@@ -4552,7 +4552,7 @@
                   'padding:24px;"><div><h1>Access Blocked</h1><p>' +
                   'Your device failed a network security check and this session has been ended.' +
                   '<br>Please resolve the issue and log in again.</p></div></div>';
-                setTimeout(function() { window.location.href = '/employee_login'; }, 4000);
+                setTimeout(function() { window.location.href = '/login'; }, 4000);
               } else {
                 _pollTimer = setTimeout(poll, POLL_MS);
               }

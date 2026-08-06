@@ -160,24 +160,6 @@ def add_shift():
     return redirect(dest)
 
 
-@attendance_bp.route("/delete_shift", methods=["POST"])
-@admin_required
-def delete_shift_form():
-    sid = request.form.get("shift_id", "").strip()
-    dest = request.form.get("redirect") or "/settings?tab=shifts"
-    if not sid:
-        return redirect(dest)
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("UPDATE employees SET shift_id=NULL WHERE shift_id=%s", (sid,))
-    cursor.execute("UPDATE break_config SET shift_id=NULL WHERE shift_id=%s", (sid,))
-    cursor.execute("DELETE FROM shifts WHERE id=%s", (sid,))
-    db.commit()
-    cursor.close()
-    db.close()
-    return redirect(dest)
-
-
 @attendance_bp.route("/delete_shift/<int:sid>", methods=["POST"])
 @admin_required
 def delete_shift(sid):
@@ -193,15 +175,9 @@ def delete_shift(sid):
     return redirect(dest)
 
 
-@attendance_bp.route("/edit_shift", methods=["POST"])
 @attendance_bp.route("/edit_shift/<int:sid>", methods=["POST"])
 @admin_required
-def edit_shift(sid=None):
-    if sid is None:
-        try:
-            sid = int(request.form.get("shift_id", ""))
-        except (ValueError, TypeError):
-            return redirect("/employees?tab=schedule")
+def edit_shift(sid):
     name = (request.form.get("shift_name") or request.form.get("name", "")).strip()
     start = request.form.get("start_time", "").strip()
     half = request.form.get("half_time", "").strip()
@@ -520,15 +496,9 @@ def update_break(bid):
     return redirect(dest)
 
 
-@attendance_bp.route("/delete_break", methods=["POST"])
 @attendance_bp.route("/delete_break/<int:bid>", methods=["POST"])
 @admin_required
-def delete_break(bid=None):
-    if bid is None:
-        try:
-            bid = int(request.form.get("break_id", ""))
-        except (ValueError, TypeError):
-            return redirect("/employees?tab=schedule")
+def delete_break(bid):
     dest = request.form.get("redirect") or "/employees?tab=schedule"
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
