@@ -1,0 +1,48 @@
+# Never include local dev/env files
+.env
+.env.local
+*.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Dev tools
+.venv/
+venv/
+node_modules/
+
+# Local secrets / certs
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+
+# Logs and uploads (should be in volumes)
+logs/
+dataset/
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test artifacts
+tests/__pycache__/
+htmlcov/
+.coverage
+
+# macOS
+.DS_Store

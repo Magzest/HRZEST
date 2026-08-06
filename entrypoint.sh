@@ -1,21 +1,49 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-echo "🚀 Starting Employee Attendance Platform Container..."
+echo "🚀 Starting HRMS Attendance Platform..."
 
-# Wait for PostgreSQL to be ready if DB_HOST is set
-if [ -n "$DB_HOST" ]; then
-    echo "⏳ Waiting for PostgreSQL at $DB_HOST:$DB_PORT..."
-    while ! curl -s http://$DB_HOST:${DB_PORT:-5432} > /dev/null 2>&1 && ! nc -z $DB_HOST ${DB_PORT:-5432} 2>/dev/null; do
-        sleep 1
-    done
-    echo "✅ PostgreSQL is reachable!"
+# ── 1. Pre-flight: warn about unset critical variables ───────────────────────
+warn_missing() {
+  local var="$1"
+  if [ -z "${!var:-}" ]; then
+    echo "⚠️  WARNING: $var is not set — see .env.example for instructions"
+  fi
+}
+warn_missing SECRET_KEY
+warn_missing ENCRYPTION_KEY
+warn_missing APP_URL
+warn_missing SMTP_HOST
+
+# Fail hard if SECRET_KEY looks like the placeholder
+if [[ "${SECRET_KEY:-}" == "your_secret_key_here" || -z "${SECRET_KEY:-}" ]]; then
+  echo "❌ FATAL: SECRET_KEY is unset or still the placeholder value."
+  echo "   Run: python -c \"import secrets; print(secrets.token_hex(32))\""
+  echo "   Then set SECRET_KEY in your .env file."
+  exit 1
 fi
 
-# Run Database Schema Migration
-echo "📦 Running plan database migration..."
-python migrate_plans.py || true
+# ── 2. Wait for PostgreSQL ────────────────────────────────────────────────────
+if [ -n "${DB_HOST:-}" ]; then
+  DB_PORT="${DB_PORT:-5432}"
+  echo "⏳ Waiting for PostgreSQL at ${DB_HOST}:${DB_PORT}..."
+  MAX_TRIES=30
+  TRIES=0
+  until nc -z "$DB_HOST" "$DB_PORT" 2>/dev/null; do
+    TRIES=$((TRIES + 1))
+    if [ "$TRIES" -ge "$MAX_TRIES" ]; then
+      echo "❌ PostgreSQL not reachable after ${MAX_TRIES}s — aborting."
+      exit 1
+    fi
+    sleep 1
+  done
+  echo "✅ PostgreSQL is reachable!"
+fi
 
-# Start Gunicorn WSGI Server
-echo "🔥 Launching Gunicorn WSGI server on port 5000..."
-exec gunicorn --bind 0.0.0.0:5000 --workers 4 --threads 2 --timeout 120 wsgi:application
+# ── 3. Run database migrations ────────────────────────────────────────────────
+echo "📦 Running schema migrations..."
+python migrate_plans.py || { echo "⚠️  migrate_plans.py failed — continuing (may be first boot)"; }
+
+# ── 4. Start Gunicorn ─────────────────────────────────────────────────────────
+echo "🔥 Launching Gunicorn..."
+exec gunicorn -c gunicorn.conf.py wsgi:application
