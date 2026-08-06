@@ -2235,9 +2235,8 @@
     <div class="u-bg-fff u-br-20 u-p-28 u-w-100pct u-maxw-400 u-shad-0-20-60-rgba30b88226 u-pos-relative">
       <button class="u-pos-absolute u-top-14 u-rgt-16 u-bg-none u-bd-none u-fs-22 u-c-94a3b8 u-cur-pointer" onclick="closeModal('editBreakModal')">&#x2715;</button>
       <h3 class="u-fs-17 u-fw-800 u-c-0f172a u-mb-20 u-d-flex u-ai-center u-gap-8"><i class="ti ti-pencil u-c-f59e0b"></i> Edit Break</h3>
-      <form method="POST" action="/update_break">
+      <form method="POST" id="editBreakForm" action="/update_break/0">
         <input type="hidden" name="redirect" value="/employees?tab=schedule" />
-        <input type="hidden" name="break_id" id="editBreakId" />
         <div class="u-d-grid u-gap-12">
           <div>
             <label class="u-fs-10 u-fw-700 u-ttr-uppercase u-ls-d5 u-c-64748b u-d-block u-mb-4">Break Name</label>
@@ -2297,7 +2296,7 @@
     document.getElementById('editShiftModal').style.display = 'flex';
   }
   function openEditBreakModal(id, name, time, dur, active) {
-    document.getElementById('editBreakId').value    = id;
+    document.getElementById('editBreakForm').action = '/update_break/' + id;
     document.getElementById('editBreakName').value  = name;
     document.getElementById('editBreakTime').value  = time;
     document.getElementById('editBreakDur').value   = dur;

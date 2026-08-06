@@ -125,9 +125,6 @@ _COVERAGE_GATE_PCT = 80
 _MFA_OTP_TTL_SEC = 300  # 5 minutes
 
 
-@secops_bp.route("/secops/login")
-@secops_bp.route("/sp_admin")
-@secops_bp.route("/sp_admin/")
 @secops_bp.route("/sp_admin/login", methods=["GET", "POST"])
 @limiter.limit("10 per 15 minutes")
 def sp_admin_login():

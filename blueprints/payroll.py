@@ -1112,42 +1112,6 @@ def api_salary_report():
                     "year": year, "month": month})
 
 
-@payroll_bp.route("/api/email_config", methods=["GET"])
-@api_required
-def api_get_email_config():
-    cfg = get_email_config()
-    if cfg is None:
-        return jsonify({"ok": True, "config": None})
-    # Never return the SMTP password to clients — they only need to know config exists.
-    safe_cfg = {k: v for k, v in cfg.items() if k != "password"}
-    safe_cfg["password_set"] = bool(cfg.get("password"))
-    return jsonify({"ok": True, "config": safe_cfg})
-
-
-@payroll_bp.route("/api/email_config", methods=["POST"])
-@api_required
-def api_save_email_config():
-    data = request.get_json() or {}
-    host = data.get("smtp_host", "").strip()
-    port = int(data.get("smtp_port", 587))
-    user = data.get("smtp_user", "").strip()
-    password = data.get("smtp_pass", "").strip()
-    from_name = data.get("from_name", "HR Department").strip()
-    if not host or not user or not password:
-        return jsonify({"ok": False, "msg": "host, user and password required"}), 400
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("DELETE FROM email_config")
-    cursor.execute(
-        "INSERT INTO email_config (smtp_host, smtp_port, smtp_user, smtp_pass, from_name) VALUES (%s,%s,%s,%s,%s)",
-        (host, port, user, encrypt_pii(password), from_name)
-    )
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"ok": True})
-
-
 @payroll_bp.route("/api/send_salary_email", methods=["POST"])
 @api_required
 def api_send_salary_email():

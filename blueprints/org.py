@@ -307,26 +307,7 @@ def api_create_org():
         return jsonify({"ok": False, "msg": f"Server error: {global_exc}"}), 500
 
 
-# ── Super Admin Command Center ────────────────────────────────────────────────
+# /superadmin is superseded by /super_admin — redirect for backwards compat
 @org_bp.route("/superadmin")
-def superadmin_dashboard():
-    """Global Super Admin Command Center for tenant and subscription management."""
-    if session.get("admin_role") != "superadmin":
-        flash("Super Admin access required.", "error")
-        return redirect("/login")
-
-    from database import get_db_connection
-    db = get_db_connection()
-    cur = db.cursor()
-    cur.execute("""
-        SELECT a.username, a.email, COALESCE(a.plan, 'basic'), COALESCE(c.company_name, 'Main Org'), 'Active'
-        FROM admin_users a
-        LEFT JOIN company_settings c ON 1=1
-        ORDER BY a.username ASC
-    """)
-    tenants = cur.fetchall()
-    cur.close()
-    db.close()
-
-    return render_template("superadmin_dashboard.html", tenants=tenants, total_tenants=len(tenants))
-
+def superadmin_redirect():
+    return redirect("/super_admin/login")

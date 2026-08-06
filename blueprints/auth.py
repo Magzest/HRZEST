@@ -161,8 +161,6 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
-@auth_bp.route("/admin_login", methods=["GET", "POST"])
-@auth_bp.route("/employee_login", methods=["GET", "POST"])
 @limiter.limit("60 per 15 minutes")
 @limiter.limit("20 per minute")
 @limiter.limit("150 per hour")

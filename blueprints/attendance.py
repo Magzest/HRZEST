@@ -488,15 +488,9 @@ def add_break():
     return redirect(dest)
 
 
-@attendance_bp.route("/update_break", methods=["POST"])
 @attendance_bp.route("/update_break/<int:bid>", methods=["POST"])
 @admin_required
-def update_break(bid=None):
-    if bid is None:
-        try:
-            bid = int(request.form.get("break_id", ""))
-        except (ValueError, TypeError):
-            return redirect("/employees?tab=schedule")
+def update_break(bid):
     name = request.form.get("break_name", "").strip()
     btime = request.form.get("break_time", "").strip()
     duration = int(request.form.get("duration_minutes", 10) or 10)
