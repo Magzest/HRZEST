@@ -186,10 +186,10 @@
       <div class="error-box"><i class="ti ti-alert-circle"></i> {{ error }}</div>
       {% endif %}
 
-      <form action="/admin_login" method="POST" autocomplete="on">
+      <form action="/login" method="POST" autocomplete="on">
         <label class="field-label" for="login_identifier">Username or Employee ID</label>
         <input class="field-input" type="text" id="login_identifier" name="identifier"
-               placeholder="Enter your username or Employee ID"
+               placeholder="Enter your Username or Employee ID"
                required autofocus autocomplete="username" />
 
         <label class="field-label" for="login_password">Password</label>
@@ -206,19 +206,12 @@
       </form>
 
       <div class="links">
-        <a href="/checkin">← Back to Scanner</a>
+        <a href="/checkin">← Back to Kiosk</a>
         <a href="/admin_forgot_password" class="forgot">Forgot password?</a>
-      </div>
-      <div class="u-ta-center u-mt-10 u-fs-12 u-c-94a3b8">
-        Employee? <a class="u-c-6366f1 u-tdec-none" href="/employee_forgot_password">Reset your password</a>
-      </div>
-      <div class="u-ta-center u-mt-10 u-fs-12 u-c-94a3b8">
-        New company? <a class="u-c-6366f1 u-tdec-none" href="/get-started">Get started</a>
       </div>
 
       <div class="hint">
-        <strong>Admins</strong> — use your admin username &amp; password.<br>
-        <strong>Employees</strong> — use your Employee ID and the temporary password sent by your admin. You will be prompted to set a new password on first login.
+        <strong>Unified Sign In</strong> — Enter your <strong>Admin Username</strong> or <strong>Employee ID</strong> and password to access your company dashboard.
       </div>
     </div>
     <script src="/static/darkmode.min.js"></script>

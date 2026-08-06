@@ -1,0 +1,171 @@
+name: Total Automation CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: hrms-prod-repo
+  ECS_CLUSTER: hrms-prod-cluster
+  ECS_SERVICE: hrms-prod-service
+  MIGRATION_TASK_DEF: hrms-migration-task
+  APP_TASK_DEF_FILE: TaskDefinition.json
+
+jobs:
+  # ---------------------------------------------------------
+  # Phase 1: Lint, Security & Unit Testing
+  # ---------------------------------------------------------
+  security-and-test:
+    name: Code Quality & Security Scanning
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_testpass
+          POSTGRES_DB: att_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d att_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Dependencies
+        run: |
+          pip install --no-cache-dir dlib-bin
+          pip install --no-cache-dir --no-deps face-recognition face-recognition-models
+          grep -v '^face-recognition' requirements.txt > /tmp/ci-requirements.txt
+          pip install --no-cache-dir -r /tmp/ci-requirements.txt -r requirements-dev.txt
+
+      - name: Run Pytest
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASS: ci_testpass
+          DB_NAME: att_test
+          SECRET_KEY: ci-test-secret-key
+          FLASK_ENV: testing
+        run: python -m pytest tests/ -v
+
+      - name: SAST Scan (Semgrep)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/default"
+
+      - name: Dependency Scan (Snyk)
+        uses: snyk/actions/python-3.10@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: test
+
+  # ---------------------------------------------------------
+  # Phase 2: Docker Build & ECR Push
+  # ---------------------------------------------------------
+  build-and-push:
+    name: Build & Push to ECR
+    needs: security-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, Tag, and Push Image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest -f Dockerfile .
+          docker push -a $ECR_REGISTRY/$ECR_REPOSITORY
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------
+  # Phase 3: DB Migrations & ECS Deployment
+  # ---------------------------------------------------------
+  deploy:
+    name: Pre-deploy DB Migrations & ECS Update
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Step 1: Run the Database Migrations automatically as an ECS Standalone Task
+      - name: Run Automated Database Migrations
+        run: |
+          echo "Triggering standalone ECS task to run flask db upgrade..."
+          TASK_ARN=$(aws ecs run-task \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --task-definition ${{ env.MIGRATION_TASK_DEF }} \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_ID }}],securityGroups=[${{ secrets.SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides": [{"name": "app-container", "command": ["flask", "db", "upgrade"]}]}' \
+            --query 'tasks[0].taskArn' \
+            --output text)
+            
+          echo "Waiting for migration task $TASK_ARN to complete..."
+          aws ecs wait tasks-stopped --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN
+          
+          # Check exit code to ensure migrations succeeded
+          EXIT_CODE=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "Database migration failed with exit code $EXIT_CODE"
+            exit 1
+          fi
+          echo "Database migrations completed successfully!"
+
+      # Step 2: Render Task Definition and Deploy
+      - name: Render new ECS Task Definition
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ${{ env.APP_TASK_DEF_FILE }}
+          container-name: app-container
+          image: ${{ needs.build-and-push.outputs.image }}
+
+      - name: Deploy to Amazon ECS (Zero-Downtime Rolling Update)
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true

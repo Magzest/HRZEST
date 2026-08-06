@@ -9,6 +9,7 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="stylesheet" href="/static/tabler-icons.min.css" />
     <script src="/static/chart.umd.min.js"></script>
+    <script src="/static/toast.js"></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       body { background: #f1f5f9; min-height: 100vh; display: flex; }
@@ -366,6 +367,7 @@
       body.dark-mode .flash-error   { background: #7f1d1d !important; border-color: #991b1b !important; color: #fca5a5 !important; }
     </style>
   <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="/static/toast.css" />
   </head>
   <body>
 
@@ -373,13 +375,19 @@
     <div class="sidebar">
 
       <div class="brand-wrap">
-        <div class="brand-icon"><i class="ti ti-layout-dashboard u-fs-18"></i></div>
+        <div class="brand-icon" style="overflow:hidden;background:#fff;">
+          {% if co.logo_url %}
+            <img src="{{ co.logo_url }}" alt="{{ co.company_name }}" style="width:100%;height:100%;object-fit:contain;" onerror="this.outerHTML='<i class=\'ti ti-building u-fs-18\' style=\'color:#6366f1;\'></i>'" />
+          {% else %}
+            <i class="ti ti-building u-fs-18" style="color:#6366f1;"></i>
+          {% endif %}
+        </div>
         <div>
-          <div class="brand">Admin Panel</div>
+          <div class="brand">{{ co.company_name }}</div>
           <div class="brand-sub">
-            {{ co.company_name }}
+            {{ co.company_code|default('HQ') }} &middot; Admin Panel
             <span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:800;background:rgba(255,255,255,0.18);color:#60a5fa;margin-left:4px;letter-spacing:0.5px;">
-              {{ (current_plan|default('starter'))|upper }}
+              {{ (co.plan|default(current_plan|default('basic')))|upper }}
             </span>
           </div>
         </div>
@@ -397,12 +405,11 @@
       <a class="nav-item" href="/performance"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
   <a class="nav-item" href="/onboarding"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
       <a class="nav-item" href="/analytics"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
-  <a class="nav-item" href="/compliance"><span class="nav-icon"><i class="ti ti-shield-check"></i></span>Compliance &amp; Security</a>
-  <a class="nav-item" href="/sp_admin/login" style="background: linear-gradient(90deg, #1e3a8a, #3b82f6); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-shield-lock"></i></span>SecOps Portal (MFA)</a>
+  <a class="nav-item" href="/compliance"><span class="nav-icon"><i class="ti ti-shield-check"></i></span>Compliance &amp; System Health</a>
   {% if session.get('admin_role') == 'superadmin' %}
-  <a class="nav-item" href="/superadmin" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal</a>
+  <a class="nav-item" href="/super_admin/login" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal</a>
   {% endif %}
-  <a class="nav-item" href="/download_tax_statement/EMP-1001/2026" target="_blank"><span class="nav-icon"><i class="ti ti-file-text"></i></span>Tax Form 16 / W-2</a>
+  <a class="nav-item" href="/download_tax_statement/EMP-1001/2026"><span class="nav-icon"><i class="ti ti-file-text"></i></span>Tax Form 16 / W-2</a>
   <a class="nav-item" href="/org_chart"><span class="nav-icon"><i class="ti ti-hierarchy"></i></span>Org Chart</a>
   <a class="nav-item" href="/admin_tools"><span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools</a>
     
@@ -878,12 +885,13 @@
       async function sendAbsenteeReport() {
         const btn = event.currentTarget;
         btn.disabled = true; btn.textContent = "Sending…";
+        showToast("Sending absentee emails in background...", "info");
         try {
           const res  = await fetch("/send_absentee_report", {method:"POST"});
-          if (res.status === 401) { alert("Session expired. Please log in again."); window.location.href="/admin_login"; return; }
+          if (res.status === 401) { showToast("Session expired. Please log in again.", "error"); window.location.href="/login"; return; }
           const data = await res.json();
-          alert(data.ok ? data.msg : "Error: " + data.msg);
-        } catch(e) { alert("Failed to reach server. Check your connection."); }
+          showToast(data.ok ? data.msg : "Error: " + data.msg, data.ok ? "success" : "error");
+        } catch(e) { showToast("Failed to reach server. Check your connection.", "error"); }
         btn.disabled = false; btn.innerHTML = '<i class="ti ti-mail"></i> Email Absentees';
       }
 
@@ -911,7 +919,7 @@
         try {
           _camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
           document.getElementById("camVideo").srcObject = _camStream;
-        } catch(e) { alert("Camera not accessible: "+e.message+"\nUse Upload Photo instead."); closeCameraModal(); }
+        } catch(e) { showToast("Camera not accessible: "+e.message+". Use Upload Photo instead.", "error"); closeCameraModal(); }
       }
       function capturePhoto() {
         const video = document.getElementById("camVideo"), canvas = document.getElementById("camCanvas");
@@ -940,7 +948,7 @@
       document.getElementById("cameraModal").addEventListener("click", e => { if (e.target===e.currentTarget) closeCameraModal(); });
 
       function validateUpdForm() {
-        if (!document.getElementById("updFaceFile").files.length) { alert("Please take or upload a face photo."); return false; } return true;
+        if (!document.getElementById("updFaceFile").files.length) { showToast("Please take or upload a face photo.", "error"); return false; } return true;
       }
 
       /* ── WORK MODE TOGGLE (Edit modal) ── */
@@ -949,11 +957,11 @@
       }
 
       function useMyLocationForEdit() {
-        if (!navigator.geolocation) { alert("Geolocation not supported by your browser."); return; }
+        if (!navigator.geolocation) { showToast("Geolocation not supported by your browser.", "error"); return; }
         navigator.geolocation.getCurrentPosition(function(pos) {
           document.getElementById("edit_work_lat").value = pos.coords.latitude.toFixed(6);
           document.getElementById("edit_work_lon").value = pos.coords.longitude.toFixed(6);
-        }, function() { alert("Could not get location. Please enter coordinates manually."); });
+        }, function() { showToast("Could not get location. Please enter coordinates manually.", "error"); });
       }
 
       /* ── EDIT MODAL ── */
@@ -976,7 +984,7 @@
           document.getElementById("edit_work_lat").value    = data.work_lat || "";
           document.getElementById("edit_work_lon").value    = data.work_lon || "";
           editToggleLocation(wm);
-        } catch(e) { alert("Could not load employee data."); closeEdit(); }
+        } catch(e) { showToast("Could not load employee data.", "error"); closeEdit(); }
       }
       function closeEdit() { document.getElementById("editModal").style.display = "none"; }
       document.getElementById("editModal").addEventListener("click", e => { if (e.target===e.currentTarget) closeEdit(); });
@@ -1073,9 +1081,14 @@
         if (cells.length >= 8) prevRowKeys.add(cells[0].textContent+"|"+cells[3].textContent+"|"+cells[5].textContent);
       });
 
-      setInterval(refreshDashboard, REFRESH_INTERVAL);
+      let _dashboardTimer = null;
+      async function scheduleDashboardRefresh() {
+        clearTimeout(_dashboardTimer);
+        try { await refreshDashboard(); } catch(e) {}
+        _dashboardTimer = setTimeout(scheduleDashboardRefresh, REFRESH_INTERVAL);
+      }
+      setTimeout(scheduleDashboardRefresh, 5000);
       setInterval(updateLastUpdated, 5000);
-      setTimeout(refreshDashboard, 5000);
 
       /* ── ATTENDANCE CHARTS ── */
       let _trendChart = null, _deptChart = null;
@@ -1142,8 +1155,13 @@
         } catch(e) {}
       }
 
-      loadCharts();
-      setInterval(loadCharts, 120000);
+      let _chartTimer = null;
+      async function scheduleChartRefresh() {
+        clearTimeout(_chartTimer);
+        try { await loadCharts(); } catch(e) {}
+        _chartTimer = setTimeout(scheduleChartRefresh, 120000);
+      }
+      scheduleChartRefresh();
     </script>
   <script src="/static/darkmode.min.js"></script>
 

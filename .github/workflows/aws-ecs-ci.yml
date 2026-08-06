@@ -1,0 +1,119 @@
+name: HRMS Enterprise CI/CD Pipeline (AWS ECS)
+
+on:
+  push:
+    branches: [ "master" ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: hrms-prod-repo
+  ECS_CLUSTER: employee-attendance-ecs-cluster
+  ECS_SERVICE: employee-attendance-service
+  CONTAINER_NAME: app-container
+
+jobs:
+  # ---------------------------------------------------------
+  # Phase 1: Security Audit & Testing
+  # ---------------------------------------------------------
+  security-and-test:
+    name: Code Security & Unit Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_testpass
+          POSTGRES_DB: att_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d att_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Dependencies
+        run: |
+          pip install --no-cache-dir dlib-bin
+          pip install --no-cache-dir --no-deps face-recognition face-recognition-models
+          grep -v '^face-recognition' requirements.txt > /tmp/ci-requirements.txt
+          pip install --no-cache-dir -r /tmp/ci-requirements.txt -r requirements-dev.txt
+
+      - name: Run Pytest
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_USER: postgres
+          DB_PASS: ci_testpass
+          DB_NAME: att_test
+          SECRET_KEY: ci-test-secret-key-not-used-in-prod
+          FLASK_ENV: testing
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: SAST Security Scan (Semgrep)
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/default"
+
+  # ---------------------------------------------------------
+  # Phase 2: Build, Push to ECR & Deploy to ECS
+  # ---------------------------------------------------------
+  build-and-deploy:
+    name: Build & Deploy to AWS
+    needs: security-and-test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, Tag, and Push Image to ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push -a $ECR_REGISTRY/$ECR_REPOSITORY
+          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Download current ECS task definition
+        run: |
+          aws ecs describe-task-definition --task-definition employee-attendance-app-task --query taskDefinition > task-definition.json
+          
+      - name: Render new ECS Task Definition
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.build-image.outputs.image }}
+
+      - name: Deploy to Amazon ECS Service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true

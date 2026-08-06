@@ -1,0 +1,81 @@
+{
+  "family": "hrms-prod-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "app-container",
+      "image": "ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/hrms-prod-repo:latest",
+      "cpu": 512,
+      "memoryReservation": 1024,
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "FLASK_ENV",
+          "value": "production"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DB_HOST",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/db_host"
+        },
+        {
+          "name": "DB_PORT",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/db_port"
+        },
+        {
+          "name": "DB_USER",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/db_user"
+        },
+        {
+          "name": "DB_PASS",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/db_pass"
+        },
+        {
+          "name": "DB_NAME",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/db_name"
+        },
+        {
+          "name": "SECRET_KEY",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/secret_key"
+        },
+        {
+          "name": "REDIS_HOST",
+          "valueFrom": "arn:aws:ssm:us-east-1:ACCOUNT_ID:parameter/hrms/prod/redis_host"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/healthz || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/hrms-prod-task",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

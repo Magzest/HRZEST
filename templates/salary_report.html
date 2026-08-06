@@ -410,7 +410,7 @@
         fd.append('month',  MONTH);
 
         fetch('/send_salary_email', { method: 'POST', body: fd })
-          .then(r => { if (r.status === 401) { window.location.href='/admin_login'; return null; } return r.json(); })
+          .then(r => { if (r.status === 401) { window.location.href='/login'; return null; } return r.json(); })
           .then(data => {
             if (!data) return;
             if (data.ok) {
@@ -443,7 +443,7 @@
         fd.append('month', MONTH);
 
         fetch('/send_all_salary_emails', { method: 'POST', body: fd })
-          .then(r => { if (r.status === 401) { window.location.href='/admin_login'; return null; } return r.json(); })
+          .then(r => { if (r.status === 401) { window.location.href='/login'; return null; } return r.json(); })
           .then(data => {
             if (!data) return;
             showToast((data.ok ? '✅ ' : '⚠️ ') + data.msg, data.ok ? 'success' : 'error');

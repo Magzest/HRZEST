@@ -38,22 +38,7 @@ def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-# ── DB context manager ────────────────────────────────────────────────────────
-@contextmanager
-def _db():
-    conn = get_db_connection()
-    cursor = conn.cursor(buffered=True)
-    try:
-        yield cursor, conn
-    finally:
-        try:
-            cursor.close()
-        except Exception as _e:
-            app_log.debug("cursor.close() failed: %s", _e)
-        try:
-            conn.close()
-        except Exception as _e:
-            app_log.debug("conn.close() failed: %s", _e)
+from utils.helpers import _db
 
 
 # ── Account lockout ───────────────────────────────────────────────────────────

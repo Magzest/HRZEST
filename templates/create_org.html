@@ -95,15 +95,19 @@
     <div class="section-title">Company Details</div>
 
     <label class="field-label">Company Name</label>
-    <input class="field-input" type="text" name="company_name"
-           placeholder="Acme Corp" required autofocus />
+    <input class="field-input" type="text" name="company_name" id="company_name_input"
+           placeholder="Acme Corp" required autofocus oninput="autoFillSubdomain(this.value)" />
 
     <label class="field-label">Subdomain</label>
     <div class="subdomain-row">
-      <input class="field-input" type="text" name="subdomain"
+      <input class="field-input" type="text" name="subdomain" id="subdomain_input"
              placeholder="acme" pattern="[a-z0-9\-]+" required
-             title="Lowercase letters, digits and hyphens only" />
+             title="Lowercase letters, digits and hyphens only"
+             oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
       <div class="subdomain-suffix">.hrms.gradzest.com</div>
+    </div>
+    <div style="font-size:11px; color:#94a3b8; margin-top:4px; margin-bottom:14px;">
+      Enter a short subdomain slug (e.g. <strong>magzest</strong>). Full URLs like <em>https://gradzest.com/</em> will automatically be cleaned.
     </div>
 
     <label class="field-label">Number of Employees</label>
@@ -164,6 +168,28 @@
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="/static/darkmode.min.js"></script>
 <script>
+let subdomainUserEdited = false;
+
+function cleanSubdomainInput(el) {
+  subdomainUserEdited = true;
+  let val = el.value.toLowerCase().trim();
+  val = val.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+  const suffixes = ['.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
+  for (let s of suffixes) {
+    if (val.endsWith(s)) val = val.slice(0, -s.length);
+  }
+  val = val.replace(/[^a-z0-9\-]/g, '');
+  el.value = val;
+}
+
+function autoFillSubdomain(name) {
+  if (subdomainUserEdited) return;
+  const sub = document.getElementById('subdomain_input');
+  if (!sub) return;
+  let val = name.toLowerCase().trim().replace(/[^a-z0-9\-]/g, '');
+  sub.value = val;
+}
+
 function selectedPlanCard() {
   return document.querySelector('[data-plan-card].selected') || document.querySelector('[data-plan-card]');
 }
