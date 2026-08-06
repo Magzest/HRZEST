@@ -1261,7 +1261,7 @@ def my_onboarding():
         # still logged in elsewhere) — the template assumes emp is never
         # None, so send them back to login instead of a 500.
         session.clear()
-        return redirect("/employee_login")
+        return redirect("/login")
     return render_template("my_onboarding.html",
                            emp=emp, emp_id=emp_id, onboardings=onboardings, tasks=tasks,
                            selected_ob=selected_ob, selected_ob_id=int(selected_ob_id) if selected_ob_id else None,

@@ -17,6 +17,8 @@
     <title>My Portal — {{ emp[1] }}</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <script src="/static/jsQR.min.js"></script>
+    <script src="/static/toast.js"></script>
+    <link rel="stylesheet" href="/static/toast.css" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       html, body { height: 100%; }
@@ -1147,7 +1149,7 @@
             {% endfor %}
           </select>
           <button class="btn-view" onclick="applyFilter()">View</button>
-          <a id="pdfLink" href="/my_attendance_pdf?month={{ sel_month }}&year={{ sel_year }}" target="_blank" class="btn-pdf">⬇ Download PDF</a>
+          <a id="pdfLink" href="/my_attendance_pdf?month={{ sel_month }}&year={{ sel_year }}" class="btn-pdf">⬇ Download PDF</a>
         </div>
 
         <!-- Calendar -->
@@ -2284,7 +2286,7 @@
             <div class="u-pos-relative u-w-100 u-h-100 u-fxs-0">
               <div class="profile-avatar u-w-100 u-h-100 u-fs-36 u-mb-0">
                 {% if emp[4] %}
-                  <a class="u-d-block u-w-100pct u-h-100pct" href="/my_photo" target="_blank" title="View full photo">
+                  <a class="u-d-block u-w-100pct u-h-100pct" href="/my_photo" title="View full photo">
                     <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo" alt="{{ emp[1] }}" id="profilePreview"
                          onerror="this.parentNode.parentNode.innerHTML='{{ emp[1][0]|upper }}'" />
                   </a>
@@ -3340,7 +3342,7 @@
                 </div>
               </div>
               <div class="u-d-flex u-gap-12 u-fxw-wrap">
-                <a class="u-fx-1 u-minw-160 u-d-inline-flex u-ai-center u-jc-center u-gap-8 u-p-13-24 u-bg-linear-gradiene7a6cb u-c-fff u-br-11 u-fs-14 u-fw-600 u-tdec-none u-shad-0-4-14-rgba37_e838f4" href="/view_payslip/{{ emp[0] }}/${year}/${month}" target="_blank">
+                <a class="u-fx-1 u-minw-160 u-d-inline-flex u-ai-center u-jc-center u-gap-8 u-p-13-24 u-bg-linear-gradiene7a6cb u-c-fff u-br-11 u-fs-14 u-fw-600 u-tdec-none u-shad-0-4-14-rgba37_e838f4" href="/view_payslip/{{ emp[0] }}/${year}/${month}">
                   🖨️ Open & Print Full Slip
                 </a>
                 <button class="u-fx-1 u-minw-120 u-p-13-24 u-bg-f1f5f9 u-bd-1-solid-e2e8f0 u-c-475569 u-br-11 u-fs-14 u-fw-600 u-cur-pointer" onclick="closePayslipModal()">
@@ -3747,7 +3749,7 @@
                     <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-rgba255_255_255_d15 u-c-fff u-bd-1-solid-rgba255b647a u-br-8 u-fs-12 u-fw-700 u-tdec-none" href="/my_payslip_summary/{{ emp[0] }}/${year}/${month}" download>
                       <i class="ti ti-download"></i> Download
                     </a>
-                    <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-fff u-c-1e3a8a u-br-8 u-fs-12 u-fw-700 u-tdec-none" href="/view_payslip/{{ emp[0] }}/${year}/${month}" target="_blank">
+                    <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-fff u-c-1e3a8a u-br-8 u-fs-12 u-fw-700 u-tdec-none" href="/view_payslip/{{ emp[0] }}/${year}/${month}">
                       <i class="ti ti-printer"></i> Print
                     </a>
                   </div>
@@ -4467,13 +4469,18 @@
       }
     }
 
+    let _loadTimer = null;
     function load() {
+      clearTimeout(_loadTimer);
       fetch('/web/notifications/list')
         .then(function(r) { return r.json(); })
         .then(function(data) {
           if (data.ok) { items = data.notifications || []; render(); }
+          _loadTimer = setTimeout(load, 30000);
         })
-        .catch(function() {});
+        .catch(function() {
+          _loadTimer = setTimeout(load, 30000);
+        });
     }
 
     bell.addEventListener('click', function() {
@@ -4495,7 +4502,6 @@
     });
 
     load();
-    setInterval(load, 30000);
   })();
   </script>
   <!-- /NOTIFICATION BELL -->
@@ -4521,12 +4527,14 @@
     var AGENT_URL = 'http://127.0.0.1:47823/risk'; // placeholder — match the real agent's port
     var POLL_MS   = 30000;
 
+    let _pollTimer = null;
     function poll() {
+      clearTimeout(_pollTimer);
       fetch(AGENT_URL, { mode: 'cors' })
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
-          if (!data || typeof data.risk_score !== 'number') return; // no agent / bad response -> no-op
-          if (data.risk_score <= 60) return; // agent reachable, device fine -> no-op
+          if (!data || typeof data.risk_score !== 'number') { _pollTimer = setTimeout(poll, POLL_MS); return; } // no agent / bad response -> no-op
+          if (data.risk_score <= 60) { _pollTimer = setTimeout(poll, POLL_MS); return; } // agent reachable, device fine -> no-op
 
           fetch('/api/employee/device_risk', {
             method: 'POST',
@@ -4545,15 +4553,16 @@
                   'Your device failed a network security check and this session has been ended.' +
                   '<br>Please resolve the issue and log in again.</p></div></div>';
                 setTimeout(function() { window.location.href = '/employee_login'; }, 4000);
+              } else {
+                _pollTimer = setTimeout(poll, POLL_MS);
               }
             })
-            .catch(function() {});
+            .catch(function() { _pollTimer = setTimeout(poll, POLL_MS); });
         })
-        .catch(function() {}); // agent not running — expected in most environments today
+        .catch(function() { _pollTimer = setTimeout(poll, POLL_MS); }); // agent not running — expected in most environments today
     }
 
     poll();
-    setInterval(poll, POLL_MS);
   })();
   </script>
   <!-- /DEVICE POSTURE RELAY -->

@@ -141,7 +141,7 @@ def download_document(did):
     is_admin = session.get("admin_logged_in")
     emp_session = session.get("employee_id")
     if not is_admin and not emp_session:
-        return redirect("/employee_login")
+        return redirect("/login")
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT employee_id, original_name, stored_name FROM employee_documents WHERE id=%s", (did,))
@@ -167,7 +167,7 @@ def download_document(did):
 def upload_my_document():
     emp_id = session.get("employee_id")
     if not emp_id:
-        return redirect("/employee_login")
+        return redirect("/login")
     doc_type = request.form.get('doc_type', '').strip()
     f = request.files.get('document')
     if not doc_type or not f or not f.filename:
@@ -199,7 +199,7 @@ def upload_my_document():
 def delete_my_document(did):
     emp_id = session.get("employee_id")
     if not emp_id:
-        return redirect("/employee_login")
+        return redirect("/login")
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT employee_id, stored_name FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))

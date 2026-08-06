@@ -126,3 +126,51 @@ def totp_qr_data_uri(admin_username: str, secret: str) -> str:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def send_secops_mfa_qr_email(to_email: str, username: str, role_label: str, secret: str, otp_code: str = None):
+    """Email the SecOps / SOC Dashboard MFA Authenticator QR code and verification code
+    directly to the authorized employee's / admin's email address."""
+    from utils.email_utils import get_email_config, send_email_async
+    _user = _html.escape(str(username))
+    _role = _html.escape(str(role_label))
+    _secret = _html.escape(str(secret))
+    _code = _html.escape(str(otp_code or ""))
+    qr_uri = totp_qr_data_uri(username, secret)
+
+    code_block = ""
+    if otp_code:
+        code_block = f"""
+        <div style="text-align:center;margin:16px 0;padding:14px;background:#090d16;border-radius:10px;">
+          <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;letter-spacing:1px;font-weight:600;">SINGLE-USE ACCESS CODE</div>
+          <span style="font-size:28px;font-weight:800;letter-spacing:5px;color:#60a5fa;">{_code}</span>
+        </div>
+        """
+
+    html_body = f"""
+<div style="font-family:Segoe UI,sans-serif;max-width:500px;margin:auto;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;color:#f8fafc;">
+  <div style="background:linear-gradient(135deg,#4c1d95,#6d28d9);padding:24px;color:#fff;text-align:center;">
+    <div style="font-size:20px;font-weight:700;letter-spacing:0.5px;">🛡️ SecOps Dashboard MFA QR Access</div>
+    <div style="font-size:12px;opacity:0.9;margin-top:6px;">{_role} &middot; {_user}</div>
+  </div>
+  <div style="padding:26px;text-align:center;">
+    <p style="color:#cbd5e1;font-size:13px;margin-bottom:18px;">Scan this QR code with Google Authenticator, Authy, or your 2FA App to authenticate your SecOps / SOC session:</p>
+    
+    <div style="background:#ffffff;padding:16px;display:inline-block;border-radius:12px;margin-bottom:16px;">
+      <img src="{qr_uri}" alt="SecOps MFA QR Code" style="width:180px;height:180px;display:block;" />
+    </div>
+    
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:16px;">
+      Secret Key: <code style="background:#1e293b;padding:4px 8px;border-radius:6px;color:#c4b5fd;font-family:monospace;">{_secret}</code>
+    </div>
+    
+    {code_block}
+    
+    <p style="font-size:11px;color:#64748b;margin-top:20px;">If you did not initiate this SecOps login, report this immediately to Security Operations.</p>
+  </div>
+</div>"""
+    config = get_email_config()
+    if not config:
+        return False
+    send_email_async(to_email, "🔐 SecOps Dashboard MFA Authentication QR Code", html_body, config)
+    return True

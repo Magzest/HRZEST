@@ -362,19 +362,27 @@ def get_company_settings():
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute(
-            "SELECT company_name, company_tagline, company_logo, currency_symbol, timezone, "
-            "setup_done, COALESCE(company_code,''), COALESCE(session_timeout,30) FROM company_settings LIMIT 1"
-        )
+        cursor.execute("SELECT * FROM company_settings LIMIT 1")
         row = cursor.fetchone()
+        
+        # Get column names from cursor description
+        cols = [desc[0].lower() for desc in cursor.description] if cursor.description else []
+        row_dict = dict(zip(cols, row)) if (row and cols) else {}
         cursor.close()
         db.close()
-        if row:
+        
+        if row_dict:
             result = {
-                "company_name": row[0], "company_tagline": row[1],
-                "company_logo": row[2], "currency_symbol": row[3],
-                "company_code": row[6], "timezone": row[4], "setup_done": bool(row[5]),
-                "session_timeout": row[7],
+                "company_name": row_dict.get("company_name") or "My Company",
+                "company_tagline": row_dict.get("company_tagline") or "Employee Attendance System",
+                "company_logo": row_dict.get("company_logo"),
+                "currency_symbol": row_dict.get("currency_symbol") or "₹",
+                "company_code": row_dict.get("company_code") or "COMP",
+                "timezone": row_dict.get("timezone") or "Asia/Kolkata",
+                "setup_done": bool(row_dict.get("setup_done")),
+                "session_timeout": row_dict.get("session_timeout") or 30,
+                "logo_url": row_dict.get("logo_url") or "",
+                "plan": row_dict.get("plan") or "basic",
             }
             with _settings_lock:
                 _co_cache["data"] = result
@@ -384,7 +392,7 @@ def get_company_settings():
         pass
     return {"company_name": "My Company", "company_tagline": "Employee Attendance System",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
-            "setup_done": False, "company_code": "", "session_timeout": 30}
+            "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic"}
 
 
 # ── Companies list + overdue-onboarding count caches (short TTL) ─────────────

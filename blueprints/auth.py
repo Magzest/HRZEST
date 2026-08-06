@@ -60,44 +60,64 @@ _INJECTION_PATTERN_RE = re.compile(
 )
 
 @auth_bp.route("/setup", methods=["GET", "POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("10 per minute")
 def setup_wizard():
     co = get_company_settings()
-    if co["setup_done"]:
-        return redirect("/admin_login")
+    if co.get("setup_done"):
+        if session.get("admin_logged_in"):
+            return redirect("/admin")
+        return redirect("/login")
 
     error = None
     if request.method == "POST":
         company_name = request.form.get("company_name", "").strip()
+        company_code = request.form.get("company_code", "").strip().upper()
         company_tag = request.form.get("company_tagline", "").strip()
         currency = request.form.get("currency_symbol", "₹").strip()
+        logo_url = request.form.get("logo_url", "").strip()
+        plan = request.form.get("plan", "basic").strip().lower()
         admin_user = request.form.get("admin_username", "").strip()
+        admin_email = request.form.get("admin_email", "").strip()
         admin_pass = request.form.get("admin_password", "").strip()
         admin_pass2 = request.form.get("admin_password2", "").strip()
 
         if not company_name:
-            error = "Company name is required."
+            error = "Company Name is required."
         elif not admin_user:
-            error = "Admin username is required."
+            error = "Admin Username is required."
+        elif not admin_email or "@" not in admin_email:
+            error = "A valid Admin Email is required."
         elif len(admin_pass) < 8:
-            error = "Password must be at least 8 characters."
+            error = "Password must be at least 8 characters long."
         elif admin_pass != admin_pass2:
             error = "Passwords do not match."
         else:
             db = get_db_connection()
             cursor = db.cursor(buffered=True)
-            cursor.execute("UPDATE company_settings SET company_name=%s, company_tagline=%s, currency_symbol=%s, setup_done=1",
-                           (company_name, company_tag or "Employee Attendance System", currency))
-            cursor.execute("DELETE FROM admin_users")
-            cursor.execute("INSERT INTO admin_users (username, password) VALUES (%s, %s)",
-                           (admin_user, generate_password_hash(admin_pass)))
-            db.commit()
-            cursor.close()
-            db.close()
-            invalidate_settings_cache()
-            return redirect("/admin_login?setup=done")
+            try:
+                cursor.execute(
+                    "UPDATE company_settings SET company_name=%s, company_code=%s, company_tagline=%s, currency_symbol=%s, logo_url=%s, plan=%s, setup_done=1",
+                    (company_name, company_code or "COMP", company_tag or "Enterprise HRMS Platform", currency, logo_url, plan)
+                )
+                cursor.execute("DELETE FROM admin_users")
+                cursor.execute(
+                    "INSERT INTO admin_users (username, password, email, role, plan) VALUES (%s, %s, %s, %s, %s)",
+                    (admin_user, generate_password_hash(admin_pass), admin_email, "admin", plan)
+                )
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                app_log.error("Setup DB update error: %s", e)
+            finally:
+                cursor.close()
+                db.close()
 
-    return render_template("setup.html", error=error)
+            invalidate_settings_cache()
+
+            # Setup completed successfully -- redirect to admin login page!
+            return redirect("/login?setup=success")
+
+    return render_template("setup.html", error=error, co=co)
 
 
 # Every successful password check in admin_login()/hr_portal.hr_login() goes
@@ -140,15 +160,9 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     return redirect("/mfa_verify")
 
 
+@auth_bp.route("/login", methods=["GET", "POST"])
 @auth_bp.route("/admin_login", methods=["GET", "POST"])
-# Raised from 5/15min, 5/min, 20/hour: under rootless Podman's port-forwarding
-# proxy, every visitor's IP collapses to the same internal gateway address
-# (see nginx/nginx.conf.template's matching comment), so these IP-keyed
-# limits were shared by the whole site's traffic combined, not per-visitor
-# — a handful of page loads by anyone locked out everyone else for 15
-# minutes. The real brute-force defense is the per-account lockout above
-# (_check_login_lockout/_record_login_failure), unaffected by this; these
-# stay only as a backstop against raw request floods.
+@auth_bp.route("/employee_login", methods=["GET", "POST"])
 @limiter.limit("60 per 15 minutes")
 @limiter.limit("20 per minute")
 @limiter.limit("150 per hour")
@@ -298,7 +312,7 @@ def mfa_verify():
     username = session.get("mfa_user")
     kind = session.get("mfa_kind")
     if not username or not session.get("mfa_pending") or kind not in ("admin_users", "employee"):
-        return redirect("/admin_login")
+        return redirect("/login")
 
     issued_at = session.get("mfa_issued_at") or 0
     if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
@@ -318,7 +332,7 @@ def mfa_verify():
                     row = cursor.fetchone()
                 if not row:
                     session.clear()
-                    return redirect("/admin_login")
+                    return redirect("/login")
                 session.clear()
                 session["employee_id"] = row[0]
                 session["employee_name"] = row[1]
@@ -338,7 +352,7 @@ def mfa_verify():
                     row = cursor.fetchone()
                 if not row:
                     session.clear()
-                    return redirect("/admin_login")
+                    return redirect("/login")
                 role = row[0] or "admin"
                 # This emailed code IS this login's MFA -- mark enrolled so
                 # app.py's _enforce_admin_mfa_enrollment (which still applies
@@ -605,15 +619,10 @@ def employee_reset_password(token):
     return render_template("employee_reset_password.html", valid=True, done=True, token=token, error=None)
 
 
-@auth_bp.route("/employee_login", methods=["GET", "POST"])
-def employee_login():
-    return redirect("/admin_login")
-
-
 @auth_bp.route("/employee_logout", methods=["GET", "POST"])
 def employee_logout():
     session.clear()
-    return redirect("/employee_login")
+    return redirect("/login")
 
 
 @auth_bp.route("/change_password", methods=["POST"])
@@ -1130,7 +1139,7 @@ def step_up_mfa():
     of (not instead of) the admin session already established at login."""
     username = session.get("admin_username")
     if not username:
-        return redirect("/admin_login")
+        return redirect("/login")
 
     if request.method == "POST":
         totp_code = request.form.get("totp_code", "").strip()

@@ -1200,7 +1200,7 @@ def view_payslip(emp_id, year, month):
     # editing the URL). enforce_ownership() logs any denial at ERROR, which
     # feeds the alerting webhook (utils/alerts.py), not just the log stream.
     if not enforce_ownership(emp_id, "payslip", f"{year}-{month:02d}"):
-        return redirect("/employee_login")
+        return redirect("/login")
     # enforce_ownership() grants any admin-side session a bypass regardless
     # of role — too broad for this route specifically, since it renders
     # plaintext PAN/UAN/bank account details. Restrict the non-owner
@@ -1213,7 +1213,7 @@ def view_payslip(emp_id, year, month):
             level="ERROR", identifier=session.get("admin_username"),
             resource_type="payslip", resource_id=f"{emp_id}:{year}-{month:02d}",
         )
-        return redirect("/employee_login")
+        return redirect("/login")
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)

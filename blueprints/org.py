@@ -29,12 +29,25 @@ _RESERVED_SUBDOMAINS = frozenset({
 })
 
 
+def _clean_subdomain_slug(raw, company_name=""):
+    if not raw and company_name:
+        raw = company_name
+    s = str(raw).strip().lower()
+    s = re.sub(r'^https?://', '', s)
+    s = s.split('/')[0].split(':')[0]
+    for suffix in [".hrms.gradzest.com", ".gradzest.com", ".gradzest.in", ".com", ".in", ".org", ".net", ".io"]:
+        if s.endswith(suffix):
+            s = s[:-len(suffix)]
+    s = re.sub(r'[^a-z0-9\-]', '', s)
+    return s
+
 def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan):
     """Shared field validation for all three tenant-creation entry points
     (/create_org, /api/create_org, and the platform-admin-initiated create
     flow in platform_admin.py) -- keeps the reserved-subdomain and
     email-format checks from drifting out of sync across call sites.
     Returns an error message, or None if every field is valid."""
+    subdomain = _clean_subdomain_slug(subdomain, company_name)
     if not all([company_name, subdomain, admin_username, admin_password, admin_email]):
         return "All fields (company name, subdomain, admin email/username/password) are required."
     if not _EMAIL_RE.match(admin_email):
@@ -138,33 +151,50 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     return True, None, portal_url
 
 
-def send_portal_ready_email(admin_email, company_name, admin_username, portal_url):
-    """Best-effort welcome email with the tenant's dedicated portal link --
-    not a plaintext password (the admin already chose their own, or a
-    platform-admin-created one was communicated separately), just where to
-    find the new HRMS. Never raises: callers show the same link on their
-    own success page regardless of whether this send works. Returns
-    whether the send was attempted (not necessarily delivered)."""
+def send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password=""):
+    """Welcome email with the tenant's dedicated portal link and login credentials."""
     try:
         email_cfg = get_email_config()
         if not email_cfg:
             return False
+        
+        creds_block = ""
+        if admin_password:
+            creds_block = f"""
+            <div style="background:#f1f5f9;border-left:4px solid #3b82f6;padding:14px;border-radius:6px;margin:18px 0;font-size:14px;color:#334155;">
+              <div style="font-weight:700;margin-bottom:6px;color:#1e293b;">🔑 Login Credentials</div>
+              <div><strong>Username:</strong> {admin_username}</div>
+              <div><strong>Password:</strong> {admin_password}</div>
+            </div>
+            """
+        else:
+            creds_block = f"""
+            <div style="background:#f1f5f9;border-left:4px solid #3b82f6;padding:14px;border-radius:6px;margin:18px 0;font-size:14px;color:#334155;">
+              <div><strong>Admin Username:</strong> {admin_username}</div>
+            </div>
+            """
+
         html_body = f"""
-<div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
-  <div style="background:#1e3a8a;padding:24px 28px;color:white;">
-    <div style="font-size:20px;font-weight:700;">Your HRMS portal is ready</div>
-    <div style="font-size:13px;opacity:0.75;margin-top:4px;">{company_name}</div>
+<div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+  <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:28px;color:white;text-align:center;">
+    <div style="font-size:24px;font-weight:800;">🏢 {company_name}</div>
+    <div style="font-size:14px;opacity:0.85;margin-top:6px;">Your Dedicated HRMS Portal is Ready</div>
   </div>
   <div style="padding:28px;">
-    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your organisation's dedicated HRMS portal has been created.</p>
-    <a href="{portal_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:20px;">
-      Go to Your Dashboard
+    <p style="font-size:15px;color:#334155;margin-bottom:16px;line-height:1.6;">
+      Welcome to your Attendance & HRMS Platform! Your company workspace has been fully configured and set up by our onboarding team.
+    </p>
+
+    {creds_block}
+
+    <a href="{portal_url}" style="display:block;text-align:center;padding:16px 28px;background:linear-gradient(135deg,#0284c7,#2563eb);color:white;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700;margin:24px 0;box-shadow:0 6px 20px rgba(37,99,235,0.35);">
+      🚀 Launch Your Branded Dashboard
     </a>
-    <p style="font-size:13px;color:#64748b;">Log in with the admin username you created during signup: <strong>{admin_username}</strong></p>
-    <p style="font-size:12px;color:#94a3b8;margin-top:12px;">Or copy this link: {portal_url}</p>
+
+    <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser: <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Your HRMS portal is ready — {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Your HRMS Portal is Ready — {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_portal_ready_email failed: %s", exc)
@@ -184,9 +214,6 @@ def get_started_page():
 
 @org_bp.route("/create_org", methods=["GET"])
 def create_org_page():
-    # ?plan= lets the /pricing page's "Get Started" CTAs pre-select a tier
-    # (see templates/pricing.html); an unrecognized/missing value just
-    # falls back to the template's own 'starter' default.
     requested_plan = request.args.get("plan", "").strip().lower()
     selected_plan = requested_plan if requested_plan in PLAN_TIERS else None
     return render_template(
@@ -213,7 +240,7 @@ def create_org():
             return redirect("/create_org")
 
     company_name = request.form.get("company_name", "").strip()
-    subdomain = request.form.get("subdomain", "").strip().lower()
+    subdomain = _clean_subdomain_slug(request.form.get("subdomain", ""), company_name)
     admin_username = request.form.get("admin_username", "").strip()
     admin_password = request.form.get("admin_password", "").strip()
     admin_email = request.form.get("admin_email", "").strip()
@@ -286,7 +313,7 @@ def superadmin_dashboard():
     """Global Super Admin Command Center for tenant and subscription management."""
     if session.get("admin_role") != "superadmin":
         flash("Super Admin access required.", "error")
-        return redirect("/admin_login")
+        return redirect("/login")
 
     from database import get_db_connection
     db = get_db_connection()

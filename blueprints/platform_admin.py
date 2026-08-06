@@ -236,7 +236,7 @@ def platform_admin_create_tenant():
         flash(error, "error")
         return redirect("/super_admin")
 
-    send_portal_ready_email(admin_email, company_name, admin_username, portal_url)
+    send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password)
 
     log_security_event(
         "platform_admin.tenant_created",

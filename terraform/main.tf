@@ -12,399 +12,256 @@ provider "aws" {
   region = var.aws_region
 }
 
-# CloudFront-scoped WAFv2 Web ACLs (scope = "CLOUDFRONT") must be created in
-# us-east-1 regardless of var.aws_region — an AWS requirement, not a choice
-# made here. Used only by aws_wafv2_web_acl.app in security_hardening.tf.
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
+# ==========================================
+# 1. NETWORKING (VPC, Subnets, IGW, NAT)
+# ==========================================
+resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = { Name = "hrms-prod-vpc" }
 }
 
-# ---------------------------------------------------------------------------
-# RDS — PostgreSQL (replaces the containerized `db` service for production)
-# ---------------------------------------------------------------------------
-
-resource "aws_db_subnet_group" "this" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = var.subnet_ids
-
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
-  }
+resource "aws_subnet" "public" {
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(aws_vpc.main.cidr_block, 4, count.index)
+  map_public_ip_on_launch = true
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  tags = { Name = "hrms-public-subnet-${count.index + 1}" }
 }
 
-resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
-  description = "Allow PostgreSQL only from the application EC2 instance"
-  vpc_id      = var.vpc_id
-
-  ingress {
-    description     = "PostgreSQL from app server"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [var.ec2_security_group_id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-rds-sg"
-  }
+resource "aws_subnet" "private" {
+  count             = 2
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = cidrsubnet(aws_vpc.main.cidr_block, 4, count.index + 2)
+  availability_zone = data.aws_availability_zones.available.names[count.index]
+  tags = { Name = "hrms-private-subnet-${count.index + 1}" }
 }
 
-# ---------------------------------------------------------------------------
-# App server firewall policy
-#
-#   OPEN (0.0.0.0/0)     — 80, 443: the only ports the public actually needs
-#                           to reach (nginx redirects 80->443; 80 also serves
-#                           the Let's Encrypt HTTP-01 challenge).
-#   FILTERED (trusted IPs only) — 22 (SSH), 3389 (RDP), 5432/1433 (direct DB
-#                           access), 8080/8443 (alternate HTTP/HTTPS) — never
-#                           exposed to the internet, only to
-#                           var.trusted_admin_cidrs. Several of these aren't
-#                           actually used by this stack (RDP/1433 — this is a
-#                           Linux/Postgres deployment, not Windows/MSSQL) but
-#                           are still explicitly filtered rather than left
-#                           unlisted, matching the requested policy.
-#   CLOSED (no rule at all) — 21 (FTP), 23 (Telnet), 25 (SMTP): legacy
-#                           cleartext protocols this app never runs; security
-#                           groups default-deny anything not explicitly
-#                           allowed, so "closed" means simply never adding a
-#                           rule for them here.
-#
-# NOTE: this SG is a NEW Terraform-managed resource — it is not
-# automatically attached to the existing EC2 instance (which was originally
-# provisioned outside Terraform; see ec2_security_group_id). After `terraform
-# apply`, attach this SG's ID to the instance (in addition to or in place of
-# its current SG) via the EC2 console or:
-#   aws ec2 modify-instance-attribute --instance-id <id> \
-#     --groups <existing-sg-id> $(terraform output -raw app_firewall_sg_id)
-resource "aws_security_group" "app_firewall" {
-  name        = "${var.project_name}-app-firewall"
-  description = "Public web ports open; management/DB ports filtered to trusted IPs; legacy ports closed"
-  vpc_id      = var.vpc_id
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags = { Name = "hrms-igw" }
+}
+
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id
+  tags = { Name = "hrms-nat" }
+}
+
+resource "aws_eip" "nat" {
+  domain = "vpc"
+}
+
+# ==========================================
+# 2. SECURITY GROUPS
+# ==========================================
+resource "aws_security_group" "alb_sg" {
+  name        = "hrms-alb-sg"
+  description = "Allow HTTPS and HTTP inbound"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "HTTP (redirects to HTTPS; also serves ACME HTTP-01 challenge)"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
   ingress {
-    description = "SSH - filtered to trusted IPs only"
-    from_port   = 22
-    to_port     = 22
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = var.trusted_admin_cidrs
+    cidr_blocks = ["0.0.0.0/0"]
   }
-
-  ingress {
-    description = "RDP - filtered to trusted IPs only (not used by this Linux deployment, kept filtered per policy rather than unlisted)"
-    from_port   = 3389
-    to_port     = 3389
-    protocol    = "tcp"
-    cidr_blocks = var.trusted_admin_cidrs
-  }
-
-  ingress {
-    description = "Direct PostgreSQL access - filtered to trusted IPs only (normal app traffic goes to RDS over the private VPC, not through here)"
-    from_port   = 5432
-    to_port     = 5432
-    protocol    = "tcp"
-    cidr_blocks = var.trusted_admin_cidrs
-  }
-
-  ingress {
-    description = "MSSQL - filtered to trusted IPs only (not used by this stack, kept filtered per policy rather than unlisted)"
-    from_port   = 1433
-    to_port     = 1433
-    protocol    = "tcp"
-    cidr_blocks = var.trusted_admin_cidrs
-  }
-
-  ingress {
-    description = "Alternate HTTP - filtered to trusted IPs only"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = var.trusted_admin_cidrs
-  }
-
-  ingress {
-    description = "Alternate HTTPS - filtered to trusted IPs only"
-    from_port   = 8443
-    to_port     = 8443
-    protocol    = "tcp"
-    cidr_blocks = var.trusted_admin_cidrs
-  }
-
-  # 21 (FTP), 23 (Telnet), 25 (SMTP) deliberately have no ingress rule —
-  # security groups default-deny, so this is what "closed" looks like.
-
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
 
-  tags = {
-    Name = "${var.project_name}-app-firewall"
+resource "aws_security_group" "ecs_sg" {
+  name        = "hrms-ecs-sg"
+  description = "Allow inbound from ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
 
-resource "aws_db_instance" "this" {
-  identifier     = "${var.project_name}-db"
-  engine         = "postgres"
-  engine_version = "16"
+resource "aws_security_group" "rds_sg" {
+  name        = "hrms-rds-sg"
+  description = "Allow PostgreSQL from ECS"
+  vpc_id      = aws_vpc.main.id
 
-  instance_class    = var.db_instance_class
-  allocated_storage = var.db_allocated_storage
-  storage_type      = "gp3"
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  db_subnet_group_name   = aws_db_subnet_group.this.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible    = false
-
-  backup_retention_period = var.db_backup_retention_days
-  backup_window           = "17:00-18:00" # UTC — off-peak for Asia/Kolkata default
-  maintenance_window      = "sun:18:30-sun:19:30"
-
-  storage_encrypted = true
-  skip_final_snapshot       = false
-  final_snapshot_identifier = "${var.project_name}-db-final-snapshot"
-  deletion_protection       = true
-
-  tags = {
-    Name = "${var.project_name}-db"
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_sg.id]
   }
 }
 
-# ---------------------------------------------------------------------------
-# IAM — instance profile for the existing EC2 instance
-# (CloudWatch agent metrics + read/write to the backup S3 bucket)
-# ---------------------------------------------------------------------------
+resource "aws_security_group" "redis_sg" {
+  name        = "hrms-redis-sg"
+  description = "Allow Redis from ECS"
+  vpc_id      = aws_vpc.main.id
 
-resource "aws_s3_bucket" "backups" {
-  bucket = "${var.project_name}-backups-${data.aws_caller_identity.current.account_id}"
-
-  tags = {
-    Name = "${var.project_name}-backups"
+  ingress {
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_sg.id]
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "backups" {
-  bucket                  = aws_s3_bucket.backups.id
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+# ==========================================
+# 3. DATABASE (Amazon RDS PostgreSQL)
+# ==========================================
+resource "aws_db_subnet_group" "rds_subnet_group" {
+  name       = "hrms-rds-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "backups" {
-  bucket = aws_s3_bucket.backups.id
+resource "aws_db_instance" "postgres" {
+  identifier             = "hrms-prod-db"
+  engine                 = "postgres"
+  engine_version         = "16"
+  instance_class         = "db.t4g.medium"
+  allocated_storage      = 50
+  storage_type           = "gp3"
+  db_name                = "hrms_prod"
+  username               = var.db_username
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  skip_final_snapshot    = true
+  multi_az               = true
+}
+
+# ==========================================
+# 4. CACHE (Amazon ElastiCache Redis)
+# ==========================================
+resource "aws_elasticache_subnet_group" "redis_subnet_group" {
+  name       = "hrms-redis-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+}
+
+resource "aws_elasticache_cluster" "redis" {
+  cluster_id           = "hrms-prod-redis"
+  engine               = "redis"
+  node_type            = "cache.t4g.small"
+  num_cache_nodes      = 1
+  parameter_group_name = "default.redis7"
+  subnet_group_name    = aws_elasticache_subnet_group.redis_subnet_group.name
+  security_group_ids   = [aws_security_group.redis_sg.id]
+}
+
+# ==========================================
+# 5. STORAGE (Amazon S3 with Lifecycle Rules)
+# ==========================================
+resource "aws_s3_bucket" "app_storage" {
+  bucket = "hrms-prod-assets-${random_id.s3_suffix.hex}"
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "app_storage_lifecycle" {
+  bucket = aws_s3_bucket.app_storage.id
 
   rule {
-    id     = "expire-old-backups"
+    id     = "expire_garbage"
     status = "Enabled"
-    filter {}
+    filter {
+      prefix = "garbage/"
+    }
+    expiration {
+      days = 30
+    }
+  }
+
+  rule {
+    id     = "expire_cache"
+    status = "Enabled"
+    filter {
+      prefix = "cache/"
+    }
     expiration {
       days = 30
     }
   }
 }
 
-data "aws_caller_identity" "current" {}
+resource "random_id" "s3_suffix" {
+  byte_length = 4
+}
 
-data "aws_iam_policy_document" "ec2_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ec2.amazonaws.com"]
-    }
+# ==========================================
+# 6. LOAD BALANCING (Application Load Balancer)
+# ==========================================
+resource "aws_lb" "alb" {
+  name               = "hrms-prod-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = aws_subnet.public[*].id
+}
+
+resource "aws_lb_target_group" "ecs_tg" {
+  name        = "hrms-ecs-tg"
+  port        = 8000
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    path                = "/healthz"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    matcher             = "200"
   }
 }
 
-resource "aws_iam_role" "ec2_app_role" {
-  name               = "${var.project_name}-ec2-role"
-  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
-}
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.alb.arn
+  port              = "80"
+  protocol          = "HTTP"
 
-resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
-  role       = aws_iam_role.ec2_app_role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-}
-
-data "aws_iam_policy_document" "s3_backups_rw" {
-  statement {
-    actions   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
-    resources = [aws_s3_bucket.backups.arn, "${aws_s3_bucket.backups.arn}/*"]
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ecs_tg.arn
   }
 }
 
-resource "aws_iam_role_policy" "s3_backups_rw" {
-  name   = "${var.project_name}-s3-backups-rw"
-  role   = aws_iam_role.ec2_app_role.id
-  policy = data.aws_iam_policy_document.s3_backups_rw.json
+# ==========================================
+# 7. COMPUTE (AWS ECS Fargate Cluster)
+# ==========================================
+resource "aws_ecs_cluster" "fargate_cluster" {
+  name = "hrms-prod-cluster"
 }
 
-resource "aws_iam_instance_profile" "ec2_app_profile" {
-  name = "${var.project_name}-ec2-profile"
-  role = aws_iam_role.ec2_app_role.name
+# Data source for availability zones
+data "aws_availability_zones" "available" {}
+
+# Variables
+variable "aws_region" {
+  default = "us-east-1"
 }
-
-# ---------------------------------------------------------------------------
-# Monitoring — SNS alerts + CloudWatch alarms on the existing EC2 instance
-# ---------------------------------------------------------------------------
-
-resource "aws_sns_topic" "alerts" {
-  name = "${var.project_name}-alerts"
+variable "db_username" {
+  sensitive = true
 }
-
-resource "aws_sns_topic_subscription" "alerts_email" {
-  topic_arn = aws_sns_topic.alerts.arn
-  protocol  = "email"
-  endpoint  = var.alert_email
-}
-
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "${var.project_name}-cpu-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 3
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "EC2 CPU above 80% for 15 minutes"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-  ok_actions          = [aws_sns_topic.alerts.arn]
-  dimensions = {
-    InstanceId = var.ec2_instance_id
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "status_check_failed" {
-  alarm_name          = "${var.project_name}-status-check-failed"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "StatusCheckFailed"
-  namespace           = "AWS/EC2"
-  period              = 60
-  statistic           = "Maximum"
-  threshold           = 0
-  alarm_description   = "EC2 instance or system status check failed"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-  dimensions = {
-    InstanceId = var.ec2_instance_id
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "disk_high" {
-  alarm_name          = "${var.project_name}-disk-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "disk_used_percent"
-  namespace           = "CWAgent"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 85
-  alarm_description   = "Root volume disk usage above 85% (requires the CloudWatch agent — see cloudwatch-agent-config.json)"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-  treat_missing_data  = "notBreaching"
-  dimensions = {
-    InstanceId = var.ec2_instance_id
-    path       = "/"
-    fstype     = "ext4"
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "rds_storage_low" {
-  alarm_name          = "${var.project_name}-rds-storage-low"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "FreeStorageSpace"
-  namespace           = "AWS/RDS"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 2147483648 # 2 GiB in bytes
-  alarm_description   = "RDS free storage below 2GB"
-  alarm_actions       = [aws_sns_topic.alerts.arn]
-  dimensions = {
-    DBInstanceIdentifier = aws_db_instance.this.id
-  }
-}
-
-# ---------------------------------------------------------------------------
-# Automated backups — EBS snapshots of the EC2 instance via DLM
-# (covers the dataset/, static/employee_docs/, static/qrcodes/ Podman
-#  volumes, which live on the instance's EBS volume and aren't in RDS)
-# ---------------------------------------------------------------------------
-
-data "aws_iam_policy_document" "dlm_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["dlm.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "dlm_lifecycle_role" {
-  name               = "${var.project_name}-dlm-role"
-  assume_role_policy = data.aws_iam_policy_document.dlm_assume_role.json
-}
-
-resource "aws_iam_role_policy_attachment" "dlm_lifecycle" {
-  role       = aws_iam_role.dlm_lifecycle_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
-}
-
-resource "aws_dlm_lifecycle_policy" "ec2_daily_snapshot" {
-  description        = "Daily EBS snapshot of the attendance app server"
-  execution_role_arn = aws_iam_role.dlm_lifecycle_role.arn
-  state              = "ENABLED"
-
-  policy_details {
-    resource_types = ["INSTANCE"]
-
-    target_tags = {
-      DlmBackup = "${var.project_name}-app-server"
-    }
-
-    schedule {
-      name = "daily-snapshot"
-      create_rule {
-        interval      = 24
-        interval_unit = "HOURS"
-        times         = ["03:00"]
-      }
-      retain_rule {
-        count = 7
-      }
-      copy_tags = true
-    }
-  }
+variable "db_password" {
+  sensitive = true
 }

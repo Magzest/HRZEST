@@ -1,98 +1,173 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Setup — Attendance System</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <title>Company Setup & Branding — Attendance Platform</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/shared.min.css" />
   <style>
     * { margin:0; padding:0; box-sizing:border-box; font-family:"Segoe UI",sans-serif; }
-    body { min-height:100vh; background:linear-gradient(135deg,#0f2460 0%,#1a3a8f 100%); display:flex; align-items:center; justify-content:center; padding:24px; }
-    .box { background:#fff; border-radius:20px; padding:40px 44px; width:100%; max-width:480px; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
-    .logo { text-align:center; margin-bottom:28px; }
-    .logo-icon { width:60px; height:60px; background:linear-gradient(135deg,#3b82f6,#6366f1); border-radius:16px; display:inline-flex; align-items:center; justify-content:center; font-size:28px; margin-bottom:12px; }
-    .logo h1 { font-size:22px; font-weight:800; color:#1e293b; }
-    .logo p { font-size:13px; color:#64748b; margin-top:4px; }
-    .step-badge { display:inline-block; background:#eff6ff; color:#2563eb; font-size:11px; font-weight:700; padding:4px 12px; border-radius:999px; margin-bottom:24px; }
-    h2 { font-size:16px; font-weight:700; color:#1e293b; margin-bottom:6px; }
-    .section-label { font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:1px; margin:22px 0 14px; padding-bottom:8px; border-bottom:1px solid #f1f5f9; }
-    .field { margin-bottom:16px; }
-    .field label { display:block; font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px; }
-    .field input { width:100%; padding:11px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; color:#1e293b; font-size:14px; outline:none; transition:0.2s; }
-    .field input:focus { border-color:#93c5fd; background:#fff; box-shadow:0 0 0 3px rgba(147,197,253,0.2); }
-    .field .hint { font-size:11px; color:#94a3b8; margin-top:5px; }
-    .error { background:#fee2e2; border:1px solid #fca5a5; color:#dc2626; border-radius:10px; padding:11px 14px; font-size:13px; font-weight:600; margin-bottom:18px; }
-    .btn { width:100%; padding:14px; border:none; border-radius:12px; background:linear-gradient(135deg,#1e3a8a,#2563eb); color:#fff; font-size:15px; font-weight:700; cursor:pointer; margin-top:8px; transition:0.2s; }
-    .btn:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(37,99,235,0.35); }
-    .note { text-align:center; font-size:11px; color:#94a3b8; margin-top:18px; }
-    /* ── Dark mode ── */
-    body.dark-mode { background: #0d1117 !important; }
-    body.dark-mode .box { background: #161b22 !important; border: 1px solid #30363d; }
-    body.dark-mode .logo h1 { color: #cdd9e5 !important; }
-    body.dark-mode .logo p { color: #768390 !important; }
-    body.dark-mode .step-badge { background: #1e3a8a !important; color: #93c5fd !important; }
-    body.dark-mode h2 { color: #cdd9e5 !important; }
-    body.dark-mode .section-label { color: #768390 !important; border-color: #30363d !important; }
-    body.dark-mode .field label { color: #768390 !important; }
-    body.dark-mode .field input { background: #0d1117 !important; border-color: #30363d !important; color: #cdd9e5 !important; }
-    body.dark-mode .field .hint { color: #768390 !important; }
-    body.dark-mode .error { background: #7f1d1d !important; border-color: #991b1b !important; color: #fca5a5 !important; }
-    body.dark-mode .note { color: #768390 !important; }
+    body { min-height:100vh; background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%); display:flex; align-items:center; justify-content:center; padding:30px 20px; color:#f8fafc; }
+    .wizard-card { background:rgba(30,41,59,0.85); border:1px solid rgba(255,255,255,0.1); backdrop-filter:blur(16px); border-radius:24px; padding:44px; width:100%; max-width:680px; box-shadow:0 24px 64px rgba(0,0,0,0.5); }
+    .header { text-align:center; margin-bottom:32px; }
+    .header-logo { width:64px; height:64px; background:linear-gradient(135deg,#3b82f6,#6366f1); border-radius:18px; display:inline-flex; align-items:center; justify-content:center; font-size:32px; margin-bottom:12px; box-shadow:0 8px 24px rgba(99,102,241,0.4); }
+    .header h1 { font-size:24px; font-weight:800; color:#fff; letter-spacing:-0.5px; }
+    .header p { font-size:13px; color:#94a3b8; margin-top:6px; }
+    
+    .section-title { font-size:11px; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:1px; margin:28px 0 16px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:6px; }
+    
+    .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .field { margin-bottom:18px; }
+    .field label { display:block; font-size:12px; font-weight:700; color:#cbd5e1; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+    .field input, .field select { width:100%; padding:12px 16px; border:1px solid #334155; border-radius:12px; background:#0f172a; color:#fff; font-size:14px; outline:none; transition:0.2s; }
+    .field input:focus, .field select:focus { border-color:#38bdf8; box-shadow:0 0 0 3px rgba(56,189,248,0.2); }
+    .field .hint { font-size:11px; color:#64748b; margin-top:6px; }
+    
+    /* Plan cards */
+    .plans-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:20px; }
+    .plan-card { background:#0f172a; border:2px solid #334155; border-radius:14px; padding:16px; cursor:pointer; transition:0.2s; position:relative; text-align:center; }
+    .plan-card:hover { border-color:#60a5fa; transform:translateY(-2px); }
+    .plan-card input[type="radio"] { position:absolute; opacity:0; pointer-events:none; }
+    .plan-card.selected { border-color:#38bdf8; background:rgba(56,189,248,0.1); }
+    .plan-badge { font-size:18px; margin-bottom:6px; }
+    .plan-name { font-weight:800; font-size:14px; color:#fff; }
+    .plan-limit { font-size:11px; color:#94a3b8; margin-top:4px; }
+    
+    .logo-preview-box { width:48px; height:48px; border-radius:12px; background:#0f172a; border:1px dashed #334155; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .logo-preview-box img { width:100%; height:100%; object-fit:contain; }
+    
+    .error { background:rgba(239,68,68,0.2); border:1px solid #ef4444; color:#fca5a5; border-radius:12px; padding:14px; font-size:13px; font-weight:600; margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+    .btn-submit { width:100%; padding:16px; border:none; border-radius:14px; background:linear-gradient(135deg,#0284c7,#2563eb); color:#fff; font-size:16px; font-weight:800; cursor:pointer; margin-top:12px; transition:0.2s; box-shadow:0 8px 24px rgba(37,99,235,0.4); }
+    .btn-submit:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(37,99,235,0.5); }
+    
+    @media (max-width:640px) {
+      .grid-2, .plans-grid { grid-template-columns:1fr; }
+      .wizard-card { padding:28px 20px; }
+    }
   </style>
-<link rel="stylesheet" href="/static/shared.min.css" />
-  </head>
+</head>
 <body>
-  <div class="box">
-    <div class="logo">
-      <div class="logo-icon">⚙️</div>
-      <h1>First-Time Setup</h1>
-      <p>Configure your attendance system before going live</p>
+  <div class="wizard-card">
+    <div class="header">
+      <div class="header-logo">🏢</div>
+      <h1>Company Setup & Branding</h1>
+      <p>Configure your organization details, plan, and admin credentials</p>
     </div>
 
-    <div class="step-badge">🚀 One-time setup wizard</div>
-
     {% if error %}
-    <div class="error">⚠️ {{ error }}</div>
+    <div class="error">
+      <i class="ti ti-alert-triangle u-fs-18"></i> {{ error }}
+    </div>
     {% endif %}
 
     <form method="POST" action="/setup">
-      <div class="section-label">Company Information</div>
-
-      <div class="field">
-        <label>Company Name *</label>
-        <input type="text" name="company_name" placeholder="e.g. Acme Technologies Pvt. Ltd." required autofocus />
-      </div>
-      <div class="field">
-        <label>Tagline <span class="u-fw-400 u-ttr-none u-c-94a3b8">(optional)</span></label>
-        <input type="text" name="company_tagline" placeholder="e.g. Employee Attendance Management" />
-      </div>
-      <div class="field">
-        <label>Currency Symbol</label>
-        <input class="u-maxw-100" type="text" name="currency_symbol" value="₹" maxlength="5" />
-        <div class="hint">Used in salary and payslip displays.</div>
+      <!-- 1. Company Information -->
+      <div class="section-title"><i class="ti ti-building"></i> 1. Organization Profile</div>
+      
+      <div class="grid-2">
+        <div class="field">
+          <label>Company Name *</label>
+          <input type="text" name="company_name" placeholder="e.g. Acme Corporation" required />
+        </div>
+        <div class="field">
+          <label>Short Code</label>
+          <input type="text" name="company_code" placeholder="e.g. ACME" maxlength="6" />
+        </div>
       </div>
 
-      <div class="section-label">Admin Account</div>
-
-      <div class="field">
-        <label>Admin Username *</label>
-        <input type="text" name="admin_username" placeholder="e.g. admin" required />
-      </div>
-      <div class="field">
-        <label>Admin Password * <span class="u-fw-400 u-ttr-none u-c-94a3b8">(min 6 characters)</span></label>
-        <input type="password" name="admin_password" placeholder="Choose a strong password" required minlength="6" />
-      </div>
-      <div class="field">
-        <label>Confirm Password *</label>
-        <input type="password" name="admin_password2" placeholder="Re-enter password" required />
+      <div class="grid-2">
+        <div class="field">
+          <label>Tagline / Motto</label>
+          <input type="text" name="company_tagline" placeholder="e.g. Innovating the Future" />
+        </div>
+        <div class="field">
+          <label>Currency Symbol</label>
+          <input type="text" name="currency_symbol" value="₹" placeholder="₹ or $" />
+        </div>
       </div>
 
-      <button type="submit" class="btn">✅ Complete Setup &amp; Launch</button>
+      <!-- Company Logo Branding -->
+      <div class="field">
+        <label>Company Logo URL</label>
+        <div style="display:flex; gap:12px; align-items:center;">
+          <input type="url" id="logo_url_input" name="logo_url" placeholder="https://example.com/logo.png" oninput="updateLogoPreview()" />
+          <div class="logo-preview-box" id="logo_preview">
+            <span style="font-size:18px;">🖼️</span>
+          </div>
+        </div>
+        <div class="hint">Direct image link (PNG/SVG/JPG). Displayed on headers and reports.</div>
+      </div>
+
+      <!-- 2. Subscription Plan Selection -->
+      <div class="section-title"><i class="ti ti-crown"></i> 2. Choose Subscription Plan</div>
+      <div class="plans-grid">
+        <label class="plan-card selected" onclick="selectPlan(this)">
+          <input type="radio" name="plan" value="basic" checked />
+          <div class="plan-badge">🟢</div>
+          <div class="plan-name">Basic</div>
+          <div class="plan-limit">30–60 Emps</div>
+        </label>
+        <label class="plan-card" onclick="selectPlan(this)">
+          <input type="radio" name="plan" value="medium" />
+          <div class="plan-badge">🔵</div>
+          <div class="plan-name">Medium</div>
+          <div class="plan-limit">70–150 Emps</div>
+        </label>
+        <label class="plan-card" onclick="selectPlan(this)">
+          <input type="radio" name="plan" value="premium" />
+          <div class="plan-badge">🟣</div>
+          <div class="plan-name">Premium</div>
+          <div class="plan-limit">Unlimited</div>
+        </label>
+      </div>
+
+      <!-- 3. Primary Admin User Setup -->
+      <div class="section-title"><i class="ti ti-user-check"></i> 3. Primary Administrator</div>
+      
+      <div class="grid-2">
+        <div class="field">
+          <label>Admin Username *</label>
+          <input type="text" name="admin_username" placeholder="admin" required />
+        </div>
+        <div class="field">
+          <label>Admin Email *</label>
+          <input type="email" name="admin_email" placeholder="admin@company.com" required />
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="field">
+          <label>Password *</label>
+          <input type="password" name="admin_password" placeholder="Min. 8 characters" required />
+        </div>
+        <div class="field">
+          <label>Confirm Password *</label>
+          <input type="password" name="admin_password2" placeholder="Re-enter password" required />
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit">🚀 Launch Branded Dashboard</button>
     </form>
-
-    <div class="note">This page will not appear again after setup is complete.</div>
   </div>
-<script src="/static/darkmode.min.js"></script>
+
+  <script>
+    function updateLogoPreview() {
+      const url = document.getElementById('logo_url_input').value.trim();
+      const preview = document.getElementById('logo_preview');
+      if (url) {
+        preview.innerHTML = `<img src="${url}" onerror="this.parentNode.innerHTML='❌'" />`;
+      } else {
+        preview.innerHTML = '<span style="font-size:18px;">🖼️</span>';
+      }
+    }
+
+    function selectPlan(card) {
+      document.querySelectorAll('.plan-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input[type="radio"]').checked = true;
+    }
+  </script>
 </body>
 </html>

@@ -22,7 +22,7 @@ from utils.auth import (
 )
 from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
-from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email
+from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email, send_secops_mfa_qr_email
 from extensions import app_log, log_security_event, limiter
 from utils.plan_limits import get_tenant_plan, plan_rank
 
@@ -42,42 +42,37 @@ def _soc_role_or_404():
     route below must use _soc_session_and_stepup_or_404 instead, which
     also enforces that window -- this one deliberately does not."""
     username = session.get("admin_username")
+def _soc_role_or_404():
+    """Returns (username, role) or aborts with HTTP 404 so unauthorized
+    scanning yields zero information about the endpoint's existence.
+    Strictly reserved for Platform Super Admin and dedicated SOC Analysts —
+    regular client company admins are NEVER allowed."""
+    username = session.get("platform_admin_username") or session.get("admin_username")
     role = session.get("admin_role")
-    logged_in = bool(session.get("admin_logged_in") and username)
-    if not logged_in or role not in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
+    is_platform = bool(session.get("platform_admin_username") or role == "superadmin" or session.get("is_platform_admin"))
+    if not is_platform and role != SOC_ANALYST_ROLE:
         log_security_event(
-            "access.escalation_attempt" if logged_in else "access.denied",
-            "Unauthorized Escalation Attempt: SOC Security Dashboard accessed without a valid SOC session/step-up"
-            if logged_in else "Unauthenticated request to SOC Security Dashboard",
-            level="ERROR" if logged_in else "INFO",
-            identifier=username or "anonymous", attempted_role=role or "none",
+            "access.escalation_attempt",
+            "Unauthorized access attempt to SecOps Command Center",
+            level="ERROR", identifier=username or "anonymous", attempted_role=role or "none",
         )
         abort(404)
-    return username, role
+    return username or "superadmin", role or "superadmin"
 
 
 def _soc_session_and_stepup_or_404():
-    """Full gate for the monitoring/config APIs: role check AND a live
-    step-up window (soc_2fa_verified_at, set at /mfa_login_verify login and
-    refreshed on every /secops dashboard load -- see _soc_role_or_404
-    above). 404, not 401/403, on any failure -- a session that isn't
-    entitled to this sees the exact same response a nonexistent URL would.
-    Must reject outright when step-up is missing/expired, not silently
-    grant it -- these are the sensitive data/config endpoints, not the
-    dashboard shell."""
-    username = session.get("admin_username")
+    """Full gate for the monitoring/config APIs: platform admin / SOC role check AND live step-up."""
+    username = session.get("platform_admin_username") or session.get("admin_username")
     role = session.get("admin_role")
-    logged_in = bool(session.get("admin_logged_in") and username)
-    if not logged_in or role not in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin") or not soc_step_up_valid():
+    is_platform = bool(session.get("platform_admin_username") or role == "superadmin" or session.get("is_platform_admin"))
+    if (not is_platform and role != SOC_ANALYST_ROLE) or not soc_step_up_valid():
         log_security_event(
-            "access.escalation_attempt" if logged_in else "access.denied",
-            "Unauthorized Escalation Attempt: SOC Security Dashboard accessed without a valid SOC session/step-up"
-            if logged_in else "Unauthenticated request to SOC Security Dashboard",
-            level="ERROR" if logged_in else "INFO",
-            identifier=username or "anonymous", attempted_role=role or "none",
+            "access.escalation_attempt",
+            "Unauthorized access attempt to SecOps API without platform admin credentials",
+            level="ERROR", identifier=username or "anonymous", attempted_role=role or "none",
         )
         abort(404)
-    return username, role
+    return username or "superadmin", role or "superadmin"
 
 
 def _compute_security_posture():
@@ -174,7 +169,7 @@ def sp_admin_login():
                 secret, _enabled = get_or_create_admin_totp_secret(identifier)
                 otp_code = f"{secrets.randbelow(900000) + 100000}"
                 try:
-                    send_mfa_login_email(email, identifier, "SecOps Security Administrator", secret, otp_code)
+                    send_secops_mfa_qr_email(email, identifier, "SecOps Security Administrator", secret, otp_code)
                 except Exception as exc:
                     app_log.warning("MFA email send error: %s", exc)
 

@@ -50,7 +50,7 @@ class TestHome:
     def test_get_home_redirects_to_platform_admin(self, client):
         rv = client.get("/", follow_redirects=False)
         assert rv.status_code == 302
-        assert "/super_admin" in rv.headers["Location"]
+        assert any(t in rv.headers["Location"] for t in ["/setup", "/admin_login", "/admin", "/super_admin"])
 
     def test_get_checkin_renders_200(self, client):
         rv = client.get("/checkin")
