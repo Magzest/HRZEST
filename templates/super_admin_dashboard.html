@@ -96,6 +96,9 @@
           <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').open = !document.getElementById('newCoPanel').open;">
             <i class="ti ti-plus"></i> New Company
           </button>
+          <a href="/sp_admin/login" style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
+            <i class="ti ti-shield-lock"></i> SecOps Dashboard
+          </a>
           <form action="/super_admin/logout" method="POST" style="margin:0;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="logout-btn"><i class="ti ti-logout"></i> Sign Out</button>
