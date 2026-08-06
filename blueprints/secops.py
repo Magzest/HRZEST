@@ -35,14 +35,6 @@ def _is_secops_authorized():
 
 
 def _soc_role_or_404():
-    """Role/login check only, no step-up requirement -- used solely by the
-    /secops dashboard route itself, which treats reaching it (already
-    logged in via the SOC email-MFA login) as sufficient and then refreshes
-    the step-up window explicitly right after. Every other protected
-    route below must use _soc_session_and_stepup_or_404 instead, which
-    also enforces that window -- this one deliberately does not."""
-    username = session.get("admin_username")
-def _soc_role_or_404():
     """Returns (username, role) or aborts with HTTP 404 so unauthorized
     scanning yields zero information about the endpoint's existence.
     Strictly reserved for Platform Super Admin and dedicated SOC Analysts —
