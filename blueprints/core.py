@@ -13,7 +13,7 @@ from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
 )
-from utils.helpers import _db, get_auth_config, get_company_settings
+from utils.helpers import _db, get_auth_config
 from utils.session_risk import is_session_compromised
 
 core_bp = Blueprint("core", __name__)
@@ -41,9 +41,6 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
-    co = get_company_settings()
-    if not co.get("setup_done"):
-        return redirect("/setup")
     if session.get("admin_logged_in"):
         return redirect("/admin")
     if session.get("employee_id"):

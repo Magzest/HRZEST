@@ -405,10 +405,6 @@
       <a class="nav-item" href="/performance"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
   <a class="nav-item" href="/onboarding"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
       <a class="nav-item" href="/analytics"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
-  <a class="nav-item" href="/compliance"><span class="nav-icon"><i class="ti ti-shield-check"></i></span>Compliance &amp; System Health</a>
-  {% if session.get('admin_role') == 'superadmin' %}
-  <a class="nav-item" href="/super_admin/login" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal</a>
-  {% endif %}
   <a class="nav-item" href="/org_chart"><span class="nav-icon"><i class="ti ti-hierarchy"></i></span>Org Chart</a>
   <a class="nav-item" href="/admin_tools"><span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools</a>
     

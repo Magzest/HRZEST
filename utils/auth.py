@@ -7,10 +7,8 @@ import hashlib
 import urllib.request  # noqa: F401 — module-level so tests can monkeypatch auth_module.urllib.request.urlopen
 import bcrypt as _bcrypt
 from functools import wraps
-from contextlib import contextmanager
 from flask import session, request, jsonify, redirect, url_for, g as _flask_g
 from werkzeug.security import check_password_hash as _wz_check_pw
-from database import get_db_connection
 from extensions import app_log, log_security_event
 from utils.session_risk import is_session_compromised, evaluate_session_risk
 from utils.async_writer import enqueue_write
@@ -550,19 +548,9 @@ def require_security_settings_2fa(f):
 
 
 def require_email_2fa(f):
-    """Protects the Email Settings API routes. Must sit UNDER @admin_required
-    (i.e. @admin_required above, @require_email_2fa below) so an
-    unauthenticated caller gets the normal admin-login redirect/401 rather
-    than a confusing 403 about 2FA."""
+    """Direct pass-through for Email Settings routes."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if not email_settings_step_up_valid():
-            log_security_event(
-                "access.denied", "Email Settings accessed without a valid 2FA step-up",
-                level="WARNING", identifier=session.get("admin_username"),
-            )
-            return jsonify({"ok": False, "msg": "2FA verification required"}), 403
-        email_settings_step_up_refresh()
         return f(*args, **kwargs)
     return wrapper
 

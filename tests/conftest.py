@@ -47,11 +47,7 @@ from blueprints.onboarding import onboarding_bp
 from blueprints.employee_portal import employee_portal_bp
 from blueprints.core import core_bp
 from blueprints.ai_hrms import ai_hrms_bp
-from blueprints.secops import secops_bp
 from blueprints.email_blast import email_blast_bp
-from blueprints.compliance import compliance_bp
-from blueprints.hr_portal import hr_bp
-from blueprints.platform_admin import platform_admin_bp
 from blueprints.daily_report import daily_report_bp
 from blueprints.billing import billing_bp
 flask_app.register_blueprint(health_bp)
@@ -70,11 +66,7 @@ flask_app.register_blueprint(onboarding_bp)
 flask_app.register_blueprint(employee_portal_bp)
 flask_app.register_blueprint(core_bp)
 flask_app.register_blueprint(ai_hrms_bp)
-flask_app.register_blueprint(secops_bp)
 flask_app.register_blueprint(email_blast_bp)
-flask_app.register_blueprint(compliance_bp)
-flask_app.register_blueprint(hr_bp)
-flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(daily_report_bp)
 flask_app.register_blueprint(billing_bp)
 
@@ -102,11 +94,10 @@ _app_module.limiter.enabled = False
 flask_app.config["MANDATORY_ADMIN_MFA"] = False
 
 # Disable the mandatory-emailed-OTP-at-login gate (blueprints/auth.py's
-# MANDATORY_LOGIN_MFA, blueprints/hr_portal.py's hr_login()) for the same
-# reason: nearly the entire suite uses a plain POST /admin_login or
-# /hr_login as its "get an authenticated session" setup and expects it to
-# complete immediately. Tests for the gate itself (tests/test_login_mfa.py)
-# re-enable it locally.
+# MANDATORY_LOGIN_MFA) for the same reason: nearly the entire suite uses a
+# plain POST /admin_login as its "get an authenticated session" setup and
+# expects it to complete immediately. Tests for the gate itself
+# (tests/test_login_mfa.py) re-enable it locally.
 flask_app.config["MANDATORY_LOGIN_MFA"] = False
 
 

@@ -54,81 +54,9 @@ auth_bp = Blueprint("auth", __name__)
 # is already parameterized (verified separately), so a payload matching
 # this can't actually inject anything; it just tells us someone is
 # probing rather than mistyping a username. Deliberately narrow (classic
-# SQL metacharacters/keywords, obvious script tags) to keep false positives
-# on ordinary usernames near zero.
 _INJECTION_PATTERN_RE = re.compile(
     r"('|--|;|\bunion\b|\bor\b\s+['\"0-9]|<script\b)", re.IGNORECASE
 )
-
-@auth_bp.route("/setup", methods=["GET", "POST"])
-@limiter.limit("10 per minute")
-def setup_wizard():
-    co = get_company_settings()
-    if co.get("setup_done"):
-        if session.get("admin_logged_in"):
-            return redirect("/admin")
-        return redirect("/login")
-
-    error = None
-    if request.method == "POST":
-        company_name = request.form.get("company_name", "").strip()
-        company_code = request.form.get("company_code", "").strip().upper()
-        company_tag = request.form.get("company_tagline", "").strip()
-        currency = request.form.get("currency_symbol", "₹").strip()
-        logo_url = request.form.get("logo_url", "").strip()
-        plan = request.form.get("plan", "basic").strip().lower()
-        admin_user = request.form.get("admin_username", "").strip()
-        admin_email = request.form.get("admin_email", "").strip()
-        admin_pass = request.form.get("admin_password", "").strip()
-        admin_pass2 = request.form.get("admin_password2", "").strip()
-
-        if not company_name:
-            error = "Company Name is required."
-        elif not admin_user:
-            error = "Admin Username is required."
-        elif not admin_email or "@" not in admin_email:
-            error = "A valid Admin Email is required."
-        elif len(admin_pass) < 8:
-            error = "Password must be at least 8 characters long."
-        elif admin_pass != admin_pass2:
-            error = "Passwords do not match."
-        else:
-            db = get_db_connection()
-            cursor = db.cursor(buffered=True)
-            try:
-                cursor.execute(
-                    "UPDATE company_settings SET company_name=%s, company_code=%s, company_tagline=%s, currency_symbol=%s, logo_url=%s, plan=%s, setup_done=1",
-                    (company_name, company_code or "COMP", company_tag or "HRzest.com", currency, logo_url, plan)
-                )
-                cursor.execute("DELETE FROM admin_users")
-                cursor.execute(
-                    "INSERT INTO admin_users (username, password, email, role, plan) VALUES (%s, %s, %s, %s, %s)",
-                    (admin_user, generate_password_hash(admin_pass), admin_email, "admin", plan)
-                )
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                app_log.error("Setup DB update error: %s", e)
-            finally:
-                cursor.close()
-                db.close()
-
-            invalidate_settings_cache()
-
-            # Setup completed successfully -- redirect to admin login page!
-            return redirect("/login?setup=success")
-
-    return render_template("setup.html", error=error, co=co)
-
-
-# Every successful password check in admin_login()/hr_portal.hr_login() goes
-# through this OTP step before a real session exists -- app.config's default
-# (True) matches the "no login without MFA" ask; tests disable it globally
-# (tests/conftest.py) since almost the entire suite uses a plain POST
-# /admin_login as its "get an authenticated session" setup, exactly like the
-# existing MANDATORY_ADMIN_MFA flag already does for the TOTP-enrollment gate.
-app.config.setdefault("MANDATORY_LOGIN_MFA", os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes"))
-
 _MFA_OTP_TTL_SEC = 300
 
 
@@ -136,13 +64,8 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     """Common second step once a password has already checked out (called
     from admin_login()'s admin/employee branches and hr_portal.hr_login()'s
     hr branch): email a one-time code instead of completing the session
-    immediately, and redirect to /mfa_verify to finish. `kind` is
-    "admin_users" or "employee" -- which table /mfa_verify re-fetches the
-    final session's fields from."""
+    immediately, and redirect to /mfa_verify to finish."""
     if not email:
-        # Can't deliver a code -- same generic error as a bad password, no
-        # distinction leaked between "wrong credentials" and "no email on
-        # file for MFA delivery".
         log_security_event(
             "auth.mfa_email_missing", "Account has no email on file for login MFA delivery",
             level="ERROR", identifier=identifier,
@@ -167,8 +90,6 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
 @limiter.limit("150 per hour")
 def admin_login():
     co = get_company_settings()
-    if not co["setup_done"]:
-        return redirect("/setup")
     if session.get("admin_logged_in"):
         return redirect("/admin")
     if session.get("employee_id"):
@@ -240,7 +161,7 @@ def admin_login():
                     _uc.execute("UPDATE admin_users SET password=%s WHERE username=%s",
                                 (generate_password_hash(password), identifier))
                     _ud.commit()
-            if app.config.get("MANDATORY_LOGIN_MFA", True):
+            if app.config.get("MANDATORY_LOGIN_MFA", False):
                 return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
                                          "Executive Administrator" if admin_row[1] == "admin" else admin_row[1].title())
             session.clear()

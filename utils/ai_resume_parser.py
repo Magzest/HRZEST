@@ -112,7 +112,7 @@ def parse_resume(file_bytes, filename=""):
     }
 
 
-def match_candidate_job(parsed_candidate, job_description, target_skills=None):
+def match_candidate_job(parsed_candidate, job_description):
     """Evaluate a parsed candidate profile against a target job description."""
     if not job_description:
         job_description = "Software Developer with Python, SQL, and Agile experience."

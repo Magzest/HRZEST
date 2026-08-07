@@ -38,63 +38,6 @@ def _employee_bearer_token(client, seed_employee):
     return resp.get_json()["token"]
 
 
-class TestSetupWizard:
-    """The success path (which DELETEs every admin_users row) is deliberately
-    not exercised here — att_test is shared/persistent and that write would
-    be destructive to every other test's admin fixtures. Only the read-only
-    and validation branches are covered."""
-
-    def test_redirects_when_already_done(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": True})
-        resp = client.get("/setup", follow_redirects=False)
-        assert resp.status_code == 302
-        assert "/admin_login" in resp.headers["Location"]
-
-    def test_renders_form_when_not_done(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.get("/setup")
-        assert resp.status_code == 200
-
-    def test_missing_company_name_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "", "admin_username": "x",
-            "admin_password": "longenough1", "admin_password2": "longenough1",
-        })
-        assert resp.status_code == 200
-        assert b"Company name is required" in resp.data
-
-    def test_missing_admin_username_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "",
-            "admin_password": "longenough1", "admin_password2": "longenough1",
-        })
-        assert b"Admin username is required" in resp.data
-
-    def test_short_password_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "x",
-            "admin_password": "short", "admin_password2": "short",
-        })
-        assert b"at least 8 characters" in resp.data
-
-    def test_mismatched_passwords_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "x",
-            "admin_password": "longenough1", "admin_password2": "different1",
-        })
-        assert b"do not match" in resp.data
-
-
 class TestAdminLoginEdgeBranches:
     def test_already_admin_logged_in_redirects_to_admin(self, client, seed_admin):
         _admin_session(client, seed_admin["username"])
