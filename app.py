@@ -3116,17 +3116,7 @@ def inject_plan_context():
         return dict(current_plan="starter", plan_info={}, plan_tiers={})
 
 
-@app.route("/pricing")
-def pricing_page():
-    """Public pricing / plan comparison page. Passes plan_tiers explicitly
-    (overriding inject_plan_context's context-processor value above) since
-    that one derives from g.tenant_db, which /pricing -- a public,
-    tenant-agnostic page -- may hit without a resolved tenant, in which
-    case the context processor's except-branch would hand back an empty
-    dict instead of the real tier data this page needs to render prices."""
-    import datetime as _dt
-    from utils.plan_limits import PLAN_TIERS
-    return render_template("pricing.html", now=_dt.datetime.now(), plan_tiers=PLAN_TIERS)
+
 
 _register_api_v1_aliases()
 
