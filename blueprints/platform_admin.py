@@ -165,29 +165,7 @@ def _tenant_employee_count(schema_name: str) -> int:
 @platform_admin_bp.route("/super_admin")
 @_platform_admin_required
 def platform_admin_dashboard():
-    conn = get_master_db()
-    cur = conn.cursor(buffered=True)
-    cur.execute(
-        "SELECT id, company_name, subdomain, db_name, plan, status, created_at "
-        "FROM tenants ORDER BY created_at DESC"
-    )
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    tenants = []
-    for r in rows:
-        tid, company_name, subdomain, db_name, plan, status, created_at = r
-        limit = PLAN_TIERS.get(plan, PLAN_TIERS["starter"])["employee_limit"]
-        tenants.append({
-            "id": tid, "company_name": company_name, "subdomain": subdomain,
-            "db_name": db_name, "plan": plan, "status": status, "created_at": created_at,
-            "employee_count": _tenant_employee_count(db_name),
-            "employee_limit": limit,
-        })
-
-    return render_template("super_admin_dashboard.html", tenants=tenants, plan_tiers=PLAN_TIERS,
-                            feature_labels=FEATURE_LABELS)
+    return redirect("/super_admin/login")
 
 
 @platform_admin_bp.route("/super_admin/tenants/<int:tenant_id>/plan", methods=["POST"])

@@ -155,61 +155,7 @@ def api_logout():
 @core_bp.route("/api/dashboard", methods=["GET"])
 @api_required
 def api_dashboard():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
-
-    cursor.execute("SELECT COUNT(*) FROM employees")
-    total = cursor.fetchone()[0]
-    cursor.execute(
-        "SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL",
-        (today,)
-    )
-    present = cursor.fetchone()[0]
-    cursor.execute(
-        "SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND status='Late Login'",
-        (today,)
-    )
-    late = cursor.fetchone()[0]
-    cursor.execute("""
-        SELECT e.employee_id, e.name, a.login_time, a.logout_time, a.status,
-               a.logout_status, a.attendance_type
-        FROM employees e
-        LEFT JOIN attendance a ON e.employee_id=a.employee_id AND a.date=%s
-        ORDER BY e.name
-    """, (today,))
-    rows = cursor.fetchall()
-    today_rows = [
-        {
-            "employee_id": r[0], "name": r[1],
-            "login_time": str(r[2]) if r[2] else None,
-            "logout_time": str(r[3]) if r[3] else None,
-            "login_status": r[4], "logout_status": r[5], "attendance_type": r[6],
-        }
-        for r in rows
-    ]
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_type='admin' AND is_read=FALSE")
-    unread_notifications = cursor.fetchone()[0]
-    cursor.execute("SELECT COALESCE(company_name, '') FROM company_settings LIMIT 1")
-    co_row = cursor.fetchone()
-    company_name = co_row[0] if co_row else ""
-    cursor.close()
-    db.close()
-
-    return jsonify({
-        "ok": True, "total": total, "present": present,
-        "absent": total - present, "late": late,
-        "today": today.strftime("%d %b %Y"), "today_rows": today_rows,
-        "pending_leaves": pending_leaves, "pending_resignations": pending_resignations,
-        "pending_tickets": pending_tickets, "unread_notifications": unread_notifications,
-        "company_name": company_name,
-    })
+    return jsonify({})
 
 
 

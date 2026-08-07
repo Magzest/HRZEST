@@ -117,27 +117,4 @@ def hr_login():
 @hr_bp.route("/hr")
 @role_required(HR_ROLE)
 def hr_dashboard():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    active_cid = session.get("active_company_id")
-    _co_sub, _co_args = co_scope_subquery(active_cid)
-
-    if active_cid:
-        cursor.execute("SELECT COUNT(*) FROM employees WHERE company_id=%s", _co_args)
-    else:
-        cursor.execute("SELECT COUNT(*) FROM employees")
-    total_employees = cursor.fetchone()[0]
-
-    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_leaves = cursor.fetchone()[0]
-
-    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress') {_co_sub}", _co_args)  # nosec B608
-    open_tickets = cursor.fetchone()[0]
-
-    cursor.close()
-    db.close()
-    return render_template(
-        "hr_dashboard.html", co=get_company_settings(), active_nav="dashboard",
-        total_employees=total_employees, pending_leaves=pending_leaves,
-        open_tickets=open_tickets,
-    )
+    return redirect("/employees")

@@ -13,9 +13,8 @@ if __name__ == "__main__":
     print("🚀 HRMS Employee Attendance Platform — Development Server")
     print("="*60)
     print("📍 Local URLs to open in your web browser:")
-    print("   • Pricing Page:    http://127.0.0.1:5000/pricing")
-    print("   • Admin Dashboard: http://127.0.0.1:5000/admin")
     print("   • Employee Portal: http://127.0.0.1:5000/employee")
+    print("   • Admin Employees: http://127.0.0.1:5000/employees")
     print("   • Health Check:    http://127.0.0.1:5000/healthz")
     print("="*60 + "\n")
 
