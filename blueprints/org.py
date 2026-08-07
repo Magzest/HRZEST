@@ -1,6 +1,6 @@
 """Org blueprint — multi-tenant org self-registration."""
 import re
-from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
+from flask import Blueprint, request, redirect, render_template, flash, jsonify
 from extensions import app_log
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
 from utils.plan_limits import PLAN_TIERS
