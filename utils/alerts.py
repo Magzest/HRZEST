@@ -163,7 +163,7 @@ def _build_payload(event_type, description, severity, timestamp, fields):
                 {"type": "section", "text": {"type": "mrkdwn", "text": description}},
                 {"type": "section", "text": {"type": "mrkdwn", "text": field_text}},
                 {"type": "context", "elements": [
-                    {"type": "mrkdwn", "text": f"Employee Attendance System · {timestamp}"}
+                    {"type": "mrkdwn", "text": f"HRzest.com · {timestamp}"}
                 ]},
             ],
         }
@@ -178,7 +178,7 @@ def _build_payload(event_type, description, severity, timestamp, fields):
                 {"name": k, "value": v or "—", "inline": True}
                 for k, v in list(fields.items())[:24]  # Discord caps embeds at 25 fields
             ],
-            "footer": {"text": "Employee Attendance System — security alert"},
+            "footer": {"text": "HRzest.com — security alert"},
         }]
     }
 

@@ -115,8 +115,8 @@ def _build_email_html(date_str: str, stats: dict) -> str:
     <!-- Footer -->
     <div style="padding:20px 24px;background:#F8FAFC;border-top:1px solid #E2E8F0;text-align:center;">
       <p style="color:#94A3B8;font-size:12px;margin:0;">
-        This is an automated daily report from the Employee Attendance Platform.<br>
-        © {datetime.date.today().year} Employee Attendance Platform
+        This is an automated daily report from HRzest.com.<br>
+        © {datetime.date.today().year} HRzest.com
       </p>
     </div>
   </div>

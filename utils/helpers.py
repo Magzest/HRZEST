@@ -377,7 +377,7 @@ def get_company_settings():
         if row_dict:
             result = {
                 "company_name": row_dict.get("company_name") or "My Company",
-                "company_tagline": row_dict.get("company_tagline") or "Employee Attendance System",
+                "company_tagline": row_dict.get("company_tagline") or "HRzest.com",
                 "company_logo": row_dict.get("company_logo"),
                 "currency_symbol": row_dict.get("currency_symbol") or "₹",
                 "company_code": row_dict.get("company_code") or "COMP",
@@ -393,7 +393,7 @@ def get_company_settings():
             return dict(result)
     except Exception:
         pass
-    return {"company_name": "My Company", "company_tagline": "Employee Attendance System",
+    return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
             "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic"}
 

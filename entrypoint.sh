@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "🚀 Starting HRMS Attendance Platform..."
+echo "🚀 Starting HRzest.com..."
 
 # ── 1. Pre-flight: warn about unset critical variables ───────────────────────
 warn_missing() {

@@ -43,7 +43,7 @@ limit_request_field_size = 8190
 
 # ── Server hooks ─────────────────────────────────────────────────────────────
 def on_starting(server):
-    server.log.info("🚀 HRMS Attendance Platform — Gunicorn starting")
+    server.log.info("🚀 HRzest.com — Gunicorn starting")
 
 def worker_exit(server, worker):
     server.log.info(f"Worker {worker.pid} exited cleanly")

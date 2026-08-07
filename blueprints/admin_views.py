@@ -871,7 +871,7 @@ def api_save_email_settings():
     host = (data.get("host") or "").strip()
     port = data.get("port")
     user = (data.get("user") or "").strip()
-    from_name = (data.get("from_name") or "Attendance System").strip()
+    from_name = (data.get("from_name") or "HRzest.com").strip()
     from_email = (data.get("from_email") or "").strip() or user
     password = (data.get("password") or "").strip()
     if not host or not port or not user:
@@ -1805,8 +1805,8 @@ def test_email():
     try:
         send_email_smtp(
             to_email,
-            "Test Email - Attendance System",
-            "<h2>Test email from Employee Attendance System</h2><p>Email configuration is working correctly.</p>",
+            "Test Email - HRzest.com",
+            "<h2>Test email from HRzest.com</h2><p>Email configuration is working correctly.</p>",
             config,
         )
         return jsonify({"ok": True, "msg": f"Test email sent to {to_email}"})
@@ -2391,7 +2391,7 @@ def api_test_email():
     if not cfg or not cfg.get("host"):
         return jsonify({"ok": False, "msg": "No SMTP configuration found in system. Please configure SMTP first."}), 400
 
-    subject = "⚡ SMTP Connection Test — Employee Attendance Platform"
+    subject = "⚡ SMTP Connection Test — HRzest.com"
     now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
     html_body = f"""
     <div style="font-family: Arial, sans-serif; padding: 24px; background: #f8fafc; border-radius: 12px;">

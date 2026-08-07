@@ -98,7 +98,7 @@ def setup_wizard():
             try:
                 cursor.execute(
                     "UPDATE company_settings SET company_name=%s, company_code=%s, company_tagline=%s, currency_symbol=%s, logo_url=%s, plan=%s, setup_done=1",
-                    (company_name, company_code or "COMP", company_tag or "Enterprise HRMS Platform", currency, logo_url, plan)
+                    (company_name, company_code or "COMP", company_tag or "HRzest.com", currency, logo_url, plan)
                 )
                 cursor.execute("DELETE FROM admin_users")
                 cursor.execute(
@@ -466,7 +466,7 @@ def admin_forgot_password():
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
     <div style="font-size:20px;font-weight:700;">🔐 Admin Password Reset</div>
-    <div style="font-size:13px;opacity:0.75;margin-top:4px;">Employee Attendance System</div>
+    <div style="font-size:13px;opacity:0.75;margin-top:4px;">HRzest.com</div>
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">You requested a password reset for the admin account.</p>
@@ -478,7 +478,7 @@ def admin_forgot_password():
   </div>
 </div>"""
     try:
-        send_email_smtp(admin_email, "Admin Password Reset — Attendance System", html_body, cfg)
+        send_email_smtp(admin_email, "Admin Password Reset — HRzest.com", html_body, cfg)
     except Exception:
         app_log.error("Failed to send admin password reset email", exc_info=True)
         return render_template("admin_forgot_password.html", sent=False,

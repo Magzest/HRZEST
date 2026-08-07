@@ -26,6 +26,8 @@ PLAN_TIERS = {
         "base_price_paise": 199900,       # ₹1,999/mo
         "per_employee_paise": 4000,       # ₹40/mo per employee beyond employee_band
         "features": frozenset({"qr", "pin", "face"}),
+        "description": "Everything a small team needs to go digital — QR and face check-in "
+                        "with PIN login, for up to 60 employees.",
     },
     "growth": {
         "display_name": "Medium",
@@ -37,6 +39,8 @@ PLAN_TIERS = {
             "qr", "pin", "face", "fingerprint", "geo", "totp_mfa",
             "attendance_lockout", "soc_dashboard", "daily_reports",
         }),
+        "description": "Automated attendance controls, fingerprint check-in, geofencing, and "
+                        "a SecOps dashboard for growing teams up to 150 employees.",
     },
     "enterprise": {
         "display_name": "Prime",
@@ -49,6 +53,8 @@ PLAN_TIERS = {
             "attendance_lockout", "soc_dashboard", "soc_dashboard_dedicated",
             "daily_reports", "mobile_app", "email_mfa",
         }),
+        "description": "Unlimited employees, advanced biometrics, a dedicated SecOps "
+                        "dashboard, and mobile app access — built for large organisations.",
     },
 }
 

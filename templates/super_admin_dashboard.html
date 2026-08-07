@@ -139,8 +139,12 @@
         <h1><i class="ti ti-building-fortress"></i> Platform Admin Console</h1>
         <div style="display:flex;gap:10px;align-items:center;">
           <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').open = !document.getElementById('newCoPanel').open;">
-            <i class="ti ti-plus"></i> New Company
+            <i class="ti ti-plus"></i> New Company (Free)
           </button>
+          <a href="/create_org" target="_blank" rel="noopener" title="Opens the same public registration + plan selection + Razorpay checkout a self-service customer would use — hand this to a client to pay on the spot."
+             style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
+            <i class="ti ti-credit-card"></i> New Company (Paid Signup)
+          </a>
           <a href="/sp_admin/login" style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
             <i class="ti ti-shield-lock"></i> SecOps Dashboard
           </a>
@@ -188,7 +192,11 @@
       </div>
 
       <details class="new-co card" id="newCoPanel">
-        <summary><strong><i class="ti ti-building-plus"></i> Create a new company</strong></summary>
+        <summary><strong><i class="ti ti-building-plus"></i> Create a new company (free / manual)</strong></summary>
+        <p style="margin:10px 4px 0;font-size:12px;color:var(--text-muted);">
+          Provisions immediately at no charge — for sales-assisted or trial onboarding. To actually
+          charge a client via Razorpay instead, use <strong>New Company (Paid Signup)</strong> above.
+        </p>
         <form class="new-co-form" action="/super_admin/tenants/create" method="POST">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
           <div class="field">

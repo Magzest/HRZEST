@@ -1,4 +1,4 @@
-# Employee Attendance System
+# HRzest.com
 
 A full-featured, self-hosted employee management and attendance platform built with Flask, PostgreSQL, face recognition, WebAuthn (passkeys), and GPS geo-fencing. Includes a React Native mobile app and a full CI/CD pipeline.
 

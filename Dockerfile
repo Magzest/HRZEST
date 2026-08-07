@@ -1,5 +1,5 @@
 # ==============================================================================
-# Production Dockerfile — Employee Attendance Platform Backend & Web UI
+# Production Dockerfile — HRzest.com Backend & Web UI
 # ==============================================================================
 
 FROM python:3.13-slim

@@ -189,11 +189,11 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 <div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
   <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:28px;color:white;text-align:center;">
     <div style="font-size:24px;font-weight:800;">🏢 {company_name}</div>
-    <div style="font-size:14px;opacity:0.85;margin-top:6px;">Your Dedicated HRMS Portal is Ready</div>
+    <div style="font-size:14px;opacity:0.85;margin-top:6px;">Your Dedicated HRzest.com Portal is Ready</div>
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#334155;margin-bottom:16px;line-height:1.6;">
-      Welcome to your Attendance & HRMS Platform! Your company workspace has been fully configured and set up by our onboarding team.
+      Welcome to HRzest.com! Your company workspace has been fully configured and set up by our onboarding team.
     </p>
 
     {creds_block}
@@ -205,7 +205,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
     <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser: <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Your HRMS Portal is Ready — {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Your HRzest.com Portal is Ready — {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_portal_ready_email failed: %s", exc)
@@ -231,11 +231,11 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
-    <div style="font-size:20px;font-weight:700;">Payment received — your HRMS portal is ready</div>
+    <div style="font-size:20px;font-weight:700;">Payment received — your HRzest.com portal is ready</div>
     <div style="font-size:13px;opacity:0.75;margin-top:4px;">{company_name}</div>
   </div>
   <div style="padding:28px;">
-    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRMS portal has been created.</p>
+    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRzest.com portal has been created.</p>
     <a href="{set_password_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
       Set Your Password &amp; Sign In
     </a>
@@ -250,7 +250,7 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
     <p style="font-size:12px;color:#94a3b8;">Your portal: {portal_url}</p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Payment confirmed — set up your HRMS portal for {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Payment confirmed — set up your HRzest.com portal for {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_payment_confirmation_email failed: %s", exc)
@@ -262,19 +262,21 @@ def get_started_page():
     """Public entry point for the SaaS product: 'login to your existing
     company' (redirects to <subdomain>.hrms.gradzest.com/admin_login) vs
     'register a new company' (/create_org). The root "/" route
-    (blueprints/core.py's home()) is the platform operator's own login,
-    not this page -- link here explicitly (e.g. from /pricing) rather
-    than via "/"."""
+    (blueprints/core.py's home()) now serves the public marketing landing
+    page to anonymous apex-domain visitors (whose "Login" link points
+    here); this page stays the actual subdomain-lookup step."""
     return render_template("get_started.html")
 
 
 @org_bp.route("/create_org", methods=["GET"])
 def create_org_page():
+    from utils.plan_limits import FEATURE_LABELS
     requested_plan = request.args.get("plan", "").strip().lower()
     selected_plan = requested_plan if requested_plan in PLAN_TIERS else None
     return render_template(
         "create_org.html",
         plan_tiers=PLAN_TIERS,
+        feature_labels=FEATURE_LABELS,
         selected_plan=selected_plan,
         show_captcha=turnstile_enabled(),
         turnstile_site_key=_TURNSTILE_SITE_KEY,

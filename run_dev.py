@@ -10,7 +10,7 @@ from wsgi import app
 
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("🚀 HRMS Employee Attendance Platform — Development Server")
+    print("🚀 HRzest.com — Development Server")
     print("="*60)
     print("📍 Local URLs to open in your web browser:")
     print("   • Pricing Page:    http://127.0.0.1:5000/pricing")

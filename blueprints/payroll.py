@@ -337,7 +337,7 @@ def email_config():
     port = int(request.form["smtp_port"])
     user = request.form["smtp_user"].strip()
     password = request.form.get("smtp_pass", "").strip()
-    from_name = request.form.get("from_name", "Attendance System").strip()
+    from_name = request.form.get("from_name", "HRzest.com").strip()
     from_email = request.form.get("from_email", "").strip() or user
 
     # A blank or masked password means "leave the stored one unchanged" —
@@ -766,7 +766,7 @@ def my_attendance_pdf():
 </div>
 <table><thead><tr><th>Date</th><th>Day</th><th>Login</th><th>Logout</th><th>Status</th></tr></thead>
 <tbody>{rows_html}</tbody></table>
-<div class="footer">Employee Attendance System &nbsp;·&nbsp; {emp[1]} &nbsp;·&nbsp; {month_name}</div>
+<div class="footer">HRzest.com &nbsp;·&nbsp; {emp[1]} &nbsp;·&nbsp; {month_name}</div>
 </body></html>"""
     return html
 

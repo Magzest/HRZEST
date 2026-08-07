@@ -117,7 +117,7 @@ def ticket_action(tid):
 <div style="font-family:'Segoe UI',sans-serif;max-width:560px;margin:0 auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);padding:24px 28px;color:white;">
     <div style="font-size:20px;font-weight:700;">🎫 Ticket Update</div>
-    <div style="font-size:13px;opacity:0.75;margin-top:4px;">Employee Attendance System</div>
+    <div style="font-size:13px;opacity:0.75;margin-top:4px;">HRzest.com</div>
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Hi <strong>{emp_name}</strong>, your ticket has been updated.</p>

@@ -321,7 +321,7 @@ def export_compliance_pdf(framework):
         <div class="box"><h4>🌐 Network & Infrastructure</h4><p>• Rate Limiting: Dynamic Per-Worker Protection<br>• Security Headers: Strict CSP Nonce + HSTS<br>• Device Posture: Agent Verification Engine</p></div>
       </div>
       <div style="margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #94a3b8; text-align: center;">
-        Verified by Antigravity SecOps Engine • Employee Attendance Platform Compliance Certificate
+        Verified by Antigravity SecOps Engine • HRzest.com Compliance Certificate
       </div>
     </body>
     </html>

@@ -247,7 +247,7 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             company_name TEXT DEFAULT 'My Company',
             company_code TEXT DEFAULT 'COMP',
-            company_tagline TEXT DEFAULT 'Enterprise HRMS Platform',
+            company_tagline TEXT DEFAULT 'HRzest.com',
             currency_symbol TEXT DEFAULT '₹',
             logo_url TEXT DEFAULT '',
             plan TEXT DEFAULT 'basic',

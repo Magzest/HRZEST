@@ -12,7 +12,7 @@ import qrcode
 from database import get_db_connection
 from utils.helpers import encrypt_pii, decrypt_pii
 
-_ISSUER = "Attendance System"
+_ISSUER = "HRzest.com"
 
 
 def get_or_create_admin_totp_secret(admin_username: str):

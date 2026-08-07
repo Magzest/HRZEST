@@ -1619,7 +1619,7 @@ def _init_core_tables(cursor, db):
         CREATE TABLE IF NOT EXISTS company_settings (
             id SERIAL PRIMARY KEY,
             company_name VARCHAR(200) DEFAULT 'My Company',
-            company_tagline VARCHAR(300) DEFAULT 'Employee Attendance System',
+            company_tagline VARCHAR(300) DEFAULT 'HRzest.com',
             company_logo VARCHAR(255) DEFAULT NULL,
             currency_symbol VARCHAR(10) DEFAULT '₹',
             timezone VARCHAR(60) DEFAULT 'Asia/Kolkata',

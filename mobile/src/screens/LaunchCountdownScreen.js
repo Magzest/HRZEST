@@ -152,7 +152,7 @@ export default function LaunchCountdownScreen({ onContinue }) {
         </View>
 
         <Text style={styles.copyRightText}>
-          © 2026 Enterprise Attendance System • All Rights Reserved
+          © 2026 HRzest.com • All Rights Reserved
         </Text>
       </SafeAreaView>
     </LinearGradient>

@@ -1,6 +1,6 @@
-# 🏢 HRMS Employee Attendance Platform — Architecture & Structure Guide
+# 🏢 HRzest.com — Architecture & Structure Guide
 
-This document outlines the modular directory structure and architectural layers of the Employee Attendance Platform.
+This document outlines the modular directory structure and architectural layers of HRzest.com.
 
 ---
 

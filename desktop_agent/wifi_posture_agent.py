@@ -1,4 +1,4 @@
-"""Windows Wi-Fi/network posture agent for the Employee Attendance System.
+"""Windows Wi-Fi/network posture agent for HRzest.com.
 
 WHY THIS EXISTS: a browser page cannot read Wi-Fi encryption type, ARP
 tables, or DNS configuration — those aren't exposed to page JavaScript by

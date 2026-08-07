@@ -227,7 +227,7 @@ def request_leave():
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:20px;">Leave Request Received</h2>
-    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">Employee Attendance System</p>
+    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
   </div>
   <div style="padding:24px;">
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
@@ -530,7 +530,7 @@ def leave_action(lid):
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:22px;">{icon} Leave {action}</h2>
-    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">Employee Attendance System</p>
+    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
   </div>
   <div style="padding:28px 32px;">
     <p style="font-size:15px;color:#1e293b;">Hi <strong>{_safe_name}</strong>,</p>
@@ -546,7 +546,7 @@ def leave_action(lid):
     <p style="font-size:13px;color:#94a3b8;margin-top:20px;">For queries, contact your HR administrator.</p>
   </div>
   <div style="background:#f1f5f9;padding:14px;text-align:center;font-size:11px;color:#94a3b8;">
-    Employee Attendance System &bull; Automated Notification
+    HRzest.com &bull; Automated Notification
   </div>
 </div>"""
                 send_email_async(emp_email, f"Leave {action} — {date_str}", html_body, cfg_row)
@@ -663,7 +663,7 @@ def request_resignation():
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,#ef4444,#b91c1c);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:20px;">⚠️ Resignation Notice Received</h2>
-    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">Employee Attendance System</p>
+    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
   </div>
   <div style="padding:24px;">
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
@@ -752,7 +752,7 @@ def resignation_action(rid):
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:22px;">{icon} Resignation {action}</h2>
-    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">Employee Attendance System</p>
+    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
   </div>
   <div style="padding:28px 32px;">
     <p style="font-size:15px;color:#1e293b;">Hi <strong>{_safe_name}</strong>,</p>
@@ -767,7 +767,7 @@ def resignation_action(rid):
     <p style="font-size:13px;color:#94a3b8;margin-top:20px;">For queries, contact your HR administrator.</p>
   </div>
   <div style="background:#f1f5f9;padding:14px;text-align:center;font-size:11px;color:#94a3b8;">
-    Employee Attendance System &bull; Automated Notification
+    HRzest.com &bull; Automated Notification
   </div>
 </div>"""
                 send_email_async(emp_email, f"Resignation {action} — {emp_name}", html_body, cfg_row)
@@ -824,7 +824,7 @@ def bulk_leave_action():
   <div style="padding:24px;">
     <p>Hi <strong>{_safe_name}</strong>, your leave request for <strong>{date_str}</strong> has been
     <strong style="color:{color};">{action.lower()}</strong>.</p>
-    <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Employee Attendance System &bull; Automated Notification</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:16px;">HRzest.com &bull; Automated Notification</p>
   </div>
 </div>"""
             send_email_async(emp_email, f"Leave {action} — {date_str}", html_body, cfg_row)
