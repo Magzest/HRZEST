@@ -41,9 +41,6 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
-    co = get_company_settings()
-    if not co.get("setup_done"):
-        return redirect("/setup")
     if session.get("admin_logged_in"):
         return redirect("/admin")
     if session.get("employee_id"):

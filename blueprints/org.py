@@ -246,85 +246,9 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
         return False
 
 
-@org_bp.route("/get-started", methods=["GET"])
-def get_started_page():
-    """Public entry point for the SaaS product: 'login to your existing
-    company' (redirects to <subdomain>.hrms.gradzest.com/admin_login) vs
-    'register a new company' (/create_org). The root "/" route
-    (blueprints/core.py's home()) is the platform operator's own login,
-    not this page -- link here explicitly (e.g. from /pricing) rather
-    than via "/"."""
-    return render_template("get_started.html")
-
-
-@org_bp.route("/create_org", methods=["GET"])
-def create_org_page():
-    requested_plan = request.args.get("plan", "").strip().lower()
-    selected_plan = requested_plan if requested_plan in PLAN_TIERS else None
-    return render_template(
-        "create_org.html",
-        plan_tiers=PLAN_TIERS,
-        selected_plan=selected_plan,
-        show_captcha=turnstile_enabled(),
-        turnstile_site_key=_TURNSTILE_SITE_KEY,
-    )
-
-
-@org_bp.route("/create_org", methods=["POST"])
-def create_org():
-    """Direct-POST provisioning path. templates/create_org.html's JS no
-    longer submits here directly when Razorpay is configured (it goes
-    through blueprints/billing.py's create_order/verify_payment instead,
-    and no longer collects a password at all) -- but this route stays live
-    as a free fallback whenever RAZORPAY_KEY_ID/SECRET aren't set (local
-    dev, CI, and every test fixture that provisions a real tenant via this
-    exact endpoint, e.g. tests/test_ip_ban.py's signup_enabled_org). Once
-    real Razorpay keys are configured, hitting this directly with a
-    crafted POST (bypassing payment) is rejected -- the JSON /api/create_org
-    endpoint below is unrelated (mobile app's own registration flow) and is
-    untouched either way."""
-    from utils.razorpay_utils import razorpay_configured
-    if razorpay_configured():
-        flash("Please use the signup form to complete payment and create your organisation.", "error")
-        return redirect("/create_org")
-
-    # Signup has no prior-failure signal to key a captcha off (unlike
-    # login's CAPTCHA_AFTER_ATTEMPTS) -- it's shown unconditionally
-    # whenever Turnstile is configured, since this is the one endpoint
-    # that creates a brand-new schema. Fails open (signup stays reachable)
-    # when Turnstile isn't configured, matching how the rest of the app
-    # treats an unconfigured gate.
-    if turnstile_enabled():
-        token = request.form.get("cf-turnstile-response", "")
-        if not verify_turnstile(token, request.remote_addr):
-            flash("Captcha verification failed. Please try again.", "error")
-            return redirect("/create_org")
-
-    company_name = request.form.get("company_name", "").strip()
-    subdomain = _clean_subdomain_slug(request.form.get("subdomain", ""), company_name)
-    admin_username = request.form.get("admin_username", "").strip()
-    admin_password = request.form.get("admin_password", "").strip()
-    admin_email = request.form.get("admin_email", "").strip()
-    plan = request.form.get("plan", "starter").strip()
-
-    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan)
-    if error:
-        flash(error, "error")
-        return redirect("/create_org")
-
-    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan)
-    if not ok:
-        flash(error, "error")
-        return redirect("/create_org")
-
-    email_sent = send_portal_ready_email(admin_email, company_name, admin_username, portal_url)
-
-    return render_template(
-        "org_created.html",
-        company_name=company_name, subdomain=subdomain,
-        admin_username=admin_username, admin_email=admin_email,
-        portal_url=portal_url, email_sent=email_sent,
-    )
+@org_bp.route("/create_org", methods=["GET", "POST"])
+def create_org_disabled():
+    return redirect("/login")
 
 
 @org_bp.route("/org_payment_success", methods=["GET"])
