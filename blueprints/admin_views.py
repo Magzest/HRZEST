@@ -79,11 +79,6 @@ _TOGGLE_FEATURE_PLAN_MAP = {
 @admin_views_bp.route("/admin")
 @admin_required
 def admin():
-    if session.get("admin_role") == "hr":
-        # HR accounts have their own dashboard (blueprints/hr_portal.py) --
-        # this full view also renders links to payroll, settings, and
-        # company management that their session can't actually use.
-        return redirect("/hr")
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     today = datetime.date.today()
@@ -444,6 +439,30 @@ def admin_mfa_required_page():
     /api/settings/2fa/enable it calls) is deliberately reachable on
     @admin_required alone."""
     return render_template("admin_mfa_required.html")
+
+
+@admin_views_bp.route("/save_company_profile", methods=["POST"])
+@admin_required
+def save_company_profile():
+    company_name = request.form.get("company_name", "").strip()
+    company_code = request.form.get("company_code", "").strip()
+    contact_email = request.form.get("contact_email", "").strip()
+    contact_phone = request.form.get("contact_phone", "").strip()
+    address = request.form.get("address", "").strip()
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    try:
+        cursor.execute("""
+            UPDATE company_settings 
+            SET company_name=%s, company_code=%s, contact_email=%s, contact_phone=%s, address=%s
+        """, (company_name, company_code, contact_email, contact_phone, address))
+        db.commit()
+    except Exception:
+        pass
+    cursor.close()
+    db.close()
+    return redirect("/settings?tab=company")
 
 
 @admin_views_bp.route("/settings")

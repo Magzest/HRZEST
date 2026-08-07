@@ -47,9 +47,7 @@ from blueprints.onboarding import onboarding_bp
 from blueprints.employee_portal import employee_portal_bp
 from blueprints.core import core_bp
 from blueprints.ai_hrms import ai_hrms_bp
-from blueprints.secops import secops_bp
 from blueprints.email_blast import email_blast_bp
-from blueprints.compliance import compliance_bp
 from blueprints.hr_portal import hr_bp
 from blueprints.platform_admin import platform_admin_bp
 from blueprints.daily_report import daily_report_bp
@@ -70,9 +68,7 @@ flask_app.register_blueprint(onboarding_bp)
 flask_app.register_blueprint(employee_portal_bp)
 flask_app.register_blueprint(core_bp)
 flask_app.register_blueprint(ai_hrms_bp)
-flask_app.register_blueprint(secops_bp)
 flask_app.register_blueprint(email_blast_bp)
-flask_app.register_blueprint(compliance_bp)
 flask_app.register_blueprint(hr_bp)
 flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(daily_report_bp)

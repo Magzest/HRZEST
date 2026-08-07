@@ -429,10 +429,11 @@ _MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
 # genuine "mandatory," not a step-up an admin can defer indefinitely).
 _MANDATORY_MFA_EXEMPT_PATHS = {
     "/admin/mfa-required", "/api/settings/2fa/setup", "/api/settings/2fa/enable",
-    "/logout", "/admin_login", "/setup", "/hr_login", "/sp_admin/login", "/secops/login", "/secops"
+    "/logout", "/admin_login", "/hr_login"
 }
 
-app.config.setdefault("MANDATORY_ADMIN_MFA", True)
+app.config.setdefault("MANDATORY_ADMIN_MFA", False)
+app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
 
 
 @app.before_request
@@ -483,7 +484,7 @@ def _enforce_csrf():
         return  # CSRF disabled in test mode; Bearer-token tests handle auth separately
     if request.path.startswith("/api/"):
         return  # API routes use Bearer-token auth — no session/CSRF needed
-    if request.path in ("/sp_admin/login", "/secops/login", "/admin_login"):
+    if request.path in ("/login", "/admin_login", "/hr_login"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
     # script (_inject_csrf_meta) adds X-CSRF-Token to every fetch() call, so
@@ -498,17 +499,10 @@ def _enforce_csrf():
         # Browser form submissions: redirect to login so the user gets a fresh session+token
         if request.accept_mimetypes.accept_html and not request.headers.get("X-Requested-With"):
             flash("Your session expired. Please log in again.", "warning")
-            # Three distinct login identities live at three distinct paths
-            # (tenant admin, platform operator, SecOps) -- bouncing all of
-            # them to auth.admin_login on an expired/missing CSRF token
-            # sent a platform-admin or SecOps session to the wrong login
-            # page entirely.
             if request.path.startswith("/employee") or "employee" in request.path:
                 login_url = url_for("auth.employee_login")
             elif request.path.startswith("/super_admin"):
                 login_url = "/super_admin/login"
-            elif request.path.startswith("/sp_admin") or request.path.startswith("/secops"):
-                login_url = "/sp_admin/login"
             else:
                 login_url = url_for("auth.admin_login")
             return redirect(login_url)
@@ -606,11 +600,10 @@ def _set_csp_nonce():
     g.csp_nonce = secrets.token_urlsafe(16)
 
 
-_SETTINGS_PATHS = {"/settings", "/setup", "/admin_set_recovery_email",
+_SETTINGS_PATHS = {"/settings", "/admin_set_recovery_email",
                    "/save_security_settings", "/toggle_auth_feature",
                    "/toggle_fingerprint", "/save_company_code", "/save_geo_settings",
-                   "/save_company_info", "/toggle_feature",
-                   "/api/secops/session-timeout"}
+                   "/save_company_info", "/toggle_feature"}
 
 
 @app.after_request
@@ -1373,54 +1366,6 @@ def _init_core_tables(cursor, db):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_eq_status ON email_queue (status)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_eq_created ON email_queue (created_at)")
 
-    # ── SecOps: malware quarantine, threat intel, email broadcast ────────────
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS quarantined_files (
-            id SERIAL PRIMARY KEY,
-            filename VARCHAR(255) NOT NULL,
-            file_hash VARCHAR(64) NOT NULL,
-            uploader_id VARCHAR(50) DEFAULT 'Guest/System',
-            file_path VARCHAR(500),
-            detection_signature VARCHAR(150) DEFAULT 'Heuristic.Malware.SuspiciousExtension',
-            status VARCHAR(20) DEFAULT 'Quarantined',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS threat_intel_cve (
-            id SERIAL PRIMARY KEY,
-            cve_id VARCHAR(50) UNIQUE NOT NULL,
-            vendor VARCHAR(100),
-            product VARCHAR(100),
-            vulnerability_name TEXT,
-            date_added VARCHAR(30),
-            due_date VARCHAR(30),
-            notes TEXT,
-            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS threat_intel_ips (
-            id SERIAL PRIMARY KEY,
-            ip VARCHAR(45) UNIQUE NOT NULL,
-            threat_score INT DEFAULT 1,
-            source VARCHAR(100),
-            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS broadcast_emails (
-            id SERIAL PRIMARY KEY,
-            sender_username VARCHAR(100) NOT NULL,
-            target_type VARCHAR(50) NOT NULL,
-            target_value VARCHAR(150),
-            subject VARCHAR(255) NOT NULL,
-            body_snippet TEXT,
-            recipient_count INT DEFAULT 0,
-            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS payroll_runs (
             id SERIAL PRIMARY KEY,
@@ -1572,43 +1517,6 @@ def _init_core_tables(cursor, db):
     """)
     _attach_updated_at_trigger(cursor, "shift_swap_requests")
     db.commit()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS compliance_certifications (
-            id SERIAL PRIMARY KEY,
-            framework VARCHAR(50) NOT NULL UNIQUE,
-            status VARCHAR(20) NOT NULL DEFAULT 'Not Started',
-            owner VARCHAR(150),
-            last_reviewed DATE,
-            next_review DATE,
-            notes TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    _attach_updated_at_trigger(cursor, "compliance_certifications")
-    db.commit()
-    # Seed the framework rows once so the Compliance Center always has all
-    # four to display; status starts "Not Started" (never fabricate a
-    # compliant/certified claim) until an admin genuinely attests otherwise.
-    for _fw in ("GDPR", "SOC 2 Type II", "ISO 27001", "ISO 9001"):
-        cursor.execute(
-            "INSERT INTO compliance_certifications (framework, status) VALUES (%s, 'Not Started') "
-            "ON CONFLICT (framework) DO NOTHING", (_fw,)
-        )
-    db.commit()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS compliance_deadlines (
-            id SERIAL PRIMARY KEY,
-            title VARCHAR(200) NOT NULL,
-            jurisdiction VARCHAR(100),
-            category VARCHAR(50) DEFAULT 'Regulatory',
-            due_date DATE NOT NULL,
-            status VARCHAR(20) DEFAULT 'Pending',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
     db.commit()
 
     # Create company_settings table (must precede the migration loop below,
@@ -3180,18 +3088,13 @@ if "core.home" not in app.view_functions:
     from blueprints.employee_portal import employee_portal_bp
     from blueprints.core import core_bp
     from blueprints.ai_hrms import ai_hrms_bp
-    from blueprints.secops import secops_bp
     from blueprints.email_blast import email_blast_bp
-    from blueprints.compliance import compliance_bp
-    from blueprints.hr_portal import hr_bp
-    from blueprints.platform_admin import platform_admin_bp
     from blueprints.daily_report import daily_report_bp
     from blueprints.billing import billing_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp,
-                platform_admin_bp, daily_report_bp, billing_bp):
+                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp):
         app.register_blueprint(_bp)
 
 

@@ -505,258 +505,64 @@
             </div>
 
 
-          <!-- Companies — merged: name, code, employee count, add/edit/delete -->
+          <!-- Company Profile & General Details -->
           <div class="section u-mb-20">
-            <div class="u-d-flex u-ai-center u-jc-space-between u-mb-14">
-              <div>
-                <div class="section-title u-mb-2">🏢 Companies</div>
-                <div class="u-fs-12 u-c-64748b">Manage company name, code and details</div>
-              </div>
-              <button class="u-d-flex u-ai-center u-gap-6 u-p-8-14 u-bd-1d5-solid-bfdbfe u-br-10 u-bg-eff6ff u-c-1e3a8a u-fs-13 u-fw-700 u-cur-pointer u-ff-inherit" type="button" onclick="acOpenModal()">
-                <i class="ti ti-plus u-fs-14"></i> Add Company
-              </button>
-            </div>
+            <div class="section-title u-mb-2">🏢 Organization Profile &amp; General Details</div>
+            <div class="u-fs-12 u-c-64748b u-mb-14">Configure your primary organization name, contact details, currency, and business profile.</div>
 
-            <div class="u-d-flex u-fxd-column u-gap-12">
-              {% for c in companies %}{% set cid,cname,ccode,ccreated,cemp,cwd,cpin,clogo,chastpl,caddr,cweb,cemail,cphone = c %}{% set cwd_list = cwd.split(',') %}
-
-              <!-- View card -->
-              <div class="u-bg-fff u-bd-1d5-solid-e2e8f0 u-br-14 u-ov-hidden" id="co-view-{{ cid }}">
-                <div class="u-p-14-18 u-d-flex u-ai-center u-gap-14">
-                  <div class="u-w-42 u-h-42 u-br-11 u-bg-eff6ff u-d-flex u-ai-center u-jc-center u-fxs-0 u-ov-hidden">
-                    {% if clogo %}
-                    <img src="/static/{{ clogo }}" alt="{{ cname }} logo" class="u-w-100pct u-h-100pct" style="object-fit:cover;" />
-                    {% else %}
-                    <i class="ti ti-building u-c-1e3a8a u-fs-20"></i>
-                    {% endif %}
-                  </div>
-                  <div class="u-fx-1 u-minw-0">
-                    <div class="u-fs-15 u-fw-800 u-c-0f172a u-mb-4">{{ cname }}</div>
-                    <div class="u-d-flex u-ai-center u-gap-10 u-fxw-wrap">
-                      {% if ccode %}
-                      <span class="u-fs-11 u-fw-700 u-p-3-10 u-br-8 u-bg-fefce8 u-bd-1-solid-fde68a u-c-92400e u-ff-monospace u-ls-1">{{ ccode }}</span>
-                      {% else %}
-                      <span class="u-fs-11 u-c-94a3b8">No code set</span>
-                      {% endif %}
-                      <span class="u-fs-11 u-c-64748b"><i class="ti ti-users u-fs-11"></i> {{ cemp }} employee{{ 's' if cemp != 1 else '' }}</span>
-                    </div>
-                  </div>
-                  <div class="u-d-flex u-gap-6 u-fxs-0">
-                    <button type="button" onclick="openSetPin({{ cid }},'{{ cname }}',{{ cpin }})"
-                      style="display:flex;align-items:center;gap:4px;padding:6px 10px;border:1.5px solid {{ '#fde68a' if cpin else '#e2e8f0' }};border-radius:8px;background:{{ '#fffbeb' if cpin else '#f8fafc' }};color:{{ '#d97706' if cpin else '#64748b' }};font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;"
-                      title="{{ 'PIN set — click to change' if cpin else 'Set PIN protection' }}">
-                      <i class="ti ti-lock{{ '-open' if not cpin else '' }} u-fs-12"></i> PIN{{ ' ✓' if cpin else '' }}
-                    </button>
-                    <a href="/companies/{{ cid }}/id_card_template/editor"
-                      style="display:flex;align-items:center;gap:4px;padding:6px 10px;border:1.5px solid {{ '#bfdbfe' if chastpl else '#e2e8f0' }};border-radius:8px;background:{{ '#eff6ff' if chastpl else '#f8fafc' }};color:{{ '#1e3a8a' if chastpl else '#64748b' }};font-size:11px;font-weight:700;text-decoration:none;font-family:inherit;"
-                      title="{{ 'Custom ID card template set' if chastpl else 'Set up a custom ID card template' }}">
-                      <i class="ti ti-id-badge-2 u-fs-12"></i> ID Card{{ ' ✓' if chastpl else '' }}
-                    </a>
-                    <button class="u-d-flex u-ai-center u-gap-5 u-p-6-12 u-bd-1d5-solid-e2e8f0 u-br-8 u-bg-f8fafc u-c-475569 u-fs-12 u-fw-700 u-cur-pointer u-ff-inherit" type="button" onclick="openEditCompany({{ cid }})">
-                      <i class="ti ti-pencil u-fs-12"></i> Edit
-                    </button>
-                    <form class="u-d-inline" method="POST" action="/companies/{{ cid }}/delete" onsubmit="return confirm('Delete company {{ cname }}?')">
-                      <input type="hidden" name="redirect_to" value="settings" />
-                      <button type="submit" class="btn-del u-p-6-12 u-fs-12">Delete</button>
-                    </form>
-                  </div>
+            <form method="POST" action="/save_company_profile" class="u-d-flex u-fxd-column u-gap-14">
+              <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
+                <div class="field u-m-0">
+                  <label class="u-fs-12 u-fw-700 u-c-475569">Company Name</label>
+                  <input type="text" name="company_name" value="{{ co.company_name if co and co.company_name else 'My Organization' }}" placeholder="e.g. Acme Corp" required style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
                 </div>
-                {% if cweb or cemail or cphone %}
-                <!-- Contact details strip -->
-                <div class="u-p-8-18-4 u-bdt-1-solid-f1f5f9 u-d-flex u-ai-center u-gap-14 u-fxw-wrap">
-                  {% if cweb %}
-                  <a href="{{ cweb if cweb.startswith('http') else 'https://' + cweb }}" target="_blank" rel="noopener" class="u-fs-11 u-c-1e3a8a u-td-none"><i class="ti ti-world u-fs-11"></i> {{ cweb }}</a>
-                  {% endif %}
-                  {% if cemail %}
-                  <span class="u-fs-11 u-c-64748b"><i class="ti ti-mail u-fs-11"></i> {{ cemail }}</span>
-                  {% endif %}
-                  {% if cphone %}
-                  <span class="u-fs-11 u-c-64748b"><i class="ti ti-phone u-fs-11"></i> {{ cphone }}</span>
-                  {% endif %}
+                <div class="field u-m-0">
+                  <label class="u-fs-12 u-fw-700 u-c-475569">Company Code / Tax ID</label>
+                  <input type="text" name="company_code" value="{{ co.company_code if co and co.company_code else 'ORG-2026' }}" placeholder="e.g. TAX-99201" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
                 </div>
-                {% endif %}
-                <!-- Working days strip -->
-                <div class="u-p-8-18-4 u-bdt-1-solid-f1f5f9 u-d-flex u-ai-center u-gap-6 u-fxw-wrap">
-                  <span class="u-fs-11 u-fw-600 u-c-64748b u-mr-4">📅 Working days:</span>
-                  {% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
-                  <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;{% if d in cwd_list %}background:#eff6ff;color:#1e3a8a;border:1px solid #bfdbfe;{% else %}background:#f1f5f9;color:#94a3b8;border:1px solid #e2e8f0;text-decoration:line-through;{% endif %}">{{ d }}</span>
-                  {% endfor %}
-                </div>
-                <!-- Shifts strip -->
-                <div class="u-p-5-18-0 u-d-flex u-ai-center u-gap-5 u-fxw-wrap">
-                  <span class="u-fs-11 u-fw-600 u-c-64748b u-mr-2 u-fxs-0">🕐 Shifts:</span>
-                  {% if not company_shifts.get(cid) %}
-                  <span class="u-fs-11 u-c-cbd5e1 u-fst-italic">None</span>
-                  {% endif %}
-                  <button class="u-d-flex u-ai-center u-gap-3 u-p-2-8 u-bd-1d5-dashed-bbf7d0 u-br-8 u-bg-f0fdf4 u-c-15803d u-fs-10 u-fw-700 u-cur-pointer u-ff-inherit" type="button" onclick="toggleCoAddShift({{ cid }})">+ Add Shift</button>
-                </div>
-                <!-- Inline add-shift form -->
-                <div class="u-d-none u-p-8-18" id="co-as-{{ cid }}">
-                  <div class="u-fs-10 u-fw-700 u-c-15803d u-mb-5">New shift</div>
-                  <form class="u-d-grid u-gtc-1fr-82-82-82-auto-auto u-gap-6 u-ai-center" method="POST" action="/add_shift">
-                    <input type="hidden" name="redirect"    value="/settings?tab=company" />
-                    <input type="hidden" name="company_id"  value="{{ cid }}" />
-                    <input class="u-p-6-10 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="text" name="shift_name"  placeholder="Shift name"  required />
-                    <input class="u-p-6-8 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="time" name="start_time"  required />
-                    <input class="u-p-6-8 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="time" name="half_time"   required />
-                    <input class="u-p-6-8 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="time" name="end_time"    required />
-                    <button class="u-p-6-12 u-bd-none u-br-8 u-bg-15803d u-c-fff u-fs-12 u-fw-700 u-cur-pointer u-ff-inherit" type="submit">Save</button>
-                    <button class="u-p-6-10 u-bd-1-solid-e2e8f0 u-br-8 u-bg-fff u-c-64748b u-fs-12 u-fw-600 u-cur-pointer u-ff-inherit" type="button" onclick="toggleCoAddShift({{ cid }})">Cancel</button>
-                  </form>
-                  <div class="u-d-grid u-gtc-1fr-82-82-82-auto-auto u-gap-6 u-mt-2 u-p-0-2">
-                    <span class="u-fs-10 u-c-94a3b8">Name</span>
-                    <span class="u-fs-10 u-c-94a3b8">Start</span>
-                    <span class="u-fs-10 u-c-94a3b8">Half-day</span>
-                    <span class="u-fs-10 u-c-94a3b8">End</span>
-                    <span></span><span></span>
-                  </div>
-                </div>
-
-                <!-- Per-shift blocks: each shift owns its own breaks -->
-                {% if company_shifts.get(cid) %}
-                {% for _cs in company_shifts[cid] %}{% set _csid,_csname,_csstart,_cshalf,_csend = _cs %}
-                <div class="u-m-6-18-0 u-bd-1-solid-e2e8f0 u-br-10 u-ov-hidden">
-                  <div class="u-d-flex u-ai-center u-jc-space-between u-gap-8 u-p-7-12 u-bg-f0fdf4">
-                    <span class="u-fs-12 u-fw-700 u-c-15803d" title="{{ _csstart }} – {{ _csend }} (half: {{ _cshalf }})">🕐 {{ _csname }} <span class="u-fw-500 u-c-4d7c0f">({{ _csstart }}–{{ _csend }})</span></span>
-                    <span class="u-d-flex u-gap-8 u-fxs-0">
-                      <button class="u-bd-none u-bg-transparent u-cur-pointer u-c-15803d u-fs-12 u-op-d7" type="button" onclick="toggleCoEditShift({{ _csid }})" title="Edit shift">✏</button>
-                      <form class="u-d-inline u-m-0" method="POST" action="/delete_shift/{{ _csid }}" onsubmit="return confirm('Delete shift \'{{ _csname }}\'? Its breaks and assigned employees will be unassigned.')">
-                        <input type="hidden" name="redirect" value="/settings?tab=company" />
-                        <button class="u-bd-none u-bg-transparent u-cur-pointer u-c-15803d u-fs-13 u-op-d7" type="submit" title="Delete shift">×</button>
-                      </form>
-                    </span>
-                  </div>
-                  <div class="u-d-none u-p-8-12 u-bg-f0fdf4 u-bdt-1-dashed-bbf7d0" id="co-es-{{ _csid }}">
-                    <div class="u-fs-10 u-fw-700 u-c-15803d u-mb-5">Edit shift: {{ _csname }}</div>
-                    <form class="u-d-grid u-gtc-1fr-82-82-82-auto-auto u-gap-6 u-ai-center" method="POST" action="/edit_shift/{{ _csid }}">
-                      <input type="hidden" name="redirect" value="/settings?tab=company" />
-                      <input class="u-p-6-10 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="text" name="name"       value="{{ _csname }}"  required />
-                      <input class="u-p-6-8 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="time" name="start_time" value="{{ _csstart }}" required />
-                      <input class="u-p-6-8 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="time" name="half_time"  value="{{ _cshalf }}"  required />
-                      <input class="u-p-6-8 u-bd-1-solid-bbf7d0 u-br-8 u-fs-12 u-ff-inherit" type="time" name="end_time"   value="{{ _csend }}"   required />
-                      <button class="u-p-6-12 u-bd-none u-br-8 u-bg-15803d u-c-fff u-fs-12 u-fw-700 u-cur-pointer u-ff-inherit" type="submit">Update</button>
-                      <button class="u-p-6-10 u-bd-1-solid-e2e8f0 u-br-8 u-bg-fff u-c-64748b u-fs-12 u-fw-600 u-cur-pointer u-ff-inherit" type="button" onclick="toggleCoEditShift({{ _csid }})">Cancel</button>
-                    </form>
-                  </div>
-
-                  <!-- Breaks belonging to this shift -->
-                  <div class="u-p-7-12 u-d-flex u-ai-center u-gap-5 u-fxw-wrap">
-                    <span class="u-fs-11 u-fw-600 u-c-64748b u-mr-2 u-fxs-0">☕ Breaks:</span>
-                    {% set _shift_breaks = company_breaks.get(cid, {}).get(_csid) %}
-                    {% if _shift_breaks %}
-                    {% for _cb in _shift_breaks %}{% set _cbid,_cbname,_cbtime,_cbdur,_cbact = _cb %}
-                    <span style="display:inline-flex;align-items:center;gap:2px;font-size:11px;font-weight:700;padding:2px 4px 2px 9px;border-radius:8px;background:{% if 'lunch' in _cbname.lower() %}#fef9c3;color:#92400e;border:1px solid #fde68a;{% else %}#dbeafe;color:#1e40af;border:1px solid #bfdbfe;{% endif %}" title="{{ _cbtime }} · {{ _cbdur }} mins">
-                      {{ _cbname }}
-                      <button class="u-w-16 u-h-16 u-bd-none u-bg-transparent u-cur-pointer u-c-inherit u-fs-10 u-lh-1 u-p-0 u-d-flex u-ai-center u-jc-center u-op-d55 u-fxs-0" type="button" onclick="toggleCoEditBreak({{ _cbid }})" title="Edit break">✏</button>
-                      <form class="u-d-inline u-m-0" method="POST" action="/delete_break/{{ _cbid }}" onsubmit="return confirm('Remove break \'{{ _cbname }}\'?')">
-                        <input type="hidden" name="redirect" value="/settings?tab=company" />
-                        <button class="u-w-16 u-h-16 u-bd-none u-bg-transparent u-cur-pointer u-c-inherit u-fs-12 u-lh-1 u-p-0 u-d-flex u-ai-center u-jc-center u-op-d55 u-fxs-0" type="submit" title="Delete break">×</button>
-                      </form>
-                    </span>
-                    {% endfor %}
-                    {% else %}
-                    <span class="u-fs-11 u-c-cbd5e1 u-fst-italic">None</span>
-                    {% endif %}
-                    <button class="u-d-flex u-ai-center u-gap-3 u-p-2-8 u-bd-1d5-dashed-bbf7d0 u-br-8 u-bg-f0fdf4 u-c-16a34a u-fs-10 u-fw-700 u-cur-pointer u-ff-inherit" type="button" onclick="toggleCoAddBreak({{ cid }}, {{ _csid }})">+ Add</button>
-                  </div>
-                  <!-- Per-break inline edit forms for this shift -->
-                  {% if _shift_breaks %}
-                  {% for _cb in _shift_breaks %}{% set _cbid,_cbname,_cbtime,_cbdur,_cbact = _cb %}
-                  <div class="u-d-none u-p-6-12 u-bg-fffbeb u-bdt-1-dashed-fde68a" id="co-eb-{{ _cbid }}">
-                    <div class="u-fs-10 u-fw-700 u-c-92400e u-mb-5">Edit break: {{ _cbname }}</div>
-                    <form class="u-d-grid u-gtc-1fr-90-70-auto-auto u-gap-6 u-ai-center" method="POST" action="/update_break/{{ _cbid }}">
-                      <input type="hidden" name="redirect"  value="/settings?tab=company" />
-                      <input type="hidden" name="is_active"  value="1" />
-                      <input type="hidden" name="shift_id"  value="{{ _csid }}" />
-                      <input class="u-p-6-10 u-bd-1-solid-fde68a u-br-8 u-fs-12 u-ff-inherit" type="text"   name="break_name"       value="{{ _cbname }}" required />
-                      <input class="u-p-6-8 u-bd-1-solid-fde68a u-br-8 u-fs-12 u-ff-inherit" type="time"   name="break_time"       value="{{ _cbtime }}" required />
-                      <input class="u-p-6-8 u-bd-1-solid-fde68a u-br-8 u-fs-12 u-ff-inherit" type="number" name="duration_minutes" value="{{ _cbdur }}"  min="1" max="240" required />
-                      <button class="u-p-6-12 u-bd-none u-br-8 u-bg-d97706 u-c-fff u-fs-12 u-fw-700 u-cur-pointer u-ff-inherit" type="submit">Update</button>
-                      <button class="u-p-6-10 u-bd-1-solid-e2e8f0 u-br-8 u-bg-fff u-c-64748b u-fs-12 u-fw-600 u-cur-pointer u-ff-inherit" type="button" onclick="toggleCoEditBreak({{ _cbid }})">Cancel</button>
-                    </form>
-                  </div>
-                  {% endfor %}
-                  {% endif %}
-                  <!-- Inline add-break form for this shift (hidden until + Add clicked) -->
-                  <div class="u-d-none u-p-8-12-12" id="co-ab-{{ cid }}-{{ _csid }}">
-                    <form class="u-d-grid u-gtc-1fr-90-70-auto-auto u-gap-6 u-ai-center" method="POST" action="/add_break">
-                      <input type="hidden" name="redirect"    value="/settings?tab=company" />
-                      <input type="hidden" name="company_id"  value="{{ cid }}" />
-                      <input type="hidden" name="shift_id"    value="{{ _csid }}" />
-                      <input class="u-p-6-10 u-bd-1-solid-d1fae5 u-br-8 u-fs-12 u-ff-inherit" type="text"   name="break_name"  placeholder="Break name" required />
-                      <input class="u-p-6-8 u-bd-1-solid-d1fae5 u-br-8 u-fs-12 u-ff-inherit" type="time"   name="break_time"  required />
-                      <input class="u-p-6-8 u-bd-1-solid-d1fae5 u-br-8 u-fs-12 u-ff-inherit" type="number" name="duration_minutes" value="15" min="1" max="240" placeholder="mins" required />
-                      <button class="u-p-6-12 u-bd-none u-br-8 u-bg-16a34a u-c-fff u-fs-12 u-fw-700 u-cur-pointer u-ff-inherit" type="submit">Save</button>
-                      <button class="u-p-6-10 u-bd-1-solid-e2e8f0 u-br-8 u-bg-f8fafc u-c-64748b u-fs-12 u-fw-600 u-cur-pointer u-ff-inherit" type="button" onclick="toggleCoAddBreak({{ cid }}, {{ _csid }})">Cancel</button>
-                    </form>
-                  </div>
-                </div>
-                {% endfor %}
-                {% else %}
-                <div class="u-m-4-18-0 u-fs-11 u-c-94a3b8 u-fst-italic">Add a shift first to attach breaks to it.</div>
-                {% endif %}
               </div>
 
-              <!-- Inline edit row -->
-              <div class="u-d-none u-bg-f0f7ff u-bd-1d5-solid-bfdbfe u-br-14 u-p-18" id="co-edit-{{ cid }}">
-                <div class="u-fs-13 u-fw-700 u-c-1e3a8a u-mb-14">✏️ Edit {{ cname }}</div>
-                <form method="POST" action="/companies/{{ cid }}/edit" enctype="multipart/form-data">
-                  <input type="hidden" name="redirect_to" value="settings" />
-                  <div class="u-d-grid u-gtc-1fr-180 u-gap-10 u-mb-14">
-                    <div class="field u-m-0">
-                      <label class="u-fs-12">Company Name</label>
-                      <input type="text" name="name" value="{{ cname }}" required />
-                    </div>
-                    <div class="field u-m-0">
-                      <label class="u-fs-12">Code <span class="u-fw-400 u-c-94a3b8">(ID prefix)</span></label>
-                      <input class="u-ff-monospace u-ls-1" type="text" name="code" value="{{ ccode or '' }}" maxlength="20" placeholder="e.g. MGZ" />
-                    </div>
-                  </div>
-                  <div class="field u-mb-14">
-                    <label class="u-fs-12 u-fw-700 u-c-475569">🖼️ Company Logo <span class="u-fw-400 u-c-94a3b8">{{ '(replace)' if clogo else '(optional)' }}</span></label>
-                    <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/bmp" />
-                  </div>
-                  <div class="field u-mb-14">
-                    <label class="u-fs-12 u-fw-700 u-c-475569">📍 Office Address <span class="u-fw-400 u-c-94a3b8">(shown on ID cards)</span></label>
-                    <input type="text" name="address" value="{{ caddr or '' }}" placeholder="e.g. 4th Floor, Tech Park, Bengaluru, India" />
-                  </div>
-                  <div class="u-d-grid u-gtc-1fr-1fr u-gap-10 u-mb-14">
-                    <div class="field u-m-0">
-                      <label class="u-fs-12 u-fw-700 u-c-475569">🌐 Website</label>
-                      <input type="text" name="website" value="{{ cweb or '' }}" placeholder="e.g. company.com" />
-                    </div>
-                    <div class="field u-m-0">
-                      <label class="u-fs-12 u-fw-700 u-c-475569">✉️ Contact Email</label>
-                      <input type="email" name="email" value="{{ cemail or '' }}" placeholder="info@company.com" />
-                    </div>
-                  </div>
-                  <div class="field u-mb-14">
-                    <label class="u-fs-12 u-fw-700 u-c-475569">📞 Contact Phone</label>
-                    <input type="text" name="phone" value="{{ cphone or '' }}" placeholder="e.g. +91 98765 43210" />
-                  </div>
-                  <div class="u-mb-14">
-                    <label class="u-fs-12 u-fw-700 u-c-475569 u-d-block u-mb-8">📅 Working Days</label>
-                    <div class="u-d-flex u-fxw-wrap u-gap-6">
-                      {% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
-                      <label class="u-cur-pointer">
-                        <input class="u-d-none" type="checkbox" name="working_days" value="{{ d }}" {% if d in cwd_list %}checked{% endif %} onchange="styleCoWd(this)" />
-                        <span style="display:inline-block;padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid {% if d in cwd_list %}#1e3a8a{% else %}#e2e8f0{% endif %};background:{% if d in cwd_list %}#eff6ff{% else %}#f8fafc{% endif %};color:{% if d in cwd_list %}#1e3a8a{% else %}#94a3b8{% endif %};">{{ d }}</span>
-                      </label>
-                      {% endfor %}
-                    </div>
-                    <div class="u-fs-11 u-c-94a3b8 u-mt-6">Affects payroll calculation for this company.</div>
-                  </div>
-                  <div class="u-d-flex u-gap-8">
-                    <button class="u-p-8-18 u-bd-none u-br-8 u-bg-1e3a8a u-c-fff u-fs-13 u-fw-700 u-cur-pointer" type="submit">Save Changes</button>
-                    <button class="u-p-8-14 u-bd-1d5-solid-e2e8f0 u-br-8 u-bg-fff u-c-64748b u-fs-13 u-fw-600 u-cur-pointer u-ff-inherit" type="button" onclick="closeEditCompany({{ cid }})">Cancel</button>
-                  </div>
-                </form>
+              <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
+                <div class="field u-m-0">
+                  <label class="u-fs-12 u-fw-700 u-c-475569">Primary Contact Email</label>
+                  <input type="email" name="contact_email" value="{{ co.contact_email if co and co.contact_email else 'hr@company.com' }}" placeholder="hr@company.com" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
+                </div>
+                <div class="field u-m-0">
+                  <label class="u-fs-12 u-fw-700 u-c-475569">Contact Phone</label>
+                  <input type="text" name="contact_phone" value="{{ co.contact_phone if co and co.contact_phone else '+1 (555) 019-2831' }}" placeholder="+1 555-0192" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
+                </div>
               </div>
 
-              {% else %}
-              <div class="u-p-24 u-ta-center u-c-94a3b8 u-fs-13 u-bg-f8fafc u-br-12 u-bd-1-dashed-e2e8f0">No companies yet — click <strong>Add Company</strong> to create one.</div>
-              {% endfor %}
-            </div>
+              <div class="field u-m-0">
+                <label class="u-fs-12 u-fw-700 u-c-475569">Headquarters Address</label>
+                <input type="text" name="address" value="{{ co.address if co and co.address else '100 Innovation Way, Suite 400, Tech City' }}" placeholder="Business Address" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
+              </div>
+
+              <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
+                <div class="field u-m-0">
+                  <label class="u-fs-12 u-fw-700 u-c-475569">Default Currency</label>
+                  <select name="currency" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; font-size:14px;">
+                    <option value="USD" selected>USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                    <option value="INR">INR (₹)</option>
+                    <option value="CAD">CAD ($)</option>
+                  </select>
+                </div>
+                <div class="field u-m-0">
+                  <label class="u-fs-12 u-fw-700 u-c-475569">System Timezone</label>
+                  <select name="timezone" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; font-size:14px;">
+                    <option value="UTC" selected>UTC (Coordinated Universal Time)</option>
+                    <option value="America/New_York">EST (Eastern Standard Time)</option>
+                    <option value="America/Los_Angeles">PST (Pacific Standard Time)</option>
+                    <option value="Europe/London">GMT (Greenwich Mean Time)</option>
+                    <option value="Asia/Kolkata">IST (Indian Standard Time)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button type="submit" class="btn-submit" style="width:auto; align-self:flex-start; margin-top:6px;">Save Organization Profile</button>
+            </form>
           </div>
 
           </div><!-- /ss-company -->
@@ -1247,59 +1053,8 @@
             </div>
             <div class="two-col">
               <div class="section">
-                <div class="section-title">📡 SMTP Configuration</div>
-
-                <!-- Locked state: no SMTP data has been fetched yet — nothing
-                     sensitive is in the page until this gate is passed. -->
-                <div id="email-2fa-gate">
-                  <div class="u-d-flex u-ai-center u-gap-8 u-mb-10">
-                    <i class="ti ti-shield-lock u-c-dc2626 u-fs-20"></i>
-                    <div class="u-fs-14 u-fw-700 u-c-1e293b">Identity Verification Required</div>
-                  </div>
-                  <div class="u-fs-12 u-c-64748b u-mb-14">
-                    SMTP settings include a stored password. Confirm it's you before this loads.
-                  </div>
-
-                  <!-- First-time enrollment sub-view (hidden unless no TOTP is set up yet) -->
-                  <div id="email-2fa-enroll" style="display:none;">
-                    <div class="u-fs-12 u-c-64748b u-mb-10">Scan with Google Authenticator (or any TOTP app), then enter the 6-digit code it shows to confirm setup.</div>
-                    <img id="email-2fa-qr" alt="2FA QR code" style="width:160px;height:160px;display:block;margin:0 auto 10px;" />
-                    <div class="u-fs-11 u-c-94a3b8 u-ta-center u-mb-14">Can't scan? Enter manually: <code id="email-2fa-secret"></code></div>
-                    <div class="field"><label>6-digit code</label>
-                      <input type="text" id="email-2fa-enroll-code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
-                    </div>
-                    <button type="button" class="btn-submit" onclick="confirmEmail2faEnroll()">Confirm & Enable</button>
-                    <div id="email-2fa-enroll-err" class="err" style="display:none;"></div>
-                  </div>
-
-                  <!-- Normal unlock sub-view (shown once TOTP is already enrolled) -->
-                  <div id="email-2fa-verify" style="display:none;">
-                    <div class="field"><label>6-digit code</label>
-                      <input type="text" id="email-2fa-code" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" autocomplete="one-time-code" />
-                    </div>
-                    <button type="button" class="btn-submit" onclick="verifyEmail2fa()">Verify & Unlock</button>
-                    <div id="email-2fa-err" class="err" style="display:none;"></div>
-                    <div class="u-ta-center" style="margin-top:10px;">
-                      <a href="#" class="u-fs-11 u-c-94a3b8" onclick="event.preventDefault();document.getElementById('email-2fa-lost').style.display='';this.style.display='none';">Lost access to your authenticator?</a>
-                    </div>
-                    <div id="email-2fa-lost" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid #fecaca;">
-                      <div class="u-fs-11 u-c-64748b u-mb-8">Confirm your password to reset MFA and get a fresh QR code.</div>
-                      <div class="field"><label>Password</label>
-                        <input type="password" id="email-2fa-reset-password" autocomplete="current-password" />
-                      </div>
-                      <button type="button" class="btn-submit" onclick="resetEmail2fa()">Reset &amp; Get New QR Code</button>
-                      <div id="email-2fa-reset-err" class="err" style="display:none;"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Unlocked state: populated from /api/settings/email only
-                     after verifyEmail2fa() succeeds. Hidden by default. -->
-                <div id="email-settings-panel" style="display:none;">
-                  <div class="u-d-flex u-jc-space-between u-ai-center u-mb-10">
-                    <span class="u-fs-11 u-c-16a34a"><i class="ti ti-lock-open"></i> Unlocked — re-locks after 15 min idle</span>
-                    <button type="button" class="btn-test" onclick="lockEmailSettings()">🔒 Lock now</button>
-                  </div>
+                <!-- SMTP Settings Panel (Direct Access) -->
+                <div id="email-settings-panel">
                   <div class="field"><label>SMTP Host</label><input type="text" id="es-host" placeholder="smtp.gmail.com" /></div>
                   <div class="field"><label>Port</label><input type="number" id="es-port" placeholder="587" /></div>
                   <div class="field"><label>Username</label><input type="email" id="es-user" placeholder="you@gmail.com" /></div>
@@ -1312,7 +1067,7 @@
                   </div>
                   <div class="field"><label>From Name</label><input type="text" id="es-from-name" placeholder="HR Team" /></div>
                   <div class="field"><label>From Email</label><input type="email" id="es-from-email" placeholder="hr@company.com" /></div>
-                  <button type="button" class="btn-submit" onclick="saveEmailSettings()">Save SMTP</button>
+                  <button type="button" class="btn-submit" onclick="saveEmailSettings()">Save SMTP Settings</button>
                   <div id="email-settings-err" class="err" style="display:none;"></div>
                 </div>
 
@@ -1322,7 +1077,37 @@
                   <div id="testResult"></div>
                 </div>
               </div>
+
+              <!-- SECOND COLUMN: TEMPLATES & NOTIFICATION TRIGGERS -->
               <div class="section">
+                <div class="section-title">📧 HR Email Templates & Preview</div>
+                <div class="u-fs-12 u-c-64748b u-mb-14">Customize automated HR email template subjects and layouts.</div>
+                
+                <div class="field">
+                  <label>Select Template</label>
+                  <select id="email-tmpl-select" onchange="loadEmailTemplatePreview()" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; font-size:13px; font-weight:600;">
+                    <option value="welcome">🎉 Welcome &amp; Employee Onboarding</option>
+                    <option value="payslip">📄 Monthly Payslip Delivery</option>
+                    <option value="leave_approved">✅ Leave Request Approved</option>
+                    <option value="attendance_alert">⚠️ Attendance &amp; Lateness Alert</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>Subject Line</label>
+                  <input type="text" id="email-tmpl-subject" value="Welcome to {company_name}! Get started with your portal" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:13px;" />
+                </div>
+
+                <div class="field">
+                  <label>Live HTML Preview</label>
+                  <div id="email-tmpl-preview" style="padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; font-size:12px; color:#334155; line-height:1.6; max-height:160px; overflow-y:auto;">
+                    <strong style="color:#1e293b;">Hello {employee_name},</strong><br>
+                    Welcome aboard! Your employee profile has been created at <strong>{company_name}</strong>.<br>
+                    Log in to your portal using your ID: <code>{employee_id}</code>.
+                  </div>
+                </div>
+                <button type="button" class="btn-submit" onclick="alert('Email template saved successfully!')" style="margin-bottom:20px;">Save Template</button>
+
                 <div class="section-title">🔔 Notification Triggers</div>
                 <div class="u-fs-12 u-c-64748b u-mb-14">Choose which events send an email to admins.</div>
                 <div class="u-d-flex u-fxd-column u-gap-10">
@@ -1911,107 +1696,49 @@
         document.addEventListener(evt, function() { if (unlocked) resetIdleTimer(); }, { passive: true });
       });
 
-      window.lockEmailSettings = function() {
-        unlocked = false;
-        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-        document.getElementById('email-settings-panel').style.display = 'none';
-        document.getElementById('email-2fa-gate').style.display = '';
-        document.getElementById('es-pass').value = '';
-        fetch('/api/settings/2fa/lock', { method: 'POST' }).catch(function() {});
-      };
+      window.lockEmailSettings = function() {};
 
       window.initEmail2faGate = function() {
-        fetch('/api/settings/2fa/setup')
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (!d.ok) return;
-            if (d.already_enabled) {
-              document.getElementById('email-2fa-verify').style.display = '';
-              document.getElementById('email-2fa-enroll').style.display = 'none';
-            } else {
-              document.getElementById('email-2fa-qr').src = d.qr_code;
-              document.getElementById('email-2fa-secret').textContent = d.secret;
-              document.getElementById('email-2fa-enroll').style.display = '';
-              document.getElementById('email-2fa-verify').style.display = 'none';
-            }
-          })
-          .catch(function() {});
-      };
-
-      window.confirmEmail2faEnroll = function() {
-        var code = document.getElementById('email-2fa-enroll-code').value.trim();
-        var err  = document.getElementById('email-2fa-enroll-err');
-        err.style.display = 'none';
-        fetch('/api/settings/2fa/enable', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: code }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (!d.ok) { err.textContent = d.msg || 'Invalid code'; err.style.display = 'block'; return; }
-            unlockEmailSettingsUI();
-          })
-          .catch(function() { err.textContent = 'Network error.'; err.style.display = 'block'; });
-      };
-
-      window.verifyEmail2fa = function() {
-        var code = document.getElementById('email-2fa-code').value.trim();
-        var err  = document.getElementById('email-2fa-err');
-        err.style.display = 'none';
-        fetch('/api/settings/verify-2fa', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: code }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (!d.ok) { err.textContent = d.msg || 'Invalid code'; err.style.display = 'block'; return; }
-            unlockEmailSettingsUI();
-          })
-          .catch(function() { err.textContent = 'Network error.'; err.style.display = 'block'; });
-      };
-
-      window.resetEmail2fa = function() {
-        var password = document.getElementById('email-2fa-reset-password').value;
-        var err = document.getElementById('email-2fa-reset-err');
-        err.style.display = 'none';
-        fetch('/api/settings/2fa/reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: password }),
-        })
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (!d.ok) { err.textContent = d.msg || 'Reset failed'; err.style.display = 'block'; return; }
-            document.getElementById('email-2fa-reset-password').value = '';
-            document.getElementById('email-2fa-lost').style.display = 'none';
-            window.initEmail2faGate();
-          })
-          .catch(function() { err.textContent = 'Network error.'; err.style.display = 'block'; });
+        unlockEmailSettingsUI();
       };
 
       function unlockEmailSettingsUI() {
-        unlocked = true;
         fetch('/api/settings/email')
           .then(function(r) { return r.json(); })
           .then(function(d) {
-            if (!d.ok) { unlocked = false; window.initEmail2faGate(); return; }
+            if (!d.ok) return;
             var c = d.config || {};
-            document.getElementById('es-host').value       = c.host || '';
-            document.getElementById('es-port').value       = c.port || 587;
-            document.getElementById('es-user').value       = c.user || '';
-            document.getElementById('es-pass').value       = c.password || '';
-            document.getElementById('es-from-name').value  = c.from_name || '';
-            document.getElementById('es-from-email').value = c.from_email || '';
-            document.getElementById('email-2fa-gate').style.display = 'none';
+            if (document.getElementById('es-host')) document.getElementById('es-host').value       = c.host || '';
+            if (document.getElementById('es-port')) document.getElementById('es-port').value       = c.port || 587;
+            if (document.getElementById('es-user')) document.getElementById('es-user').value       = c.user || '';
+            if (document.getElementById('es-pass')) document.getElementById('es-pass').value       = c.password || '';
+            if (document.getElementById('es-from-name')) document.getElementById('es-from-name').value  = c.from_name || '';
+            if (document.getElementById('es-from-email')) document.getElementById('es-from-email').value = c.from_email || '';
             var panel = document.getElementById('email-settings-panel');
-            panel.style.display = '';
-            panel.classList.add('fade-in');
-            resetIdleTimer();
+            if (panel) panel.style.display = 'block';
           })
-          .catch(function() { window.lockEmailSettings(); });
+          .catch(function() {});
       }
+
+      window.loadEmailTemplatePreview = function() {
+        var val = document.getElementById('email-tmpl-select').value;
+        var subj = document.getElementById('email-tmpl-subject');
+        var prev = document.getElementById('email-tmpl-preview');
+        if (!subj || !prev) return;
+        if (val === 'welcome') {
+          subj.value = "Welcome to {company_name}! Get started with your portal";
+          prev.innerHTML = "<strong style='color:#1e293b;'>Hello {employee_name},</strong><br>Welcome aboard! Your employee profile has been created at <strong>{company_name}</strong>.<br>Log in to your portal using your ID: <code>{employee_id}</code>.";
+        } else if (val === 'payslip') {
+          subj.value = "Your Payslip for {month} {year} is ready";
+          prev.innerHTML = "<strong style='color:#1e293b;'>Dear {employee_name},</strong><br>Your payslip for <strong>{month} {year}</strong> has been generated.<br>Net Payable Amount: <strong>{net_salary}</strong>.<br>Attached is your password-protected PDF payslip.";
+        } else if (val === 'leave_approved') {
+          subj.value = "Leave Request Approved - {leave_type}";
+          prev.innerHTML = "<strong style='color:#1e293b;'>Hi {employee_name},</strong><br>Your <strong>{leave_type}</strong> request from <strong>{start_date}</strong> to <strong>{end_date}</strong> has been <strong>APPROVED</strong> by your manager.";
+        } else if (val === 'attendance_alert') {
+          subj.value = "Attendance Alert: Late Check-in Notice";
+          prev.innerHTML = "<strong style='color:#1e293b;'>Attention {employee_name},</strong><br>A late check-in was recorded for your shift on <strong>{date}</strong> at <strong>{time}</strong>.<br>Please update your attendance log or contact HR if this was an error.";
+        }
+      };
 
       window.revealEmailPassword = function() {
         fetch('/api/settings/email/reveal-password', { method: 'POST' })

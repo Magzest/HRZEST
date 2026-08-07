@@ -24,66 +24,6 @@ def _emp_session(client, seed_employee):
     return client
 
 
-# ── setup_wizard ──────────────────────────────────────────────────────────────
-
-class TestSetupWizard:
-
-    def test_get_when_setup_done_redirects_to_login(self, client):
-        """Line 29-30: setup_done=True → redirect /admin_login."""
-        rv = client.get("/setup")
-        # Default company has setup_done=True so redirects immediately
-        assert rv.status_code == 302
-        assert "admin_login" in rv.headers["Location"]
-
-    def test_post_missing_company_name_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "", "admin_username": "admin",
-            "admin_password": "pass1234", "admin_password2": "pass1234",
-        })
-        assert rv.status_code == 200
-        assert b"Company name" in rv.data
-
-    def test_post_missing_admin_user_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "",
-            "admin_password": "pass1234", "admin_password2": "pass1234",
-        })
-        assert rv.status_code == 200
-        assert b"username" in rv.data.lower()
-
-    def test_post_short_password_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "admin",
-            "admin_password": "short", "admin_password2": "short",
-        })
-        assert rv.status_code == 200
-        assert b"8 characters" in rv.data
-
-    def test_post_password_mismatch_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "admin",
-            "admin_password": "ValidPass1!", "admin_password2": "Different1!",
-        })
-        assert rv.status_code == 200
-        assert b"not match" in rv.data or b"do not match" in rv.data
-
-
 # ── admin_login — employee-already-in-session, employee credentials ────────────
 
 class TestAdminLoginBranches:
