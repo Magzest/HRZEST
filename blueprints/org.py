@@ -253,15 +253,7 @@ def create_org_disabled():
 
 @org_bp.route("/org_payment_success", methods=["GET"])
 def org_payment_success():
-    """Landing page after templates/create_org.html's JS successfully
-    verifies payment (blueprints/billing.py's verify_payment) -- portal_url
-    and email are just for display, Jinja auto-escapes both so a tampered
-    query string can't inject anything, and no sensitive data (order ID,
-    amount) is exposed here since those already went out in the
-    confirmation email, not the URL."""
-    portal_url = request.args.get("portal_url", "")
-    email = request.args.get("email", "")
-    return render_template("org_payment_success.html", portal_url=portal_url, email=email)
+    return redirect("/login")
 
 
 @org_bp.route("/api/create_org", methods=["POST"])
