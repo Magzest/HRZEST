@@ -11,18 +11,23 @@ org_bp = Blueprint("org", __name__)
 _SUBDOMAIN_RE = re.compile(r'^[a-z0-9\-]+$')
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
-# Matches the hardcoded ".hrms.gradzest.com" suffix already shown in
+# Matches the hardcoded ".hrzest.com" suffix already shown in
 # templates/create_org.html and templates/get_started.html -- kept as one
 # constant here since the portal link is also built server-side (welcome
 # email + the org_created.html success page).
-_TENANT_DOMAIN_SUFFIX = "hrms.gradzest.com"
+#
+# DNS/TLS for hrzest.com (wildcard *.hrzest.com) isn't live yet as of this
+# rename -- tenant portal links built from this constant won't resolve
+# until that's set up. Update this the same day DNS goes live.
+_TENANT_DOMAIN_SUFFIX = "hrzest.com"
 
-# Subdomains that must never be self-registered: _resolve_tenant() (app.py)
-# treats any 3-label host as <label1>.<rest>, so the bare production domain
-# itself (e.g. hrms.gradzest.com) parses as subdomain candidate "hrms" --
-# letting someone register that subdomain would silently hijack every
-# visitor to the operator's own bare domain from that point on. The rest
-# are conventional infrastructure/admin names worth blocking on principle.
+# Subdomains that must never be self-registered. _resolve_tenant() (app.py)
+# treats any 3-label host as <label1>.<rest>, so "www.hrzest.com" itself
+# parses as subdomain candidate "www" -- letting someone register that
+# would silently hijack any traffic landing on the www alias. The rest are
+# conventional infrastructure/admin names worth blocking on principle.
+# ("hrms" is kept for legacy reasons -- it was load-bearing under the old
+# hrms.gradzest.com domain and costs nothing to keep blocked.)
 _RESERVED_SUBDOMAINS = frozenset({
     "hrms", "www", "api", "admin", "app", "mail", "master", "super_admin",
     "static", "ns1", "ns2", "assets", "cdn",
@@ -35,7 +40,7 @@ def _clean_subdomain_slug(raw, company_name=""):
     s = str(raw).strip().lower()
     s = re.sub(r'^https?://', '', s)
     s = s.split('/')[0].split(':')[0]
-    for suffix in [".hrms.gradzest.com", ".gradzest.com", ".gradzest.in", ".com", ".in", ".org", ".net", ".io"]:
+    for suffix in [".hrzest.com", ".hrms.gradzest.com", ".gradzest.com", ".gradzest.in", ".com", ".in", ".org", ".net", ".io"]:
         if s.endswith(suffix):
             s = s[:-len(suffix)]
     s = re.sub(r'[^a-z0-9\-]', '', s)
@@ -260,17 +265,28 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
 @org_bp.route("/get-started", methods=["GET"])
 def get_started_page():
     """Public entry point for the SaaS product: 'login to your existing
-    company' (redirects to <subdomain>.hrms.gradzest.com/admin_login) vs
+    company' (redirects to <subdomain>.hrzest.com/admin_login) vs
     'register a new company' (/create_org). The root "/" route
-    (blueprints/core.py's home()) now serves the public marketing landing
-    page to anonymous apex-domain visitors (whose "Login" link points
-    here); this page stays the actual subdomain-lookup step."""
+    (blueprints/core.py's home()) is the platform operator's own login,
+    not this page -- link here explicitly (e.g. from /pricing) rather
+    than via "/"."""
     return render_template("get_started.html")
 
 
 @org_bp.route("/create_org", methods=["GET"])
 def create_org_page():
     from utils.plan_limits import FEATURE_LABELS
+    # Flashed messages live in the session cookie, not scoped to any one
+    # page -- an unrelated admin-session-expiry notice (category
+    # "warning", queued by app.py's _enforce_session_lifetime /
+    # _enforce_idle_timeout / _enforce_csrf hooks on some earlier request
+    # in this same browser, possibly a different tab entirely) must never
+    # surface on this public signup page just because it shares a cookie
+    # with that admin session. This page's own flashes (validation
+    # errors, captcha failures, from the POST handler below) are always
+    # category "error" -- keep only those, drop everything else.
+    if session.get("_flashes"):
+        session["_flashes"] = [f for f in session["_flashes"] if f[0] == "error"]
     requested_plan = request.args.get("plan", "").strip().lower()
     selected_plan = requested_plan if requested_plan in PLAN_TIERS else None
     return render_template(

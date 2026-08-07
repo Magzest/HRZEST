@@ -41,32 +41,14 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
-    # session["tenant_db"] is only ever set by _resolve_tenant() (app.py)
-    # when the request host matched a real tenant subdomain in
-    # att_master.tenants -- so its absence here means this visit landed on
-    # the bare/apex domain (or an unrecognized host), not a company's own
-    # subdomain. That's the signal used to decide "marketing landing page"
-    # vs. "this company's own portal", without needing a second lookup.
-    if session.get("tenant_db"):
-        co = get_company_settings()
-        if not co.get("setup_done"):
-            return redirect("/setup")
-        if session.get("admin_logged_in"):
-            return redirect("/admin")
-        if session.get("employee_id"):
-            return redirect("/employee_portal")
-        return redirect("/login")
-
-    # Apex/marketing domain: send anyone with a live session straight to
-    # where they were going; anonymous visitors get the public pitch.
+    co = get_company_settings()
+    if not co.get("setup_done"):
+        return redirect("/setup")
     if session.get("admin_logged_in"):
         return redirect("/admin")
     if session.get("employee_id"):
         return redirect("/employee_portal")
-    if session.get("platform_admin_logged_in"):
-        return redirect("/super_admin")
-    from utils.plan_limits import PLAN_TIERS, FEATURE_LABELS
-    return render_template("landing.html", plan_tiers=PLAN_TIERS, feature_labels=FEATURE_LABELS)
+    return redirect("/login")
 
 
 @core_bp.route("/checkin")

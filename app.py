@@ -3258,12 +3258,16 @@ if __name__ == "__main__":
 
     _cert = _os.environ.get("SSL_CERT_PATH") or _os.path.join(_os.path.dirname(__file__), "cert.pem")
     _key = _os.environ.get("SSL_KEY_PATH") or _os.path.join(_os.path.dirname(__file__), "key.pem")
+    # threaded=True: /api/session/risk-stream (blueprints/core.py) holds an
+    # SSE connection open for ~20s, and Werkzeug's dev server is single-
+    # threaded by default -- without this, one open stream blocks every
+    # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
         print("🔒  SSL cert found — starting on https://0.0.0.0:5000")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False,  # nosec B104
+        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 ssl_context=(_cert, _key), request_handler=_QuietRequestHandler)
     else:
         print("⚠   No cert.pem / key.pem — starting on http://0.0.0.0:5000")
         print("    Fingerprint / WebAuthn requires HTTPS. Run: python generate_cert.py")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False,  # nosec B104
+        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 request_handler=_QuietRequestHandler)

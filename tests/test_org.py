@@ -118,8 +118,9 @@ class TestSignupValidation:
     ])
     def test_reserved_subdomain_rejected(self, client, subdomain):
         # _resolve_tenant() (app.py) parses any 3-label host as
-        # <label1>.<rest> -- registering "hrms" would silently hijack the
-        # bare production domain (hrms.gradzest.com) from that point on.
+        # <label1>.<rest> -- registering "www" would silently hijack
+        # www.hrzest.com from that point on. "hrms" stays reserved too,
+        # a holdover from the old hrms.gradzest.com domain.
         resp = client.post("/create_org", data={
             "company_name": "Evil Org", "subdomain": subdomain,
             "admin_username": "evil_admin", "admin_password": "password123",
@@ -156,7 +157,7 @@ class TestPortalLinkOnSuccess:
                 "admin_email": "portal@test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
-            assert f"https://{subdomain}.hrms.gradzest.com/admin_login".encode() in resp.data
+            assert f"https://{subdomain}.hrzest.com/admin_login".encode() in resp.data
             assert b"portal_admin" in resp.data
             # No SMTP configured -- the page must degrade gracefully to
             # "bookmark this link" rather than falsely claiming an email

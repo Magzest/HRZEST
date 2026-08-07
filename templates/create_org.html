@@ -113,10 +113,10 @@
              placeholder="acme" pattern="[a-z0-9\-]+" required
              title="Lowercase letters, digits and hyphens only"
              oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
-      <div class="subdomain-suffix">.hrms.gradzest.com</div>
+      <div class="subdomain-suffix">.hrzest.com</div>
     </div>
     <div style="font-size:11px; color:#94a3b8; margin-top:4px; margin-bottom:14px;">
-      Enter a short subdomain slug (e.g. <strong>magzest</strong>). Full URLs like <em>https://gradzest.com/</em> will automatically be cleaned.
+      Enter a short subdomain slug (e.g. <strong>acme</strong>). Full URLs like <em>https://hrzest.com/</em> will automatically be cleaned.
     </div>
 
     <label class="field-label">Number of Employees</label>
@@ -188,7 +188,7 @@ function cleanSubdomainInput(el) {
   subdomainUserEdited = true;
   let val = el.value.toLowerCase().trim();
   val = val.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
-  const suffixes = ['.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
+  const suffixes = ['.hrzest.com', '.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
   for (let s of suffixes) {
     if (val.endsWith(s)) val = val.slice(0, -s.length);
   }
