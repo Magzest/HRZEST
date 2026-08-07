@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -12,41 +13,41 @@ const CARDS = [
   {
     key: "hours",
     title: "Hours",
-    value: "08h 20m",
     subtitle: "Worked Today",
     icon: "time-outline",
     color: "#2563EB",
     bg: "#EEF4FF",
+    screen: "Attendance",
   },
 
   {
     key: "attendance",
     title: "Attendance",
-    value: "98%",
     subtitle: "This Month",
     icon: "calendar-outline",
     color: "#16A34A",
     bg: "#ECFDF5",
+    screen: "Attendance",
   },
 
   {
     key: "leave",
     title: "Leave",
-    value: "08",
     subtitle: "Remaining",
     icon: "leaf-outline",
     color: "#EA580C",
     bg: "#FFF7ED",
+    screen: "Leave",
   },
 
   {
     key: "performance",
     title: "Performance",
-    value: "A+",
     subtitle: "Overall",
     icon: "trending-up-outline",
     color: "#7C3AED",
     bg: "#F5F3FF",
+    screen: "Performance",
   },
 
 ];
@@ -56,6 +57,7 @@ export default function EmployeeSummaryCards({
   attendance = "0%",
   leaveBalance = "0",
   performance = "N/A",
+  navigation,
 }) {
 
   const values = {
@@ -84,9 +86,15 @@ export default function EmployeeSummaryCards({
 
           CARDS.map((item) => (
 
-            <View
+            <TouchableOpacity
               key={item.key}
+              activeOpacity={0.8}
               style={styles.card}
+              onPress={() => {
+                if (navigation && item.screen) {
+                  navigation.navigate(item.screen);
+                }
+              }}
             >
 
               <View style={styles.topRow}>
@@ -128,7 +136,7 @@ export default function EmployeeSummaryCards({
                 {item.subtitle}
               </Text>
 
-            </View>
+            </TouchableOpacity>
 
           ))
 

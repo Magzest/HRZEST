@@ -81,10 +81,11 @@ export default function LeavesHolidaysScreen({ navigation }) {
   };
 
   const handleLeaveAction = async (lid, action) => {
+    const apiAction = action === "approve" || action === "Approved" ? "Approved" : "Declined";
     try {
-      const res = await leaveAction(lid, action);
+      const res = await leaveAction(lid, apiAction);
       if (res?.data?.ok) {
-        Alert.alert("Success", `Leave request ${action}d successfully.`);
+        Alert.alert("Success", `Leave request ${apiAction.toLowerCase()}d successfully.`);
         loadData();
       } else {
         Alert.alert("Action Failed", res?.data?.msg || "Could not update status.");

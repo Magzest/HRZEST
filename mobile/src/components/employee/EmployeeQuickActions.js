@@ -49,7 +49,7 @@ const ACTIONS = [
     icon: "person-circle-outline",
     color: "#0284C7",
     bg: "#F0F9FF",
-    screen: "ProfileTab",
+    screen: "Profile",
   },
 ];
 
@@ -68,11 +68,7 @@ export default function EmployeeQuickActions({ navigation }) {
             style={styles.card}
             onPress={() => {
               if (navigation && item.screen) {
-                try {
-                  navigation.navigate(item.screen);
-                } catch (_) {
-                  navigation.navigate("Home");
-                }
+                navigation.navigate(item.screen);
               }
             }}
           >

@@ -27,7 +27,7 @@ import { fetchDashboard } from "../../api/client";
 import { useAuth } from "../../store/AuthContext";
 
 export default function AdminDashboard({ navigation }) {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [search, setSearch] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
   const [announcementModalVisible, setAnnouncementModalVisible] = useState(false);
@@ -42,11 +42,14 @@ export default function AdminDashboard({ navigation }) {
       const res = await fetchDashboard();
       if (res?.data) {
         setDashboardData(res.data);
+        if (res.data.company_name && updateUser) {
+          updateUser({ company: res.data.company_name });
+        }
       }
     } catch (_) {}
   };
 
-  const totalEmps = dashboardData?.total_employees ?? dashboardData?.employees_count ?? 0;
+  const totalEmps = dashboardData?.total_employees ?? dashboardData?.total ?? dashboardData?.employees_count ?? 0;
   const presentEmps = dashboardData?.present ?? dashboardData?.present_count ?? 0;
   const absentEmps = dashboardData?.absent ?? dashboardData?.absent_count ?? 0;
   const lateEmps = dashboardData?.late ?? dashboardData?.late_count ?? 0;

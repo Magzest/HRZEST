@@ -163,7 +163,13 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
   // ── QR scan ──────────────────────────────────────────────────────────────────
   const handleQRScan = ({ data }) => {
     if (scanned || processing) return;
-    const empId = data.trim().toUpperCase();
+    let raw = data ? String(data).trim() : "";
+    if (!raw) return;
+    if (raw.includes("/")) {
+      const parts = raw.split("/");
+      raw = parts[parts.length - 1].replace(".png", "");
+    }
+    const empId = raw.toUpperCase();
     if (!empId) return;
     setScanned(true);
     setEmployeeId(empId);

@@ -17,32 +17,22 @@ export default function AttendanceCalendar({
     records.forEach((item) => {
       if (!item.date) return;
 
-      let color = "#22C55E";
+      const statusStr = (item.status || item.attendance_type || item.login_status || "").toLowerCase();
 
-      switch ((item.status || "").toLowerCase()) {
-        case "present":
-          color = "#22C55E";
-          break;
-
-        case "late":
-          color = "#F59E0B";
-          break;
-
-        case "half day":
-        case "halfday":
-          color = "#FB923C";
-          break;
-
-        case "holiday":
-          color = "#8B5CF6";
-          break;
-
-        case "absent":
-          color = "#EF4444";
-          break;
-
-        default:
-          color = "#CBD5E1";
+      if (statusStr.includes("present") || statusStr.includes("full day")) {
+        color = "#22C55E";
+      } else if (statusStr.includes("late")) {
+        color = "#F59E0B";
+      } else if (statusStr.includes("half")) {
+        color = "#FB923C";
+      } else if (statusStr.includes("holiday") || statusStr.includes("week off")) {
+        color = "#8B5CF6";
+      } else if (statusStr.includes("absent")) {
+        color = "#EF4444";
+      } else if (statusStr.includes("leave")) {
+        color = "#A855F7";
+      } else {
+        color = "#CBD5E1";
       }
 
       marks[item.date] = {

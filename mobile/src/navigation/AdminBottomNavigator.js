@@ -137,67 +137,67 @@ export default function AdminBottomNavigator() {
       <Tab.Screen
         name="Payroll"
         component={SalaryPayslipsScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Analytics"
         component={AnalyticsScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="CompOff"
         component={CompOffScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="MarkAttendance"
         component={MarkAttendanceScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Resignations"
         component={ResignationsScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Tickets"
         component={AdminTicketsScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Performance"
         component={PerformanceScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Onboarding"
         component={OnboardingScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="OrgChart"
         component={OrgChartScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="Departments"
         component={DepartmentsScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
 
       <Tab.Screen
         name="LeavesHolidays"
         component={LeavesHolidaysScreen}
-        options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+        options={{ tabBarItemStyle: { display: "none" } }}
       />
     </Tab.Navigator>
   );

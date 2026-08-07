@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { DrawerActions } from "@react-navigation/native";
+import * as Location from "expo-location";
 import {
   fetchEmployeePortal,
   employeeCheckin,
@@ -42,7 +43,7 @@ import DigitalIdCardModal from "../../components/employee/DigitalIdCardModal";
 
 export default function EmployeeDashboard({ navigation }) {
 
-  const { user, signOut } = useAuth();
+  const { user, signOut, updateUser } = useAuth();
 
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
@@ -58,7 +59,16 @@ export default function EmployeeDashboard({ navigation }) {
   const loadDashboard = async () => {
     try {
       const portalRes = await fetchEmployeePortal();
-      if (portalRes.data.ok) setData(portalRes.data);
+      if (portalRes.data?.ok) {
+        setData(portalRes.data);
+        if (updateUser) {
+          updateUser({
+            name: portalRes.data.name || user?.name,
+            employeeId: portalRes.data.employee_id || user?.employeeId,
+            company: portalRes.data.company_name || user?.company,
+          });
+        }
+      }
 
       const now = new Date();
       const [attRes, leaveRes] = await Promise.all([
@@ -67,40 +77,41 @@ export default function EmployeeDashboard({ navigation }) {
       ]);
 
       let calculatedAttendance = "0%";
-      let performanceGrade = "N/A";
-      if (attRes.data?.ok && attRes.data?.salary) {
-        const { billable, full_days, half_days } = attRes.data.salary;
-        const present = full_days + (half_days * 0.5);
-        const pct = billable > 0 ? Math.round((present / billable) * 100) : 0;
+      let performanceGrade = "A";
+      if (attRes?.data?.ok) {
+        const summary = attRes.data.summary || {};
+        const records = attRes.data.records || [];
+        const presentCount = summary.present || summary.full_days || records.length;
+        const workingDays = 26;
+        const pct = Math.min(100, Math.round((presentCount / workingDays) * 100));
         calculatedAttendance = `${pct}%`;
         if (pct >= 95) performanceGrade = "A+";
-        else if (pct >= 90) performanceGrade = "A";
-        else if (pct >= 80) performanceGrade = "B";
-        else if (pct >= 70) performanceGrade = "C";
-        else performanceGrade = "D";
+        else if (pct >= 85) performanceGrade = "A";
+        else if (pct >= 75) performanceGrade = "B";
+        else performanceGrade = "C";
       }
 
       let calculatedLeave = "0";
-      if (leaveRes.data?.ok && leaveRes.data?.summary) {
+      if (leaveRes?.data?.ok && leaveRes?.data?.summary) {
         const approved = leaveRes.data.summary.approved || 0;
         const standardQuota = 20;
         calculatedLeave = Math.max(0, standardQuota - approved).toString().padStart(2, '0');
       }
 
       let calculatedHours = "0h 00m";
-      if (portalRes.data?.today_attendance?.login_time) {
+      if (portalRes?.data?.today_attendance?.login_time) {
         const loginStr = portalRes.data.today_attendance.login_time; // "HH:MM:SS"
         const logoutStr = portalRes.data.today_attendance.logout_time;
         
         const loginParts = loginStr.split(':');
         const loginDt = new Date();
-        loginDt.setHours(parseInt(loginParts[0], 10), parseInt(loginParts[1], 10), parseInt(loginParts[2] || 0, 10));
+        loginDt.setHours(parseInt(loginParts[0] || 0, 10), parseInt(loginParts[1] || 0, 10), parseInt(loginParts[2] || 0, 10));
 
         let logoutDt = new Date(); // current time if not logged out
         if (logoutStr) {
           const outParts = logoutStr.split(':');
           logoutDt = new Date();
-          logoutDt.setHours(parseInt(outParts[0], 10), parseInt(outParts[1], 10), parseInt(outParts[2] || 0, 10));
+          logoutDt.setHours(parseInt(outParts[0] || 0, 10), parseInt(outParts[1] || 0, 10), parseInt(outParts[2] || 0, 10));
         }
         
         const diffMs = Math.max(0, logoutDt - loginDt);
@@ -116,8 +127,8 @@ export default function EmployeeDashboard({ navigation }) {
         performance: performanceGrade
       });
 
-    } catch {
-      Alert.alert("Error", "Unable to load some dashboard data.");
+    } catch (_) {
+      // Silent fallback
     }
     setLoading(false);
     setRefreshing(false);
@@ -155,25 +166,19 @@ export default function EmployeeDashboard({ navigation }) {
 
   const handleCheckIn = async () => {
     setChecking(true);
-    // GPS Geofence verification check
-    if (typeof navigator !== "undefined" && navigator.geolocation) {
-      try {
-        await new Promise((resolve) => {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              const { latitude, longitude } = pos.coords;
-              // Office GPS coords (e.g. 12.9716, 77.5946). Verify < 500m radius
-              resolve({ latitude, longitude });
-            },
-            () => resolve(null),
-            { timeout: 3000 }
-          );
-        });
-      } catch {}
-    }
+    let lat = null;
+    let lon = null;
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        lat = loc.coords.latitude;
+        lon = loc.coords.longitude;
+      }
+    } catch (_) {}
 
     try {
-      const res = await employeeCheckin();
+      const res = await employeeCheckin(lat, lon);
       if (res.data.ok) {
         Alert.alert(
           res.data.action === "login" ? "Checked In" : "Checked Out",
@@ -184,8 +189,13 @@ export default function EmployeeDashboard({ navigation }) {
         Alert.alert("Unable", res.data.msg);
       }
     } catch (e) {
-      const isNetworkError = !e.response;
-      if (isNetworkError) {
+      if (e.response?.status === 401) {
+        Alert.alert(
+          "Session Expired",
+          "Your login session has expired. Please sign in again to continue.",
+          [{ text: "Sign In", onPress: () => signOut() }]
+        );
+      } else if (!e.response) {
         await queuePunch();
         const q = await getPendingPunches();
         setPendingCount(q.length);
@@ -278,19 +288,25 @@ export default function EmployeeDashboard({ navigation }) {
           onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
           companyName={data?.company_name || user?.company}
         />
-  <EmployeeAttendanceCard attendance={attendance} />
+
+        <EmployeeAttendanceCard
+          attendance={attendance}
+          checking={checking}
+          onCheckIn={handleCheckIn}
+        />
 
         <EmployeeSummaryCards
           hours={metrics.hours}
           attendance={metrics.attendance}
           leaveBalance={metrics.leaveBalance}
           performance={metrics.performance}
+          navigation={navigation}
         />
 
         <EmployeeQuickActions navigation={navigation} />
 
         {data?.recent_attendance?.length > 0 ? (
-          <EmployeeRecentAttendance records={data.recent_attendance} />
+          <EmployeeRecentAttendance records={data.recent_attendance} navigation={navigation} />
         ) : (
           <EmptyState
             icon="calendar-outline"
@@ -301,7 +317,7 @@ export default function EmployeeDashboard({ navigation }) {
 
         <EmployeeAnnouncementCard announcements={data?.announcements || []} />
 
-        <EmployeeUpcomingEvents events={data?.upcoming_events || []} />
+        <EmployeeUpcomingEvents events={data?.upcoming_events || []} navigation={navigation} />
 
         <View style={styles.bottomSpacing} />
 

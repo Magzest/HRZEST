@@ -37,8 +37,17 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateUser = async (partialData) => {
+    setUser((prev) => {
+      if (!prev) return partialData;
+      const updated = { ...prev, ...partialData };
+      AsyncStorage.setItem('user', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signOut, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

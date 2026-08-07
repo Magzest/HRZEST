@@ -3,66 +3,55 @@ import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 
 export default function EmployeeRecentAttendance({
-
   records = [],
-
+  navigation,
 }) {
-
   return (
-
     <View style={styles.container}>
-
       <View style={styles.header}>
-
         <View>
-
           <Text style={styles.title}>
             Recent Attendance
           </Text>
-
           <Text style={styles.subtitle}>
             Last attendance activity
           </Text>
-
         </View>
-
+        {navigation && (
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center" }}
+            onPress={() => navigation.navigate("Attendance")}
+          >
+            <Text style={{ color: "#173B8C", fontWeight: "700", fontSize: 13, marginRight: 2 }}>
+              View All
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#173B8C" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {
-
-        records.length === 0 ?
-
-        (
-
-          <View style={styles.empty}>
-
-            <Ionicons
-              name="calendar-outline"
-              size={40}
-              color="#CBD5E1"
-            />
-
-            <Text style={styles.emptyTitle}>
-              No Records Found
-            </Text>
-
-            <Text style={styles.emptySubtitle}>
-              Attendance history will appear here.
-            </Text>
-
-          </View>
-
-        )
-
-        :
-
-        records.map((item,index)=>{
-
+      {records.length === 0 ? (
+        <View style={styles.empty}>
+          <Ionicons
+            name="calendar-outline"
+            size={40}
+            color="#CBD5E1"
+          />
+          <Text style={styles.emptyTitle}>
+            No Records Found
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            Attendance history will appear here.
+          </Text>
+        </View>
+      ) : (
+        records.map((item, index) => {
           const status =
             item.attendance_type ||
             (item.login_time ? "Present" : "Absent");
@@ -74,65 +63,36 @@ export default function EmployeeRecentAttendance({
               ? "#F59E0B"
               : "#EF4444";
 
-          return(
-
-            <View
+          return (
+            <TouchableOpacity
               key={index}
+              activeOpacity={0.8}
               style={styles.item}
+              onPress={() => navigation && navigation.navigate("Attendance")}
             >
-
               <View style={styles.left}>
-
                 <View
                   style={[
                     styles.circle,
                     {
-                      backgroundColor:color,
+                      backgroundColor: color,
                     },
                   ]}
                 >
-
                   <Ionicons
                     name="checkmark"
                     size={14}
                     color="#FFFFFF"
                   />
-
                 </View>
-
-                {
-
-                  index !== records.length-1 &&
-
-                  <View style={styles.line}/>
-
-                }
-
-              </View>
-
-              <View style={styles.content}>
-
-                <View style={styles.topRow}>
-
+                <View style={styles.info}>
                   <Text style={styles.date}>
                     {item.date}
                   </Text>
 
-                  <View
-                    style={[
-                      styles.badge,
-                      {
-                        backgroundColor:color,
-                      },
-                    ]}
-                  >
-
-                    <Text style={styles.badgeText}>
-                      {status}
-                    </Text>
-
-                  </View>
-
+                  <Text style={[styles.status, { color }]}>
+                    {status}
+                  </Text>
                 </View>
 
                 <View style={styles.timeRow}>
@@ -164,15 +124,10 @@ export default function EmployeeRecentAttendance({
                 </View>
 
               </View>
-
-            </View>
-
+            </TouchableOpacity>
           );
-
         })
-
-      }
-
+      )}
     </View>
 
   );

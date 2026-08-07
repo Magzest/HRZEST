@@ -17,7 +17,17 @@ import EarningsScreen from "../screens/employee/EarningsScreen";
 import PayslipsScreen from "../screens/employee/PayslipsScreen";
 import PerformanceScreen from "../screens/employee/PerformanceScreen";
 import OnboardingScreen from "../screens/employee/OnboardingScreen";
-import ProfileNavigator from "./ProfileNavigator";
+import ProfileScreen from "../screens/employee/ProfileScreen";
+import PersonalInfoScreen from "../screens/employee/PersonalInfoScreen";
+import WorkInfoScreen from "../screens/employee/WorkInfoScreen";
+import ContactScreen from "../screens/employee/ContactScreen";
+import EmergencyContactScreen from "../screens/employee/EmergencyContactScreen";
+import EducationScreen from "../screens/employee/EducationScreen";
+import ExperienceScreen from "../screens/employee/ExperienceScreen";
+import DocumentsScreen from "../screens/employee/DocumentsScreen";
+import BankDetailsScreen from "../screens/employee/BankDetailsScreen";
+import SecurityScreen from "../screens/employee/SecurityScreen";
+import SettingsScreen from "../screens/employee/SettingsScreen";
 import PoliciesScreen from "../screens/employee/PoliciesScreen";
 import ResignScreen from "../screens/employee/ResignScreen";
 
@@ -136,65 +146,125 @@ export default function EmployeeNavigator() {
           options={{ tabBarLabel: "Alerts" }}
         />
 
-        {/* Hidden Drawer Screens */}
+        {/* Hidden Drawer & Profile Screens */}
         <Tab.Screen
           name="Attendance"
           component={AttendanceScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="CompOff"
           component={CompOffScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Holidays"
           component={HolidaysScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Earnings"
           component={EarningsScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Payslips"
           component={PayslipsScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Performance"
           component={PerformanceScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Onboarding"
           component={OnboardingScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Profile"
-          component={ProfileNavigator}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          component={ProfileScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="PersonalInfo"
+          component={PersonalInfoScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="WorkInfo"
+          component={WorkInfoScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="Contact"
+          component={ContactScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="EmergencyContact"
+          component={EmergencyContactScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="Education"
+          component={EducationScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="Experience"
+          component={ExperienceScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="Documents"
+          component={DocumentsScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="BankDetails"
+          component={BankDetailsScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="Security"
+          component={SecurityScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Policies"
           component={PoliciesScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
 
         <Tab.Screen
           name="Resignation"
           component={ResignScreen}
-          options={{ tabBarButton: () => null, tabBarItemStyle: { display: "none" } }}
+          options={{ tabBarItemStyle: { display: "none" } }}
         />
       </Tab.Navigator>
     </>

@@ -11,9 +11,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 
-import { fetchEmployeeAttendance } from "../../api/client";
+import { Alert } from "react-native";
+import * as Location from "expo-location";
+import { fetchEmployeeAttendance, employeeCheckin } from "../../api/client";
+
+import { useAuth } from "../../store/AuthContext";
 
 import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
+import AttendanceScannerModal from "../AttendanceScannerModal";
 
 import MonthYearPicker from "../../components/attendance/MonthYearPicker";
 import AttendanceSummaryCard from "../../components/attendance/AttendanceSummaryCard";
@@ -27,6 +32,7 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 
 export default function AttendanceScreen() {
   const navigation = useNavigation();
+  const { signOut } = useAuth();
 
   const today = new Date();
 
@@ -35,6 +41,8 @@ export default function AttendanceScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   const [attendance, setAttendance] = useState([]);
 
@@ -53,6 +61,43 @@ export default function AttendanceScreen() {
 
     setLoading(false);
     setRefreshing(false);
+  };
+
+  const handleCheckIn = async () => {
+    setChecking(true);
+    try {
+      let lat = null;
+      let lon = null;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          lat = loc.coords.latitude;
+          lon = loc.coords.longitude;
+        }
+      } catch (_) {}
+
+      const res = await employeeCheckin(lat, lon);
+      if (res.data?.ok) {
+        const title = res.data.action === "logout" ? "✅ Shift Completed" : "✅ Attendance Marked";
+        Alert.alert(title, `${res.data.name || ""}\nStatus: ${res.data.status}\nTime: ${res.data.time}`, [
+          { text: "OK", onPress: () => loadAttendance() }
+        ]);
+      } else {
+        Alert.alert("Attendance Error", res.data?.msg || "Could not mark attendance.");
+      }
+    } catch (e) {
+      if (e.response?.status === 401) {
+        Alert.alert(
+          "Session Expired",
+          "Your login session has expired. Please sign in again to continue.",
+          [{ text: "Sign In", onPress: () => signOut() }]
+        );
+      } else {
+        Alert.alert("Error", e.response?.data?.msg || "Failed to communicate with server.");
+      }
+    }
+    setChecking(false);
   };
 
   useEffect(() => {
@@ -77,29 +122,42 @@ export default function AttendanceScreen() {
     }
   };
 
-  const present = attendance.filter(
-    (x) => x.status === "Present"
-  ).length;
+  const present = attendance.filter((x) => {
+    const s = (x.attendance_type || x.login_status || x.status || "").toLowerCase();
+    return s.includes("present") || s.includes("full day") || s.includes("half day");
+  }).length;
 
-  const absent = attendance.filter(
-    (x) => x.status === "Absent"
-  ).length;
+  const absent = attendance.filter((x) => {
+    const s = (x.attendance_type || x.login_status || x.status || "").toLowerCase();
+    return s.includes("absent");
+  }).length;
 
-  const late = attendance.filter(
-    (x) => x.status === "Late"
-  ).length;
+  const late = attendance.filter((x) => {
+    const s = (x.attendance_type || x.login_status || x.status || "").toLowerCase();
+    return s.includes("late");
+  }).length;
 
-  const percentage =
-    attendance.length === 0
-      ? 0
-      : Math.round(
-          (present / attendance.length) * 100
-        );
+  const totalMarked = attendance.length;
+  const percentage = totalMarked === 0 ? 0 : Math.round((present / totalMarked) * 100);
 
-  const latest =
-    attendance.length > 0
-      ? attendance[attendance.length - 1]
-      : {};
+  // Today's or latest attendance record
+  const todayIso = new Date().toISOString().split("T")[0];
+  const todayRecord = attendance.find((x) => x.date === todayIso) || attendance[0] || {};
+
+  const checkInTime = todayRecord.login_time || todayRecord.check_in || "--:--";
+  const checkOutTime = todayRecord.logout_time || todayRecord.check_out || "--:--";
+  const statusVal = todayRecord.attendance_type || todayRecord.login_status || todayRecord.status || "Not Marked";
+
+  let hoursVal = "--";
+  if (todayRecord.worked_minutes) {
+    const h = Math.floor(todayRecord.worked_minutes / 60);
+    const m = todayRecord.worked_minutes % 60;
+    hoursVal = `${h}h ${m}m`;
+  } else if (todayRecord.hours) {
+    hoursVal = `${todayRecord.hours} hrs`;
+  } else if (todayRecord.login_time && !todayRecord.logout_time) {
+    hoursVal = "In Progress";
+  }
 
   if (loading) {
     return (
@@ -148,10 +206,12 @@ export default function AttendanceScreen() {
         />
 
         <AttendanceStatusCard
-          checkIn={latest.check_in || "--:--"}
-          checkOut={latest.check_out || "--:--"}
-          workingHours={latest.hours || "--"}
-          status={latest.status || "Not Marked"}
+          checkIn={checkInTime}
+          checkOut={checkOutTime}
+          workingHours={hoursVal}
+          status={statusVal}
+          onCheckIn={handleCheckIn}
+          checking={checking}
         />
 
         {attendance.length > 0 ? (
@@ -172,6 +232,12 @@ export default function AttendanceScreen() {
           <AttendanceEmptyState />
         )}
       </ScrollView>
+
+      <AttendanceScannerModal
+        visible={showScanner}
+        onClose={() => setShowScanner(false)}
+        onSuccess={() => loadAttendance()}
+      />
     </LinearGradient>
   );
 }

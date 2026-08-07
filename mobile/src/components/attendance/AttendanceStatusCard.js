@@ -11,9 +11,14 @@ export default function AttendanceStatusCard({
   checkOut = "--:--",
   workingHours = "--",
   status = "Not Marked",
+  onCheckIn,
+  checking = false,
 }) {
+  const checkedIn = checkIn !== "--:--" && checkOut === "--:--";
+  const completed = checkIn !== "--:--" && checkOut !== "--:--";
+
   const statusColor =
-    status === "Present"
+    status === "Present" || checkedIn
       ? "#22C55E"
       : status === "Late"
       ? "#F59E0B"
@@ -22,7 +27,7 @@ export default function AttendanceStatusCard({
       : "#94A3B8";
 
   const statusBg =
-    status === "Present"
+    status === "Present" || checkedIn
       ? "#ECFDF5"
       : status === "Late"
       ? "#FFFBEB"
@@ -126,6 +131,40 @@ export default function AttendanceStatusCard({
         </View>
       </View>
 
+      {/* Action Button */}
+      {onCheckIn && !completed && (
+        <TouchableOpacity
+          activeOpacity={0.88}
+          disabled={checking}
+          onPress={onCheckIn}
+          style={[
+            styles.actionBtn,
+            checkedIn ? styles.checkoutBtn : styles.checkinBtn,
+          ]}
+        >
+          <Ionicons
+            name={checkedIn ? "log-out-outline" : "log-in-outline"}
+            size={20}
+            color="#FFFFFF"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.actionBtnText}>
+            {checking
+              ? "Processing..."
+              : checkedIn
+              ? "Check Out Shift"
+              : "Mark Attendance / Check In"}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {completed && (
+        <View style={styles.completedBadge}>
+          <Ionicons name="checkmark-circle" size={18} color="#16A34A" style={{ marginRight: 6 }} />
+          <Text style={styles.completedText}>Today's Shift Completed</Text>
+        </View>
+      )}
+
       {/* Status */}
 
       <View style={styles.statusRow}>
@@ -152,7 +191,7 @@ export default function AttendanceStatusCard({
               { color: statusColor },
             ]}
           >
-            {status}
+            {checkedIn ? "Working" : status}
           </Text>
         </View>
       </View>
@@ -334,5 +373,46 @@ const styles = StyleSheet.create({
   statusText: {
     fontWeight: "700",
     fontSize: 13,
+  },
+
+  actionBtn: {
+    marginTop: 16,
+    height: 48,
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+
+  checkinBtn: {
+    backgroundColor: "#173B8C",
+  },
+
+  checkoutBtn: {
+    backgroundColor: "#DC2626",
+  },
+
+  actionBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
+  completedBadge: {
+    marginTop: 16,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: "#DCFCE7",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+
+  completedText: {
+    color: "#15803D",
+    fontSize: 14,
+    fontWeight: "800",
   },
 });

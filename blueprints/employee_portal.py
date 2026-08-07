@@ -856,7 +856,7 @@ def api_employee_portal():
     today = datetime.date.today()
 
     cursor.execute("""
-        SELECT e.name, e.email, COALESCE(c.name, '') AS company_name
+        SELECT e.name, e.email, COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), '') AS company_name
         FROM employees e
         LEFT JOIN companies c ON e.company_id = c.id
         WHERE e.employee_id=%s
@@ -1519,7 +1519,7 @@ def api_employee_profile():
                e.pincode, e.about_me, e.emergency_contact_name, e.emergency_contact_phone,
                e.bank_name, e.bank_account, e.bank_ifsc, e.pan_number, e.aadhar_number,
                COALESCE(s.salary_per_day, 0), COALESCE(e.joining_date, e.date_of_joining),
-               COALESCE(c.name, '')
+               COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), '')
         FROM employees e
         LEFT JOIN salary_config s ON e.employee_id = s.employee_id
         LEFT JOIN companies c ON e.company_id = c.id

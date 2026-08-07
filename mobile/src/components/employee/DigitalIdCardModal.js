@@ -3,8 +3,15 @@ import { Modal, View, Text, StyleSheet, TouchableOpacity, Image } from "react-na
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
+import { API_BASE_URL } from "../../config";
+
 export default function DigitalIdCardModal({ visible, employee, onClose }) {
   if (!employee) return null;
+
+  const empId = employee.employeeId || employee.employee_id || "EMP-1001";
+  const serverQrUri = `${API_BASE_URL}/static/qrcodes/${empId}.png`;
+  const fallbackQrUri = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(empId)}`;
+  const [qrUri, setQrUri] = React.useState(serverQrUri);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -40,7 +47,7 @@ export default function DigitalIdCardModal({ visible, employee, onClose }) {
             <View style={styles.detailsTable}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>EMP ID:</Text>
-                <Text style={styles.detailValue}>{employee.employeeId || employee.employee_id || "EMP-1001"}</Text>
+                <Text style={styles.detailValue}>{empId}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>STATUS:</Text>
@@ -49,7 +56,11 @@ export default function DigitalIdCardModal({ visible, employee, onClose }) {
             </View>
 
             <View style={styles.qrContainer}>
-              <Ionicons name="qr-code" size={72} color="#0F172A" />
+              <Image
+                source={{ uri: qrUri }}
+                style={{ width: 120, height: 120, borderRadius: 12 }}
+                onError={() => setQrUri(fallbackQrUri)}
+              />
               <Text style={styles.qrText}>Scan for Digital Verification</Text>
             </View>
           </View>

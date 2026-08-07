@@ -907,6 +907,94 @@ def bulk_mark_attendance():
                            )
 
 
+@attendance_bp.route("/api/bulk_mark_attendance", methods=["GET", "POST"])
+@api_required
+def api_bulk_mark_attendance():
+    today = datetime.date.today()
+    if request.method == "POST":
+        data = request.get_json() or {}
+        date_str = data.get("date", "").strip() or today.isoformat()
+        records = data.get("records", [])
+        try:
+            date_obj = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({"ok": False, "msg": "Invalid date format."}), 400
+
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        rows = []
+        for r in records:
+            eid = r.get("emp_id") or r.get("employee_id")
+            att_type = r.get("attendance_type", "").strip()
+            if not eid or not att_type:
+                continue
+            login_t = r.get("login_time") or None
+            logout_t = r.get("logout_time") or None
+            rows.append((eid, date_obj, login_t, logout_t, att_type))
+
+        saved = len(rows)
+        if rows:
+            placeholders = ",".join(["(%s,%s,%s,%s,%s,'Manual','Manual')"] * len(rows))
+            params = [v for row in rows for v in row]
+            cursor.execute(
+                "INSERT INTO attendance (employee_id, date, login_time, logout_time, "
+                f"attendance_type, status, logout_status) VALUES {placeholders} "
+                "ON CONFLICT (employee_id, date) DO UPDATE SET "
+                "login_time=EXCLUDED.login_time, logout_time=EXCLUDED.logout_time, "
+                "attendance_type=EXCLUDED.attendance_type, status='Manual', logout_status='Manual'",
+                params
+            )
+            db.commit()
+        cursor.close()
+        db.close()
+        return jsonify({"ok": True, "saved": saved, "msg": f"Attendance saved for {saved} employee(s)."})
+
+    # GET request
+    date_str = request.args.get("date", today.isoformat())
+    try:
+        date_obj = datetime.date.fromisoformat(date_str)
+    except ValueError:
+        date_obj = today
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        SELECT e.employee_id, e.name, COALESCE(e.department,''), COALESCE(e.role,''),
+               COALESCE(TO_CHAR(s.start_time,'HH24:MI'),'09:00'),
+               COALESCE(TO_CHAR(s.end_time,'HH24:MI'),'18:00'),
+               COALESCE(e.work_mode,'office')
+        FROM employees e
+        LEFT JOIN shifts s ON s.id=e.shift_id
+        WHERE COALESCE(e.is_active, 1)=1
+        ORDER BY e.name
+    """)
+    emp_rows = cursor.fetchall()
+
+    cursor.execute("SELECT employee_id, login_time, logout_time, attendance_type FROM attendance WHERE date=%s", (date_obj,))
+    att_map = {r[0]: r for r in cursor.fetchall()}
+    cursor.close()
+    db.close()
+
+    employees = []
+    for r in emp_rows:
+        eid = r[0]
+        att = att_map.get(eid)
+        employees.append({
+            "employee_id": eid,
+            "name": r[1],
+            "department": r[2],
+            "role": r[3],
+            "shift_start": r[4],
+            "shift_end": r[5],
+            "work_mode": r[6],
+            "attendance_type": att[3] if att else "",
+            "login_time": str(att[1]) if att and att[1] else None,
+            "logout_time": str(att[2]) if att and att[2] else None,
+        })
+
+    return jsonify({"ok": True, "date": date_obj.isoformat(), "employees": employees})
+
+
 @attendance_bp.route("/monthly_report_export")
 @admin_required
 @limiter.limit("10 per minute")
