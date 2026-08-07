@@ -166,30 +166,6 @@ def api_settings_update():
     return jsonify({"ok": True, "msg": "System settings updated successfully.", "settings": data})
 
 
-@core_bp.route("/api/holidays", methods=["POST"])
-@api_required
-def api_add_holiday():
-    data = request.get_json() or {}
-    date = data.get("date")
-    name = data.get("name")
-    if not date or not name:
-        return jsonify({"ok": False, "msg": "date and name required"}), 400
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    try:
-        cursor.execute("INSERT INTO holidays (date, name) VALUES (%s,%s)", (date, name))
-        db.commit()
-    except Exception:
-        app_log.error("API holiday insert failed", exc_info=True)
-        db.rollback()
-        cursor.close()
-        db.close()
-        return jsonify({"ok": False, "msg": "Failed to add holiday. Check for duplicate dates."}), 400
-    cursor.close()
-    db.close()
-    return jsonify({"ok": True})
-
-
 @core_bp.route("/api/employee/login", methods=["POST"])
 @limiter.limit("5 per minute")
 @limiter.limit("20 per hour")
