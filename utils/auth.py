@@ -7,10 +7,8 @@ import hashlib
 import urllib.request  # noqa: F401 — module-level so tests can monkeypatch auth_module.urllib.request.urlopen
 import bcrypt as _bcrypt
 from functools import wraps
-from contextlib import contextmanager
 from flask import session, request, jsonify, redirect, url_for, g as _flask_g
 from werkzeug.security import check_password_hash as _wz_check_pw
-from database import get_db_connection
 from extensions import app_log, log_security_event
 from utils.session_risk import is_session_compromised, evaluate_session_risk
 from utils.async_writer import enqueue_write

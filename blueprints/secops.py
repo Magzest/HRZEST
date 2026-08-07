@@ -22,7 +22,7 @@ from utils.auth import (
 )
 from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
-from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email, send_secops_mfa_qr_email
+from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_secops_mfa_qr_email
 from extensions import app_log, log_security_event, limiter
 from utils.plan_limits import get_tenant_plan, plan_rank
 

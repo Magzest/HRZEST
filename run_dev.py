@@ -8,6 +8,10 @@ os.environ.setdefault("SECRET_KEY", "dev-secret-key-12345")
 
 from wsgi import app
 
+# Local-only: skip the mandatory admin TOTP enrollment gate so the app is
+# reachable without an authenticator app during local dev/testing.
+app.config["MANDATORY_ADMIN_MFA"] = False
+
 if __name__ == "__main__":
     print("\n" + "="*60)
     print("🚀 HRzest.com — Development Server")
