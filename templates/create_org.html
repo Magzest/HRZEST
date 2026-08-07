@@ -60,6 +60,11 @@
     .plan-name{font-size:14px;font-weight:800;color:#fff;margin-bottom:4px}
     .plan-limit{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:6px}
     .plan-features{font-size:11px;color:rgba(255,255,255,.4);line-height:1.5}
+    .price-summary{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);
+      border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+    .price-summary .amount{font-size:20px;font-weight:800;color:#fff}
+    .price-summary .label{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px}
+    .btn:disabled{opacity:.6;cursor:not-allowed;transform:none !important}
     @media(max-width:480px){.card{padding:32px 22px 28px}.plan-grid{grid-template-columns:1fr}}
     /* ── Dark mode ── */
     body.dark-mode{background:#0d1117 !important}
@@ -84,7 +89,7 @@
     {% endfor %}
   {% endwith %}
 
-  <form action="/create_org" method="POST" autocomplete="off" id="createOrgForm">
+  <form autocomplete="off" id="createOrgForm">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
 
     <div class="section-title">Company Details</div>
@@ -105,18 +110,33 @@
       Enter a short subdomain slug (e.g. <strong>magzest</strong>). Full URLs like <em>https://gradzest.com/</em> will automatically be cleaned.
     </div>
 
+    <label class="field-label">Number of Employees</label>
+    <input class="field-input" type="number" name="employee_count" id="employeeCount"
+           placeholder="e.g. 15" min="1" value="1" required />
+
     <hr class="divider" />
     <div class="section-title">Choose a Plan</div>
 
     <div class="plan-grid">
       {% for key, tier in plan_tiers.items() %}
-      <label class="plan-card{{ ' selected' if key == (selected_plan or 'starter') else '' }}" data-plan-card>
-        <input type="radio" name="plan" value="{{ key }}" {% if key == (selected_plan or 'starter') %}checked{% endif %} onchange="document.querySelectorAll('[data-plan-card]').forEach(function(c){c.classList.remove('selected')});this.closest('[data-plan-card]').classList.add('selected')" />
+      <label class="plan-card{{ ' selected' if key == (selected_plan or 'starter') else '' }}" data-plan-card
+             data-base-price="{{ tier.base_price_paise }}" data-band="{{ tier.employee_band or '' }}"
+             data-per-employee="{{ tier.per_employee_paise }}" data-limit="{{ tier.employee_limit or '' }}">
+        <input type="radio" name="plan" value="{{ key }}" {% if key == (selected_plan or 'starter') %}checked{% endif %}
+               onchange="document.querySelectorAll('[data-plan-card]').forEach(function(c){c.classList.remove('selected')});this.closest('[data-plan-card]').classList.add('selected');updatePriceSummary();" />
         <div class="plan-name">{{ tier.display_name }}</div>
         <div class="plan-limit">{{ tier.employee_limit if tier.employee_limit else 'Unlimited' }} employees</div>
-        <div class="plan-features">{{ tier.features | join(', ') | upper }}</div>
+        <div class="plan-features">{{ (tier.features | list)[:3] | join(', ') | upper }}</div>
       </label>
       {% endfor %}
+    </div>
+
+    <div class="price-summary">
+      <div>
+        <div class="label">Total (monthly)</div>
+        <div class="amount" id="priceAmount">—</div>
+      </div>
+      <div class="label" id="priceNote"></div>
     </div>
 
     <hr class="divider" />
@@ -129,45 +149,168 @@
     <label class="field-label">Admin Email</label>
     <input class="field-input" type="email" name="admin_email"
            placeholder="admin@acme.com" required autocomplete="email" />
-
-    <label class="field-label">Admin Password</label>
-    <input class="field-input" type="password" name="admin_password"
-           placeholder="Minimum 8 characters" required minlength="8"
-           autocomplete="new-password" />
+    <p style="font-size:12px;color:rgba(255,255,255,.4);margin:-10px 0 18px;">
+      No password needed here — after payment, we'll email you a link to set your own.
+    </p>
 
     {% if show_captcha %}
     <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     {% endif %}
 
-    <button type="submit" class="btn">Create Organisation <i class="ti ti-arrow-right"></i></button>
+    <div id="formError" class="alert alert-error" style="display:none;"></div>
+
+    <button type="submit" class="btn" id="payBtn">Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i></button>
   </form>
 
   <a href="/get-started" class="back-link">← Already have an account? Sign in</a>
 </div>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script src="/static/darkmode.min.js"></script>
 <script>
-  let subdomainUserEdited = false;
+let subdomainUserEdited = false;
 
-  function cleanSubdomainInput(el) {
-    subdomainUserEdited = true;
-    let val = el.value.toLowerCase().trim();
-    val = val.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
-    const suffixes = ['.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
-    for (let s of suffixes) {
-      if (val.endsWith(s)) val = val.slice(0, -s.length);
-    }
-    val = val.replace(/[^a-z0-9\-]/g, '');
-    el.value = val;
+function cleanSubdomainInput(el) {
+  subdomainUserEdited = true;
+  let val = el.value.toLowerCase().trim();
+  val = val.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+  const suffixes = ['.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
+  for (let s of suffixes) {
+    if (val.endsWith(s)) val = val.slice(0, -s.length);
   }
+  val = val.replace(/[^a-z0-9\-]/g, '');
+  el.value = val;
+}
 
-  function autoFillSubdomain(name) {
-    if (subdomainUserEdited) return;
-    const sub = document.getElementById('subdomain_input');
-    if (!sub) return;
-    let val = name.toLowerCase().trim().replace(/[^a-z0-9\-]/g, '');
-    sub.value = val;
+function autoFillSubdomain(name) {
+  if (subdomainUserEdited) return;
+  const sub = document.getElementById('subdomain_input');
+  if (!sub) return;
+  let val = name.toLowerCase().trim().replace(/[^a-z0-9\-]/g, '');
+  sub.value = val;
+}
+
+function selectedPlanCard() {
+  return document.querySelector('[data-plan-card].selected') || document.querySelector('[data-plan-card]');
+}
+function formatInr(paise) {
+  return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+}
+function calcPrice(card, employeeCount) {
+  var base = parseInt(card.dataset.basePrice, 10) || 0;
+  var band = card.dataset.band ? parseInt(card.dataset.band, 10) : null;
+  var perEmp = parseInt(card.dataset.perEmployee, 10) || 0;
+  if (!band || employeeCount <= band) return base;
+  return base + perEmp * (employeeCount - band);
+}
+function updatePriceSummary() {
+  var card = selectedPlanCard();
+  if (!card) return;
+  var count = parseInt(document.getElementById('employeeCount').value, 10) || 1;
+  var limit = card.dataset.limit ? parseInt(card.dataset.limit, 10) : null;
+  var amountEl = document.getElementById('priceAmount');
+  var noteEl = document.getElementById('priceNote');
+  if (limit && count > limit) {
+    amountEl.textContent = '—';
+    noteEl.textContent = 'Max ' + limit + ' employees on this plan';
+    return;
   }
+  amountEl.textContent = formatInr(calcPrice(card, count)) + '/mo';
+  noteEl.textContent = count + ' employee' + (count === 1 ? '' : 's');
+}
+document.getElementById('employeeCount').addEventListener('input', updatePriceSummary);
+document.addEventListener('DOMContentLoaded', updatePriceSummary);
+
+function showFormError(msg) {
+  var el = document.getElementById('formError');
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+
+document.getElementById('createOrgForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var form = e.target;
+  var payBtn = document.getElementById('payBtn');
+  document.getElementById('formError').style.display = 'none';
+
+  var card = selectedPlanCard();
+  var payload = {
+    company_name: form.company_name.value.trim(),
+    subdomain: form.subdomain.value.trim().toLowerCase(),
+    employee_count: document.getElementById('employeeCount').value,
+    plan: card ? card.querySelector('input[name="plan"]').value : 'starter',
+    admin_username: form.admin_username.value.trim(),
+    admin_email: form.admin_email.value.trim(),
+  };
+  var turnstileEl = form.querySelector('[name="cf-turnstile-response"]');
+  if (turnstileEl) payload.cf_turnstile_response = turnstileEl.value;
+
+  payBtn.disabled = true;
+  payBtn.textContent = 'Starting checkout…';
+
+  fetch('/api/billing/create_order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.ok) {
+        showFormError(data.msg || 'Could not start checkout.');
+        payBtn.disabled = false;
+        payBtn.innerHTML = 'Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i>';
+        return;
+      }
+      var rzp = new Razorpay({
+        key: data.key_id,
+        order_id: data.order_id,
+        amount: data.amount_paise,
+        currency: data.currency,
+        name: 'HRMS Portal',
+        description: payload.company_name + ' — ' + payload.plan + ' plan',
+        prefill: { email: payload.admin_email },
+        handler: function (response) {
+          payBtn.textContent = 'Verifying payment…';
+          fetch('/api/billing/verify_payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (verifyData) {
+              if (!verifyData.ok) {
+                showFormError(verifyData.msg || 'Payment verification failed.');
+                payBtn.disabled = false;
+                payBtn.innerHTML = 'Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i>';
+                return;
+              }
+              window.location.href = '/org_payment_success?portal_url=' + encodeURIComponent(verifyData.portal_url)
+                + '&email=' + encodeURIComponent(payload.admin_email);
+            })
+            .catch(function () {
+              showFormError('Payment succeeded but verification failed to reach the server. Contact support.');
+              payBtn.disabled = false;
+            });
+        },
+        modal: {
+          ondismiss: function () {
+            payBtn.disabled = false;
+            payBtn.innerHTML = 'Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i>';
+          },
+        },
+      });
+      rzp.open();
+    })
+    .catch(function () {
+      showFormError('Could not reach the server. Please try again.');
+      payBtn.disabled = false;
+      payBtn.innerHTML = 'Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i>';
+    });
+});
 </script>
 </body>
 </html>

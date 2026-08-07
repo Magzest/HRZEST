@@ -56,13 +56,27 @@
     .basic .plan-name  { color: var(--green); }
     .medium .plan-name { color: var(--blue); }
     .premium .plan-name{ color: var(--purple); }
+    .plan-price { font-size: 1.9rem; font-weight: 900; color: var(--text); margin-bottom: 0.15rem; }
+    .plan-price-period { font-size: 0.85rem; font-weight: 600; color: var(--muted); margin-left: 0.15rem; }
+    .plan-price-metered { font-size: 0.75rem; color: var(--muted); margin-bottom: 0.75rem; }
     .plan-limit { font-size: 0.85rem; color: var(--muted); font-weight: 500; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.4rem; }
     .plan-limit-pill { display: inline-block; padding: 0.2rem 0.65rem; border-radius: 6px; font-weight: 600; font-size: 0.8rem; }
     .basic  .plan-limit-pill { background: rgba(34,197,94,0.12);  color: var(--green); }
     .medium .plan-limit-pill { background: rgba(59,130,246,0.12); color: var(--blue); }
     .premium .plan-limit-pill{ background: rgba(168,85,247,0.12); color: var(--purple); }
-    .card-divider { height: 1px; background: var(--border); margin-bottom: 1.4rem; }
-    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 2rem; }
+    .details-toggle {
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem; width: 100%;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; padding: 0.6rem 1rem;
+      border-radius: 10px; cursor: pointer; margin-bottom: 1rem; transition: background 0.2s;
+    }
+    .details-toggle:hover { background: rgba(255,255,255,0.08); }
+    .details-toggle .chevron { transition: transform 0.2s; font-size: 0.75rem; }
+    .card.expanded .details-toggle .chevron { transform: rotate(180deg); }
+    .card-divider { height: 1px; background: var(--border); margin-bottom: 1.4rem; display: none; }
+    .feature-list { list-style: none; flex-direction: column; gap: 0.65rem; margin-bottom: 2rem; display: none; }
+    .card.expanded .card-divider { display: block; }
+    .card.expanded .feature-list { display: flex; }
     .feature-item { display: flex; align-items: center; gap: 0.65rem; font-size: 0.9rem; color: var(--text); }
     .feature-item.missing { color: var(--muted); }
     .icon-check, .icon-cross { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.7rem; font-weight: 700; }
@@ -146,7 +160,12 @@
       <div class="card basic">
         <span class="plan-emoji">🟢</span>
         <div class="plan-name">Basic</div>
-        <div class="plan-limit">Employees:&nbsp;<span class="plan-limit-pill">Up to 25</span></div>
+        <div class="plan-price">{{ plan_tiers.starter.base_price_paise | plan_price }}<span class="plan-price-period">/mo</span></div>
+        <div class="plan-price-metered">+ {{ plan_tiers.starter.per_employee_paise | plan_price }}/employee beyond {{ plan_tiers.starter.employee_band }}</div>
+        <div class="plan-limit">Employees:&nbsp;<span class="plan-limit-pill">Up to {{ plan_tiers.starter.employee_limit }}</span></div>
+        <button type="button" class="details-toggle" data-toggle-details>
+          <span class="toggle-label">See full plan details</span> <span class="chevron">▾</span>
+        </button>
         <div class="card-divider"></div>
         <ul class="feature-list">
           <li class="feature-item"><span class="icon-check">✓</span> Face Login</li>
@@ -163,14 +182,19 @@
           <li class="feature-item missing"><span class="icon-cross">✕</span> Daily Email Reports</li>
           <li class="feature-item missing"><span class="icon-cross">✕</span> Mobile App</li>
         </ul>
-        <a href="/create_org?plan=starter" class="cta-btn">Get Started</a>
+        <a href="/create_org?plan=starter" class="cta-btn">Proceed to Payment</a>
       </div>
 
       <!-- MEDIUM -->
       <div class="card medium">
         <span class="plan-emoji">🔵</span>
         <div class="plan-name">Medium</div>
-        <div class="plan-limit">Employees:&nbsp;<span class="plan-limit-pill">70 – 150</span></div>
+        <div class="plan-price">{{ plan_tiers.growth.base_price_paise | plan_price }}<span class="plan-price-period">/mo</span></div>
+        <div class="plan-price-metered">+ {{ plan_tiers.growth.per_employee_paise | plan_price }}/employee beyond {{ plan_tiers.growth.employee_band }}</div>
+        <div class="plan-limit">Employees:&nbsp;<span class="plan-limit-pill">{{ plan_tiers.growth.employee_band }} – {{ plan_tiers.growth.employee_limit }}</span></div>
+        <button type="button" class="details-toggle" data-toggle-details>
+          <span class="toggle-label">See full plan details</span> <span class="chevron">▾</span>
+        </button>
         <div class="card-divider"></div>
         <ul class="feature-list">
           <li class="feature-item"><span class="icon-check">✓</span> Face Login</li>
@@ -183,18 +207,25 @@
           <li class="feature-item"><span class="icon-check">✓</span> Fingerprint Login</li>
           <li class="feature-item"><span class="icon-check">✓</span> Dashboard Auth QR</li>
           <li class="feature-item"><span class="icon-check">✓</span> Daily Email Reports</li>
-          <li class="feature-item missing"><span class="icon-cross">✕</span> MFA</li>
+          <li class="feature-item"><span class="icon-check">✓</span> Authenticator App MFA</li>
+          <li class="feature-item"><span class="icon-check">✓</span> Auto-lock After Failed Check-ins</li>
+          <li class="feature-item"><span class="icon-check">✓</span> SecOps Dashboard</li>
           <li class="feature-item missing"><span class="icon-cross">✕</span> Mobile App</li>
         </ul>
-        <a href="/create_org?plan=growth" class="cta-btn">Get Started</a>
+        <a href="/create_org?plan=growth" class="cta-btn">Proceed to Payment</a>
       </div>
 
-      <!-- PREMIUM -->
+      <!-- PRIME -->
       <div class="card premium">
         <div class="popular-badge">⭐ Most Popular</div>
         <span class="plan-emoji">🟣</span>
-        <div class="plan-name">Premium</div>
+        <div class="plan-name">Prime</div>
+        <div class="plan-price">{{ plan_tiers.enterprise.base_price_paise | plan_price }}<span class="plan-price-period">/mo</span></div>
+        <div class="plan-price-metered">Flat price, no per-employee metering</div>
         <div class="plan-limit">Employees:&nbsp;<span class="plan-limit-pill">Unlimited</span></div>
+        <button type="button" class="details-toggle" data-toggle-details>
+          <span class="toggle-label">See full plan details</span> <span class="chevron">▾</span>
+        </button>
         <div class="card-divider"></div>
         <ul class="feature-list">
           <li class="feature-item"><span class="icon-check">✓</span> Face Login</li>
@@ -207,11 +238,13 @@
           <li class="feature-item"><span class="icon-check">✓</span> Fingerprint Login</li>
           <li class="feature-item"><span class="icon-check">✓</span> Dashboard Auth QR</li>
           <li class="feature-item"><span class="icon-check">✓</span> Daily Email Reports</li>
-          <li class="feature-item"><span class="icon-check">✓</span> MFA</li>
-          <li class="feature-item"><span class="icon-check">✓</span> Auth QR to Email</li>
+          <li class="feature-item"><span class="icon-check">✓</span> Authenticator App MFA</li>
+          <li class="feature-item"><span class="icon-check">✓</span> Auto-lock After Failed Check-ins</li>
+          <li class="feature-item"><span class="icon-check">✓</span> Dedicated SecOps Dashboard</li>
+          <li class="feature-item"><span class="icon-check">✓</span> Email MFA Codes</li>
           <li class="feature-item"><span class="icon-check">✓</span> Mobile App</li>
         </ul>
-        <a href="/create_org?plan=enterprise" class="cta-btn">Get Started (Unlimited)</a>
+        <a href="/create_org?plan=enterprise" class="cta-btn">Proceed to Payment (Unlimited)</a>
       </div>
 
     </div>
@@ -230,16 +263,22 @@
             <th>Feature</th>
             <th class="th-basic">🟢 Basic</th>
             <th class="th-medium">🔵 Medium</th>
-            <th class="th-premium">🟣 Premium</th>
+            <th class="th-premium">🟣 Prime</th>
           </tr>
         </thead>
         <tbody>
           <tr class="group-header"><td colspan="4">Employee Capacity</td></tr>
           <tr>
             <td>Team Size</td>
-            <td>Up to 25</td>
-            <td>Up to 150</td>
+            <td>Up to {{ plan_tiers.starter.employee_limit }}</td>
+            <td>Up to {{ plan_tiers.growth.employee_limit }}</td>
             <td class="col-highlight">Unlimited</td>
+          </tr>
+          <tr>
+            <td>Monthly Price</td>
+            <td>{{ plan_tiers.starter.base_price_paise | plan_price }}+</td>
+            <td>{{ plan_tiers.growth.base_price_paise | plan_price }}+</td>
+            <td class="col-highlight">{{ plan_tiers.enterprise.base_price_paise | plan_price }} flat</td>
           </tr>
 
           <tr class="group-header"><td colspan="4">Authentication</td></tr>
@@ -348,6 +387,22 @@
   <footer>
     <p>&copy; {% if now is defined %}{{ now.year }}{% else %}2026{% endif %} <strong>AttendanceOS</strong>. All rights reserved. &nbsp;·&nbsp; Employee Attendance Platform</p>
   </footer>
+
+  <script>
+    // Each card starts collapsed (summary: name/price/limit only). Clicking
+    // "See full plan details" reveals the feature list and flips the CTA
+    // into view — details before payment, not the other way round.
+    document.querySelectorAll('[data-toggle-details]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var card = btn.closest('.card');
+        var expanded = card.classList.toggle('expanded');
+        btn.querySelector('.toggle-label').textContent = expanded ? 'Hide plan details' : 'See full plan details';
+        if (expanded) {
+          card.querySelector('.cta-btn').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
+    });
+  </script>
 
 </body>
 </html>

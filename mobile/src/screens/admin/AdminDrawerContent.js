@@ -76,6 +76,20 @@ export default function AdminDrawerContent(props) {
       section: "HR OPERATIONS",
     },
     {
+      title: "Departments & Units",
+      icon: "business-outline",
+      iconFocused: "business",
+      route: "Departments",
+      section: "HR OPERATIONS",
+    },
+    {
+      title: "Leaves & Holidays",
+      icon: "calendar-outline",
+      iconFocused: "calendar",
+      route: "LeavesHolidays",
+      section: "HR OPERATIONS",
+    },
+    {
       title: "Organization Chart",
       icon: "git-network-outline",
       iconFocused: "git-network",

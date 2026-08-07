@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
-import { fetchEmployees, fetchDashboard } from "../../api/client";
+import { fetchEmployees, fetchDashboard, fetchMonthlyReport } from "../../api/client";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -50,33 +50,64 @@ export default function AttendanceScreen({ navigation }) {
 
   const loadData = async () => {
     try {
-      const [empRes, dashRes] = await Promise.all([fetchEmployees(), fetchDashboard()]);
+      const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+      const [empRes, dashRes, reportRes] = await Promise.all([
+        fetchEmployees().catch(() => null),
+        fetchDashboard().catch(() => null),
+        fetchMonthlyReport(parseInt(selectedYear, 10), monthIdx).catch(() => null),
+      ]);
       const empList = empRes?.data?.employees || [];
       const dash = dashRes?.data || {};
 
-      const total = empList.length || dash.total_employees || 0;
-      const present = dash.present || 0;
-      const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+      if (reportRes?.data?.ok && Array.isArray(reportRes.data.report)) {
+        const repList = reportRes.data.report;
+        const total = repList.length || empList.length || 0;
+        const avgPct = total > 0 ? Math.round(repList.reduce((acc, curr) => acc + (curr.pct || 0), 0) / total) : 0;
 
-      setSummary({
-        employees: total,
-        workingDays: dash.working_days || 26,
-        attendance: pct,
-        holidays: dash.holidays || 0,
-      });
+        setSummary({
+          employees: total,
+          workingDays: reportRes.data.total_working || 26,
+          attendance: avgPct,
+          holidays: reportRes.data.holiday_count || 0,
+        });
 
-      const mapped = empList.map((emp, i) => ({
-        id: emp.employee_id || `EMP-${1001 + i}`,
-        name: emp.name,
-        full: emp.status === "Active" ? 22 : 0,
-        late: 0,
-        half: 0,
-        absent: emp.status === "Active" ? 0 : 1,
-        working: 26,
-        percent: emp.status === "Active" ? 100 : 0,
-        status: emp.status === "Active" ? "Present" : "Absent",
-      }));
-      setEmployees(mapped);
+        const mapped = repList.map((item, i) => ({
+          id: item.employee_id || `EMP-${1001 + i}`,
+          name: item.name,
+          full: item.full_days || 0,
+          late: item.late_days || 0,
+          half: item.half_days || 0,
+          absent: item.absent || 0,
+          working: item.billable || 26,
+          percent: Math.round(item.pct || 0),
+          status: item.pct > 0 ? "Present" : "Absent",
+        }));
+        setEmployees(mapped);
+      } else {
+        const total = empList.length || dash.total_employees || 0;
+        const present = dash.present || 0;
+        const pct = total > 0 ? Math.round((present / total) * 100) : 0;
+
+        setSummary({
+          employees: total,
+          workingDays: dash.working_days || 26,
+          attendance: pct,
+          holidays: dash.holidays || 0,
+        });
+
+        const mapped = empList.map((emp, i) => ({
+          id: emp.employee_id || `EMP-${1001 + i}`,
+          name: emp.name,
+          full: emp.status === "Active" ? 22 : 0,
+          late: 0,
+          half: 0,
+          absent: emp.status === "Active" ? 0 : 1,
+          working: 26,
+          percent: emp.status === "Active" ? 100 : 0,
+          status: emp.status === "Active" ? "Present" : "Absent",
+        }));
+        setEmployees(mapped);
+      }
     } catch (e) {
       setEmployees([]);
       setSummary({ employees: 0, workingDays: 26, attendance: 0, holidays: 0 });

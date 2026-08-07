@@ -898,8 +898,12 @@ def api_leave_requests():
 @api_required
 def api_leave_action(lid):
     data = request.get_json(silent=True) or {}
-    action = data.get("action", "").strip()
-    if action not in ("Approved", "Declined"):
+    raw_action = data.get("action", "").strip().lower()
+    if raw_action in ("approved", "approve"):
+        action = "Approved"
+    elif raw_action in ("declined", "decline", "rejected", "reject"):
+        action = "Declined"
+    else:
         return jsonify({"ok": False, "msg": "action must be Approved or Declined"}), 400
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1284,6 +1288,30 @@ def api_compoff():
             "balance_days": float(r[6]) if r[6] else 0.0,
         })
     return jsonify({"ok": True, "balances": balances})
+
+
+@leave_bp.route("/api/compoff/<int:cid>/action", methods=["POST"])
+@api_required
+def api_compoff_action(cid):
+    data = request.get_json(silent=True) or {}
+    raw_action = data.get("action", "").strip().lower()
+    if raw_action in ("approved", "approve", "accepted", "accept"):
+        status = "Approved"
+    elif raw_action in ("declined", "decline", "rejected", "reject"):
+        status = "Rejected"
+    else:
+        status = "Approved"
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    try:
+        cursor.execute("UPDATE compoff_balances SET status=%s WHERE id=%s", (status, cid))
+        db.commit()
+    except Exception:
+        pass
+    finally:
+        cursor.close()
+        db.close()
+    return jsonify({"ok": True, "status": status})
 
 
 

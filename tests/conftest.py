@@ -53,6 +53,7 @@ from blueprints.compliance import compliance_bp
 from blueprints.hr_portal import hr_bp
 from blueprints.platform_admin import platform_admin_bp
 from blueprints.daily_report import daily_report_bp
+from blueprints.billing import billing_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -75,6 +76,7 @@ flask_app.register_blueprint(compliance_bp)
 flask_app.register_blueprint(hr_bp)
 flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(daily_report_bp)
+flask_app.register_blueprint(billing_bp)
 
 # Import app AFTER blueprints are registered so all module-level reads pick
 # up test values AND _register_api_v1_aliases() sees the full route set.

@@ -19,8 +19,28 @@ export default function AttendanceHistoryCard({
   records = [],
 }) {
   const renderItem = ({ item }) => {
-    const color =
-      STATUS_COLORS[item.status] || "#94A3B8";
+    const checkIn = item.check_in || item.login_time || "--:--";
+    const checkOut = item.check_out || item.logout_time || "--:--";
+    const rawStatus = item.status || item.attendance_type || item.login_status || "Present";
+    const displayStatus = rawStatus.includes("Late")
+      ? "Late"
+      : rawStatus.includes("Half")
+      ? "Half Day"
+      : rawStatus.includes("Absent")
+      ? "Absent"
+      : rawStatus.includes("Holiday")
+      ? "Holiday"
+      : rawStatus.includes("Leave")
+      ? "Leave"
+      : "Present";
+    const color = STATUS_COLORS[displayStatus] || "#22C55E";
+
+    let hoursDisplay = item.hours || "--";
+    if (item.worked_minutes) {
+      const hrs = Math.floor(item.worked_minutes / 60);
+      const mins = item.worked_minutes % 60;
+      hoursDisplay = `${hrs}h ${mins}m`;
+    }
 
     return (
       <View style={styles.card}>
@@ -52,7 +72,7 @@ export default function AttendanceHistoryCard({
             />
 
             <Text style={styles.time}>
-              {item.check_in || "--:--"}
+              {checkIn}
             </Text>
 
             <Ionicons
@@ -63,13 +83,13 @@ export default function AttendanceHistoryCard({
             />
 
             <Text style={styles.time}>
-              {item.check_out || "--:--"}
+              {checkOut}
             </Text>
           </View>
 
           <View style={styles.bottomRow}>
             <Text style={styles.hours}>
-              {item.hours || "--"} hrs
+              {hoursDisplay}
             </Text>
 
             <View
@@ -89,7 +109,7 @@ export default function AttendanceHistoryCard({
                   },
                 ]}
               >
-                {item.status}
+                {displayStatus}
               </Text>
             </View>
           </View>

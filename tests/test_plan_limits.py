@@ -50,6 +50,38 @@ class TestPlanTiers:
         assert isinstance(plan_limits.PLAN_TIERS["growth"]["employee_limit"], int)
 
 
+class TestCalculatePlanPrice:
+    def test_at_or_below_band_is_flat_base_price(self):
+        assert plan_limits.calculate_plan_price("starter", 1) == 199900
+        assert plan_limits.calculate_plan_price("starter", 30) == 199900
+
+    def test_one_over_band_adds_one_increment(self):
+        assert plan_limits.calculate_plan_price("starter", 31) == 199900 + 4000
+
+    def test_at_employee_limit_is_max_metered_price(self):
+        # 60 - 30 = 30 employees billed above the band
+        assert plan_limits.calculate_plan_price("starter", 60) == 199900 + 4000 * 30
+
+    def test_growth_band_and_limit(self):
+        assert plan_limits.calculate_plan_price("growth", 70) == 599900
+        assert plan_limits.calculate_plan_price("growth", 71) == 599900 + 3500
+        assert plan_limits.calculate_plan_price("growth", 150) == 599900 + 3500 * 80
+
+    def test_enterprise_is_flat_regardless_of_count(self):
+        assert plan_limits.calculate_plan_price("enterprise", 1) == 1499900
+        assert plan_limits.calculate_plan_price("enterprise", 10000) == 1499900
+
+    def test_over_employee_limit_raises(self):
+        with pytest.raises(ValueError):
+            plan_limits.calculate_plan_price("starter", 61)
+        with pytest.raises(ValueError):
+            plan_limits.calculate_plan_price("growth", 151)
+
+    def test_unknown_plan_raises(self):
+        with pytest.raises(ValueError):
+            plan_limits.calculate_plan_price("not-a-real-plan", 10)
+
+
 class TestGetTenantPlan:
     def test_unknown_schema_defaults_to_starter(self):
         assert plan_limits.get_tenant_plan("att_no_such_schema_xyz") == "starter"
@@ -77,7 +109,7 @@ class TestCheckEmployeeLimit:
         monkeypatch.setitem(plan_limits.PLAN_TIERS["starter"], "employee_limit", 0)
         allowed, msg = plan_limits.check_employee_limit(_TEST_SCHEMA)
         assert allowed is False
-        assert "Starter" in msg
+        assert "Basic" in msg
         assert "Upgrade" in msg
 
     def test_unregistered_schema_uses_starter_plan(self):
@@ -87,26 +119,31 @@ class TestCheckEmployeeLimit:
 
 
 class TestCheckFeatureAllowed:
-    def test_starter_allows_qr_and_pin(self, tenant_row):
+    def test_starter_allows_qr_pin_and_face(self, tenant_row):
         tenant_row("starter")
         assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "qr")[0] is True
         assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "pin")[0] is True
+        assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "face")[0] is True
 
-    def test_starter_blocks_face_and_fingerprint(self, tenant_row):
+    def test_starter_blocks_fingerprint_and_mfa(self, tenant_row):
         tenant_row("starter")
-        allowed, msg = plan_limits.check_feature_allowed(_TEST_SCHEMA, "face")
+        allowed, msg = plan_limits.check_feature_allowed(_TEST_SCHEMA, "fingerprint")
         assert allowed is False
-        assert "Starter" in msg
-        assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "fingerprint")[0] is False
+        assert "Basic" in msg
+        assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "totp_mfa")[0] is False
 
     def test_growth_allows_face_fingerprint_geo_but_not_biometric(self, tenant_row):
         tenant_row("growth")
         assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "face")[0] is True
         assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "fingerprint")[0] is True
         assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "geo")[0] is True
+        assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "attendance_lockout")[0] is True
         assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "biometric")[0] is False
+        assert plan_limits.check_feature_allowed(_TEST_SCHEMA, "mobile_app")[0] is False
 
     def test_enterprise_allows_everything(self, tenant_row):
         tenant_row("enterprise")
-        for key in ("qr", "pin", "face", "fingerprint", "geo", "biometric"):
+        for key in ("qr", "pin", "face", "fingerprint", "geo", "biometric",
+                    "totp_mfa", "attendance_lockout", "soc_dashboard",
+                    "soc_dashboard_dedicated", "daily_reports", "mobile_app", "email_mfa"):
             assert plan_limits.check_feature_allowed(_TEST_SCHEMA, key)[0] is True

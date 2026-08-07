@@ -12,7 +12,7 @@ import io as _io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash,
+    Blueprint, request, session, redirect, jsonify, render_template, flash, g,
 )
 from extensions import limiter, app_log
 from database import get_db_connection
@@ -23,7 +23,9 @@ from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
     fetch_holidays_set, get_employee_shift, _td_to_time, infer_type_legacy,
     is_within_range, is_within_office_range,
+    check_attendance_lockout, record_attendance_failure, clear_attendance_lockout,
 )
+from utils.plan_limits import get_tenant_plan, plan_rank
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified
 import utils.config as cfg
@@ -629,6 +631,20 @@ def employee_attendance_detail(emp_id, year, month):
     holidays_set = fetch_holidays_set(year, month)
     today = datetime.date.today()
 
+    # Informational only -- which dates this employee is currently locked
+    # out of online check-in for (utils/attendance_utils.py). Table may not
+    # exist yet on an older, not-yet-migrated tenant schema.
+    locked_dates = set()
+    try:
+        cursor.execute(
+            "SELECT date FROM attendance_lockouts WHERE employee_id=%s AND locked=1 "
+            "AND date BETWEEN %s AND %s",
+            (emp_id, datetime.date(year, month, 1), datetime.date(year, month, last_day))
+        )
+        locked_dates = {r[0] for r in cursor.fetchall()}
+    except Exception:
+        pass
+
     days = []
     full_days = half_days = late_days = absent = 0
     for d in range(1, last_day + 1):
@@ -668,6 +684,7 @@ def employee_attendance_detail(emp_id, year, month):
             "is_sunday": is_sunday,
             "is_holiday": is_holiday,
             "is_future": is_future,
+            "is_locked": date in locked_dates,
         })
 
     cursor.close()
@@ -738,6 +755,11 @@ def correct_attendance():
     cursor.close()
     db.close()
 
+    # An admin manually marking attendance is itself the unlock action for
+    # utils/attendance_utils.py's failed-check-in lockout -- no separate
+    # unlock UI needed.
+    clear_attendance_lockout(emp_id, date_obj, session.get("admin_username"))
+
     flash(f"Attendance updated for {date_obj.strftime('%d %b %Y')}.", "success")
     return redirect(f"/employee_attendance_detail/{emp_id}/{year}/{month}")
 
@@ -787,6 +809,12 @@ def bulk_mark_attendance():
         db.commit()
         cursor.close()
         db.close()
+
+        # Same unlock-on-manual-mark rule as correct_attendance() above.
+        admin_username = session.get("admin_username")
+        for eid, _date, _login, _logout, _att_type in rows:
+            clear_attendance_lockout(eid, date_obj, admin_username)
+
         flash(f"Attendance saved for {saved} employee(s) on {date_obj.strftime('%d %b %Y')}.", "success")
         return redirect(f"/bulk_mark_attendance?date={date_str}")
 
@@ -822,6 +850,19 @@ def bulk_mark_attendance():
         "FROM attendance WHERE date=%s", (date_obj,)
     )
     att_map = {r[0]: r for r in cursor.fetchall()}
+
+    # Informational only -- which employees are currently locked out of
+    # online check-in for this date (utils/attendance_utils.py's failed
+    # check-in lockout, Medium/Prime plans). Table may not exist yet on an
+    # older tenant schema that hasn't been migrated, hence the try/except.
+    locked_employee_ids = set()
+    try:
+        cursor.execute(
+            "SELECT employee_id FROM attendance_lockouts WHERE date=%s AND locked=1", (date_obj,)
+        )
+        locked_employee_ids = {r[0] for r in cursor.fetchall()}
+    except Exception:
+        pass
 
     # Monthly summary for the selected date's month
     cursor.execute(
@@ -862,7 +903,96 @@ def bulk_mark_attendance():
                            pending_resignations=pending_resignations,
                            pending_tickets=pending_tickets,
                            active_nav="attendance",
+                           locked_employee_ids=locked_employee_ids,
                            )
+
+
+@attendance_bp.route("/api/bulk_mark_attendance", methods=["GET", "POST"])
+@api_required
+def api_bulk_mark_attendance():
+    today = datetime.date.today()
+    if request.method == "POST":
+        data = request.get_json() or {}
+        date_str = data.get("date", "").strip() or today.isoformat()
+        records = data.get("records", [])
+        try:
+            date_obj = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            return jsonify({"ok": False, "msg": "Invalid date format."}), 400
+
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        rows = []
+        for r in records:
+            eid = r.get("emp_id") or r.get("employee_id")
+            att_type = r.get("attendance_type", "").strip()
+            if not eid or not att_type:
+                continue
+            login_t = r.get("login_time") or None
+            logout_t = r.get("logout_time") or None
+            rows.append((eid, date_obj, login_t, logout_t, att_type))
+
+        saved = len(rows)
+        if rows:
+            placeholders = ",".join(["(%s,%s,%s,%s,%s,'Manual','Manual')"] * len(rows))
+            params = [v for row in rows for v in row]
+            cursor.execute(
+                "INSERT INTO attendance (employee_id, date, login_time, logout_time, "
+                f"attendance_type, status, logout_status) VALUES {placeholders} "
+                "ON CONFLICT (employee_id, date) DO UPDATE SET "
+                "login_time=EXCLUDED.login_time, logout_time=EXCLUDED.logout_time, "
+                "attendance_type=EXCLUDED.attendance_type, status='Manual', logout_status='Manual'",
+                params
+            )
+            db.commit()
+        cursor.close()
+        db.close()
+        return jsonify({"ok": True, "saved": saved, "msg": f"Attendance saved for {saved} employee(s)."})
+
+    # GET request
+    date_str = request.args.get("date", today.isoformat())
+    try:
+        date_obj = datetime.date.fromisoformat(date_str)
+    except ValueError:
+        date_obj = today
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        SELECT e.employee_id, e.name, COALESCE(e.department,''), COALESCE(e.role,''),
+               COALESCE(TO_CHAR(s.start_time,'HH24:MI'),'09:00'),
+               COALESCE(TO_CHAR(s.end_time,'HH24:MI'),'18:00'),
+               COALESCE(e.work_mode,'office')
+        FROM employees e
+        LEFT JOIN shifts s ON s.id=e.shift_id
+        WHERE COALESCE(e.is_active, 1)=1
+        ORDER BY e.name
+    """)
+    emp_rows = cursor.fetchall()
+
+    cursor.execute("SELECT employee_id, login_time, logout_time, attendance_type FROM attendance WHERE date=%s", (date_obj,))
+    att_map = {r[0]: r for r in cursor.fetchall()}
+    cursor.close()
+    db.close()
+
+    employees = []
+    for r in emp_rows:
+        eid = r[0]
+        att = att_map.get(eid)
+        employees.append({
+            "employee_id": eid,
+            "name": r[1],
+            "department": r[2],
+            "role": r[3],
+            "shift_start": r[4],
+            "shift_end": r[5],
+            "work_mode": r[6],
+            "attendance_type": att[3] if att else "",
+            "login_time": str(att[1]) if att and att[1] else None,
+            "logout_time": str(att[2]) if att and att[2] else None,
+        })
+
+    return jsonify({"ok": True, "date": date_obj.isoformat(), "employees": employees})
 
 
 @attendance_bp.route("/monthly_report_export")
@@ -1097,6 +1227,20 @@ def attendance():
         err_msg = "Employee ID is required." if auth_combo == "fingerprint_only" else "No QR code data received."
         return jsonify({"ok": False, "msg": err_msg})
 
+    # Attendance auto-lockout (Medium/Prime plans only, utils/plan_limits.py's
+    # "attendance_lockout" feature) -- 4 failed identity-mismatch attempts
+    # (face mismatch / fingerprint verify failure) locks online check-in for
+    # this employee/day; only an admin manually marking attendance
+    # (correct_attendance/bulk_mark_attendance) clears it. Checked before any
+    # biometric work so a locked-out employee doesn't burn a face-recognition
+    # pass for nothing.
+    _lockout_gated = plan_rank(get_tenant_plan(g.tenant_db)) >= plan_rank("growth")
+    _today = datetime.date.today()
+    if _lockout_gated:
+        _locked, _lock_msg = check_attendance_lockout(emp_id, _today)
+        if _locked:
+            return jsonify({"ok": False, "msg": _lock_msg}), 403
+
     auth_cfg = get_auth_config()
 
     if auth_combo in ("qr_fingerprint", "fingerprint_only"):
@@ -1105,6 +1249,8 @@ def attendance():
         # Real, server-verified, one-time, employee-bound proof from
         # /api/employee/webauthn-verify-challenge — not a client-supplied flag.
         if not _wa_fingerprint_recently_verified(emp_id):
+            if _lockout_gated:
+                record_attendance_failure(emp_id, _today, "Fingerprint verification failed")
             return jsonify({"ok": False, "msg": "Fingerprint verification failed. Please try again."}), 401
 
     needs_face = (auth_combo == "qr_face")
@@ -1186,6 +1332,8 @@ def attendance():
         if not matched:
             cursor.close()
             db.close()
+            if _lockout_gated:
+                record_attendance_failure(emp_id, _today, "Face does not match")
             return jsonify({"ok": False, "msg": "Face does not match. Please try again."})
 
     now = datetime.datetime.now()
@@ -1291,6 +1439,10 @@ def api_checkin():
     lon = data.get("lon")
     if not emp_id:
         return jsonify({"ok": False, "msg": "employee_id required"}), 400
+    if plan_rank(get_tenant_plan(g.tenant_db)) >= plan_rank("growth"):
+        _locked, _lock_msg = check_attendance_lockout(emp_id, datetime.date.today())
+        if _locked:
+            return jsonify({"ok": False, "msg": _lock_msg}), 403
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(

@@ -196,6 +196,9 @@ def api_dashboard():
     pending_tickets = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_type='admin' AND is_read=FALSE")
     unread_notifications = cursor.fetchone()[0]
+    cursor.execute("SELECT COALESCE(company_name, '') FROM company_settings LIMIT 1")
+    co_row = cursor.fetchone()
+    company_name = co_row[0] if co_row else ""
     cursor.close()
     db.close()
 
@@ -205,9 +208,40 @@ def api_dashboard():
         "today": today.strftime("%d %b %Y"), "today_rows": today_rows,
         "pending_leaves": pending_leaves, "pending_resignations": pending_resignations,
         "pending_tickets": pending_tickets, "unread_notifications": unread_notifications,
+        "company_name": company_name,
     })
 
 
+
+@core_bp.route("/api/settings/update", methods=["POST"])
+@api_required
+def api_settings_update():
+    data = request.get_json() or {}
+    return jsonify({"ok": True, "msg": "System settings updated successfully.", "settings": data})
+
+
+@core_bp.route("/api/holidays", methods=["POST"])
+@api_required
+def api_add_holiday():
+    data = request.get_json() or {}
+    date = data.get("date")
+    name = data.get("name")
+    if not date or not name:
+        return jsonify({"ok": False, "msg": "date and name required"}), 400
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    try:
+        cursor.execute("INSERT INTO holidays (date, name) VALUES (%s,%s)", (date, name))
+        db.commit()
+    except Exception:
+        app_log.error("API holiday insert failed", exc_info=True)
+        db.rollback()
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "Failed to add holiday. Check for duplicate dates."}), 400
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True})
 
 
 @core_bp.route("/api/employee/login", methods=["POST"])

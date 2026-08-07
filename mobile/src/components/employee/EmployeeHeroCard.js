@@ -142,7 +142,12 @@ export default function EmployeeHeroCard({
 
       {/* Live Status Bar */}
       <View style={styles.statusBar}>
-        <View style={styles.statusLeft}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          disabled={checking || completed}
+          onPress={onCheckIn}
+          style={styles.statusLeft}
+        >
           <View
             style={[
               styles.statusDot,
@@ -150,9 +155,15 @@ export default function EmployeeHeroCard({
             ]}
           />
           <Text style={styles.statusTitle}>
-            {completed ? "Shift Completed" : checkedIn ? "Currently Checked In" : "Not Checked In Today"}
+            {checking
+              ? "Processing..."
+              : completed
+              ? "Shift Completed"
+              : checkedIn
+              ? "Currently Checked In"
+              : "Tap to Check In"}
           </Text>
-        </View>
+        </TouchableOpacity>
         <Text style={styles.dateText}>{todayStr}</Text>
       </View>
     </LinearGradient>

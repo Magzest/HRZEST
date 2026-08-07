@@ -141,7 +141,7 @@ class TestPlatformAdminDashboard:
         resp = client.get("/super_admin")
         assert resp.status_code == 200
         assert b"Sample Tenant Co" in resp.data
-        assert b"Starter" in resp.data
+        assert b"Basic" in resp.data  # display name for the 'starter' plan key (utils/plan_limits.py)
 
     def test_missing_tenant_schema_does_not_crash_dashboard(self, client, platform_admin, sample_tenant):
         # sample_tenant's db_name doesn't correspond to a real schema (this

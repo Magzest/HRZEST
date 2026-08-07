@@ -71,13 +71,7 @@ export default function ProfileHeader({
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.avatarButton}
-              onPress={() => {
-                try {
-                  navigation.navigate("Profile");
-                } catch (e) {
-                  // Fallback
-                }
-              }}
+              onPress={() => navigation.navigate("Profile")}
             >
               <View style={styles.avatarFallback}>
                 <Ionicons

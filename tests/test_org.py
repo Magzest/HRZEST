@@ -38,10 +38,13 @@ class TestSignupPage:
         assert b"Create Organisation" in resp.data
 
     def test_page_lists_all_three_plan_tiers(self, client):
+        # Display names are Basic/Medium/Prime (utils/plan_limits.py's
+        # PLAN_TIERS) even though the internal plan keys stay
+        # starter/growth/enterprise.
         resp = client.get("/create_org")
-        assert b"Starter" in resp.data
-        assert b"Growth" in resp.data
-        assert b"Enterprise" in resp.data
+        assert b"Basic" in resp.data
+        assert b"Medium" in resp.data
+        assert b"Prime" in resp.data
 
 
 class TestGetStartedPage:

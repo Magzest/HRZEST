@@ -24,7 +24,7 @@ import ProfileMenuCard from "../../components/profile/ProfileMenuCard";
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -64,6 +64,7 @@ export default function ProfileScreen() {
           phone: p.phone || user?.phone || "Not Provided",
           address: p.address || user?.address || "Not Provided",
           emergencyContact: p.emergency_contact_phone || user?.emergency_contact || "Not Provided",
+          company: p.company_name || user?.company || "",
           completion: 95,
         };
         setProfileData(updated);
@@ -72,6 +73,7 @@ export default function ProfileScreen() {
         setEditPhone(updated.phone);
         setEditAddress(updated.address);
         setEditEmergency(updated.emergencyContact);
+        if (updateUser) updateUser(updated);
       }
     } catch (_) {}
     setRefreshing(false);

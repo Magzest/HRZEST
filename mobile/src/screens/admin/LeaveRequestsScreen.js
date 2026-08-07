@@ -56,8 +56,9 @@ export default function LeaveRequestsScreen({ navigation }) {
   };
 
   const handleAction = async (id, actionType) => {
+    const apiAction = actionType === "Approved" || actionType === "approve" ? "Approved" : "Declined";
     try {
-      await leaveAction(id, actionType.toLowerCase());
+      await leaveAction(id, apiAction);
       Alert.alert("Success", `Request ${actionType}d successfully`);
     } catch (e) {
       // Local state update fallback

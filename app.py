@@ -149,6 +149,14 @@ def time_seconds_filter(value):
         return value.hour * 3600 + value.minute * 60 + value.second
     return int(value.total_seconds())
 
+
+@app.template_filter("plan_price")
+def plan_price_filter(paise):
+    """paise -> "₹1,999" for plan-pricing displays (super_admin_dashboard.html,
+    pricing.html) -- thin wrapper so templates don't import utils.plan_limits."""
+    from utils.plan_limits import format_price_inr
+    return format_price_inr(paise)
+
 # ---------------- CONFIG ----------------
 # secret_key, session cookie flags, and PERMANENT_SESSION_LIFETIME are
 # authoritative in extensions.py. Do not duplicate them here.
@@ -1248,6 +1256,19 @@ def _init_core_tables(cursor, db):
         )
     """)
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS attendance_lockouts (
+            id SERIAL PRIMARY KEY,
+            employee_id VARCHAR(50) NOT NULL,
+            date DATE NOT NULL,
+            failed_count INT NOT NULL DEFAULT 0,
+            locked SMALLINT NOT NULL DEFAULT 0,
+            lock_reason VARCHAR(200) DEFAULT NULL,
+            locked_at TIMESTAMP DEFAULT NULL,
+            unlocked_by VARCHAR(50) DEFAULT NULL,
+            UNIQUE (employee_id, date)
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS known_login_ips (
             id SERIAL PRIMARY KEY,
             identifier VARCHAR(150) NOT NULL,
@@ -2167,6 +2188,33 @@ def init_master_db():
                 password VARCHAR(255) NOT NULL,
                 email VARCHAR(200) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Razorpay orders for the paid public /create_org signup flow (see
+        # blueprints/billing.py, utils/razorpay_utils.py). Lives here, not
+        # in a tenant schema, because the order is created and paid BEFORE
+        # the tenant schema exists -- provisioning only happens once
+        # verify_payment confirms the signature. No password/credential
+        # field: the provisioned admin account gets a random password
+        # (never stored/emailed) and the customer sets their own via the
+        # same reset-token link blueprints/auth.py's admin_forgot_password
+        # already uses.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS payment_orders (
+                id SERIAL PRIMARY KEY,
+                razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
+                razorpay_payment_id VARCHAR(100) DEFAULT NULL,
+                plan VARCHAR(50) NOT NULL,
+                employee_count INT NOT NULL,
+                amount_paise INT NOT NULL,
+                company_name VARCHAR(200) NOT NULL,
+                subdomain VARCHAR(100) NOT NULL,
+                admin_username VARCHAR(100) NOT NULL,
+                admin_email VARCHAR(200) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'created',
+                tenant_id INT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                paid_at TIMESTAMP DEFAULT NULL
             )
         """)
         db.commit()
@@ -3134,11 +3182,12 @@ if "core.home" not in app.view_functions:
     from blueprints.hr_portal import hr_bp
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.daily_report import daily_report_bp
+    from blueprints.billing import billing_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp,
-                platform_admin_bp, daily_report_bp):
+                platform_admin_bp, daily_report_bp, billing_bp):
         app.register_blueprint(_bp)
 
 
@@ -3162,9 +3211,15 @@ def inject_plan_context():
 
 @app.route("/pricing")
 def pricing_page():
-    """Public pricing / plan comparison page."""
+    """Public pricing / plan comparison page. Passes plan_tiers explicitly
+    (overriding inject_plan_context's context-processor value above) since
+    that one derives from g.tenant_db, which /pricing -- a public,
+    tenant-agnostic page -- may hit without a resolved tenant, in which
+    case the context processor's except-branch would hand back an empty
+    dict instead of the real tier data this page needs to render prices."""
     import datetime as _dt
-    return render_template("pricing.html", now=_dt.datetime.now())
+    from utils.plan_limits import PLAN_TIERS
+    return render_template("pricing.html", now=_dt.datetime.now(), plan_tiers=PLAN_TIERS)
 
 _register_api_v1_aliases()
 

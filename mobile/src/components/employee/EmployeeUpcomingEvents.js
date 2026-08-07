@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -40,6 +41,7 @@ const EVENTS = [
 
 export default function EmployeeUpcomingEvents({
   events = [],
+  navigation,
 }) {
   return (
     <View style={styles.container}>
@@ -52,7 +54,19 @@ export default function EmployeeUpcomingEvents({
             Holidays, events & announcements
           </Text>
         </View>
-        <Ionicons name="calendar-outline" size={20} color="#173B8C" />
+        {navigation ? (
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center" }}
+            onPress={() => navigation.navigate("Holidays")}
+          >
+            <Text style={{ color: "#173B8C", fontWeight: "700", fontSize: 13, marginRight: 2 }}>
+              View All
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#173B8C" />
+          </TouchableOpacity>
+        ) : (
+          <Ionicons name="calendar-outline" size={20} color="#173B8C" />
+        )}
       </View>
 
       {events.length === 0 ? (
@@ -64,10 +78,11 @@ export default function EmployeeUpcomingEvents({
         </View>
       ) : (
         events.map((item, index) => (
-
-          <View
+          <TouchableOpacity
             key={index}
+            activeOpacity={0.8}
             style={styles.card}
+            onPress={() => navigation && navigation.navigate("Holidays")}
           >
 
             <View
@@ -107,7 +122,7 @@ export default function EmployeeUpcomingEvents({
 
             </View>
 
-          </View>
+          </TouchableOpacity>
 
         ))
       )}

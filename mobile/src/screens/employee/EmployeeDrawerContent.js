@@ -58,7 +58,14 @@ export default function EmployeeDrawerContent(props) {
 
     // PAYROLL & EARNINGS
     {
-      title: "Payslips & Earnings",
+      title: "Payslips & Monthly Salary",
+      icon: "document-outline",
+      iconFocused: "document",
+      route: "Payslips",
+      section: "PAYROLL & EARNINGS",
+    },
+    {
+      title: "Earnings Breakdown",
       icon: "wallet-outline",
       iconFocused: "wallet",
       route: "Earnings",
@@ -87,6 +94,13 @@ export default function EmployeeDrawerContent(props) {
       icon: "person-circle-outline",
       iconFocused: "person-circle",
       route: "Profile",
+      section: "SELF SERVICE",
+    },
+    {
+      title: "Support Tickets & Helpdesk",
+      icon: "chatbubbles-outline",
+      iconFocused: "chatbubbles",
+      route: "Tickets",
       section: "SELF SERVICE",
     },
     {

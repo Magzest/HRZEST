@@ -23,7 +23,7 @@ from database import get_master_db, get_tenant_db
 from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
-from utils.plan_limits import PLAN_TIERS
+from utils.plan_limits import PLAN_TIERS, FEATURE_LABELS
 
 platform_admin_bp = Blueprint("platform_admin", __name__)
 
@@ -186,7 +186,8 @@ def platform_admin_dashboard():
             "employee_limit": limit,
         })
 
-    return render_template("super_admin_dashboard.html", tenants=tenants, plan_tiers=PLAN_TIERS)
+    return render_template("super_admin_dashboard.html", tenants=tenants, plan_tiers=PLAN_TIERS,
+                            feature_labels=FEATURE_LABELS)
 
 
 @platform_admin_bp.route("/super_admin/tenants/<int:tenant_id>/plan", methods=["POST"])
