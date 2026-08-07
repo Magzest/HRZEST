@@ -168,7 +168,7 @@ def platform_admin_dashboard():
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "SELECT id, company_name, subdomain, db_name, plan, status, created_at "
+        "SELECT id, company_name, subdomain, db_name, plan, payment_option, status, created_at "
         "FROM tenants ORDER BY created_at DESC"
     )
     rows = cur.fetchall()
@@ -177,11 +177,12 @@ def platform_admin_dashboard():
 
     tenants = []
     for r in rows:
-        tid, company_name, subdomain, db_name, plan, status, created_at = r
+        tid, company_name, subdomain, db_name, plan, payment_option, status, created_at = r
         limit = PLAN_TIERS.get(plan, PLAN_TIERS["starter"])["employee_limit"]
         tenants.append({
             "id": tid, "company_name": company_name, "subdomain": subdomain,
-            "db_name": db_name, "plan": plan, "status": status, "created_at": created_at,
+            "db_name": db_name, "plan": plan, "payment_option": payment_option or "online",
+            "status": status, "created_at": created_at,
             "employee_count": _tenant_employee_count(db_name),
             "employee_limit": limit,
         })
@@ -226,13 +227,15 @@ def platform_admin_create_tenant():
     admin_password = request.form.get("admin_password", "").strip()
     admin_email = request.form.get("admin_email", "").strip()
     plan = request.form.get("plan", "starter").strip()
+    payment_option = request.form.get("payment_option", "manual").strip()
 
     error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan)
     if error:
         flash(error, "error")
         return redirect("/super_admin")
 
-    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                                              plan, payment_option)
     if not ok:
         flash(error, "error")
         return redirect("/super_admin")
@@ -241,7 +244,8 @@ def platform_admin_create_tenant():
 
     log_security_event(
         "platform_admin.tenant_created",
-        f"Platform admin created tenant '{company_name}' (subdomain={subdomain}, plan={plan})",
+        f"Platform admin created tenant '{company_name}' (subdomain={subdomain}, plan={plan}, "
+        f"payment_option={payment_option})",
         level="INFO", identifier=session.get("platform_admin_username"), subdomain=subdomain, plan=plan,
     )
     flash(f"Company '{company_name}' created. Portal: {portal_url}", "success")

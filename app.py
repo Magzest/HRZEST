@@ -2168,10 +2168,14 @@ def init_master_db():
                 db_name VARCHAR(100) UNIQUE NOT NULL,
                 admin_email VARCHAR(200) DEFAULT NULL,
                 plan VARCHAR(50) DEFAULT 'starter',
+                payment_option VARCHAR(20) DEFAULT 'online',
                 status VARCHAR(20) DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Pre-existing masters created before payment_option existed --
+        # CREATE TABLE IF NOT EXISTS above is a no-op against them.
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS payment_option VARCHAR(20) DEFAULT 'online'")
         # Platform-operator identity (blueprints/platform_admin.py) --
         # lives in att_master, not any tenant schema, since tenant
         # admin_users rows only exist inside their own schema and this

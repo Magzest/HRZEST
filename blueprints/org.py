@@ -63,15 +63,26 @@ def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_p
     return None
 
 
-def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan):
+_PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
+
+
+def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan,
+                      payment_option="online"):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
     provisioning, which is where the three call sites would otherwise
     duplicate ~80 near-identical lines.
 
+    payment_option is a record of how the tenant is billed ("online" via
+    Razorpay, "manual" bank-transfer/invoice, or "trial") -- it doesn't
+    trigger any charge itself, that already happened (or didn't, for
+    "manual"/"trial") before this function is called.
+
     Returns (ok, error_message_or_None, portal_url_or_None).
     """
+    if payment_option not in _PAYMENT_OPTIONS:
+        payment_option = "online"
     db_name = "att_" + subdomain.replace("-", "_")
 
     # See the long comment this replaced in the original /create_org route:
@@ -137,9 +148,9 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         mconn = get_master_db()
         mcur = mconn.cursor()
         mcur.execute(
-            "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, status) "
-            "VALUES (%s, %s, %s, %s, %s, 'active')",
-            (company_name, subdomain, db_name, admin_email, plan)
+            "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, payment_option, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, 'active')",
+            (company_name, subdomain, db_name, admin_email, plan, payment_option)
         )
         mconn.commit()
         mcur.close()

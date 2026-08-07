@@ -110,6 +110,27 @@
       .plan-tile li.included { color: var(--text-bright); }
       .plan-tile li i.ti-check { color: var(--success); }
       .plan-tile li i.ti-x { color: var(--text-dim); }
+
+      .op-plan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+      .op-plan-card {
+        display: block; cursor: pointer; border: 1px solid var(--border-color); border-radius: 10px;
+        padding: 12px; background: rgba(255,255,255,0.02);
+      }
+      .op-plan-card.selected { border-color: var(--primary); background: rgba(99, 102, 241, .1); }
+      .op-plan-card input { display: none; }
+      .op-plan-card .op-plan-name { font-size: 13px; font-weight: 800; margin-bottom: 4px; }
+      .op-plan-card .op-plan-price { font-size: 15px; font-weight: 800; color: var(--text-bright); }
+      .op-plan-card .op-plan-price small { font-size: 10px; font-weight: 600; color: var(--text-dim); }
+      .op-price-summary {
+        grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
+        border: 1px dashed var(--border-color); border-radius: 10px; padding: 10px 14px;
+        background: rgba(99, 102, 241, .06);
+      }
+      .op-price-summary .op-price-amount { font-size: 17px; font-weight: 800; }
+      .op-price-summary .op-price-note { font-size: 11px; color: var(--text-dim); }
+      .badge-payment-online { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+      .badge-payment-manual { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
+      .badge-payment-trial { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
     </style>
   </head>
   <body>
@@ -191,12 +212,39 @@
             <input type="password" name="admin_password" minlength="8" required />
           </div>
           <div class="field">
-            <label>Plan</label>
-            <select name="plan">
-              {% for key, tier in plan_tiers.items() %}
-              <option value="{{ key }}" {% if key == 'starter' %}selected{% endif %}>{{ tier.display_name }}</option>
-              {% endfor %}
+            <label>Number of Employees</label>
+            <input type="number" name="employee_count" id="opEmployeeCount" min="1" value="1"
+                   oninput="opUpdatePriceSummary()" />
+          </div>
+          <div class="field">
+            <label>Payment Option</label>
+            <select name="payment_option">
+              <option value="online">Online (Razorpay)</option>
+              <option value="manual" selected>Bank Transfer / Manual Invoice</option>
+              <option value="trial">Free / Trial</option>
             </select>
+          </div>
+          <div class="field span2">
+            <label>Plan &amp; Pricing</label>
+            <div class="op-plan-grid">
+              {% for key, tier in plan_tiers.items() %}
+              <label class="op-plan-card{{ ' selected' if key == 'starter' else '' }}" data-op-plan-card
+                     data-base-price="{{ tier.base_price_paise }}" data-band="{{ tier.employee_band or '' }}"
+                     data-per-employee="{{ tier.per_employee_paise }}" data-limit="{{ tier.employee_limit or '' }}">
+                <input type="radio" name="plan" value="{{ key }}" {% if key == 'starter' %}checked{% endif %}
+                       onchange="document.querySelectorAll('[data-op-plan-card]').forEach(function(c){c.classList.remove('selected')});this.closest('[data-op-plan-card]').classList.add('selected');opUpdatePriceSummary();" />
+                <div class="op-plan-name">{{ tier.display_name }}</div>
+                <div class="op-plan-price">{{ tier.base_price_paise | plan_price }}<small>/mo</small></div>
+              </label>
+              {% endfor %}
+              <div class="op-price-summary">
+                <div>
+                  <div class="op-price-note">Estimated monthly price</div>
+                  <div class="op-price-amount" id="opPriceAmount">—</div>
+                </div>
+                <div class="op-price-note" id="opPriceNote"></div>
+              </div>
+            </div>
           </div>
           <div class="actions">
             <button type="submit" class="submit-btn"><i class="ti ti-check"></i> Create Company</button>
@@ -209,7 +257,7 @@
         <table>
           <thead>
             <tr>
-              <th>Company</th><th>Plan</th><th>Employees</th><th>Status</th><th>Created</th><th>Actions</th>
+              <th>Company</th><th>Plan</th><th>Payment</th><th>Employees</th><th>Status</th><th>Created</th><th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -220,6 +268,11 @@
                 <div class="subdomain">{{ t.subdomain }}.hrms.gradzest.com</div>
               </td>
               <td><span class="badge badge-plan">{{ plan_tiers[t.plan].display_name if t.plan in plan_tiers else t.plan }}</span></td>
+              <td>
+                <span class="badge badge-payment-{{ t.payment_option }}">
+                  {{ {'online': 'Online', 'manual': 'Manual', 'trial': 'Trial'}.get(t.payment_option, t.payment_option) }}
+                </span>
+              </td>
               <td>
                 {% set limit = t.employee_limit %}
                 <div>{{ t.employee_count }}{% if limit %} / {{ limit }}{% else %} / ∞{% endif %}</div>
@@ -263,5 +316,37 @@
         {% endif %}
       </div>
     </div>
+    <script>
+      function opSelectedPlanCard() {
+        return document.querySelector('[data-op-plan-card].selected') || document.querySelector('[data-op-plan-card]');
+      }
+      function opFormatInr(paise) {
+        return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+      }
+      function opCalcPrice(card, employeeCount) {
+        var base = parseInt(card.dataset.basePrice, 10) || 0;
+        var band = card.dataset.band ? parseInt(card.dataset.band, 10) : null;
+        var perEmp = parseInt(card.dataset.perEmployee, 10) || 0;
+        if (!band || employeeCount <= band) return base;
+        return base + perEmp * (employeeCount - band);
+      }
+      function opUpdatePriceSummary() {
+        var card = opSelectedPlanCard();
+        if (!card) return;
+        var countEl = document.getElementById('opEmployeeCount');
+        var count = parseInt(countEl.value, 10) || 1;
+        var limit = card.dataset.limit ? parseInt(card.dataset.limit, 10) : null;
+        var amountEl = document.getElementById('opPriceAmount');
+        var noteEl = document.getElementById('opPriceNote');
+        if (limit && count > limit) {
+          amountEl.textContent = '—';
+          noteEl.textContent = 'Max ' + limit + ' employees on this plan';
+          return;
+        }
+        amountEl.textContent = opFormatInr(opCalcPrice(card, count)) + '/mo';
+        noteEl.textContent = count + ' employee' + (count === 1 ? '' : 's');
+      }
+      document.addEventListener('DOMContentLoaded', opUpdatePriceSummary);
+    </script>
   </body>
 </html>
