@@ -156,8 +156,16 @@
     function updateLogoPreview() {
       const url = document.getElementById('logo_url_input').value.trim();
       const preview = document.getElementById('logo_preview');
+      preview.innerHTML = '';
       if (url) {
-        preview.innerHTML = `<img src="${url}" onerror="this.parentNode.innerHTML='❌'" />`;
+        const img = document.createElement('img');
+        // DOM-created element + addEventListener, not an inline onerror=
+        // attribute — an inline handler injected via innerHTML never
+        // appears in the server-rendered HTML the CSP sha256-hashes, so
+        // the browser silently blocks it and the ❌ fallback never shows.
+        img.addEventListener('error', () => { preview.textContent = '❌'; }, { once: true });
+        img.src = url;
+        preview.appendChild(img);
       } else {
         preview.innerHTML = '<span style="font-size:18px;">🖼️</span>';
       }

@@ -76,6 +76,12 @@ def setup_wizard():
         company_tag = request.form.get("company_tagline", "").strip()
         currency = request.form.get("currency_symbol", "₹").strip()
         logo_url = request.form.get("logo_url", "").strip()
+        # basic/medium/premium — this on-prem install's own plan label
+        # (company_settings.plan / admin_users.plan), matching database.py's
+        # schema defaults. Distinct from utils.plan_limits.PLAN_TIERS'
+        # starter/growth/enterprise keys, which gate the hosted multi-tenant
+        # SaaS via att_master.tenants.plan (see get_tenant_plan). Neither
+        # reads the other; don't conflate them.
         plan = request.form.get("plan", "basic").strip().lower()
         admin_user = request.form.get("admin_username", "").strip()
         admin_email = request.form.get("admin_email", "").strip()
