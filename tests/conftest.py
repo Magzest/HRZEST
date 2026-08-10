@@ -74,6 +74,12 @@ flask_app.register_blueprint(billing_bp)
 flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(secops_bp)
 
+# Mirror wsgi.py's WSGI-level tenant-prefix stripping so tests exercise the
+# real path-based tenant resolution (www.hrzest.com/<slug>/...), not just
+# the pre-migration subdomain/session-cache branches.
+from utils.tenant_routing import TenantPrefixMiddleware
+flask_app.wsgi_app = TenantPrefixMiddleware(flask_app.wsgi_app)
+
 # Import app AFTER blueprints are registered so all module-level reads pick
 # up test values AND _register_api_v1_aliases() sees the full route set.
 import app as _app_module  # noqa: F401 — triggers route registration + init_db

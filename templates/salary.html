@@ -214,7 +214,7 @@
                     {% endif %}
                   </div>
                   <!-- Edit form -->
-                  <form action="/update_salary" method="POST"
+                  <form action="{{ tpath('/update_salary') }}" method="POST"
                         id="form-{{ loop.index }}" class="edit-form"
                         onsubmit="prepareSubmit('{{ loop.index }}')">
                     <input type="hidden" name="emp_id" value="{{ emp_id }}" />

@@ -8,7 +8,7 @@ from flask import Blueprint, request, session, redirect, render_template, flash,
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, employee_required, api_required
-from utils.helpers import get_company_settings, _safe_app_url, _db
+from utils.helpers import tpath, get_company_settings, _safe_app_url, _db
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async
 from extensions import limiter
 
@@ -140,7 +140,7 @@ def onboarding_template_save():
     role = request.form.get("role", "").strip() or None
     if not name:
         flash("Template name is required.", "error")
-        return redirect("/onboarding?tab=templates")
+        return redirect(tpath("/onboarding?tab=templates"))
     if tid:
         cursor.execute("UPDATE onboarding_templates SET name=%s, description=%s, role=%s WHERE id=%s",
                        (name, desc, role, tid))
@@ -151,7 +151,7 @@ def onboarding_template_save():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/onboarding?tab=templates")
+    return redirect(tpath("/onboarding?tab=templates"))
 
 
 @onboarding_bp.route("/bulk_assign_onboarding", methods=["POST"])
@@ -196,7 +196,7 @@ def bulk_assign_onboarding():
     cursor.close()
     db.close()
     flash(f"Onboarding assigned to {assigned} employee(s).", "success")
-    return redirect("/employees")
+    return redirect(tpath("/employees"))
 
 
 @onboarding_bp.route("/export_onboarding_csv")
@@ -248,7 +248,7 @@ def onboarding_template_duplicate():
         flash("Template not found.", "error")
         cursor.close()
         db.close()
-        return redirect("/onboarding?tab=templates")
+        return redirect(tpath("/onboarding?tab=templates"))
     cursor.execute(
         "INSERT INTO onboarding_templates (name, description, is_active) VALUES (%s, %s, 1) RETURNING id",
         (f"Copy of {tpl[0]}", tpl[1])
@@ -269,7 +269,7 @@ def onboarding_template_duplicate():
     cursor.close()
     db.close()
     flash(f"Template duplicated as 'Copy of {tpl[0]}'.", "success")
-    return redirect(f"/onboarding_template_detail/{new_id}")
+    return redirect(tpath(f"/onboarding_template_detail/{new_id}"))
 
 
 @onboarding_bp.route("/onboarding_template_delete", methods=["POST"])
@@ -284,7 +284,7 @@ def onboarding_template_delete():
     cursor.close()
     db.close()
     flash("Template deleted.", "success")
-    return redirect("/onboarding?tab=templates")
+    return redirect(tpath("/onboarding?tab=templates"))
 
 
 @onboarding_bp.route("/onboarding_task_save", methods=["POST"])
@@ -301,7 +301,7 @@ def onboarding_task_save():
     sort_order = int(request.form.get("sort_order", 0))
     if not title:
         flash("Task title is required.", "error")
-        return redirect(f"/onboarding_template_detail/{tid}")
+        return redirect(tpath(f"/onboarding_template_detail/{tid}"))
     if task_id:
         cursor.execute("""UPDATE onboarding_template_tasks
                           SET task_title=%s, task_description=%s, requires_document=%s,
@@ -316,7 +316,7 @@ def onboarding_task_save():
     db.commit()
     cursor.close()
     db.close()
-    return redirect(f"/onboarding_template_detail/{tid}")
+    return redirect(tpath(f"/onboarding_template_detail/{tid}"))
 
 
 @onboarding_bp.route("/onboarding_task_delete", methods=["POST"])
@@ -333,7 +333,7 @@ def onboarding_task_delete():
     cursor.close()
     db.close()
     flash("Task deleted.", "success")
-    return redirect(f"/onboarding_template_detail/{tid}")
+    return redirect(tpath(f"/onboarding_template_detail/{tid}"))
 
 
 @onboarding_bp.route("/onboarding_template_detail/<int:tid>")
@@ -373,7 +373,7 @@ def onboarding_assign():
         flash("This employee already has this onboarding in progress.", "error")
         cursor.close()
         db.close()
-        return redirect("/onboarding?tab=active")
+        return redirect(tpath("/onboarding?tab=active"))
 
     cursor.execute("INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date) VALUES (%s,%s,%s,%s) RETURNING id",
                    (emp_id, tid, today, due_date))
@@ -421,7 +421,7 @@ def onboarding_assign():
     cursor.close()
     db.close()
     flash(f"Onboarding assigned to {emp_name}.", "success")
-    return redirect("/onboarding?tab=active")
+    return redirect(tpath("/onboarding?tab=active"))
 
 
 @onboarding_bp.route("/onboarding_detail/<int:ob_id>")
@@ -477,7 +477,7 @@ def onboarding_admin_task_update():
     cursor.close()
     db.close()
     flash("Task updated.", "success")
-    return redirect(f"/onboarding_detail/{ob_id}")
+    return redirect(tpath(f"/onboarding_detail/{ob_id}"))
 
 
 @onboarding_bp.route("/onboarding_close", methods=["POST"])
@@ -491,7 +491,7 @@ def onboarding_close():
     cursor.close()
     db.close()
     flash("Onboarding marked as completed.", "success")
-    return redirect("/onboarding?tab=active")
+    return redirect(tpath("/onboarding?tab=active"))
 
 
 @onboarding_bp.route("/offer_letter/<int:ob_id>")
@@ -574,7 +574,7 @@ def offer_letter_save():
     db.commit()
     cursor.close()
     db.close()
-    return redirect(f"/offer_letter_view/{letter_id}")
+    return redirect(tpath(f"/offer_letter_view/{letter_id}"))
 
 
 @onboarding_bp.route("/offer_letter_view/<int:letter_id>")
@@ -599,7 +599,7 @@ def offer_letter_view(letter_id):
     db.close()
     if not letter:
         flash("Offer letter not found.", "error")
-        return redirect("/onboarding")
+        return redirect(tpath("/onboarding"))
     return render_template("offer_letter_view.html", letter=letter, co=co)
 
 
@@ -846,13 +846,13 @@ def offer_letter_send(letter_id):
         flash("Employee email not found.", "error")
         cursor.close()
         db.close()
-        return redirect(f"/offer_letter_view/{letter_id}")
+        return redirect(tpath(f"/offer_letter_view/{letter_id}"))
     cfg = get_email_config()
     if not cfg:
         flash("Email not configured. Go to Settings → Email.", "error")
         cursor.close()
         db.close()
-        return redirect(f"/offer_letter_view/{letter_id}")
+        return redirect(tpath(f"/offer_letter_view/{letter_id}"))
     try:
         emp_name = letter[17]
         emp_email = letter[18]
@@ -1131,7 +1131,7 @@ def offer_letter_send(letter_id):
         flash(f"Email failed: {ex}", "error")
     cursor.close()
     db.close()
-    return redirect(f"/offer_letter_view/{letter_id}")
+    return redirect(tpath(f"/offer_letter_view/{letter_id}"))
 
 
 @onboarding_bp.route("/offer_letter_pdf/<token>")
@@ -1261,7 +1261,7 @@ def my_onboarding():
         # still logged in elsewhere) — the template assumes emp is never
         # None, so send them back to login instead of a 500.
         session.clear()
-        return redirect("/login")
+        return redirect(tpath("/login"))
     return render_template("my_onboarding.html",
                            emp=emp, emp_id=emp_id, onboardings=onboardings, tasks=tasks,
                            selected_ob=selected_ob, selected_ob_id=int(selected_ob_id) if selected_ob_id else None,
@@ -1285,7 +1285,7 @@ def my_onboarding_task_done():
         flash("Not authorised.", "error")
         cursor.close()
         db.close()
-        return redirect("/my_onboarding")
+        return redirect(tpath("/my_onboarding"))
 
     doc_path = None
     if 'document' in request.files:
@@ -1336,4 +1336,4 @@ def my_onboarding_task_done():
     cursor.close()
     db.close()
     flash("Task marked as done!", "success")
-    return redirect(f"/my_onboarding?ob_id={ob_id}")
+    return redirect(tpath(f"/my_onboarding?ob_id={ob_id}"))

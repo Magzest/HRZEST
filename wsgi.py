@@ -53,6 +53,13 @@ from extensions import app, app_log  # noqa: F401
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+# Path-based multi-tenancy (www.hrzest.com/<company-slug>/...) -- strips a
+# recognized tenant slug into SCRIPT_NAME before Flask ever routes the
+# request. See utils/tenant_routing.py for why this has to be WSGI-level
+# rather than a route parameter on every blueprint.
+from utils.tenant_routing import TenantPrefixMiddleware
+app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
+
 # ── Startup DB init ───────────────────────────────────────────────────────────
 with app.app_context():
     try:

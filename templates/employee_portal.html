@@ -750,13 +750,13 @@
         </button>
 
         <div class="sb-nav-label">Account</div>
-        <a href="/my_compoff" class="sb-item u-tdec-none">
+        <a href="{{ tpath('/my_compoff') }}" class="sb-item u-tdec-none">
           <span class="sb-icon"><i class="ti ti-replace"></i></span>Comp-off / OT
         </a>
-        <a href="/my_performance" class="sb-item u-tdec-none">
+        <a href="{{ tpath('/my_performance') }}" class="sb-item u-tdec-none">
           <span class="sb-icon"><i class="ti ti-chart-line"></i></span>My Performance
         </a>
-        <a href="/my_onboarding" class="sb-item u-tdec-none">
+        <a href="{{ tpath('/my_onboarding') }}" class="sb-item u-tdec-none">
           <span class="sb-icon"><i class="ti ti-checklist"></i></span>My Onboarding
         </a>
         <button type="button" class="sb-item" id="sbn-shift-swap" onclick="showView('shift-swap')">
@@ -778,7 +778,7 @@
 
       <div class="sb-bottom">
         <hr class="sb-sep" />
-        <a class="sb-item danger" href="/employee_logout">
+        <a class="sb-item danger" href="{{ tpath('/employee_logout') }}">
           <span class="sb-icon"><i class="ti ti-logout"></i></span>Logout
         </a>
   
@@ -1251,7 +1251,7 @@
           </div>
           {% endfor %}
           <!-- Comp-off balance card -->
-          <a class="u-tdec-none" href="/my_compoff">
+          <a class="u-tdec-none" href="{{ tpath('/my_compoff') }}">
           <div style="background:#fff;border:1.5px solid {% if compoff_avail_days > 0 %}#bbf7d0{% else %}#e2e8f0{% endif %};border-radius:12px;padding:14px;cursor:pointer;transition:.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='{% if compoff_avail_days > 0 %}#bbf7d0{% else %}#e2e8f0{% endif %}'">
             <div class="u-fs-10 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d4 u-mb-8">Comp-off <span class="u-bg-eff6ff u-c-3b82f6 u-br-4 u-p-1-5 u-fs-9">OT</span></div>
             <div class="u-d-flex u-ai-baseline u-gap-4 u-mb-6">
@@ -1275,7 +1275,7 @@
       </div>
 
       <div class="section" id="apply-leave">
-        <form action="/request_leave" method="POST" id="leave-form">
+        <form action="{{ tpath('/request_leave') }}" method="POST" id="leave-form">
 
           {% if leave_types_for_form %}
           <div class="u-mb-14">
@@ -1530,7 +1530,7 @@
         {% if emp[7] %}
         <div class="swap-section-heading">🔄 Request a Swap</div>
         <div class="swap-form-card">
-          <form method="POST" action="/submit_shift_swap" id="swapForm">
+          <form method="POST" action="{{ tpath('/submit_shift_swap') }}" id="swapForm">
             <input type="hidden" name="target_id" id="swapTargetId">
 
             <!-- Search bar -->
@@ -1658,7 +1658,7 @@
         <h3>🎫 Support Tickets &amp; Complaints</h3>
 
         <!-- Raise Ticket Form -->
-        <form method="POST" action="/raise_ticket" class="ticket-raise-form">
+        <form method="POST" action="{{ tpath('/raise_ticket') }}" class="ticket-raise-form">
           <div class="ticket-form-grid">
             <div class="form-group ticket-field">
               <label for="ticket-category">Category</label>
@@ -1801,7 +1801,7 @@
               30 days from today. Submit at least 15 days before your chosen last day.
               This action is official and cannot be undone.
             </div>
-            <form action="/request_resignation" method="POST" id="resign-form-d">
+            <form action="{{ tpath('/request_resignation') }}" method="POST" id="resign-form-d">
               <div class="form-group">
                 <label>Last Working Day <span class="lwd-hint">(min. 30 days from today)</span></label>
                 <input type="date" name="last_working_day" id="resign-date-d" required title="Select your last working day" />
@@ -1837,7 +1837,7 @@
             30 days from today. You must apply at least 15 days before your chosen last day.
             Submitting this form sends a formal resignation notice to the HR/Admin team. This action cannot be undone.
           </div>
-          <form action="/request_resignation" method="POST" id="resign-form">
+          <form action="{{ tpath('/request_resignation') }}" method="POST" id="resign-form">
             <div class="form-group">
               <label>Last Working Day <span class="lwd-hint">(min. 30 days from today)</span></label>
               <input type="date" name="last_working_day" id="resign-date" required title="Select your last working day" />
@@ -2286,7 +2286,7 @@
             <div class="u-pos-relative u-w-100 u-h-100 u-fxs-0">
               <div class="profile-avatar u-w-100 u-h-100 u-fs-36 u-mb-0">
                 {% if emp[4] %}
-                  <a class="u-d-block u-w-100pct u-h-100pct" href="/my_photo" title="View full photo">
+                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}" title="View full photo">
                     <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo" alt="{{ emp[1] }}" id="profilePreview"
                          onerror="this.parentNode.parentNode.innerHTML='{{ emp[1][0]|upper }}'" />
                   </a>
@@ -2300,7 +2300,7 @@
             <div class="u-fx-1">
               <div class="u-fs-18 u-fw-700 u-c-1e293b">{{ emp[1] }}</div>
               <div class="u-fs-13 u-c-64748b u-mt-2">{{ emp[2] or 'Employee' }} &bull; {{ emp[0] }}</div>
-              <form class="u-mt-10 u-d-flex u-ai-center u-gap-10" action="/update_my_photo" method="POST" enctype="multipart/form-data" id="photoForm">
+              <form class="u-mt-10 u-d-flex u-ai-center u-gap-10" action="{{ tpath('/update_my_photo') }}" method="POST" enctype="multipart/form-data" id="photoForm">
                 <input class="u-d-none" type="file" name="photo" id="photoUpload" accept=".jpg,.jpeg,.png" onchange="previewPhoto(this)" />
                 <span class="u-fs-12 u-c-94a3b8" id="photoFileName">No file chosen</span>
                 <button class="u-d-none u-p-6-14 u-bd-none u-br-8 u-bg-3b82f6 u-c-white u-fs-12 u-fw-600 u-cur-pointer" type="submit" id="photoSubmitBtn">
@@ -2310,17 +2310,17 @@
             </div>
             <!-- Download buttons -->
             <div class="u-d-flex u-fxd-column u-gap-10">
-              <a class="u-p-9-18 u-br-9 u-bg-ede9fe u-c-6d28d9 u-fs-13 u-fw-600 u-tdec-none u-bd-1-solid-c4b5fd u-d-flex u-ai-center u-gap-7" href="/my_qr">
+              <a class="u-p-9-18 u-br-9 u-bg-ede9fe u-c-6d28d9 u-fs-13 u-fw-600 u-tdec-none u-bd-1-solid-c4b5fd u-d-flex u-ai-center u-gap-7" href="{{ tpath('/my_qr') }}">
                 📲 Download QR Code
               </a>
-              <a class="u-p-9-18 u-br-9 u-bg-dbeafe u-c-1e3a8a u-fs-13 u-fw-600 u-tdec-none u-bd-1-solid-93c5fd u-d-flex u-ai-center u-gap-7" href="/my_id_card">
+              <a class="u-p-9-18 u-br-9 u-bg-dbeafe u-c-1e3a8a u-fs-13 u-fw-600 u-tdec-none u-bd-1-solid-93c5fd u-d-flex u-ai-center u-gap-7" href="{{ tpath('/my_id_card') }}">
                 🪪 Download ID Card
               </a>
             </div>
           </div>
         </div>
 
-        <form action="/update_my_profile" method="POST">
+        <form action="{{ tpath('/update_my_profile') }}" method="POST">
           <div class="u-d-grid u-gtc-1fr-1fr u-gap-22 u-ai-start">
 
             <!-- LEFT COLUMN -->
@@ -2484,7 +2484,7 @@
           </div>
 
           <!-- Upload form -->
-          <form class="u-d-flex u-gap-10 u-fxw-wrap u-ai-flex-end u-mb-16" action="/upload_my_document" method="POST" enctype="multipart/form-data">
+          <form class="u-d-flex u-gap-10 u-fxw-wrap u-ai-flex-end u-mb-16" action="{{ tpath('/upload_my_document') }}" method="POST" enctype="multipart/form-data">
             <div class="u-fx-1 u-minw-160">
               <label class="u-fs-11 u-fw-700 u-c-475569 u-ttr-uppercase u-ls-d4 u-d-block u-mb-5">Document Type</label>
               <select class="u-w-100pct u-p-9-12 u-bd-1-solid-dbeafe u-br-9 u-bg-f8fafc u-c-1e293b u-fs-13 u-out-none" name="doc_type" required>
@@ -2585,7 +2585,7 @@
           {% endif %}
           <details class="u-bg-f0f9ff u-bd-1-solid-bae6fd u-br-10 u-p-14-16">
             <summary class="u-fs-13 u-fw-600 u-c-0369a1 u-cur-pointer">+ Add Work Experience</summary>
-            <form class="u-mt-14" action="/add_experience" method="POST">
+            <form class="u-mt-14" action="{{ tpath('/add_experience') }}" method="POST">
               <div class="u-d-grid u-gtc-1fr-1fr u-gap-12">
                 <div class="form-group u-m-0">
                   <label>Company / Organisation</label>
@@ -2644,7 +2644,7 @@
           {% endif %}
           <details class="u-bg-faf5ff u-bd-1-solid-e9d5ff u-br-10 u-p-14-16">
             <summary class="u-fs-13 u-fw-600 u-c-7c3aed u-cur-pointer">+ Add Education</summary>
-            <form class="u-mt-14" action="/add_education_entry" method="POST">
+            <form class="u-mt-14" action="{{ tpath('/add_education_entry') }}" method="POST">
               <div class="u-d-grid u-gtc-1fr-1fr u-gap-12">
                 <div class="form-group u-m-0">
                   <label>Degree / Qualification</label>
@@ -2670,7 +2670,7 @@
 
         <!-- IDENTITY INFORMATION -->
         <!-- BANK & ID DETAILS (separate form) -->
-        <form class="u-mt-22" action="/update_my_bank_details" method="POST">
+        <form class="u-mt-22" action="{{ tpath('/update_my_bank_details') }}" method="POST">
           <div class="section">
             <h3>🪪 Identity Information &amp; Bank Details
               <span class="u-fs-11 u-fw-400 u-c-94a3b8 u-ml-6">Stored securely · Used for salary processing</span>
@@ -2725,7 +2725,7 @@
           {% elif request.args.get('pwd_error') == 'mismatch' %}
             <div class="toast toast-red">❌ New passwords do not match.</div>
           {% endif %}
-          <form class="u-d-grid u-gtc-1fr-1fr-1fr u-gap-14 u-ai-end u-maxw-760" action="/change_password" method="POST">
+          <form class="u-d-grid u-gtc-1fr-1fr-1fr u-gap-14 u-ai-end u-maxw-760" action="{{ tpath('/change_password') }}" method="POST">
             <input type="text" name="username" value="{{ session.get('employee_id', '') }}" autocomplete="username" style="display:none" aria-hidden="true" />
             <div class="form-group u-m-0">
               <label>Current Password</label>

@@ -31,6 +31,7 @@ from utils.auth import (
     check_password_hash,
 )
 from utils.helpers import (
+    tpath,
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
@@ -448,7 +449,7 @@ def save_company_profile():
         pass
     cursor.close()
     db.close()
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/settings")
@@ -947,7 +948,7 @@ def save_default_onboarding_template():
     cursor.close()
     db.close()
     flash("Default onboarding template saved.", "success")
-    return redirect("/onboarding?tab=templates")
+    return redirect(tpath("/onboarding?tab=templates"))
 
 
 @admin_views_bp.route("/save_salary_rules", methods=["POST"])
@@ -959,7 +960,7 @@ def save_salary_rules():
         grace_min = max(0, min(120, int(request.form.get("grace_minutes", 15))))
     except (ValueError, TypeError):
         flash("Invalid values.", "error")
-        return redirect("/settings?tab=salary")
+        return redirect(tpath("/settings?tab=salary"))
     holiday_pay = request.form.get("holiday_pay", "paid")
     leave_pay = request.form.get("leave_pay", "exclude")
     if holiday_pay not in ("paid", "unpaid"):
@@ -998,7 +999,7 @@ def save_salary_rules():
         cfg.load_salary_rules()
         cfg.load_default_shift()
     flash("Salary rules saved.", "success")
-    return redirect("/settings?tab=salary")
+    return redirect(tpath("/settings?tab=salary"))
 
 
 @admin_views_bp.route("/toggle_auth_method", methods=["POST"])
@@ -1008,7 +1009,7 @@ def toggle_auth_method():
     enabled = request.form.get("enabled", "0") == "1"
     if method not in _TOGGLE_COLUMN_MAP:
         flash("Invalid authentication method.", "danger")
-        return redirect("/settings?tab=attendance")
+        return redirect(tpath("/settings?tab=attendance"))
     column = _TOGGLE_COLUMN_MAP[method]
     label = _TOGGLE_LABEL_MAP[method]
     active_cid = session.get("active_company_id")
@@ -1022,7 +1023,7 @@ def toggle_auth_method():
         _VALID_CS_TOGGLE = frozenset(_TOGGLE_COLUMN_MAP.values())
         if column not in _VALID_CS_TOGGLE:
             flash("Invalid setting.", "danger")
-            return redirect("/settings?tab=attendance")
+            return redirect(tpath("/settings?tab=attendance"))
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
         cursor.execute(f"UPDATE company_settings SET {column}=%s", (1 if enabled else 0,))  # nosec B608 nosemgrep: python.flask.security.injection.tainted-sql-string.tainted-sql-string
@@ -1031,7 +1032,7 @@ def toggle_auth_method():
         db.close()
     state = "enabled" if enabled else "disabled"
     flash(f"{label} {state}.", "success")
-    return redirect("/settings?tab=attendance")
+    return redirect(tpath("/settings?tab=attendance"))
 
 
 @admin_views_bp.route("/toggle_fingerprint", methods=["POST"])
@@ -1050,7 +1051,7 @@ def toggle_fingerprint():
         db.close()
     state = "enabled" if enabled else "disabled"
     flash(f"Fingerprint authentication {state}.", "success")
-    return redirect("/settings?tab=attendance")
+    return redirect(tpath("/settings?tab=attendance"))
 
 
 @admin_views_bp.route("/save_company_code", methods=["POST"])
@@ -1064,7 +1065,7 @@ def save_company_code():
     cursor.close()
     db.close()
     flash(f"Company code set to '{code}'.", "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/save_company_info", methods=["POST"])
@@ -1079,12 +1080,12 @@ def save_company_info():
     # Validate timezone against pytz database
     if timezone not in _pytz.all_timezones_set:
         flash("Invalid timezone selected.", "danger")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
     # Validate day names
     w_days_set = set(w_days_raw)
     if w_days_set and not w_days_set.issubset(_VALID_DAYS):
         flash("Invalid working days selected.", "danger")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
     w_days = ",".join(d for d in w_days_raw if d in _VALID_DAYS)
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1096,7 +1097,7 @@ def save_company_info():
     cursor.close()
     db.close()
     flash("Company info saved.", "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/toggle_feature", methods=["POST"])
@@ -1150,7 +1151,7 @@ def save_geo_radius():
             raise ValueError
     except (ValueError, TypeError):
         flash("Geo radius must be between 50 and 5000 metres.", "danger")
-        return redirect("/settings?tab=attendance")
+        return redirect(tpath("/settings?tab=attendance"))
     # Office lat/lon are optional -- both blank means "not configured yet",
     # which utils/attendance_utils.py's is_within_office_range() treats as
     # geofencing being a no-op regardless of the location_enabled toggle.
@@ -1165,7 +1166,7 @@ def save_geo_radius():
                 raise ValueError
         except (ValueError, TypeError):
             flash("Office location must be a valid latitude/longitude pair.", "danger")
-            return redirect("/settings?tab=attendance")
+            return redirect(tpath("/settings?tab=attendance"))
     active_cid = session.get("active_company_id")
     if active_cid:
         _upsert_co_feature(active_cid, "geo_radius", radius)
@@ -1187,7 +1188,7 @@ def save_geo_radius():
         cursor.close()
         db.close()
     flash("Attendance settings saved.", "success")
-    return redirect("/settings?tab=attendance")
+    return redirect(tpath("/settings?tab=attendance"))
 
 
 # save_security_settings retired: the Security tab is now the MFA-gated
@@ -1242,7 +1243,7 @@ def set_company_pin():
     pin = request.form.get("pin", "").strip()
     if not cid:
         flash("Invalid request.", "error")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
     db = get_db_connection()
     cur = db.cursor(buffered=True)
     cur.execute("UPDATE companies SET pin=%s WHERE id=%s", (pin or None, int(cid)))
@@ -1251,13 +1252,13 @@ def set_company_pin():
     db.close()
     invalidate_companies_cache()
     flash("PIN " + ("set." if pin else "removed."), "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/companies")
 @role_required("admin")
 def view_companies():
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 def _save_company_image(file_storage, cid, kind):
@@ -1557,7 +1558,7 @@ def id_card_template_upload(cid):
     has_back = bool(back_file and back_file.filename)  # nosemgrep: python.flask.security.injection.nan-injection.nan-injection
     if not has_front and not has_back:
         flash("Upload at least a front or back template image.", "error")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1573,14 +1574,14 @@ def id_card_template_upload(cid):
             cursor.close()
             db.close()
             flash(f"Front template: {err}", "error")
-            return redirect("/settings?tab=company")
+            return redirect(tpath("/settings?tab=company"))
     if has_back:
         ok, err = _validate_image_file(back_file)
         if not ok:
             cursor.close()
             db.close()
             flash(f"Back template: {err}", "error")
-            return redirect("/settings?tab=company")
+            return redirect(tpath("/settings?tab=company"))
 
     cursor.execute(
         "SELECT COALESCE(front_image,''), COALESCE(back_image,'') FROM id_card_templates WHERE company_id=%s", (cid,)
@@ -1610,7 +1611,7 @@ def id_card_template_upload(cid):
         _delete_company_image(old_back)
 
     flash("Template image(s) uploaded. Now place the fields.", "success")
-    return redirect(f"/companies/{cid}/id_card_template/editor")
+    return redirect(tpath(f"/companies/{cid}/id_card_template/editor"))
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/editor")
@@ -1658,7 +1659,7 @@ def id_card_template_save_positions(cid):
 
     if not isinstance(positions, dict):
         flash("Invalid field positions submitted.", "error")
-        return redirect(f"/companies/{cid}/id_card_template/editor")
+        return redirect(tpath(f"/companies/{cid}/id_card_template/editor"))
 
     cleaned = {}
     for key, box in positions.items():
@@ -1701,7 +1702,7 @@ def id_card_template_save_positions(cid):
     cursor.close()
     db.close()
     flash("Field positions saved.", "success")
-    return redirect(f"/companies/{cid}/id_card_template/editor")
+    return redirect(tpath(f"/companies/{cid}/id_card_template/editor"))
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/reset", methods=["POST"])
@@ -1721,7 +1722,7 @@ def id_card_template_reset(cid):
         _delete_company_image(row[0])
         _delete_company_image(row[1])
     flash("ID card template reset to default.", "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/announcements", methods=["GET", "POST"])
@@ -1738,7 +1739,7 @@ def announcements_admin():
                 flash("Please select an employee for a private announcement.", "error")
                 cursor.close()
                 db.close()
-                return redirect("/performance?tab=announcements")
+                return redirect(tpath("/performance?tab=announcements"))
             if visibility == "public":
                 target_emp = None
             title = request.form["title"]
@@ -1772,10 +1773,10 @@ def announcements_admin():
             flash("Announcement deleted.", "success")
         cursor.close()
         db.close()
-        return redirect("/performance?tab=announcements")
+        return redirect(tpath("/performance?tab=announcements"))
     cursor.close()
     db.close()
-    return redirect("/performance?tab=announcements")
+    return redirect(tpath("/performance?tab=announcements"))
 
 
 @admin_views_bp.route("/test_email", methods=["POST"])

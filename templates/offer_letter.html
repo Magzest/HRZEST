@@ -70,7 +70,7 @@
 
 {% block main %}
   <div class="breadcrumb">
-    <a href="/onboarding">Onboarding</a> /
+    <a href="{{ tpath('/onboarding') }}">Onboarding</a> /
     <a href="/onboarding_detail/{{ ob[0] }}">{{ ob[2] }}</a> /
     Offer Letter
   </div>
@@ -106,7 +106,7 @@
   </div>
   {% endif %}
 
-  <form action="/offer_letter_save" method="POST">
+  <form action="{{ tpath('/offer_letter_save') }}" method="POST">
     <input type="hidden" name="ob_id" value="{{ ob[0] }}"/>
     <input type="hidden" name="employee_id" value="{{ ob[1] }}"/>
 

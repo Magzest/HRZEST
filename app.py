@@ -181,6 +181,9 @@ def _csrf_token():
 app.jinja_env.globals["csrf_token"] = _csrf_token
 app.jinja_env.globals["timedelta"] = datetime.timedelta
 
+from utils.helpers import tpath as _tpath
+app.jinja_env.globals["tpath"] = _tpath
+
 
 @app.context_processor
 def inject_companies_context():
@@ -244,13 +247,48 @@ def _resolve_tenant():
     get_db_connection() directly; running this hook after either of them
     would make both checks query the wrong tenant's data on every single
     request in a multi-tenant deployment — a full bypass of both controls,
-    not a rare edge case."""
+    not a rare edge case.
+
+    Tenants are identified by URL path (www.hrzest.com/<company-slug>/...),
+    not subdomain. utils/tenant_routing.py's WSGI middleware has already
+    stripped a recognized slug into SCRIPT_NAME and left its lookup result
+    on request.environ before Flask ever routed this request -- this hook
+    just reads that, plus enforces session/URL tenant binding (see below)."""
     from flask import g as _g
 
     # Skip for static files and special paths
     skip_prefixes = ("/static/", "/healthz", "/create_org", "/super_admin")
     if any(request.path.startswith(p) for p in skip_prefixes):
         return
+
+    url_slug = request.environ.get("hrz.tenant_slug")
+    url_tenant_db = request.environ.get("hrz.tenant_db")
+
+    # 0. Cross-tenant session isolation. Subdomains used to give this for
+    # free (a host-only cookie for acme.hrzest.com is never sent to
+    # beta.hrzest.com by the browser itself). Now every tenant shares one
+    # hostname, so the app has to enforce it: if this session is bound to
+    # a different company than the one named in the current URL, the
+    # cookie is stale for this request -- hard-clear it rather than
+    # silently keep serving company A's session under company B's URL.
+    # Requests that carry no slug at all (marketing/platform-admin routes,
+    # and token-based API/mobile-app calls, which never addressed tenants
+    # by URL even in the subdomain era) are untouched by this check.
+    if url_slug and session.get("tenant_db"):
+        session_slug = session.get("tenant_slug")
+        if session_slug and session_slug != url_slug:
+            log_security_event(
+                "tenant.session_mismatch",
+                f"Session bound to tenant slug '{session_slug}' saw a request "
+                f"for '{url_slug}' — session cleared.",
+                level="WARNING",
+                identifier=session.get("admin_username") or session.get("employee_id"),
+            )
+            session.clear()
+        elif not session_slug:
+            # Legacy session predating this migration (or a first-touch
+            # backfill) -- trust it, just record which slug it's bound to.
+            session["tenant_slug"] = url_slug
 
     # 1. Already resolved in this session -- but re-validate status every
     # _TENANT_STATUS_RECHECK_SEC instead of trusting the cache forever.
@@ -281,31 +319,48 @@ def _resolve_tenant():
         session.clear()
         return jsonify({"ok": False, "msg": "This organisation's access has been suspended. Contact support."}), 403
 
-    # 2. Subdomain resolution
-    host = request.host.split(":")[0]  # strip port
-    parts = host.split(".")
-    if len(parts) >= 3:
-        subdomain = parts[0]
-        try:
-            from database import get_master_db
-            conn = get_master_db()
-            cur = conn.cursor(buffered=True)
-            cur.execute(
-                "SELECT db_name FROM tenants WHERE subdomain=%s AND status='active'",
-                (subdomain,)
-            )
-            row = cur.fetchone()
-            cur.close()
-            conn.close()
-            if row:
-                _g.tenant_db = row[0]
-                session["tenant_db"] = row[0]
-                return
-        except Exception:
-            pass  # master DB not yet set up — fall through to default
+    # 2. Fresh resolution from the URL's company slug -- already validated
+    # as an active tenant by utils/tenant_routing.py's WSGI middleware, so
+    # reuse its lookup instead of querying the master DB a second time.
+    if url_slug and url_tenant_db:
+        _g.tenant_db = url_tenant_db
+        session["tenant_db"] = url_tenant_db
+        session["tenant_slug"] = url_slug
+        session["_tenant_status_checked_at"] = time.time()
+        return
 
-    # 3. Default single-tenant fallback
+    # 3. Default single-tenant fallback (local dev/test, or any request
+    # that never carried a company slug: marketing pages, token-based
+    # API/mobile-app calls, the platform-admin console).
     _g.tenant_db = os.environ.get("DB_NAME", "employee_attendance")
+
+
+@app.after_request
+def _restamp_tenant_session(response):
+    """Login routes (auth.py's admin_login/employee login, etc.) call
+    session.clear() to prevent session fixation -- which wipes the
+    tenant_db/tenant_slug that _resolve_tenant() (above) already set
+    earlier in this SAME request, before the route handler ran. Without
+    this, the session cookie sent back with a successful login response
+    wouldn't carry the tenant binding at all until a second request came
+    in -- a real gap, since a request landing in that gap (any request
+    without a company slug in its own URL) would fall back to the
+    single-tenant default schema while admin_logged_in is already True.
+
+    g.tenant_db is request-scoped and untouched by session.clear(), so
+    it's still correct here regardless of what the route handler did to
+    the session -- just re-stamp the session from it before the response
+    goes out. No-ops for the overwhelming majority of requests (guarded
+    on the session already being correct), so this isn't forcing a
+    Set-Cookie on every response."""
+    from flask import g as _g
+    tenant_db = getattr(_g, "tenant_db", None)
+    url_slug = request.environ.get("hrz.tenant_slug")
+    if tenant_db and url_slug and session.get("tenant_slug") != url_slug:
+        session["tenant_db"] = tenant_db
+        session["tenant_slug"] = url_slug
+        session["_tenant_status_checked_at"] = time.time()
+    return response
 
 
 @app.before_request

@@ -178,51 +178,51 @@
 
 
       <div class="sb-nav-label">Main</div>
-      <a href="/employee_portal#dashboard" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#dashboard') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-home"></i></span>Dashboard
       </a>
-      <a href="/employee_portal#attendance" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#attendance') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-calendar-check"></i></span>Attendance
       </a>
-      <a href="/employee_portal#apply-leave" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#apply-leave') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-file-plus"></i></span>Apply Leave
       </a>
-      <a href="/employee_portal#earnings" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#earnings') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-trophy"></i></span>Earnings
       </a>
-      <a href="/employee_portal#holidays" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#holidays') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-calendar-event"></i></span>Holidays
       </a>
 
       <div class="sb-nav-label">Account</div>
-      <a href="/my_compoff" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/my_compoff') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-replace"></i></span>Comp-off / OT
       </a>
-      <a href="/my_performance" class="sb-item active u-tdec-none">
+      <a href="{{ tpath('/my_performance') }}" class="sb-item active u-tdec-none">
         <span class="sb-icon"><i class="ti ti-chart-line"></i></span>My Performance
       </a>
-      <a href="/my_onboarding" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/my_onboarding') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-checklist"></i></span>My Onboarding
       </a>
-      <a href="/employee_portal#tickets" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#tickets') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-ticket"></i></span>Support Tickets
       </a>
-      <a href="/employee_portal#my-profile" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#my-profile') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-user"></i></span>My Profile
       </a>
 
       <div class="sb-nav-label">Policies</div>
-      <a href="/employee_portal#policies" class="sb-item u-tdec-none">
+      <a href="{{ tpath('/employee_portal#policies') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-book"></i></span>Policies &amp; Guidelines
       </a>
       </div>
 
       <div class="sb-bottom">
         <hr class="sb-sep" />
-        <a href="/employee_portal#resign" class="sb-item danger u-tdec-none">
+        <a href="{{ tpath('/employee_portal#resign') }}" class="sb-item danger u-tdec-none">
           <span class="sb-icon"><i class="ti ti-alert-triangle"></i></span>Resignation
         </a>
-        <a href="/employee_logout" class="sb-item danger u-tdec-none">
+        <a href="{{ tpath('/employee_logout') }}" class="sb-item danger u-tdec-none">
         <span class="sb-icon"><i class="ti ti-logout"></i></span>Logout
       </a>
   
@@ -339,7 +339,7 @@
             "{{ emp_comment }}"
           </div>
           {% else %}
-          <form method="POST" action="/performance_employee_comment" class="comment-form">
+          <form method="POST" action="{{ tpath('/performance_employee_comment') }}" class="comment-form">
             <input type="hidden" name="review_id" value="{{ rev_id }}"/>
             <textarea name="comment" rows="3" placeholder="Add your comment on this review…"></textarea>
             <div class="u-ta-right u-mt-8">

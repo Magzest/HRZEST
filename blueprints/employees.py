@@ -12,7 +12,7 @@ from extensions import app, app_log, limiter, log_security_event
 from database import get_db_connection, transaction
 from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
-from utils.helpers import _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id
+from utils.helpers import tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import _td_to_time
@@ -81,12 +81,12 @@ def admin_action():
             cursor.close()
             db.close()
             flash(f"Missing or invalid field in registration form: {_e}", "error")
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
         if not name:
             cursor.close()
             db.close()
             flash("Full name is required.", "error")
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
         # Plaintext fields still bounded by a VARCHAR column width (the PII
         # fields below this point are Fernet-encrypted into TEXT columns, so
         # they can't overflow) — checked here with a clear message instead of
@@ -103,12 +103,12 @@ def admin_action():
                 cursor.close()
                 db.close()
                 flash(f"{_label} is too long (max {_max_len} characters).", "error")
-                return redirect("/admin")
+                return redirect(tpath("/admin"))
         if not validate_emp_id(emp_id):
             cursor.close()
             db.close()
             flash("Employee ID may only contain letters, digits, hyphens and underscores.", "error")
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
         # Auto-increment emp_id if it's already taken
         cursor.execute("SELECT 1 FROM employees WHERE employee_id = %s", (emp_id,))
         if cursor.fetchone():
@@ -135,7 +135,7 @@ def admin_action():
             flash(_img_err, "error")
             cursor.close()
             db.close()
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
         file.save(filepath)
 
@@ -147,7 +147,7 @@ def admin_action():
                 flash("No face detected in the uploaded photo. Please upload a clear, well-lit front-facing photo.", "error")
                 cursor.close()
                 db.close()
-                return redirect("/admin")
+                return redirect(tpath("/admin"))
 
         qr_path = generate_qr(emp_id)
         auto_pass = secrets.token_urlsafe(8)   # e.g. "aB3xQ7mR"
@@ -232,7 +232,7 @@ def admin_action():
             flash(f"Employee ID '{emp_id}' already exists. Please use a different ID.", "error")
             cursor.close()
             db.close()
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
 
     elif action == "update_face":
         emp_id = request.form["emp_id"]
@@ -243,14 +243,14 @@ def admin_action():
             flash(f"Employee ID '{emp_id}' not found.", "error")
             cursor.close()
             db.close()
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
         name = row[0]
         _img_ok, _img_err = _validate_image_file(file)
         if not _img_ok:
             flash(_img_err, "error")
             cursor.close()
             db.close()
-            return redirect("/admin")
+            return redirect(tpath("/admin"))
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
         file.save(filepath)
         if _face_recognition_available:
@@ -260,7 +260,7 @@ def admin_action():
                 flash("No face detected in the uploaded photo. Please upload a clear, well-lit front-facing photo.", "error")
                 cursor.close()
                 db.close()
-                return redirect("/admin")
+                return redirect(tpath("/admin"))
         cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (filepath, emp_id))
         db.commit()
         flash(f"Face photo updated successfully for '{name}' (ID: {emp_id}).", "success")
@@ -305,7 +305,7 @@ def admin_action():
 
     cursor.close()
     db.close()
-    return redirect("/admin")
+    return redirect(tpath("/admin"))
 
 
 @employees_bp.route("/delete_employee/<emp_id>", methods=["POST"])
@@ -329,7 +329,7 @@ def delete_employee(emp_id):
             db.close()
             app_log.warning("delete_employee failed mid-transaction for %s, rolled back", emp_id)
             flash(f"Failed to delete employee '{emp_id}'; no changes were made.", "error")
-            return redirect("/employees")
+            return redirect(tpath("/employees"))
         for path in row:
             if path and os.path.exists(path):
                 os.remove(path)
@@ -339,7 +339,7 @@ def delete_employee(emp_id):
         flash(f"Employee '{emp_id}' not found.", "error")
     cursor.close()
     db.close()
-    return redirect("/employees")
+    return redirect(tpath("/employees"))
 
 
 @employees_bp.route("/edit_employee/<emp_id>", methods=["GET"])
@@ -526,7 +526,7 @@ def edit_employee():
     cursor.close()
     db.close()
     flash(f"Employee '{emp_id}' updated successfully.", "success")
-    return redirect("/employees")
+    return redirect(tpath("/employees"))
 
 
 @employees_bp.route("/api/employee_info/<emp_id>")
@@ -784,7 +784,7 @@ def employee_detail(emp_id):
         cursor.close()
         db.close()
         flash("Employee not found.", "error")
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     # Decrypt PII fields: [12]=gender [14]=blood_group [17]=address [18]=city
     # [19]=state [20]=pincode [21]=ec_name [22]=ec_phone [23]=ec_relation
@@ -955,10 +955,10 @@ def add_employee_page():
 
     if not name or not emp_id:
         flash("Name and Employee ID are required.", "error")
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
     if not validate_emp_id(emp_id):
         flash("Employee ID may only contain letters, digits, hyphens and underscores.", "error")
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -983,14 +983,14 @@ def add_employee_page():
         flash("A face photo is required.", "error")
         cursor.close()
         db.close()
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     _img_ok, _img_err = _validate_image_file(file)
     if not _img_ok:
         flash(_img_err, "error")
         cursor.close()
         db.close()
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
     file.save(filepath)
@@ -1002,7 +1002,7 @@ def add_employee_page():
             flash("No face detected in the uploaded photo. Please upload a clear, well-lit front-facing photo.", "error")
             cursor.close()
             db.close()
-            return redirect("/employees")
+            return redirect(tpath("/employees"))
 
     auto_pass = secrets.token_urlsafe(8)
     hashed_pwd = generate_password_hash(auto_pass)
@@ -1129,7 +1129,7 @@ def add_employee_page():
         flash("Registration failed. Please try again.", "error")
     cursor.close()
     db.close()
-    return redirect("/employees")
+    return redirect(tpath("/employees"))
 
 
 @employees_bp.route("/update_employee_photo/<emp_id>", methods=["POST"])
@@ -1142,21 +1142,21 @@ def update_employee_photo(emp_id):
         flash("Employee not found.", "error")
         cursor.close()
         db.close()
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     file = request.files.get("face")
     if not file or not file.filename:
         flash("No photo file provided.", "error")
         cursor.close()
         db.close()
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     _img_ok, _img_err = _validate_image_file(file)
     if not _img_ok:
         flash(_img_err, "error")
         cursor.close()
         db.close()
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
 
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
     file.save(filepath)
@@ -1168,14 +1168,14 @@ def update_employee_photo(emp_id):
             flash("No face detected in the uploaded photo. Please upload a clear front-facing photo.", "error")
             cursor.close()
             db.close()
-            return redirect("/employees")
+            return redirect(tpath("/employees"))
 
     cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (filepath, emp_id))
     db.commit()
     flash(f"Photo updated for employee '{emp_id}'.", "success")
     cursor.close()
     db.close()
-    return redirect("/employees")
+    return redirect(tpath("/employees"))
 
 
 @employees_bp.route("/regenerate_qr/<emp_id>", methods=["POST"])
@@ -1188,20 +1188,20 @@ def regenerate_qr(emp_id):
         flash("Employee not found.", "error")
         cursor.close()
         db.close()
-        return redirect("/employees")
+        return redirect(tpath("/employees"))
     qr_path = generate_qr(emp_id)
     cursor.execute("UPDATE employees SET qr_code=%s WHERE employee_id=%s", (qr_path, emp_id))
     db.commit()
     flash(f"QR code regenerated for '{emp_id}'.", "success")
     cursor.close()
     db.close()
-    return redirect("/employees")
+    return redirect(tpath("/employees"))
 
 
 @employees_bp.route("/view_qrcodes")
 @admin_required
 def view_qrcodes():
-    return redirect("/view_photos")
+    return redirect(tpath("/view_photos"))
 
 
 @employees_bp.route("/dataset/<path:filename>")

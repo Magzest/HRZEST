@@ -223,7 +223,8 @@ def _recent_payments(limit=20):
         cur = conn.cursor(buffered=True)
         cur.execute(
             "SELECT company_name, subdomain, employee_count, amount_paise, status, "
-            "razorpay_order_id, razorpay_payment_id, created_at, paid_at "
+            "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
+            "admin_username, admin_email "
             "FROM payment_orders ORDER BY created_at DESC LIMIT %s",
             (limit,)
         )
@@ -235,7 +236,8 @@ def _recent_payments(limit=20):
                 "company_name": r[0], "subdomain": r[1], "employee_count": r[2],
                 "amount_display": format_price_inr(r[3]), "status": r[4],
                 "is_demo": (r[5] or "").startswith("demo_order_"),
-                "payment_id": r[6], "created_at": r[7], "paid_at": r[8],
+                "order_id": r[5], "payment_id": r[6], "created_at": r[7], "paid_at": r[8],
+                "admin_username": r[9], "admin_email": r[10],
             }
             for r in rows
         ]

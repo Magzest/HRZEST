@@ -17,7 +17,7 @@ from flask import (
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required
-from utils.helpers import get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii
+from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
@@ -124,7 +124,7 @@ def today_late():
 @attendance_bp.route("/shifts", methods=["GET"])
 @admin_required
 def shifts():
-    return redirect("/settings?tab=shifts")
+    return redirect(tpath("/settings?tab=shifts"))
 
 
 @attendance_bp.route("/add_shift", methods=["POST"])
@@ -235,7 +235,7 @@ def update_default_shift():
     half = request.form.get("shift_half", "").strip()
     end = request.form.get("shift_end", "").strip()
     if not all([start, half, end]):
-        return redirect("/shifts?error=All+fields+required")
+        return redirect(tpath("/shifts?error=All+fields+required"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
@@ -246,7 +246,7 @@ def update_default_shift():
     cursor.close()
     db.close()
     cfg.load_default_shift()
-    return redirect("/shifts?default_saved=1")
+    return redirect(tpath("/shifts?default_saved=1"))
 
 
 @attendance_bp.route("/assign_shift", methods=["POST"])
@@ -273,7 +273,7 @@ def submit_shift_swap():
     target_id = request.form.get("target_id", "").strip()
     reason = request.form.get("reason", "").strip()
     if not target_id or target_id == requester_id:
-        return redirect("/employee_portal?swap_error=invalid_target#shift-swap")
+        return redirect(tpath("/employee_portal?swap_error=invalid_target#shift-swap"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     # Fetch both employees' current shift_id (must both have shifts assigned)
@@ -284,11 +284,11 @@ def submit_shift_swap():
     if not row_r or not row_t or row_r[0] is None or row_t[0] is None:
         cursor.close()
         db.close()
-        return redirect("/employee_portal?swap_error=no_shift#shift-swap")
+        return redirect(tpath("/employee_portal?swap_error=no_shift#shift-swap"))
     if row_r[0] == row_t[0]:
         cursor.close()
         db.close()
-        return redirect("/employee_portal?swap_error=same_shift#shift-swap")
+        return redirect(tpath("/employee_portal?swap_error=same_shift#shift-swap"))
     # Check no open request already exists between them
     cursor.execute("""
         SELECT id FROM shift_swap_requests
@@ -298,7 +298,7 @@ def submit_shift_swap():
     if cursor.fetchone():
         cursor.close()
         db.close()
-        return redirect("/employee_portal?swap_error=duplicate#shift-swap")
+        return redirect(tpath("/employee_portal?swap_error=duplicate#shift-swap"))
     cursor.execute("""
         INSERT INTO shift_swap_requests
             (requester_id, target_id, requester_shift_id, target_shift_id, reason)
@@ -307,7 +307,7 @@ def submit_shift_swap():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?swap_sent=1#shift-swap")
+    return redirect(tpath("/employee_portal?swap_sent=1#shift-swap"))
 
 
 @attendance_bp.route("/respond_shift_swap/<int:req_id>", methods=["POST"])
@@ -326,7 +326,7 @@ def respond_shift_swap(req_id):
     if not row:
         cursor.close()
         db.close()
-        return redirect("/employee_portal?swap_error=not_found#shift-swap")
+        return redirect(tpath("/employee_portal?swap_error=not_found#shift-swap"))
     if action == "accept":
         cursor.execute("""
             UPDATE shift_swap_requests SET status='Pending_Admin', target_response=%s WHERE id=%s
@@ -338,7 +338,7 @@ def respond_shift_swap(req_id):
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?swap_responded=1#shift-swap")
+    return redirect(tpath("/employee_portal?swap_responded=1#shift-swap"))
 
 
 @attendance_bp.route("/admin_shift_swap/<int:req_id>", methods=["POST"])
@@ -356,7 +356,7 @@ def admin_shift_swap(req_id):
     if not row:
         cursor.close()
         db.close()
-        return redirect("/admin_shift_swaps?error=not_found")
+        return redirect(tpath("/admin_shift_swaps?error=not_found"))
     requester_id, target_id, req_shift, tgt_shift = row
     if action == "approve":
         # Swap actual shift assignments
@@ -372,7 +372,7 @@ def admin_shift_swap(req_id):
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/admin_shift_swaps?ok=1")
+    return redirect(tpath("/admin_shift_swaps?ok=1"))
 
 
 @attendance_bp.route("/admin_shift_swaps")
@@ -430,7 +430,7 @@ def api_breaks():
 @attendance_bp.route("/break_config")
 @admin_required
 def view_break_config():
-    return redirect("/settings?tab=shifts")
+    return redirect(tpath("/settings?tab=shifts"))
 
 
 @attendance_bp.route("/add_break", methods=["POST"])
@@ -760,7 +760,7 @@ def correct_attendance():
     clear_attendance_lockout(emp_id, date_obj, session.get("admin_username"))
 
     flash(f"Attendance updated for {date_obj.strftime('%d %b %Y')}.", "success")
-    return redirect(f"/employee_attendance_detail/{emp_id}/{year}/{month}")
+    return redirect(tpath(f"/employee_attendance_detail/{emp_id}/{year}/{month}"))
 
 
 @attendance_bp.route("/bulk_mark_attendance", methods=["GET", "POST"])
@@ -774,7 +774,7 @@ def bulk_mark_attendance():
             date_obj = datetime.date.fromisoformat(date_str)
         except ValueError:
             flash("Invalid date.", "error")
-            return redirect("/bulk_mark_attendance")
+            return redirect(tpath("/bulk_mark_attendance"))
 
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -815,7 +815,7 @@ def bulk_mark_attendance():
             clear_attendance_lockout(eid, date_obj, admin_username)
 
         flash(f"Attendance saved for {saved} employee(s) on {date_obj.strftime('%d %b %Y')}.", "success")
-        return redirect(f"/bulk_mark_attendance?date={date_str}")
+        return redirect(tpath(f"/bulk_mark_attendance?date={date_str}"))
 
     date_str = request.args.get("date", today.isoformat())
     try:

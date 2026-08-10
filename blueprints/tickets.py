@@ -4,7 +4,7 @@ from flask import Blueprint, request, session, redirect, jsonify, render_templat
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
 from utils.email_utils import get_email_config, send_email_async
-from utils.helpers import _create_notification
+from utils.helpers import tpath, _create_notification
 import utils.config as cfg
 
 tickets_bp = Blueprint("tickets", __name__)
@@ -19,7 +19,7 @@ def raise_ticket():
     description = request.form.get("description", "").strip()
     priority = request.form.get("priority", "Medium").strip()
     if not category or not subject or not description:
-        return redirect("/employee_portal#tickets")
+        return redirect(tpath("/employee_portal#tickets"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
@@ -32,7 +32,7 @@ def raise_ticket():
     db.close()
     _create_notification('admin', "🎫 New Support Ticket",
                          f"{emp_id} raised a {priority.lower()}-priority {category} ticket: {subject}")
-    return redirect("/employee_portal?ticket_sent=1#tickets")
+    return redirect(tpath("/employee_portal?ticket_sent=1#tickets"))
 
 
 @tickets_bp.route("/tickets")
@@ -76,7 +76,7 @@ def ticket_action(tid):
     allowed = ("Open", "In Progress", "Resolved", "Closed")
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
     if new_status not in allowed:
-        return (jsonify({"ok": False, "msg": "Invalid status."}), 400) if is_ajax else redirect("/tickets")
+        return (jsonify({"ok": False, "msg": "Invalid status."}), 400) if is_ajax else redirect(tpath("/tickets"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
@@ -151,7 +151,7 @@ def ticket_action(tid):
     if is_ajax:
         return jsonify({"ok": True, "msg": msg, "type": msg_type, "new_status": new_status})
     flash(msg, msg_type)
-    return redirect("/tickets")
+    return redirect(tpath("/tickets"))
 
 
 @tickets_bp.route("/api/employee/tickets", methods=["GET"])

@@ -144,7 +144,7 @@ class TestPortalLinkOnSuccess:
                 "admin_email": "portal@test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
-            assert f"https://{subdomain}.hrzest.com/admin_login".encode() in resp.data
+            assert f"https://www.hrzest.com/{subdomain}/login".encode() in resp.data
             assert b"portal_admin" in resp.data
             # No SMTP configured -- the page must degrade gracefully to
             # "bookmark this link" rather than falsely claiming an email

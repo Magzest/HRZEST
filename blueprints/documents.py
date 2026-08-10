@@ -7,7 +7,7 @@ from extensions import app
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, enforce_ownership
-from utils.helpers import _audit, _validate_upload, _safe_referrer_redirect
+from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect
 
 documents_bp = Blueprint("documents", __name__)
 
@@ -80,11 +80,11 @@ def upload_document():
     f = request.files.get('document')
     if not emp_id or not doc_type or not f or not f.filename:
         flash("All fields required.", "danger")
-        return redirect('/documents')
+        return redirect(tpath("/documents"))
     ok, err = _validate_upload(f, _DOC_ALLOWED_EXT)
     if not ok:
         flash(err, "danger")
-        return redirect(f'/documents?emp_id={emp_id}')
+        return redirect(tpath(f"/documents?emp_id={emp_id}"))
     folder = os.path.join(app.root_path, 'static', 'employee_docs', emp_id)
     os.makedirs(folder, exist_ok=True)
     orig_name = f.filename
@@ -111,7 +111,7 @@ def upload_document():
     from urllib.parse import urlparse as _urlparse
     _p = _urlparse(raw_redirect)
     safe_redirect = raw_redirect if (not _p.scheme and not _p.netloc) else f'/documents?emp_id={emp_id}'
-    return redirect(safe_redirect)
+    return redirect(tpath(safe_redirect))
 
 
 @documents_bp.route("/delete_document/<int:did>", methods=["POST"])
@@ -141,7 +141,7 @@ def download_document(did):
     is_admin = session.get("admin_logged_in")
     emp_session = session.get("employee_id")
     if not is_admin and not emp_session:
-        return redirect("/login")
+        return redirect(tpath("/login"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT employee_id, original_name, stored_name FROM employee_documents WHERE id=%s", (did,))
@@ -150,7 +150,7 @@ def download_document(did):
     db.close()
     if not row:
         flash("Document not found.", "danger")
-        return redirect('/documents')
+        return redirect(tpath("/documents"))
     doc_emp_id, original_name, stored_name = row
     # This check existed before but never logged a denial — a real IDOR
     # probe against someone else's payslip/ID-document upload would have
@@ -158,7 +158,7 @@ def download_document(did):
     # same alerting webhook the payslip endpoint already uses.
     if not enforce_ownership(doc_emp_id, "document", did):
         flash("Access denied.", "danger")
-        return redirect('/employee_portal')
+        return redirect(tpath("/employee_portal"))
     folder = os.path.join(app.root_path, 'static', 'employee_docs', doc_emp_id)
     return send_from_directory(folder, stored_name, as_attachment=True, download_name=original_name)
 
@@ -167,16 +167,16 @@ def download_document(did):
 def upload_my_document():
     emp_id = session.get("employee_id")
     if not emp_id:
-        return redirect("/login")
+        return redirect(tpath("/login"))
     doc_type = request.form.get('doc_type', '').strip()
     f = request.files.get('document')
     if not doc_type or not f or not f.filename:
         flash("All fields required.", "danger")
-        return redirect('/employee_portal')
+        return redirect(tpath("/employee_portal"))
     ok, err = _validate_upload(f, _DOC_ALLOWED_EXT)
     if not ok:
         flash(err, "danger")
-        return redirect('/employee_portal')
+        return redirect(tpath("/employee_portal"))
     folder = os.path.join(app.root_path, 'static', 'employee_docs', emp_id)
     os.makedirs(folder, exist_ok=True)
     orig_name = f.filename
@@ -192,14 +192,14 @@ def upload_my_document():
     cursor.close()
     db.close()
     flash("Document uploaded successfully.", "success")
-    return redirect('/employee_portal#documents')
+    return redirect(tpath("/employee_portal#documents"))
 
 
 @documents_bp.route("/delete_my_document/<int:did>", methods=["POST"])
 def delete_my_document(did):
     emp_id = session.get("employee_id")
     if not emp_id:
-        return redirect("/login")
+        return redirect(tpath("/login"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT employee_id, stored_name FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
@@ -215,4 +215,4 @@ def delete_my_document(did):
     cursor.close()
     db.close()
     flash("Document deleted.", "success")
-    return redirect('/employee_portal#documents')
+    return redirect(tpath("/employee_portal#documents"))

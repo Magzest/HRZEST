@@ -5,33 +5,26 @@ from extensions import app_log, limiter
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
 from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
+from utils.tenant_routing import RESERVED_PATH_SEGMENTS
 
 org_bp = Blueprint("org", __name__)
 
 _SUBDOMAIN_RE = re.compile(r'^[a-z0-9\-]+$')
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
-# Matches the hardcoded ".hrzest.com" suffix already shown in
-# templates/create_org.html and templates/get_started.html -- kept as one
-# constant here since the portal link is also built server-side (welcome
-# email + the org_created.html success page).
-#
-# DNS/TLS for hrzest.com (wildcard *.hrzest.com) isn't live yet as of this
-# rename -- tenant portal links built from this constant won't resolve
-# until that's set up. Update this the same day DNS goes live.
-_TENANT_DOMAIN_SUFFIX = "hrzest.com"
+# Tenants are addressed by URL path now (www.hrzest.com/<subdomain>/...),
+# not subdomain -- this constant is the apex domain the path lives under.
+# The DB column and every internal variable are still named "subdomain"
+# (no migration needed, it's just a slug string either way).
+_TENANT_APEX_DOMAIN = "www.hrzest.com"
 
-# Subdomains that must never be self-registered. _resolve_tenant() (app.py)
-# treats any 3-label host as <label1>.<rest>, so "www.hrzest.com" itself
-# parses as subdomain candidate "www" -- letting someone register that
-# would silently hijack any traffic landing on the www alias. The rest are
-# conventional infrastructure/admin names worth blocking on principle.
-# ("hrms" is kept for legacy reasons -- it was load-bearing under the old
-# hrms.gradzest.com domain and costs nothing to keep blocked.)
-_RESERVED_SUBDOMAINS = frozenset({
-    "hrms", "www", "api", "admin", "app", "mail", "master", "super_admin",
-    "static", "ns1", "ns2", "assets", "cdn",
-})
+# Slugs that must never be self-registered -- shared with
+# utils/tenant_routing.py's WSGI middleware, which uses the exact same set
+# to decide whether a URL's first path segment is a company slug or a real
+# top-level route (e.g. registering "login" as a company would otherwise
+# make www.hrzest.com/login ambiguous between the global login-picker page
+# and a company's own portal).
+_RESERVED_SUBDOMAINS = RESERVED_PATH_SEGMENTS
 
 
 def _clean_subdomain_slug(raw, company_name=""):
@@ -161,7 +154,12 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     except Exception as exc:
         return False, f"Tenant registered in DB but master registry failed: {exc}", None
 
-    portal_url = f"https://{subdomain}.{_TENANT_DOMAIN_SUFFIX}/admin_login"
+    # NOTE: the live tenant-admin login route is "/login" (auth.py's
+    # admin_login() view) -- "/admin_login" hasn't been a real route since
+    # an earlier rename and 404s. Fixed here since this exact line already
+    # needed touching for the path-based URL migration; not otherwise
+    # in scope for this change.
+    portal_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/login"
     return True, None, portal_url
 
 
@@ -263,7 +261,7 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
 @org_bp.route("/get-started", methods=["GET"])
 def get_started_page():
     """Public entry point for the SaaS product: 'login to your existing
-    company' (redirects to <subdomain>.hrzest.com/admin_login) vs
+    company' (redirects to www.hrzest.com/<subdomain>/login) vs
     'register a new company' (/create_org). The root "/" route
     (blueprints/core.py's home()) is the marketing landing page for
     anonymous apex-domain visitors, whose "Login" link points here."""

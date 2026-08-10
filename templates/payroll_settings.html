@@ -70,12 +70,12 @@
       <h1><i class="ti ti-adjustments-horizontal u-c-3b82f6"></i> Payroll Settings</h1>
       <p>Configure PF, Professional Tax, TDS and per-employee CTC</p>
     </div>
-    <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-fff u-bd-1d5-solid-dbeafe u-br-9 u-c-1e3a8a u-tdec-none u-fs-13 u-fw-700" href="/salary_report">
+    <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-fff u-bd-1d5-solid-dbeafe u-br-9 u-c-1e3a8a u-tdec-none u-fs-13 u-fw-700" href="{{ tpath('/salary_report') }}">
       <i class="ti ti-arrow-left"></i> Back
     </a>
   </div>
 
-  <form method="POST" action="/payroll_settings">
+  <form method="POST" action="{{ tpath('/payroll_settings') }}">
 
     <!-- Statutory deductions config -->
     <div class="card">
@@ -195,7 +195,7 @@
     </div>
 
     <div class="u-d-flex u-jc-flex-end u-gap-12">
-      <a class="u-p-10-22 u-bg-f1f5f9 u-c-64748b u-bd-none u-br-10 u-fs-14 u-fw-600 u-tdec-none u-d-inline-flex u-ai-center" href="/salary_report">Cancel</a>
+      <a class="u-p-10-22 u-bg-f1f5f9 u-c-64748b u-bd-none u-br-10 u-fs-14 u-fw-600 u-tdec-none u-d-inline-flex u-ai-center" href="{{ tpath('/salary_report') }}">Cancel</a>
       <button type="submit" class="btn-save"><i class="ti ti-device-floppy"></i> Save All Settings</button>
     </div>
   </form>

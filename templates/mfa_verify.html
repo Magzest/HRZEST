@@ -90,14 +90,14 @@
         <p style="font-size: 13px; color: #64748b; margin: 6px 0 18px;">We emailed a 6-digit code to the address on file for this account. Enter it below — it expires in 5 minutes.</p>
       </div>
 
-      <form action="/mfa_verify" method="POST">
+      <form action="{{ tpath('/mfa_verify') }}" method="POST">
         <input class="field-input" type="text" name="otp_code" placeholder="000000" required autofocus maxlength="6" inputmode="numeric" pattern="[0-9]{6}" />
         <button type="submit" class="btn-primary">Verify &amp; Continue</button>
       </form>
       {% endif %}
 
       <div class="footer-link">
-        <a href="/login">← Start over</a>
+        <a href="{{ tpath('/login') }}">← Start over</a>
       </div>
     </div>
   </body>

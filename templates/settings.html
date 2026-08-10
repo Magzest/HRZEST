@@ -510,7 +510,7 @@
             <div class="section-title u-mb-2">🏢 Organization Profile &amp; General Details</div>
             <div class="u-fs-12 u-c-64748b u-mb-14">Configure your primary organization name, contact details, currency, and business profile.</div>
 
-            <form method="POST" action="/save_company_profile" class="u-d-flex u-fxd-column u-gap-14">
+            <form method="POST" action="{{ tpath('/save_company_profile') }}" class="u-d-flex u-fxd-column u-gap-14">
               <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
                 <div class="field u-m-0">
                   <label class="u-fs-12 u-fw-700 u-c-475569">Company Name</label>
@@ -596,7 +596,7 @@
                   <label class="toggle u-fxs-0 u-mt-2"><input type="checkbox" {% if features.geo %}checked{% endif %} onchange="saveToggle('geo_enabled',this.checked,'extra_geo')" /><span class="toggle-slider"></span></label>
                 </div>
                 <div id="extra_geo" style="display:{% if features.geo %}flex{% else %}none{% endif %};align-items:center;gap:8px;padding:10px 12px;background:#f0fdf4;border-radius:10px;border:1px solid #bbf7d0;flex-wrap:wrap;">
-                  <form class="u-d-flex u-ai-center u-gap-8 u-fxw-wrap u-w-100pct" method="POST" action="/save_geo_radius">
+                  <form class="u-d-flex u-ai-center u-gap-8 u-fxw-wrap u-w-100pct" method="POST" action="{{ tpath('/save_geo_radius') }}">
                     <i class="ti ti-current-location u-c-16a34a u-fs-15"></i>
                     <label class="u-fs-12 u-fw-700 u-c-15803d">Radius</label>
                     <input class="u-w-72 u-p-5-9 u-bd-1-solid-86efac u-br-7 u-fs-13 u-fw-600" type="number" name="geo_radius" value="{{ features.geo_radius }}" min="50" max="5000" />
@@ -685,7 +685,7 @@
               <div class="sec-icon u-bg-fefce8"><i class="ti ti-coin u-c-ca8a04 u-fs-20"></i></div>
               <div><div class="sec-title">Payroll Rules</div><div class="sec-sub">Salary deduction rules and payroll policies</div></div>
             </div>
-            <form method="POST" action="/save_salary_rules">
+            <form method="POST" action="{{ tpath('/save_salary_rules') }}">
               <input type="hidden" name="shift_start"            id="hid_shift_start" value="{{ default_start }}">
               <input type="hidden" name="shift_half"             id="hid_shift_half"  value="{{ default_half }}">
               <input type="hidden" name="shift_end"              id="hid_shift_end"   value="{{ default_end }}">
@@ -999,7 +999,7 @@
                     <td>
                       <button class="btn-edit" onclick="openSalaryEdit('{{ eid }}')">Edit</button>
                       <div class="edit-form" id="ef_{{ eid }}">
-                        <form method="POST" action="/update_salary">
+                        <form method="POST" action="{{ tpath('/update_salary') }}">
                           <input type="hidden" name="emp_id" value="{{ eid }}" />
                           <div class="ef-row"><span class="ef-lbl">Daily Rate</span><input class="ef-inp" type="number" name="salary" step="0.01" value="{{ spd }}" /></div>
                           <div class="ef-btns u-mt-6"><button type="submit" class="btn-save">Save</button><button type="button" class="btn-cancel-sm" onclick="document.getElementById('ef_{{ eid }}').classList.remove('open')">Cancel</button></div>
@@ -1195,7 +1195,7 @@
     <div class="u-bg-fff u-br-20 u-p-28 u-w-360 u-shad-0-24-64-rgba0_0_0_0d25">
       <div class="u-fs-15 u-fw-800 u-c-0f172a u-mb-3">🔒 PIN Protection</div>
       <div class="u-fs-12 u-c-64748b u-mb-20" id="spn_label">Control access to this company</div>
-      <form method="POST" action="/set_company_pin" id="spnForm">
+      <form method="POST" action="{{ tpath('/set_company_pin') }}" id="spnForm">
         <input type="hidden" name="company_id" id="spn_cid" />
         <!-- Toggle row -->
         <div class="u-d-flex u-ai-center u-jc-space-between u-p-13-15 u-bg-f8fafc u-bd-1d5-solid-e2e8f0 u-br-12 u-mb-14">
@@ -1231,7 +1231,7 @@
   <div class="modal-bg" id="addCompanyModal">
     <div class="modal u-maxw-580 u-maxh-90vh u-d-flex u-fxd-column">
       <div class="modal-title u-fxs-0">🏢 Add Company</div>
-      <form class="u-d-flex u-fxd-column u-fx-1 u-minh-0" method="POST" action="/companies/add" enctype="multipart/form-data">
+      <form class="u-d-flex u-fxd-column u-fx-1 u-minh-0" method="POST" action="{{ tpath('/companies/add') }}" enctype="multipart/form-data">
         <input type="hidden" name="redirect_to" value="settings" />
         <div class="u-ovy-auto u-fx-1 u-pr-2">
           <div class="u-d-grid u-gtc-1fr-160 u-gap-10">

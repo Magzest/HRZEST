@@ -112,7 +112,7 @@
     <!-- Flash messages -->
 
     <!-- Date picker (GET) -->
-    <form method="GET" action="/bulk_mark_attendance" class="date-bar">
+    <form method="GET" action="{{ tpath('/bulk_mark_attendance') }}" class="date-bar">
       <label><i class="ti ti-calendar u-va-middle u-mr-4"></i> Select Date</label>
       <input type="date" name="date" value="{{ date_str }}" max="{{ today.isoformat() }}" required />
       <button type="submit"><i class="ti ti-refresh u-va-middle u-mr-4"></i>Load Employees</button>
@@ -137,7 +137,7 @@
     </div>
 
     <!-- Main form (POST) -->
-    <form method="POST" action="/bulk_mark_attendance" id="bulkForm">
+    <form method="POST" action="{{ tpath('/bulk_mark_attendance') }}" id="bulkForm">
       <input type="hidden" name="date" value="{{ date_str }}" />
       <div class="section">
         <table>

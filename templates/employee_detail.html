@@ -196,7 +196,7 @@
 {% endblock %}
 
 {% block main %}
-  <a class="back-btn" href="/employees"><i class="ti ti-arrow-left"></i> Back to Employees</a>
+  <a class="back-btn" href="{{ tpath('/employees') }}"><i class="ti ti-arrow-left"></i> Back to Employees</a>
 
   <!-- HEADER -->
   <div class="profile-header">
@@ -484,7 +484,7 @@
       </div>
 
       <!-- Upload form -->
-      <form class="u-d-flex u-gap-10 u-ai-flex-end u-fxw-wrap u-mb-20 u-p-16 u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-10" action="/upload_document" method="POST" enctype="multipart/form-data">
+      <form class="u-d-flex u-gap-10 u-ai-flex-end u-fxw-wrap u-mb-20 u-p-16 u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-10" action="{{ tpath('/upload_document') }}" method="POST" enctype="multipart/form-data">
         <input type="hidden" name="employee_id" value="{{ emp[0] }}">
         <input type="hidden" name="redirect_to" value="/employee_detail/{{ emp[0] }}">
         <div class="u-fx-1 u-minw-150">

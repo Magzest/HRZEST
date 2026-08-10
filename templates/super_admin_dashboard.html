@@ -182,6 +182,39 @@
       .badge-lead-new { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .35); }
       .badge-lead-contacted { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
       .badge-lead-converted { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+
+      /* ── Payment row → transaction detail modal ── */
+      .pay-row { cursor: pointer; }
+      .pay-row:hover, .pay-row:focus-visible { background: rgba(99, 102, 241, .08); outline: none; }
+      .pay-modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(7, 11, 20, .72); z-index: 60;
+        align-items: center; justify-content: center; padding: 20px;
+      }
+      .pay-modal-overlay.open { display: flex; }
+      .pay-modal-sheet {
+        width: 100%; max-width: 440px; max-height: 85vh; overflow-y: auto;
+        background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px;
+      }
+      .pay-modal-head {
+        display: flex; align-items: center; justify-content: space-between; padding: 16px 20px;
+        border-bottom: 1px solid var(--border-color); position: sticky; top: 0; background: var(--bg-card);
+      }
+      .pay-modal-head h3 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+      .pay-modal-head h3 i { color: var(--primary); }
+      .pay-modal-close {
+        background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1;
+        cursor: pointer; padding: 0 4px;
+      }
+      .pay-modal-close:hover { color: var(--text-bright); }
+      .pay-modal-body { padding: 8px 20px 20px; }
+      .pay-modal-row {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+        padding: 9px 0; border-bottom: 1px solid rgba(51, 65, 85, .3); font-size: 12.5px;
+      }
+      .pay-modal-row:last-child { border-bottom: none; }
+      .pay-modal-row span { color: var(--text-dim); flex-shrink: 0; }
+      .pay-modal-row strong { color: var(--text-bright); text-align: right; word-break: break-word; }
+      .pay-modal-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
     </style>
   </head>
   <body>
@@ -369,7 +402,7 @@
             <tr>
               <td>
                 <div class="co-name">{{ t.company_name }}</div>
-                <div class="subdomain">{{ t.subdomain }}.hrzest.com</div>
+                <div class="subdomain">www.hrzest.com/{{ t.subdomain }}</div>
               </td>
               <td>
                 {% if t.self_signup %}
@@ -452,7 +485,15 @@
           </thead>
           <tbody>
             {% for p in recent_payments %}
-            <tr>
+            <tr class="pay-row" tabindex="0" role="button"
+                data-company="{{ p.company_name }}" data-subdomain="{{ p.subdomain }}"
+                data-employees="{{ p.employee_count }}" data-amount="{{ p.amount_display }}"
+                data-status="{{ p.status }}" data-type="{{ 'Demo' if p.is_demo else 'Razorpay' }}"
+                data-order-id="{{ p.order_id or '—' }}" data-payment-id="{{ p.payment_id or '—' }}"
+                data-admin-username="{{ p.admin_username or '—' }}" data-admin-email="{{ p.admin_email or '—' }}"
+                data-created="{{ p.created_at.strftime('%Y-%m-%d %H:%M:%S') if p.created_at else '—' }}"
+                data-paid="{{ p.paid_at.strftime('%Y-%m-%d %H:%M:%S') if p.paid_at else '—' }}"
+                onclick="openPaymentModal(this)" onkeydown="if(event.key==='Enter')openPaymentModal(this)">
               <td>
                 <div class="co-name">{{ p.company_name }}</div>
                 <div class="subdomain">{{ p.subdomain }}</div>
@@ -466,9 +507,33 @@
             {% endfor %}
           </tbody>
         </table>
+        <p style="font-size:11px;color:var(--text-dim);margin-top:10px;">Click a row for full transaction details.</p>
         {% else %}
         <div class="empty-state" style="padding:20px;"><p>No payments yet.</p></div>
         {% endif %}
+      </div>
+
+      <div class="pay-modal-overlay" id="payModalOverlay" role="dialog" aria-modal="true" aria-label="Transaction details" onclick="if(event.target===this)closePaymentModal()">
+        <div class="pay-modal-sheet">
+          <div class="pay-modal-head">
+            <h3><i class="ti ti-receipt-2"></i> Transaction Details</h3>
+            <button type="button" class="pay-modal-close" onclick="closePaymentModal()" aria-label="Close">&times;</button>
+          </div>
+          <div class="pay-modal-body">
+            <div class="pay-modal-row"><span>Company</span><strong id="pmCompany"></strong></div>
+            <div class="pay-modal-row"><span>Subdomain</span><strong id="pmSubdomain"></strong></div>
+            <div class="pay-modal-row"><span>Employees Billed</span><strong id="pmEmployees"></strong></div>
+            <div class="pay-modal-row"><span>Amount</span><strong id="pmAmount"></strong></div>
+            <div class="pay-modal-row"><span>Status</span><strong id="pmStatus"></strong></div>
+            <div class="pay-modal-row"><span>Payment Type</span><strong id="pmType"></strong></div>
+            <div class="pay-modal-row"><span>Order ID</span><strong id="pmOrderId" class="pay-modal-mono"></strong></div>
+            <div class="pay-modal-row"><span>Payment ID</span><strong id="pmPaymentId" class="pay-modal-mono"></strong></div>
+            <div class="pay-modal-row"><span>Signed Up By</span><strong id="pmAdminUsername"></strong></div>
+            <div class="pay-modal-row"><span>Admin Email</span><strong id="pmAdminEmail"></strong></div>
+            <div class="pay-modal-row"><span>Created At</span><strong id="pmCreated"></strong></div>
+            <div class="pay-modal-row"><span>Paid At</span><strong id="pmPaid"></strong></div>
+          </div>
+        </div>
       </div>
 
       <div class="card activity-card">
@@ -489,5 +554,30 @@
         {% endif %}
       </div>
     </div>
+
+    <script>
+      function openPaymentModal(row) {
+        var d = row.dataset;
+        document.getElementById('pmCompany').textContent = d.company + ' (' + d.subdomain + ')';
+        document.getElementById('pmSubdomain').textContent = d.subdomain;
+        document.getElementById('pmEmployees').textContent = d.employees;
+        document.getElementById('pmAmount').textContent = d.amount;
+        document.getElementById('pmStatus').textContent = d.status;
+        document.getElementById('pmType').textContent = d.type;
+        document.getElementById('pmOrderId').textContent = d.orderId;
+        document.getElementById('pmPaymentId').textContent = d.paymentId;
+        document.getElementById('pmAdminUsername').textContent = d.adminUsername;
+        document.getElementById('pmAdminEmail').textContent = d.adminEmail;
+        document.getElementById('pmCreated').textContent = d.created;
+        document.getElementById('pmPaid').textContent = d.paid;
+        document.getElementById('payModalOverlay').classList.add('open');
+      }
+      function closePaymentModal() {
+        document.getElementById('payModalOverlay').classList.remove('open');
+      }
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closePaymentModal();
+      });
+    </script>
   </body>
 </html>

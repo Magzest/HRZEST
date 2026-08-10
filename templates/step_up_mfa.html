@@ -52,7 +52,7 @@
     <div class="error-msg">⚠️ {{ error }}</div>
     {% endif %}
 
-    <form method="POST" action="/admin/step-up-mfa">
+    <form method="POST" action="{{ tpath('/admin/step-up-mfa') }}">
       <div class="field">
         <label>6-Digit Authenticator Code</label>
         <input type="text" name="totp_code" maxlength="6" pattern="\d{6}" placeholder="000000" required autofocus autocomplete="off" />

@@ -9,7 +9,7 @@ import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required
-from utils.helpers import co_scope_column, _db
+from utils.helpers import tpath, co_scope_column, _db
 from extensions import limiter
 
 performance_bp = Blueprint("performance", __name__)
@@ -257,7 +257,7 @@ def performance_review(emp_id):
         cursor.close()
         db.close()
         flash("Employee not found.", "error")
-        return redirect("/performance")
+        return redirect(tpath("/performance"))
 
     # Get or create review
     cursor.execute("""
@@ -346,7 +346,7 @@ def performance_save_review():
     cursor.close()
     db.close()
     flash("Review saved successfully.", "success")
-    return redirect(f"/performance_review/{emp_id}?quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance_review/{emp_id}?quarter={q}&year={yr}"))
 
 
 @performance_bp.route("/performance_add_kpi", methods=["POST"])
@@ -362,7 +362,7 @@ def performance_add_kpi():
 
     if not title:
         flash("KPI title is required.", "error")
-        return redirect(f"/performance_review/{emp_id}?quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance_review/{emp_id}?quarter={q}&year={yr}"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -386,7 +386,7 @@ def performance_add_kpi():
     cursor.close()
     db.close()
     flash("KPI added.", "success")
-    return redirect(f"/performance_review/{emp_id}?quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance_review/{emp_id}?quarter={q}&year={yr}"))
 
 
 @performance_bp.route("/performance_rate_kpi", methods=["POST"])
@@ -422,7 +422,7 @@ def performance_rate_kpi():
 
     cursor.close()
     db.close()
-    return redirect(f"/performance_review/{emp_id}?quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance_review/{emp_id}?quarter={q}&year={yr}"))
 
 
 @performance_bp.route("/performance_delete_kpi", methods=["POST"])
@@ -438,7 +438,7 @@ def performance_delete_kpi():
     db.commit()
     cursor.close()
     db.close()
-    return redirect(f"/performance_review/{emp_id}?quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance_review/{emp_id}?quarter={q}&year={yr}"))
 
 
 @performance_bp.route("/my_performance")
@@ -495,7 +495,7 @@ def performance_employee_comment():
     cursor.close()
     db.close()
     flash("Comment submitted.", "success")
-    return redirect("/my_performance")
+    return redirect(tpath("/my_performance"))
 
 
 @performance_bp.route("/performance_export")
@@ -690,20 +690,20 @@ def performance_import():
     yr_raw = request.form.get("year", "").strip()
     if not q_raw.isdigit() or not yr_raw.isdigit():
         flash("Invalid quarter or year.", "error")
-        return redirect("/performance")
+        return redirect(tpath("/performance"))
     q = int(q_raw)
     yr = int(yr_raw)
 
     f = request.files.get("excel_file")
     if not f or not f.filename.endswith((".xlsx", ".xls")):
         flash("Please upload a valid Excel file (.xlsx or .xls).", "error")
-        return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
     try:
         wb = openpyxl.load_workbook(io.BytesIO(f.read()), data_only=True)
     except Exception:
         flash("Could not read the Excel file. Make sure it is a valid .xlsx file.", "error")
-        return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
     # Find the data sheet — use first sheet that isn't "Import Template"
     sheet = None
@@ -717,7 +717,7 @@ def performance_import():
     rows = list(sheet.iter_rows(values_only=True))
     if len(rows) < 2:
         flash("The Excel file has no data rows.", "error")
-        return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
     # Find header row (first row with 'employee_id' in it)
     header_row_idx = None
@@ -730,7 +730,7 @@ def performance_import():
             break
     if header_row_idx is None:
         flash("Could not find header row. Make sure the file has an 'employee_id' column.", "error")
-        return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
     def col(name):
         try:
@@ -751,7 +751,7 @@ def performance_import():
 
     if ci_emp is None or ci_title is None:
         flash("Missing required columns: 'employee_id' and 'kpi_title'.", "error")
-        return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
     # Parse data rows
     data_rows = rows[header_row_idx + 1:]
@@ -805,7 +805,7 @@ def performance_import():
 
     if not employees_data:
         flash("No valid data rows found in the file.", "error")
-        return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -867,4 +867,4 @@ def performance_import():
     if unknown:
         msg += f" Unknown employee IDs: {', '.join(unknown)}."
     flash(msg, "success")
-    return redirect(f"/performance?tab=performance&quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))

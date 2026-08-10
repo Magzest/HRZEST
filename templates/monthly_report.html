@@ -151,7 +151,7 @@
       </div>
 
       <!-- FILTER -->
-      <form class="filter-bar" method="GET" action="/monthly_report">
+      <form class="filter-bar" method="GET" action="{{ tpath('/monthly_report') }}">
         <label>Month</label>
         <select name="month" title="Select month">
           {% for m_num, m_name in months %}

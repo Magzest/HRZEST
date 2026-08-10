@@ -17,7 +17,7 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
-from utils.helpers import _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
 import utils.config as cfg
@@ -82,7 +82,7 @@ def add_holiday():
         pass  # duplicate date — silently ignore
     cursor.close()
     db.close()
-    return redirect(f"/leave_holidays?tab=holidays&year={year}")
+    return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
 
 
 @leave_bp.route("/admin_leave_types", methods=["GET", "POST"])
@@ -124,7 +124,7 @@ def admin_leave_types():
         db.commit()
         cursor.close()
         db.close()
-        return redirect("/admin_leave_types")
+        return redirect(tpath("/admin_leave_types"))
 
     cursor.execute("SELECT id, name, annual_quota, is_paid, is_active FROM leave_types ORDER BY id")
     leave_types = cursor.fetchall()
@@ -153,7 +153,7 @@ def import_indian_holidays():
     db.commit()
     cursor.close()
     db.close()
-    return redirect(f"/leave_holidays?tab=holidays&year={year}")
+    return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
 
 
 @leave_bp.route("/delete_holiday/<int:hid>", methods=["POST"])
@@ -166,7 +166,7 @@ def delete_holiday(hid):
     db.commit()
     cursor.close()
     db.close()
-    return redirect(f"/leave_holidays?tab=holidays&year={year}")
+    return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
 
 
 @leave_bp.route("/request_leave", methods=["POST"])
@@ -182,7 +182,7 @@ def request_leave():
     is_half_day = 1 if request.form.get("is_half_day") else 0
     half_day_session = request.form.get("half_day_session", "Morning") if is_half_day else None
     if not reason or not leave_start:
-        return redirect("/employee_portal")
+        return redirect(tpath("/employee_portal"))
 
     start_dt = datetime.date.fromisoformat(leave_start)
     # Half-day is always a single date; ignore end date
@@ -252,7 +252,7 @@ def request_leave():
         except Exception as e:
             app_log.error("Leave request notification email failed: %s", e)
 
-    return redirect("/employee_portal?leave_sent=1#apply-leave")
+    return redirect(tpath("/employee_portal?leave_sent=1#apply-leave"))
 
 
 @leave_bp.route("/leave_balance")
@@ -340,12 +340,12 @@ def set_leave_balance():
     cursor.close()
     db.close()
     flash("Leave balance updated successfully.", "success")
-    return redirect(f"/leave_balance?year={year}")
+    return redirect(tpath(f"/leave_balance?year={year}"))
 
 
 @leave_bp.route("/leave_requests")
 def leave_requests_redirect():
-    return redirect("/leave_holidays?tab=leaves")
+    return redirect(tpath("/leave_holidays?tab=leaves"))
 
 
 @leave_bp.route("/leave_holidays")
@@ -438,7 +438,7 @@ def leave_holidays():
 def leave_action(lid):
     action = request.form.get("action", "")
     if action not in ("Approved", "Rejected"):
-        return redirect("/leave_holidays?tab=leaves")
+        return redirect(tpath("/leave_holidays?tab=leaves"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -552,7 +552,7 @@ def leave_action(lid):
                 send_email_async(emp_email, f"Leave {action} — {date_str}", html_body, cfg_row)
                 flash(f"{icon} Leave {action} — notification queued for {emp_email}", "success")
 
-    return redirect("/leave_holidays?tab=leaves")
+    return redirect(tpath("/leave_holidays?tab=leaves"))
 
 
 @leave_bp.route("/leave_calendar")
@@ -632,16 +632,16 @@ def request_resignation():
     last_working_day = request.form.get("last_working_day", "").strip()
     reason = request.form.get("resign_reason", "").strip()
     if not reason or not last_working_day:
-        return redirect("/employee_portal#resign")
+        return redirect(tpath("/employee_portal#resign"))
 
     try:
         lwd = datetime.datetime.strptime(last_working_day, "%Y-%m-%d").date()
     except ValueError:
-        return redirect("/employee_portal#resign")
+        return redirect(tpath("/employee_portal#resign"))
 
     min_lwd = datetime.date.today() + datetime.timedelta(days=30)
     if lwd < min_lwd:
-        return redirect("/employee_portal#resign")
+        return redirect(tpath("/employee_portal#resign"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -684,7 +684,7 @@ def request_resignation():
                 html_body, config
             )
 
-    return redirect("/employee_portal?resigned=1#resign")
+    return redirect(tpath("/employee_portal?resigned=1#resign"))
 
 
 @leave_bp.route("/resignation_requests")
@@ -711,7 +711,7 @@ def resignation_requests_view():
 def resignation_action(rid):
     action = request.form.get("action", "")
     if action not in ("Accepted", "Declined"):
-        return redirect("/resignation_requests")
+        return redirect(tpath("/resignation_requests"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -772,7 +772,7 @@ def resignation_action(rid):
 </div>"""
                 send_email_async(emp_email, f"Resignation {action} — {emp_name}", html_body, cfg_row)
 
-    return redirect("/resignation_requests")
+    return redirect(tpath("/resignation_requests"))
 
 
 @leave_bp.route("/bulk_leave_action", methods=["POST"])
@@ -781,11 +781,11 @@ def bulk_leave_action():
     action = request.form.get("action", "")
     raw_ids = request.form.getlist("leave_ids")
     if action not in ("Approved", "Rejected") or not raw_ids:
-        return redirect("/leave_holidays?tab=leaves")
+        return redirect(tpath("/leave_holidays?tab=leaves"))
     try:
         ids = [int(i) for i in raw_ids]
     except ValueError:
-        return redirect("/leave_holidays?tab=leaves")
+        return redirect(tpath("/leave_holidays?tab=leaves"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -833,7 +833,7 @@ def bulk_leave_action():
     cursor.close()
     db.close()
     flash(f"Bulk action: {action} applied to {done} leave request(s).", "success")
-    return redirect("/leave_holidays?tab=leaves")
+    return redirect(tpath("/leave_holidays?tab=leaves"))
 
 
 @leave_bp.route("/api/holidays", methods=["GET", "POST"])
@@ -1142,7 +1142,7 @@ def cancel_leave_web(lid):
         _audit("cancel_leave", "leave_requests", str(lid), f"Employee {emp_id} cancelled leave for {row[1]}")
     cursor.close()
     db.close()
-    return redirect("/employee_portal?tab=leave#leave-history")
+    return redirect(tpath("/employee_portal?tab=leave#leave-history"))
 
 
 @leave_bp.route("/api/employee/request_overtime", methods=["POST"])
@@ -1409,7 +1409,7 @@ def overtime_action(oid):
     notes = request.form.get('notes', '').strip()
     if action not in ('approve', 'reject'):
         flash("Invalid action.", "danger")
-        return redirect('/overtime?tab=ot')
+        return redirect(tpath("/overtime?tab=ot"))
     status = 'Approved' if action == 'approve' else 'Rejected'
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1458,13 +1458,13 @@ def overtime_action(oid):
 
     cursor.close()
     db.close()
-    return redirect('/overtime?tab=ot')
+    return redirect(tpath("/overtime?tab=ot"))
 
 
 @leave_bp.route("/compoff")
 @admin_required
 def compoff():
-    return redirect("/overtime?tab=compoff")
+    return redirect(tpath("/overtime?tab=compoff"))
 
 
 @leave_bp.route("/compoff_old")
@@ -1542,7 +1542,7 @@ def compoff_settings():
     cursor.close()
     db.close()
     flash("Comp-off settings saved.", "success")
-    return redirect("/overtime?tab=settings")
+    return redirect(tpath("/overtime?tab=settings"))
 
 
 @leave_bp.route("/my_compoff")

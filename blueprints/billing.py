@@ -120,7 +120,7 @@ def create_order():
 @billing_bp.route("/api/billing/verify_payment", methods=["POST"])
 @limiter.limit("20 per minute")
 def verify_payment():
-    from blueprints.org import provision_tenant, send_payment_confirmation_email, _TENANT_DOMAIN_SUFFIX
+    from blueprints.org import provision_tenant, send_payment_confirmation_email, _TENANT_APEX_DOMAIN
 
     data = request.get_json(silent=True) or request.form
     razorpay_order_id = (data.get("razorpay_order_id") or "").strip()
@@ -166,7 +166,7 @@ def verify_payment():
     if status == "provisioned":
         cur.close()
         conn.close()
-        portal_url = f"https://{subdomain}.{_TENANT_DOMAIN_SUFFIX}/admin_login"
+        portal_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/login"  # "/admin_login" hasn't been a real route since an earlier rename
         return jsonify({"ok": True, "portal_url": portal_url, "already_provisioned": True})
 
     cur.execute(
@@ -222,7 +222,7 @@ def verify_payment():
     except Exception as exc:
         app_log.error("billing.verify_payment: failed to set reset token for order %s: %s", razorpay_order_id, exc)
 
-    set_password_url = f"https://{subdomain}.{_TENANT_DOMAIN_SUFFIX}/admin_reset_password/{reset_token}"
+    set_password_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/admin_reset_password/{reset_token}"
 
     conn = get_master_db()
     cur = conn.cursor(buffered=True)

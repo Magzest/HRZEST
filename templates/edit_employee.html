@@ -66,7 +66,7 @@
         <p>Update name, email, or role</p>
       </div>
 
-      <form action="/edit_employee" method="POST">
+      <form action="{{ tpath('/edit_employee') }}" method="POST">
         <input type="hidden" name="emp_id" value="{{ emp[0] }}" />
 
         <label>Employee ID (read-only)</label>
@@ -84,7 +84,7 @@
         <button type="submit" class="btn">Save Changes</button>
       </form>
 
-      <a href="/admin" class="back">← Back to Admin Panel</a>
+      <a href="{{ tpath('/admin') }}" class="back">← Back to Admin Panel</a>
     </div>
   <script src="/static/darkmode.min.js"></script>
 </body>

@@ -105,12 +105,12 @@
               </td>
               <td class="u-d-flex u-gap-6 u-fxw-wrap">
                 <button class="btn btn-amber" onclick="openEdit({{ lt_id }},'{{ lt_name | replace("'","\\'") }}',{{ lt_quota }},{{ lt_paid }})">✏️ Edit</button>
-                <form class="u-d-inline" action="/admin_leave_types" method="POST">
+                <form class="u-d-inline" action="{{ tpath('/admin_leave_types') }}" method="POST">
                   <input type="hidden" name="action" value="toggle" />
                   <input type="hidden" name="lt_id" value="{{ lt_id }}" />
                   <button type="submit" class="btn btn-gray">{{ '🔴 Deactivate' if lt_active else '🟢 Activate' }}</button>
                 </form>
-                <form class="u-d-inline" action="/admin_leave_types" method="POST"
+                <form class="u-d-inline" action="{{ tpath('/admin_leave_types') }}" method="POST"
                       onsubmit="return confirm('Delete {{ lt_name }}? This cannot be undone.')">
                   <input type="hidden" name="action" value="delete" />
                   <input type="hidden" name="lt_id" value="{{ lt_id }}" />
@@ -129,7 +129,7 @@
     <!-- ADD LEAVE TYPE -->
     <div class="section">
       <div class="section-title">➕ Add New Leave Type</div>
-      <form class="u-d-grid u-gtc-1fr-1fr-auto u-gap-16 u-ai-end" action="/admin_leave_types" method="POST">
+      <form class="u-d-grid u-gtc-1fr-1fr-auto u-gap-16 u-ai-end" action="{{ tpath('/admin_leave_types') }}" method="POST">
         <input type="hidden" name="action" value="add" />
         <div class="field u-mb-0">
           <label>Leave Type Name <span class="u-c-dc2626">*</span></label>
@@ -161,7 +161,7 @@
         <h3 class="u-fs-16 u-fw-800 u-c-0f172a">✏️ Edit Leave Type</h3>
         <button class="u-bd-none u-bg-f1f5f9 u-br-8 u-w-32 u-h-32 u-cur-pointer u-fs-16" onclick="closeEdit()">✕</button>
       </div>
-      <form action="/admin_leave_types" method="POST">
+      <form action="{{ tpath('/admin_leave_types') }}" method="POST">
         <input type="hidden" name="action" value="edit" />
         <input type="hidden" name="lt_id" id="edit_lt_id" />
         <div class="field">

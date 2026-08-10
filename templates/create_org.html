@@ -127,11 +127,11 @@
 
     <label class="field-label">Subdomain</label>
     <div class="subdomain-row">
+      <div class="subdomain-suffix">www.hrzest.com/</div>
       <input class="field-input" type="text" name="subdomain" id="subdomain_input"
              placeholder="acme" pattern="[a-z0-9\-]+" required
              title="Lowercase letters, digits and hyphens only"
              oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
-      <div class="subdomain-suffix">.hrzest.com</div>
     </div>
     <div style="font-size:11px; color:#94a3b8; margin-top:4px; margin-bottom:14px;">
       Enter a short subdomain slug (e.g. <strong>acme</strong>). Full URLs like <em>https://hrzest.com/</em> will automatically be cleaned.

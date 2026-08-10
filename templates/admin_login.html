@@ -186,7 +186,7 @@
       <div class="error-box"><i class="ti ti-alert-circle"></i> {{ error }}</div>
       {% endif %}
 
-      <form action="/login" method="POST" autocomplete="on">
+      <form action="{{ tpath('/login') }}" method="POST" autocomplete="on">
         <label class="field-label" for="login_identifier">Username or Employee ID</label>
         <input class="field-input" type="text" id="login_identifier" name="identifier"
                placeholder="Enter your Username or Employee ID"
@@ -206,8 +206,8 @@
       </form>
 
       <div class="links">
-        <a href="/checkin">← Back to Kiosk</a>
-        <a href="/admin_forgot_password" class="forgot">Forgot password?</a>
+        <a href="{{ tpath('/checkin') }}">← Back to Kiosk</a>
+        <a href="{{ tpath('/admin_forgot_password') }}" class="forgot">Forgot password?</a>
       </div>
 
       <div class="hint">

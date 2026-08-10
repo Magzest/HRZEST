@@ -23,6 +23,33 @@ from database import get_db_connection
 from extensions import app_log, log_security_event
 
 
+def tpath(path: str) -> str:
+    """Prefix an absolute-path link/redirect target with the current
+    tenant's URL prefix (request.script_root -- "" on marketing/platform-
+    admin routes, "/<company-slug>" once the WSGI tenant-prefix wrapper in
+    wsgi.py has stripped that slug into SCRIPT_NAME for a resolved tenant
+    request). Used in place of bare redirect("/x")/href="/x" everywhere a
+    link should stay within the current tenant's path, since this codebase
+    builds links as literal absolute-path strings rather than via
+    url_for(), which would pick up SCRIPT_NAME automatically.
+
+    Idempotent by design: some inputs (e.g. a path pulled out of the raw
+    Referer header in _safe_referrer_redirect, which reflects the real
+    browser URL the visitor was on) already carry the tenant prefix, while
+    most call sites pass a bare, unprefixed literal like "/admin" -- rather
+    than track which is which at every call site, tpath() just checks
+    whether the prefix is already there before adding it."""
+    if not path.startswith("/"):
+        return path
+    try:
+        prefix = request.script_root
+    except RuntimeError:
+        return path  # no request context (e.g. called from a script/test)
+    if not prefix or path == prefix or path.startswith(prefix + "/"):
+        return path
+    return prefix + path
+
+
 _APP_URL = os.environ.get("APP_URL", "").rstrip("/")
 
 
@@ -41,10 +68,12 @@ def _safe_app_url() -> str:
 
 
 def _safe_redirect(dest: str, fallback: str = "/admin") -> str:
-    """Validate that a redirect target is a relative path (prevents open redirect)."""
+    """Validate that a redirect target is a relative path (prevents open
+    redirect), then stamp it with the current tenant's URL prefix via
+    tpath() so every caller gets a correctly-scoped link for free."""
     if dest and dest.startswith("/") and not dest.startswith("//"):
-        return dest
-    return fallback
+        return tpath(dest)
+    return tpath(fallback)
 
 
 def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
@@ -53,7 +82,7 @@ def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
     relative path first. Referer is client-supplied and can be forged by
     non-browser HTTP clients, so it's never trusted as-is."""
     if not referrer:
-        return fallback
+        return tpath(fallback)
     from urllib.parse import urlparse as _urlparse
     p = _urlparse(referrer)
     if not p.scheme and not p.netloc:
@@ -61,7 +90,7 @@ def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
     if p.netloc == request.host:
         path = p.path or "/"
         return _safe_redirect(path + (("?" + p.query) if p.query else ""), fallback)
-    return fallback
+    return tpath(fallback)
 
 
 # ── PII encryption (Fernet) — fail-secure bootstrap ────────────────────────────

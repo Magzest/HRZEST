@@ -152,7 +152,7 @@
           <p>Deductions: Late Login = {{ late_rate }}% &nbsp;|&nbsp; Half Day = {{ half_rate }}% &nbsp;|&nbsp; Absent = 100%</p>
         </div>
         <div class="u-d-flex u-ai-center u-gap-10 u-mt-32 u-fxw-wrap">
-          <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-f0fdf4 u-c-15803d u-bd-1d5-solid-bbf7d0 u-br-9 u-tdec-none u-fs-13 u-fw-700" href="/payroll_settings">
+          <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-f0fdf4 u-c-15803d u-bd-1d5-solid-bbf7d0 u-br-9 u-tdec-none u-fs-13 u-fw-700" href="{{ tpath('/payroll_settings') }}">
             <i class="ti ti-adjustments-horizontal"></i> Payroll Settings
           </a>
           <div class="u-pos-relative">
@@ -164,7 +164,7 @@
       </div>
 
       <!-- FILTER -->
-      <form class="filter-bar" method="GET" action="/salary_report">
+      <form class="filter-bar" method="GET" action="{{ tpath('/salary_report') }}">
         <label>Month</label>
         <select name="month" title="Select month">
           {% for m_num, m_name in months %}
@@ -187,7 +187,7 @@
           📧 Send All Salary Slips
         </button>
         {% else %}
-        <a href="/email_config" class="btn-action btn-setup-email">⚠️ Setup Email First</a>
+        <a href="{{ tpath('/email_config') }}" class="btn-action btn-setup-email">⚠️ Setup Email First</a>
         {% endif %}
         {% if is_locked %}
         <button class="u-p-8-14 u-bd-1-solid-fca5a5 u-br-9 u-bg-fee2e2 u-c-dc2626 u-fs-12 u-fw-700 u-cur-pointer" type="button" onclick="unlockPayroll()">

@@ -272,8 +272,8 @@
         <div class="sub">Manage leave requests, tickets, resignations and public holidays</div>
       </div>
       <div class="topbar-actions">
-        <a href="/leave_balance" class="btn-leave-balance"><i class="ti ti-calendar-stats"></i> Leave Balance</a>
-        <a href="/leave_calendar" class="btn-leave-cal"><i class="ti ti-calendar-month"></i> Leave Calendar</a>
+        <a href="{{ tpath('/leave_balance') }}" class="btn-leave-balance"><i class="ti ti-calendar-stats"></i> Leave Balance</a>
+        <a href="{{ tpath('/leave_calendar') }}" class="btn-leave-cal"><i class="ti ti-calendar-month"></i> Leave Calendar</a>
       </div>
     </div>
     <div class="module-tabs">
@@ -324,7 +324,7 @@
     <div id="tab-leaves" class="tab-pane active">
       <div id="bulkBar" class="bulk-bar">
         <span id="bulkCount" class="bulk-count">0 selected</span>
-        <form id="bulkForm" action="/bulk_leave_action" method="POST" class="bulk-form">
+        <form id="bulkForm" action="{{ tpath('/bulk_leave_action') }}" method="POST" class="bulk-form">
           <div id="bulkIdInputs"></div>
           <button type="submit" name="action" value="Approved" class="btn-bulk-approve">✓ Approve selected</button>
           <button type="submit" name="action" value="Rejected" class="btn-bulk-reject">✗ Reject selected</button>
@@ -478,7 +478,7 @@
     </div>
 
     <div class="toolbar">
-      <form class="u-d-inline" action="/import_indian_holidays" method="POST">
+      <form class="u-d-inline" action="{{ tpath('/import_indian_holidays') }}" method="POST">
         <input type="hidden" name="year" value="{{ year }}">
         <button type="submit" class="btn-import" onclick="return confirm('Import Indian public holidays for {{ year }}? Existing entries will not be overwritten.')">
           🇮🇳 Import Indian Holidays for {{ year }}
@@ -580,7 +580,7 @@
 <div class="modal-overlay" id="addModal">
   <div class="modal-box">
     <h3>➕ Add Holiday / Leave</h3>
-    <form action="/add_holiday" method="POST">
+    <form action="{{ tpath('/add_holiday') }}" method="POST">
       <div class="form-group"><label>Date</label><input type="date" name="date" id="modalDate" required /></div>
       <div class="form-group"><label>Type</label>
         <select name="type"><option value="Holiday">🎉 Public Holiday</option><option value="Leave">🌿 Company Leave</option></select>
