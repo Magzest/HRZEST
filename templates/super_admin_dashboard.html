@@ -138,6 +138,42 @@
       .badge-source-self { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .35); }
       .badge-source-manual { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
 
+      /* ── Profit & Loss card ── */
+      .pnl-card { margin-bottom: 20px; }
+      .pnl-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .pnl-card > h2 i { color: var(--primary); }
+      .pnl-figures { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; }
+      .pnl-figures .pnl-figure .pnl-figure-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
+      .pnl-figures .pnl-figure .pnl-figure-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .pnl-figures .pnl-figure .pnl-figure-value.revenue { color: var(--success); }
+      .pnl-figures .pnl-figure .pnl-figure-value.cost { color: var(--warning); }
+      .pnl-figures .pnl-figure .pnl-figure-value.net.profit { color: var(--success); }
+      .pnl-figures .pnl-figure .pnl-figure-value.net.loss { color: var(--danger); }
+      .pnl-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+      .pnl-bar-row { display: flex; align-items: center; gap: 10px; }
+      .pnl-bar-row .pnl-bar-tag { width: 64px; flex-shrink: 0; font-size: 11px; color: var(--text-muted); font-weight: 700; }
+      .pnl-bar-row .pnl-bar-track { flex: 1; height: 14px; background: #090d16; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-color); }
+      .pnl-bar-row .pnl-bar-fill { height: 100%; border-radius: 7px; transition: width .3s; }
+      .pnl-bar-row .pnl-bar-fill.revenue { background: var(--success); }
+      .pnl-bar-row .pnl-bar-fill.cost { background: var(--warning); }
+      .pnl-bar-row .pnl-bar-amount { width: 110px; flex-shrink: 0; text-align: right; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .pnl-suggestion {
+        margin-top: 16px; border: 1px solid rgba(239, 68, 68, .35); background: rgba(239, 68, 68, .08);
+        border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--text-bright);
+      }
+      .pnl-suggestion strong { color: #fca5a5; }
+      .pnl-suggestion .pnl-suggestion-math { color: var(--text-muted); font-size: 11.5px; margin-top: 6px; }
+      .pnl-cost-form { margin-top: 16px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+      .pnl-cost-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; }
+      .pnl-cost-form input {
+        background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 9px 10px; font-size: 13.5px; width: 140px;
+      }
+      .pnl-cost-form button {
+        background: var(--primary); border: none; color: white; padding: 10px 18px;
+        border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+
       /* ── Leads / payments panels ── */
       .section-card { margin-top: 20px; }
       .section-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
@@ -214,6 +250,66 @@
             {% endfor %}
           </div>
         </div>
+      </div>
+
+      <div class="card pnl-card">
+        <h2><i class="ti ti-chart-bar"></i> Profit &amp; Loss</h2>
+        <div class="pnl-figures">
+          <div class="pnl-figure">
+            <div class="pnl-figure-label">Revenue (MRR)</div>
+            <div class="pnl-figure-value revenue">{{ pnl.revenue_display }}</div>
+          </div>
+          <div class="pnl-figure">
+            <div class="pnl-figure-label">Operating Costs</div>
+            <div class="pnl-figure-value cost">{{ pnl.cost_display }}</div>
+          </div>
+          <div class="pnl-figure">
+            <div class="pnl-figure-label">{{ 'Net Loss' if pnl.is_loss else 'Net Profit' }}</div>
+            <div class="pnl-figure-value net {{ 'loss' if pnl.is_loss else 'profit' }}">
+              {{ '-' if pnl.is_loss else '+' }}{{ pnl.net_display }}
+            </div>
+          </div>
+        </div>
+        <div class="pnl-bars">
+          <div class="pnl-bar-row">
+            <div class="pnl-bar-tag">Revenue</div>
+            <div class="pnl-bar-track"><div class="pnl-bar-fill revenue" style="width:{{ pnl.revenue_pct }}%;"></div></div>
+            <div class="pnl-bar-amount">{{ pnl.revenue_display }}</div>
+          </div>
+          <div class="pnl-bar-row">
+            <div class="pnl-bar-tag">Costs</div>
+            <div class="pnl-bar-track"><div class="pnl-bar-fill cost" style="width:{{ pnl.cost_pct }}%;"></div></div>
+            <div class="pnl-bar-amount">{{ pnl.cost_display }}</div>
+          </div>
+        </div>
+
+        {% if pnl.is_loss %}
+        <div class="pnl-suggestion">
+          <i class="ti ti-alert-triangle"></i>
+          <strong>Operating at a loss.</strong>
+          {% if pnl.suggested_rate_display %}
+          Consider raising the per-employee rate to <strong>{{ pnl.suggested_rate_display }}/employee/month</strong>
+          (currently {{ per_employee_paise | plan_price }}) to cover AWS + maintenance costs with a
+          {{ pnl.suggested_margin_pct }}% margin.
+          <div class="pnl-suggestion-math">
+            Break-even needs {{ pnl.cost_display }}/month spread across {{ total_employee_count }} billed employees.
+          </div>
+          {% else %}
+          No billed employees to base a rate suggestion on yet — costs exceed revenue with zero active billing base.
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <form class="pnl-cost-form" action="/super_admin/costs" method="POST">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+          <label>Monthly AWS Cost (₹)
+            <input type="number" name="monthly_aws" min="0" step="0.01" value="{{ '%.2f' | format(costs.aws_paise / 100) }}" placeholder="0.00" />
+          </label>
+          <label>Monthly Maintenance Cost (₹)
+            <input type="number" name="monthly_maintenance" min="0" step="0.01" value="{{ '%.2f' | format(costs.maintenance_paise / 100) }}" placeholder="0.00" />
+          </label>
+          <button type="submit"><i class="ti ti-device-floppy"></i> Save Costs</button>
+        </form>
       </div>
 
       <details class="new-co card" id="newCoPanel">

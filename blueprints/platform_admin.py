@@ -270,6 +270,73 @@ def _recent_leads(limit=20):
         return []
 
 
+# Minimum profit margin the suggested rate targets above break-even --
+# purely a "don't suggest exactly zero margin" cushion, not tied to any
+# external benchmark.
+_SUGGESTED_MARGIN_PCT = 15
+# Suggested rates are rounded up to the nearest ₹5 (500 paise) so the
+# number reads as a deliberate price point, not a raw division result.
+_SUGGESTED_ROUND_TO_PAISE = 500
+
+
+def _get_platform_costs():
+    """Monthly operating costs the platform admin has entered (AWS
+    hosting + website maintenance) -- there's no billing API wired up
+    that could discover these automatically, so this is admin-entered
+    and simply compared against MRR. Fails to zero costs rather than
+    raising, so a DB hiccup shows "no known costs" instead of crashing
+    the dashboard."""
+    try:
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute("SELECT monthly_aws_paise, monthly_maintenance_paise FROM platform_costs WHERE id=1")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            return {"aws_paise": row[0], "maintenance_paise": row[1]}
+    except Exception as exc:
+        app_log.warning("platform_admin: cost lookup failed: %s", exc)
+    return {"aws_paise": 0, "maintenance_paise": 0}
+
+
+def _compute_pnl(mrr_paise, active_employee_count, costs):
+    """Revenue (MRR) vs. admin-entered costs, plus -- only when running at
+    a loss and there's an active employee base to spread the suggestion
+    across -- a suggested per-employee rate that would clear costs with
+    _SUGGESTED_MARGIN_PCT of headroom, rounded to a clean price point."""
+    total_cost_paise = costs["aws_paise"] + costs["maintenance_paise"]
+    net_paise = mrr_paise - total_cost_paise
+    is_loss = net_paise < 0
+
+    suggested_rate_paise = None
+    if is_loss and active_employee_count > 0:
+        breakeven_rate = total_cost_paise / active_employee_count
+        target_rate = breakeven_rate * (1 + _SUGGESTED_MARGIN_PCT / 100)
+        suggested_rate_paise = int(
+            -(-target_rate // _SUGGESTED_ROUND_TO_PAISE) * _SUGGESTED_ROUND_TO_PAISE  # ceil to nearest ₹5
+        )
+
+    # Bar-fill percentages for the two-sided revenue/cost visualization --
+    # whichever side is larger anchors at 100%, the other scales relative
+    # to it, so the bar always shows the true ratio regardless of scale.
+    larger = max(mrr_paise, total_cost_paise, 1)
+    return {
+        "revenue_paise": mrr_paise,
+        "cost_paise": total_cost_paise,
+        "net_paise": net_paise,
+        "revenue_display": format_price_inr(mrr_paise),
+        "cost_display": format_price_inr(total_cost_paise),
+        "net_display": format_price_inr(abs(net_paise)),
+        "is_loss": is_loss,
+        "revenue_pct": round(mrr_paise / larger * 100),
+        "cost_pct": round(total_cost_paise / larger * 100),
+        "suggested_rate_paise": suggested_rate_paise,
+        "suggested_rate_display": format_price_inr(suggested_rate_paise) if suggested_rate_paise else None,
+        "suggested_margin_pct": _SUGGESTED_MARGIN_PCT,
+    }
+
+
 @platform_admin_bp.route("/super_admin")
 @_platform_admin_required
 def platform_admin_dashboard():
@@ -286,12 +353,14 @@ def platform_admin_dashboard():
     self_signup_ids = _self_signup_tenant_ids()
     tenants = []
     mrr_paise = 0
+    active_employee_count = 0
     for r in rows:
         tid, company_name, subdomain, db_name, payment_option, status, created_at = r
         employee_count = _tenant_employee_count(db_name)
         monthly_bill_paise = calculate_price(employee_count)
         if status == "active":
             mrr_paise += monthly_bill_paise
+            active_employee_count += employee_count
         tenants.append({
             "id": tid, "company_name": company_name, "subdomain": subdomain,
             "db_name": db_name, "payment_option": payment_option or "online",
@@ -300,6 +369,9 @@ def platform_admin_dashboard():
             "monthly_bill_display": format_price_inr(monthly_bill_paise),
             "self_signup": tid in self_signup_ids,
         })
+
+    costs = _get_platform_costs()
+    pnl = _compute_pnl(mrr_paise, active_employee_count, costs)
 
     return render_template(
         "super_admin_dashboard.html", tenants=tenants,
@@ -312,7 +384,51 @@ def platform_admin_dashboard():
         recent_payments=_recent_payments(),
         leads=_recent_leads(),
         traffic=get_traffic_stats(),
+        pnl=pnl,
+        costs=costs,
     )
+
+
+@platform_admin_bp.route("/super_admin/costs", methods=["POST"])
+@_platform_admin_required
+def platform_admin_set_costs():
+    """Lets the platform admin update the monthly AWS/maintenance cost
+    inputs that _compute_pnl() compares MRR against."""
+    def _rupees_to_paise(field):
+        raw = request.form.get(field, "0").strip()
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        if value < 0:
+            return None
+        return round(value * 100)
+
+    aws_paise = _rupees_to_paise("monthly_aws")
+    maintenance_paise = _rupees_to_paise("monthly_maintenance")
+    if aws_paise is None or maintenance_paise is None:
+        flash("Enter valid non-negative amounts for both cost fields.", "error")
+        return redirect("/super_admin")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE platform_costs SET monthly_aws_paise=%s, monthly_maintenance_paise=%s, "
+        "updated_at=CURRENT_TIMESTAMP WHERE id=1",
+        (aws_paise, maintenance_paise)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    log_security_event(
+        "platform_admin.costs_updated",
+        f"Operating costs updated (aws={format_price_inr(aws_paise)}, "
+        f"maintenance={format_price_inr(maintenance_paise)})",
+        level="INFO", identifier=session.get("platform_admin_username"),
+    )
+    flash("Operating costs updated.", "success")
+    return redirect("/super_admin")
 
 
 @platform_admin_bp.route("/super_admin/leads/<int:lead_id>/status", methods=["POST"])

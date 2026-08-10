@@ -2158,6 +2158,21 @@ def init_master_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Singleton row (id=1) holding the platform operator's own monthly
+        # running costs -- there's no API that can discover real AWS/
+        # maintenance spend automatically, so these are admin-entered and
+        # compared against MRR to drive the Platform Admin dashboard's
+        # Profit & Loss bar and pricing-adjustment suggestion.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS platform_costs (
+                id SMALLINT PRIMARY KEY DEFAULT 1,
+                monthly_aws_paise INT NOT NULL DEFAULT 0,
+                monthly_maintenance_paise INT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CHECK (id = 1)
+            )
+        """)
+        cur.execute("INSERT INTO platform_costs (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
         db.commit()
         cur.close()
         db.close()
