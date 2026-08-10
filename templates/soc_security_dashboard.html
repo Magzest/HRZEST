@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SecOps Command Center — Security Operations Dashboard</title>
+    <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <style>
+      :root {
+        --bg-main: #0f172a;
+        --bg-card: rgba(30, 41, 59, 0.7);
+        --bg-card-hover: rgba(51, 65, 85, 0.7);
+        --border-color: rgba(255, 255, 255, 0.08);
+        --border-glow: rgba(59, 130, 246, 0.3);
+        --primary: #3b82f6;
+        --primary-glow: rgba(59, 130, 246, 0.2);
+        --danger: #ef4444;
+        --danger-glow: rgba(239, 68, 68, 0.2);
+        --warning: #f59e0b;
+        --success: #10b981;
+        --accent: #6366f1;
+        --text-bright: #e2e8f0;
+        --text-muted: #94a3b8;
+        --text-dim: #64748b;
+      }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+
+      body {
+        background: var(--bg-main);
+        color: var(--text-bright);
+        min-height: 100vh;
+        padding: 24px;
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: '';
+        position: fixed; inset: 0; pointer-events: none;
+        background-image: radial-gradient(circle, rgba(59,130,246,0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+        z-index: 0;
+      }
+
+      .glow-orb {
+        position: fixed; border-radius: 50%; filter: blur(120px);
+        opacity: 0.15; pointer-events: none; z-index: 0;
+      }
+      .orb-blue { width: 500px; height: 500px; background: #3b82f6; top: -100px; left: -100px; }
+      .orb-purple { width: 450px; height: 450px; background: #8b5cf6; bottom: -100px; right: -100px; }
+
+      .container { max-width: 1440px; margin: 0 auto; position: relative; z-index: 1; }
+
+      /* ── Top Header ── */
+      .soc-header {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+        padding: 20px 24px; background: var(--bg-card);
+        -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color); border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); margin-bottom: 24px;
+      }
+
+      .soc-brand { display: flex; align-items: center; gap: 14px; }
+      .soc-icon {
+        width: 52px; height: 52px; border-radius: 16px;
+        background: linear-gradient(135deg, #1d4ed8, #3b82f6);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 26px; color: #fff;
+        box-shadow: 0 0 25px rgba(59, 130, 246, 0.4);
+      }
+      .soc-title h1 { font-size: 22px; font-weight: 800; color: #fff; letter-spacing: -0.3px; display: flex; align-items: center; gap: 10px; }
+      .soc-title p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+      .badge-soc {
+        background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4);
+        color: #60a5fa; font-size: 10px; font-weight: 800; text-transform: uppercase;
+        padding: 3px 10px; border-radius: 12px; letter-spacing: 0.5px;
+      }
+      .badge-live {
+        background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4);
+        color: #34d399; font-size: 10px; font-weight: 800; text-transform: uppercase;
+        padding: 3px 10px; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;
+      }
+      .pulse-dot { width: 7px; height: 7px; background: #34d399; border-radius: 50%; animation: pulse 2s infinite; }
+      @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+
+      .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .btn {
+        padding: 10px 18px; border-radius: 12px; font-size: 13px; font-weight: 700;
+        cursor: pointer; transition: all 0.2s; border: none; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 8px;
+      }
+      .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3); }
+      .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5); }
+      .btn-danger { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; box-shadow: 0 4px 16px rgba(220, 38, 38, 0.3); }
+      .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(220, 38, 38, 0.5); }
+      .btn-secondary { background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-color); color: var(--text-muted); }
+      .btn-secondary:hover { background: rgba(51, 65, 85, 0.8); color: #fff; }
+
+      /* ── KPI Grid ── */
+      .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
+      .kpi-card {
+        background: var(--bg-card); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color); border-radius: 18px; padding: 20px;
+        transition: all 0.2s ease; position: relative; overflow: hidden;
+      }
+      .kpi-card:hover { transform: translateY(-3px); border-color: var(--primary); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); }
+      .kpi-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .kpi-title { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.6px; }
+      .kpi-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+      .kpi-val { font-size: 28px; font-weight: 800; color: #fff; line-height: 1; }
+      .kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+      /* ── Navigation Tabs ── */
+      .tab-nav {
+        display: flex; gap: 8px; margin-bottom: 24px; overflow-x: auto; padding-bottom: 4px;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .tab-btn {
+        padding: 12px 20px; border-radius: 12px; background: transparent; border: 1px solid transparent;
+        color: var(--text-muted); font-size: 13px; font-weight: 700; cursor: pointer;
+        transition: all 0.2s; white-space: nowrap; display: flex; align-items: center; gap: 8px;
+      }
+      .tab-btn:hover { color: #fff; background: rgba(30, 41, 59, 0.5); }
+      .tab-btn.active {
+        background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.4);
+        color: #60a5fa; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+      }
+
+      /* ── Content Sections ── */
+      .tab-content { display: none; }
+      .tab-content.active { display: block; animation: fadeIn 0.3s ease-in-out; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+      .card-panel {
+        background: var(--bg-card); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+        border: 1px solid var(--border-color); border-radius: 20px; padding: 24px; margin-bottom: 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+      .panel-hdr { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+      .panel-title { font-size: 16px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
+
+      /* ── Tables ── */
+      .table-wrapper { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border-color); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+      th {
+        background: rgba(15, 23, 42, 0.95); padding: 12px 16px; color: var(--text-muted);
+        font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+        border-bottom: 1px solid var(--border-color); white-space: nowrap;
+      }
+      td { padding: 14px 16px; border-bottom: 1px solid rgba(51, 65, 85, 0.3); color: var(--text-bright); vertical-align: middle; }
+      tr:last-child td { border-bottom: none; }
+      tr:hover td { background: rgba(30, 41, 59, 0.4); }
+
+      /* ── Form Controls ── */
+      .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .field-group { display: flex; flex-direction: column; gap: 6px; }
+      .field-group label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+      .form-control {
+        background: rgba(9, 13, 22, 0.9); border: 1px solid var(--border-color);
+        border-radius: 10px; padding: 10px 14px; color: #fff; font-size: 13px; outline: none; transition: 0.2s;
+      }
+      .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+      /* ── Status Pills & Badges ── */
+      .badge-level {
+        display: inline-block; padding: 3px 10px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+      }
+      .level-error { background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #fca5a5; }
+      .level-warning { background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); color: #fcd34d; }
+      .level-info { background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); color: #93c5fd; }
+      .level-critical { background: rgba(225, 29, 72, 0.3); border: 1px solid rgba(225, 29, 72, 0.6); color: #fda4af; }
+
+      .mono { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; color: #94a3b8; }
+      .empty-state { padding: 32px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+      /* ── Toast Notifications ── */
+      #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+      .toast {
+        background: rgba(15, 23, 42, 0.95); border: 1px solid var(--border-color); color: #fff;
+        padding: 14px 20px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 10px;
+        animation: slideIn 0.3s ease-out; max-width: 380px;
+      }
+      @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+      .toast-success { border-color: rgba(16, 185, 129, 0.6); }
+      .toast-danger { border-color: rgba(239, 68, 68, 0.6); }
+    </style>
+  </head>
+  <body>
+    <div class="glow-orb orb-blue"></div>
+    <div class="glow-orb orb-purple"></div>
+
+    <div class="container">
+      <!-- ── Top Header ── -->
+      <div class="soc-header">
+        <div class="soc-brand">
+          <div class="soc-icon"><i class="ti ti-shield-lock"></i></div>
+          <div class="soc-title">
+            <h1>SecOps Command Center <span class="badge-soc">SOC ANALYST</span> <span class="badge-live"><span class="pulse-dot"></span> LIVE MONITORING</span></h1>
+            <p>Real-Time Threat Telemetry, SIEM Log Engine &amp; WAF Defense Console</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-secondary" onclick="exportSecurityLogs()"><i class="ti ti-download"></i> Export CSV Logs</button>
+          <button class="btn btn-secondary" onclick="refreshAllData()"><i class="ti ti-refresh"></i> Refresh All</button>
+          <button class="btn btn-danger" onclick="triggerEmergencyLockdown()"><i class="ti ti-lock"></i> Emergency Panic Mode</button>
+          <button class="btn btn-secondary" onclick="lockAndLeave()"><i class="ti ti-power"></i> Lock &amp; Exit</button>
+        </div>
+      </div>
+
+      <!-- ── KPI Summary Cards ── -->
+      <div class="panel-title" style="margin-bottom: 12px;"><i class="ti ti-chart-dots" style="color: #60a5fa;"></i> Log Analysis Summary</div>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Total events</span>
+            <div class="kpi-icon" style="background: rgba(59,130,246,0.15); color: #60a5fa;"><i class="ti ti-activity"></i></div>
+          </div>
+          <div class="kpi-val" id="kpi-total-events">{{ events_summary.total }}</div>
+          <div class="kpi-sub">All-time telemetry logs</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Critical &amp; Errors</span>
+            <div class="kpi-icon" style="background: rgba(239,68,68,0.15); color: #fca5a5;"><i class="ti ti-alert-triangle"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #fca5a5;" id="kpi-error-events">{{ events_summary.by_level.get('ERROR', 0) }}</div>
+          <div class="kpi-sub">Requires triage</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Active Banned IPs</span>
+            <div class="kpi-icon" style="background: rgba(245,158,11,0.15); color: #fcd34d;"><i class="ti ti-ban"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #fcd34d;" id="kpi-banned-ips">0</div>
+          <div class="kpi-sub">Application WAF blocks</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Quarantined Files</span>
+            <div class="kpi-icon" style="background: rgba(139,92,246,0.15); color: #c084fc;"><i class="ti ti-bug"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #c084fc;" id="kpi-quarantine">0</div>
+          <div class="kpi-sub">ClamAV scan findings</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-hdr">
+            <span class="kpi-title">Active Lockouts</span>
+            <div class="kpi-icon" style="background: rgba(225,29,72,0.15); color: #fda4af;"><i class="ti ti-user-x"></i></div>
+          </div>
+          <div class="kpi-val" style="color: #fda4af;">{{ active_lockouts|length }}</div>
+          <div class="kpi-sub">Brute-force blocks</div>
+        </div>
+      </div>
+
+      {% if events_summary.top_event_types %}
+      <div class="card-panel" style="margin-bottom: 24px;">
+        <div class="panel-title"><i class="ti ti-flame" style="color: #f59e0b;"></i> Top Event Types</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Event Type</th><th>Count</th></tr></thead>
+            <tbody>
+              {% for event_type, count in events_summary.top_event_types %}
+              <tr><td><strong class="mono">{{ event_type }}</strong></td><td>{{ count }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- ── Tab Navigation ── -->
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('overview', this)"><i class="ti ti-layout-dashboard"></i> Overview &amp; Posture</button>
+        <button class="tab-btn" onclick="switchTab('siem-logs', this)"><i class="ti ti-list-check"></i> SIEM Threat Logs</button>
+        <button class="tab-btn" onclick="switchTab('live-console', this)"><i class="ti ti-terminal-2"></i> Live Real-Time Console</button>
+        <button class="tab-btn" onclick="switchTab('waf-ip', this)"><i class="ti ti-shield-half"></i> WAF &amp; IP Controls</button>
+        <button class="tab-btn" onclick="switchTab('lockouts', this)"><i class="ti ti-lock-access"></i> Lockouts &amp; Risk Sessions</button>
+        <button class="tab-btn" onclick="switchTab('quarantine', this)"><i class="ti ti-virus"></i> Malware &amp; Quarantine</button>
+        <button class="tab-btn" onclick="switchTab('reports', this)"><i class="ti ti-file-text"></i> Compliance &amp; Reports</button>
+        <button class="tab-btn" onclick="switchTab('config', this)"><i class="ti ti-adjustments"></i> Operations &amp; Performance</button>
+      </div>
+
+      <!-- ── TAB 1: OVERVIEW & POSTURE ── -->
+      <div id="tab-overview" class="tab-content active">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-shield-check" style="color: #34d399;"></i> Security Posture Status</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Security Feature</th><th>Status</th><th>Enforcement Mechanism</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>HTTP Strict Transport Security (HSTS)</td>
+                  <td><span class="badge-level level-info">Enforced</span></td>
+                  <td>Dynamic header added to all HTTPS responses</td>
+                </tr>
+                <tr>
+                  <td>Content-Security-Policy (CSP)</td>
+                  <td><span class="badge-level level-info">Active</span></td>
+                  <td>Dynamic per-request SHA256 script nonce isolation</td>
+                </tr>
+                <tr>
+                  <td>Rate Limiter Engine</td>
+                  <td><span class="badge-level level-info">Operational</span></td>
+                  <td>{{ security_posture.rate_limit_backend }}</td>
+                </tr>
+                <tr>
+                  <td>Malware File Scanner (ClamAV)</td>
+                  <td>
+                    {% if security_posture.malware_scan_enabled %}
+                    <span class="badge-level level-info">Active</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Disabled</span>
+                    {% endif %}
+                  </td>
+                  <td>Automated upload stream inspection</td>
+                </tr>
+                <tr>
+                  <td>Cloudflare Turnstile CAPTCHA</td>
+                  <td>
+                    {% if security_posture.login_captcha_configured %}
+                    <span class="badge-level level-info">Active</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Not Configured</span>
+                    {% endif %}
+                  </td>
+                  <td>Challenged after repeated failed auth attempts</td>
+                </tr>
+                <tr>
+                  <td>Real-time Security Webhook Alerts</td>
+                  <td>
+                    {% if security_posture.email_alert_webhook_configured %}
+                    <span class="badge-level level-info">Active</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Not Configured</span>
+                    {% endif %}
+                  </td>
+                  <td>Fires on ERROR/CRITICAL security events</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-user-check" style="color: #60a5fa;"></i> Admin MFA Enrollment ({{ admin_mfa_status|length }})</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Username</th><th>Role</th><th>TOTP Multi-Factor Authentication</th></tr>
+              </thead>
+              <tbody>
+                {% for username, role, totp_enabled in admin_mfa_status %}
+                <tr>
+                  <td><strong>{{ username }}</strong></td>
+                  <td><span class="mono">{{ role }}</span></td>
+                  <td>
+                    {% if totp_enabled %}
+                    <span class="badge-level level-info">Enrolled</span>
+                    {% else %}
+                    <span class="badge-level level-warning">Pending</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 2: SIEM THREAT LOGS ── -->
+      <div id="tab-siem-logs" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-list-check" style="color: #60a5fa;"></i> Filterable Security Event Log Engine</div>
+            <button class="btn btn-primary" onclick="socEventsReload()"><i class="ti ti-search"></i> Apply Filters</button>
+          </div>
+
+          <div class="form-grid">
+            <div class="field-group">
+              <label>Log Level</label>
+              <select id="ev-level" class="form-control">
+                <option value="">All Levels</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARNING">WARNING</option>
+                <option value="INFO">INFO</option>
+              </select>
+            </div>
+
+            <div class="field-group">
+              <label>Event Type</label>
+              <input type="text" id="ev-event-type" class="form-control" placeholder="e.g. auth.failed" />
+            </div>
+
+            <div class="field-group">
+              <label>Identifier / User</label>
+              <input type="text" id="ev-identifier" class="form-control" placeholder="Search user ID..." />
+            </div>
+
+            <div class="field-group">
+              <label>Message Content</label>
+              <input type="text" id="ev-q" class="form-control" placeholder="Search text..." />
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Level</th>
+                  <th>Event Type</th>
+                  <th>Message</th>
+                  <th>Identifier</th>
+                  <th>Target IP</th>
+                  <th>Request Path</th>
+                </tr>
+              </thead>
+              <tbody id="ev-tbody">
+                <tr><td colspan="7" class="empty-state">Loading telemetry logs...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+            <button class="btn btn-secondary" onclick="socEventsPage(-1)"><i class="ti ti-chevron-left"></i> Previous</button>
+            <span id="ev-page-label" class="mono">Page 1</span>
+            <button class="btn btn-secondary" onclick="socEventsPage(1)">Next <i class="ti ti-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 3: WAF & IP CONTROLS ── -->
+      <div id="tab-waf-ip" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-ban" style="color: #f59e0b;"></i> Application Layer IP Ban Management</div>
+          </div>
+
+          <div class="form-grid">
+            <div class="field-group">
+              <label>IP Address</label>
+              <input type="text" id="ban-ip-input" class="form-control" placeholder="e.g. 192.168.1.100" />
+            </div>
+
+            <div class="field-group">
+              <label>Ban Reason</label>
+              <input type="text" id="ban-reason-input" class="form-control" placeholder="e.g. Repeated SQLi attempts" />
+            </div>
+
+            <div class="field-group">
+              <label>Duration (Minutes)</label>
+              <input type="number" id="ban-duration-input" class="form-control" placeholder="Blank = Permanent" min="1" />
+            </div>
+
+            <div class="field-group" style="justify-content: flex-end;">
+              <button class="btn btn-danger" onclick="socBanIp()"><i class="ti ti-shield-x"></i> Ban IP Address</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-list" style="color: #60a5fa;"></i> Active Banned IPs</div>
+            <button class="btn btn-secondary" onclick="loadBannedIps()"><i class="ti ti-refresh"></i> Refresh List</button>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Banned IP</th>
+                  <th>Reason</th>
+                  <th>Banned By</th>
+                  <th>Banned At</th>
+                  <th>Expires At</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="banned-ips-tbody">
+                <tr><td colspan="6" class="empty-state">Loading active IP bans...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 4: LOCKOUTS & SESSIONS ── -->
+      <div id="tab-lockouts" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-alert-triangle" style="color: #ef4444;"></i> Compromised Session Risk Monitor ({{ compromised_sessions|length }})</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Identifier</th><th>Attempt Type</th><th>Risk Score</th><th>Reason</th><th>Session ID</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {% if compromised_sessions %}
+                  {% for sid, identifier, attempt_type, score, last_reason, updated_at in compromised_sessions %}
+                  <tr>
+                    <td><strong>{{ identifier }}</strong></td>
+                    <td><span class="mono">{{ attempt_type }}</span></td>
+                    <td><span class="badge-level level-critical">{{ score }}</span></td>
+                    <td>{{ last_reason or '—' }}</td>
+                    <td><span class="mono">{{ sid[:12] }}…</span></td>
+                    <td>
+                      <button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px;" onclick="terminateSession('{{ sid }}')"><i class="ti ti-power"></i> Revoke</button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="6" class="empty-state">No sessions currently marked compromised.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-user-x" style="color: #f59e0b;"></i> Active Account Lockouts ({{ active_lockouts|length }})</div>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Identifier</th><th>Type</th><th>Failed Attempts</th><th>Locked Until</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {% if active_lockouts %}
+                  {% for identifier, attempt_type, failed_count, locked_until, last_attempt in active_lockouts %}
+                  <tr>
+                    <td><strong>{{ identifier }}</strong></td>
+                    <td><span class="mono">{{ attempt_type }}</span></td>
+                    <td><span class="badge-level level-warning">{{ failed_count }}</span></td>
+                    <td><span class="mono">{{ locked_until.strftime('%Y-%m-%d %H:%M:%S') if locked_until else '—' }}</span></td>
+                    <td>
+                      <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="unlockAccount('{{ identifier }}')"><i class="ti ti-lock-open"></i> Unlock</button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="5" class="empty-state">No active account lockouts.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 5: MALWARE & QUARANTINE ── -->
+      <div id="tab-quarantine" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-virus" style="color: #8b5cf6;"></i> ClamAV Malware Quarantine Stream</div>
+            <button class="btn btn-secondary" onclick="loadQuarantineFiles()"><i class="ti ti-refresh"></i> Refresh Quarantine</button>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>File ID</th><th>Original Filename</th><th>Uploader</th><th>Malware Signature</th><th>Status</th><th>Action</th></tr>
+              </thead>
+              <tbody id="quarantine-tbody">
+                <tr><td colspan="6" class="empty-state">Loading quarantine files...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 6: OPERATIONS & CONFIG ── -->
+      <div id="tab-config" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-clock" style="color: #60a5fa;"></i> Session Timeout Configuration</div>
+          </div>
+          <div class="form-grid">
+            <div class="field-group">
+              <label>Global Inactivity Timeout</label>
+              <select id="session-timeout-select" class="form-control">
+                <option value="15" {% if session_timeout_minutes == 15 %}selected{% endif %}>15 Minutes</option>
+                <option value="30" {% if session_timeout_minutes == 30 %}selected{% endif %}>30 Minutes</option>
+                <option value="60" {% if session_timeout_minutes == 60 %}selected{% endif %}>1 Hour</option>
+                <option value="120" {% if session_timeout_minutes == 120 %}selected{% endif %}>2 Hours</option>
+                <option value="480" {% if session_timeout_minutes == 480 %}selected{% endif %}>8 Hours</option>
+              </select>
+            </div>
+            <div class="field-group" style="justify-content: flex-end;">
+              <button class="btn btn-primary" onclick="saveSessionTimeout()"><i class="ti ti-device-floppy"></i> Save Timeout</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-database" style="color: #34d399;"></i> Database Connection Pool &amp; Metrics</div>
+            <button class="btn btn-secondary" onclick="loadPerformance()"><i class="ti ti-refresh"></i> Refresh Stats</button>
+          </div>
+          <div class="form-grid" id="perf-grid">
+            <div class="empty-state">Click Refresh Stats to load performance telemetry.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 7: LIVE REAL-TIME CONSOLE ── -->
+      <div id="tab-live-console" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-terminal-2" style="color: #38bdf8;"></i> High-Throughput Live Log Streamer</div>
+            <div style="display:flex; gap:10px;">
+              <input type="text" placeholder="Regex / Fuzzy Search Logs..." id="logSearchInput" style="background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:6px 12px; color:#fff; font-size:12px;" />
+              <button class="btn btn-primary" onclick="toggleLogStream()"><i class="ti ti-player-play"></i> Toggle Stream</button>
+            </div>
+          </div>
+          <div style="background:#070b14; border:1px solid rgba(255,255,255,0.1); border-radius:10px; padding:16px; font-family:monospace; font-size:12px; color:#4ade80; height:360px; overflow-y:auto; line-height:1.6;" id="liveLogConsole">
+            <span style="color:#64748b;">[CONSOLE READY] Click Toggle Stream to begin live SSE log feed.</span><br>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB 8: COMPLIANCE & REPORTS GENERATOR ── -->
+      <div id="tab-reports" class="tab-content">
+        <div class="card-panel">
+          <div class="panel-hdr">
+            <div class="panel-title"><i class="ti ti-file-text" style="color: #a78bfa;"></i> Automated Security &amp; Audit Report Generator</div>
+            <a href="/api/secops/export-logs" class="btn btn-primary" target="_blank"><i class="ti ti-download"></i> Export Security Log</a>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+            <div style="background:rgba(15,23,42,0.6); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+              <h4 style="color:#38bdf8; margin-bottom:12px;"><i class="ti ti-calendar-event"></i> Schedule Automated Reports</h4>
+              <div style="margin-bottom:12px;">
+                <label style="font-size:12px; color:#94a3b8; display:block; margin-bottom:4px;">REPORT TYPE</label>
+                <select style="width:100%; padding:8px; background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;">
+                  <option>SOC2 Type II Security Attestation</option>
+                  <option>ISO 27001 Access Audit Log</option>
+                  <option>GDPR Data Access Incident Summary</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:12px; color:#94a3b8; display:block; margin-bottom:4px;">RECURRING SCHEDULE</label>
+                <select style="width:100%; padding:8px; background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff;">
+                  <option>Daily at Midnight (23:59 PM)</option>
+                  <option>Weekly (Mondays at 00:00 AM)</option>
+                  <option>Monthly (1st of Month)</option>
+                </select>
+              </div>
+            </div>
+
+            <div style="background:rgba(15,23,42,0.6); padding:20px; border-radius:12px; border:1px solid rgba(255,255,255,0.08);">
+              <h4 style="color:#a78bfa; margin-bottom:12px;"><i class="ti ti-edit"></i> Incident Template Editor</h4>
+              <textarea style="width:100%; height:110px; background:#0f172a; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#cbd5e1; font-family:monospace; padding:10px; font-size:12px;" placeholder="Dynamic tags: {incident_summary}, {affected_nodes}, {mitigation_steps}">Incident Summary: {incident_summary}
+Affected Systems: {affected_nodes}
+Mitigation Status: Resolved via WAF auto-quarantine.</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+
+    <script>
+      let currentPage = 1;
+
+      function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.innerHTML = `<i class="ti ti-${type === 'success' ? 'circle-check' : 'alert-circle'}"></i> <span>${message}</span>`;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+      }
+
+      function switchTab(tabId, btn) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        btn.classList.add('active');
+      }
+
+      function lockAndLeave() {
+        fetch('/sp_admin/login', { method: 'GET' }).finally(() => {
+          window.location.href = '/sp_admin/login';
+        });
+      }
+
+      function refreshAllData() {
+        loadBannedIps();
+        socEventsReload();
+        loadQuarantineFiles();
+        showToast('SecOps data updated', 'success');
+      }
+
+      /* ── Live Log Console SSE Stream ── */
+      let _logEventSource = null;
+      let _logRunning = false;
+
+      function _logColor(line) {
+        if (line.includes('ERROR') || line.includes('CRITICAL') || line.includes('FAIL')) return '#f87171';
+        if (line.includes('WARNING') || line.includes('WARN')) return '#fbbf24';
+        if (line.includes('AUTH') || line.includes('LOGIN')) return '#60a5fa';
+        if (line.includes('WAF') || line.includes('BAN')) return '#f97316';
+        return '#4ade80';
+      }
+
+      function _appendLog(text) {
+        const console = document.getElementById('liveLogConsole');
+        const filter = (document.getElementById('logSearchInput').value || '').toLowerCase();
+        if (filter && !text.toLowerCase().includes(filter)) return;
+        const ts = new Date().toLocaleTimeString();
+        const color = _logColor(text);
+        const span = document.createElement('span');
+        span.style.color = color;
+        span.textContent = `[${ts}] ${text}`;
+        console.appendChild(span);
+        console.appendChild(document.createElement('br'));
+        console.scrollTop = console.scrollHeight;
+        // cap at 500 lines
+        while (console.childElementCount > 1000) { console.removeChild(console.firstChild); }
+      }
+
+      function toggleLogStream() {
+        const btn = document.querySelector('#tab-live-console .btn-primary');
+        if (_logRunning) {
+          if (_logEventSource) { _logEventSource.close(); _logEventSource = null; }
+          _logRunning = false;
+          if (btn) { btn.innerHTML = '<i class="ti ti-player-play"></i> Start Stream'; btn.style.background = ''; }
+          _appendLog('--- Stream paused ---');
+        } else {
+          _logRunning = true;
+          if (btn) { btn.innerHTML = '<i class="ti ti-player-stop"></i> Stop Stream'; btn.style.background = '#ef4444'; }
+          _appendLog('--- Connecting to /api/session/risk-stream ---');
+          try {
+            _logEventSource = new EventSource('/api/session/risk-stream');
+            _logEventSource.onmessage = function(e) {
+              try {
+                const d = JSON.parse(e.data);
+                const msg = d.event || d.message || JSON.stringify(d);
+                _appendLog(msg);
+              } catch(_) { _appendLog(e.data); }
+            };
+            _logEventSource.onerror = function() {
+              _appendLog('[SSE] Connection error or stream ended.');
+            };
+          } catch(err) {
+            _appendLog('[ERROR] SSE not supported: ' + err.message);
+          }
+        }
+      }
+
+      /* ── Banned IPs ── */
+      function loadBannedIps() {
+        fetch('/api/security/soc/banned-ips')
+          .then(r => r.json())
+          .then(data => {
+            const tbody = document.getElementById('banned-ips-tbody');
+            if (!data.ok || !data.banned_ips || data.banned_ips.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No active IP bans found.</td></tr>';
+              document.getElementById('kpi-banned-ips').innerText = '0';
+              return;
+            }
+            document.getElementById('kpi-banned-ips').innerText = data.banned_ips.length;
+            tbody.innerHTML = data.banned_ips.map(item => `
+              <tr>
+                <td><strong class="mono" style="color:#fcd34d;">${item.ip}</strong></td>
+                <td>${item.reason || '—'}</td>
+                <td>${item.banned_by || 'system'}</td>
+                <td><span class="mono">${item.banned_at || '—'}</span></td>
+                <td><span class="mono">${item.expires_at || 'Permanent'}</span></td>
+                <td>
+                  <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 11px;" onclick="socUnbanIp('${item.ip}')"><i class="ti ti-trash"></i> Unban</button>
+                </td>
+              </tr>
+            `).join('');
+          })
+          .catch(() => {
+            document.getElementById('banned-ips-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load banned IPs.</td></tr>';
+          });
+      }
+
+      function socBanIp() {
+        const ip = document.getElementById('ban-ip-input').value.trim();
+        const reason = document.getElementById('ban-reason-input').value.trim();
+        const duration = document.getElementById('ban-duration-input').value.trim();
+        if (!ip) { showToast('IP address is required', 'danger'); return; }
+
+        fetch('/api/security/soc/ban-ip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip, reason, duration_minutes: duration })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(`IP ${ip} banned successfully`, 'success');
+            document.getElementById('ban-ip-input').value = '';
+            document.getElementById('ban-reason-input').value = '';
+            loadBannedIps();
+          } else {
+            showToast(res.msg || 'Failed to ban IP', 'danger');
+          }
+        });
+      }
+
+      function socUnbanIp(ip) {
+        fetch('/api/security/soc/unban-ip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ip })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(`IP ${ip} unbanned`, 'success');
+            loadBannedIps();
+          } else {
+            showToast(res.msg || 'Failed to unban IP', 'danger');
+          }
+        });
+      }
+
+      /* ── SIEM Logs ── */
+      function socEventsReload() {
+        currentPage = 1;
+        fetchEvents();
+      }
+
+      function socEventsPage(delta) {
+        currentPage = Math.max(1, currentPage + delta);
+        fetchEvents();
+      }
+
+      function fetchEvents() {
+        const level = document.getElementById('ev-level').value;
+        const type = document.getElementById('ev-event-type').value.trim();
+        const identifier = document.getElementById('ev-identifier').value.trim();
+        const q = document.getElementById('ev-q').value.trim();
+
+        const url = `/api/security/soc/events?page=${currentPage}&level=${encodeURIComponent(level)}&event_type=${encodeURIComponent(type)}&identifier=${encodeURIComponent(identifier)}&q=${encodeURIComponent(q)}`;
+
+        fetch(url)
+          .then(r => r.json())
+          .then(data => {
+            const tbody = document.getElementById('ev-tbody');
+            if (!data.ok || !data.events || data.events.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No matching security events found.</td></tr>';
+              document.getElementById('ev-page-label').innerText = `Page ${currentPage}`;
+              return;
+            }
+            document.getElementById('ev-page-label').innerText = `Page ${data.page} of ${data.pages} (${data.total} total)`;
+            tbody.innerHTML = data.events.map(ev => `
+              <tr>
+                <td><span class="mono">${ev.created_at || '—'}</span></td>
+                <td><span class="badge-level level-${(ev.level || 'info').toLowerCase()}">${ev.level}</span></td>
+                <td><strong class="mono">${ev.event_type}</strong></td>
+                <td>${ev.message || ''}</td>
+                <td>${ev.identifier || '—'}</td>
+                <td><span class="mono">${ev.ip || '—'}</span></td>
+                <td><span class="mono">${ev.path || '—'}</span></td>
+              </tr>
+            `).join('');
+          });
+      }
+
+      function exportSecurityLogs() {
+        const level = document.getElementById('ev-level').value;
+        const type = document.getElementById('ev-event-type').value.trim();
+        const identifier = document.getElementById('ev-identifier').value.trim();
+        window.location.href = `/api/secops/export-logs?level=${encodeURIComponent(level)}&event_type=${encodeURIComponent(type)}&identifier=${encodeURIComponent(identifier)}`;
+      }
+
+      /* ── Account Unlock & Session Revoke ── */
+      function unlockAccount(identifier) {
+        fetch('/api/secops/unlock-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(res.msg, 'success');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(res.msg || 'Unlock failed', 'danger');
+          }
+        });
+      }
+
+      function terminateSession(sid) {
+        fetch('/api/secops/terminate-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sid })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(res.msg, 'success');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(res.msg || 'Revoke failed', 'danger');
+          }
+        });
+      }
+
+      /* ── Quarantine Files ── */
+      function loadQuarantineFiles() {
+        fetch('/api/secops/quarantine/files')
+          .then(r => r.json())
+          .then(data => {
+            const tbody = document.getElementById('quarantine-tbody');
+            if (!data.ok || !data.files || data.files.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No quarantined files detected.</td></tr>';
+              document.getElementById('kpi-quarantine').innerText = '0';
+              return;
+            }
+            document.getElementById('kpi-quarantine').innerText = data.files.length;
+            tbody.innerHTML = data.files.map(f => `
+              <tr>
+                <td class="mono">#${f.id || f.file_id}</td>
+                <td><strong>${f.filename}</strong></td>
+                <td>${f.uploader || 'anonymous'}</td>
+                <td><span class="badge-level level-critical">${f.signature || 'SUSPICIOUS_PAYLOAD'}</span></td>
+                <td><span class="badge-level level-warning">${f.status || 'QUARANTINED'}</span></td>
+                <td>
+                  <button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px;" onclick="purgeQuarantineFile('${f.id || f.file_id}')"><i class="ti ti-trash"></i> Purge</button>
+                </td>
+              </tr>
+            `).join('');
+          });
+      }
+
+      function purgeQuarantineFile(file_id) {
+        fetch('/api/secops/quarantine/purge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ file_id })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(res.msg, 'success');
+            loadQuarantineFiles();
+          } else {
+            showToast(res.msg || 'Purge failed', 'danger');
+          }
+        });
+      }
+
+      /* ── Session Timeout & Controls ── */
+      function saveSessionTimeout() {
+        const timeout = document.getElementById('session-timeout-select').value;
+        fetch('/api/secops/session-timeout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeout })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast(`Session timeout set to ${timeout} minutes`, 'success');
+          } else {
+            showToast(res.msg || 'Failed to save timeout', 'danger');
+          }
+        });
+      }
+
+      function triggerEmergencyLockdown() {
+        if (!confirm('Are you sure you want to trigger Emergency Panic Mode? This will enforce immediate 5-minute session timeouts across the entire platform.')) return;
+
+        fetch('/api/secops/emergency-lockdown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enable: true })
+        })
+        .then(r => r.json())
+        .then(res => {
+          if (res.ok) {
+            showToast('Emergency Panic Mode ENABLED', 'danger');
+          }
+        });
+      }
+
+      function loadPerformance() {
+        fetch('/api/secops/performance')
+          .then(r => r.json())
+          .then(data => {
+            const grid = document.getElementById('perf-grid');
+            if (data.ok) {
+              grid.innerHTML = `
+                <div class="kpi-card">
+                  <div class="kpi-title">Database Pool Status</div>
+                  <div class="kpi-val">${data.db_healthy ? 'HEALTHY' : 'DEGRADED'}</div>
+                  <div class="kpi-sub">Active: ${data.db_pool.used || 0} / Max: ${data.db_pool.max || 20}</div>
+                </div>
+                <div class="kpi-card">
+                  <div class="kpi-title">Test Coverage Gate</div>
+                  <div class="kpi-val">${data.coverage_gate_pct}%</div>
+                  <div class="kpi-sub">Required CI threshold</div>
+                </div>
+              `;
+            }
+          });
+      }
+
+      // Initial Load
+      document.addEventListener('DOMContentLoaded', () => {
+        loadBannedIps();
+        fetchEvents();
+        loadQuarantineFiles();
+      });
+    </script>
+  </body>
+</html>

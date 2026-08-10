@@ -5,8 +5,8 @@ Signup is open by default now (no shared-secret gate) -- Turnstile
 protects it instead, and turnstile_enabled() is False in tests (no
 TURNSTILE_SITE_KEY/SECRET_KEY configured), so the captcha check no-ops
 here exactly like the rest of the suite's login-flow tests already rely
-on. Plan selection defaults to "starter" and is validated server-side
-against utils.plan_limits.PLAN_TIERS.
+on. Billing is flat per-employee (utils.plan_limits.PER_EMPLOYEE_PAISE)
+-- there's no plan tier to select or validate anymore.
 
 The full provisioning path creates a real Postgres schema via
 create_tenant_schema() + init_tenant_db() (which runs the entire init_db()
@@ -37,14 +37,10 @@ class TestSignupPage:
         assert resp.status_code == 200
         assert b"Create Organisation" in resp.data
 
-    def test_page_lists_all_three_plan_tiers(self, client):
-        # Display names are Basic/Medium/Prime (utils/plan_limits.py's
-        # PLAN_TIERS) even though the internal plan keys stay
-        # starter/growth/enterprise.
+    def test_page_shows_flat_per_employee_rate(self, client):
+        import utils.plan_limits as plan_limits
         resp = client.get("/create_org")
-        assert b"Basic" in resp.data
-        assert b"Medium" in resp.data
-        assert b"Prime" in resp.data
+        assert plan_limits.format_price_inr(plan_limits.PER_EMPLOYEE_PAISE).encode() in resp.data
 
 
 class TestGetStartedPage:
@@ -103,15 +99,6 @@ class TestSignupValidation:
             "admin_email": "admin@acme.test",
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
-
-    def test_unknown_plan_rejected(self, client):
-        resp = client.post("/create_org", data={
-            "company_name": "Acme", "subdomain": "acme-badplan",
-            "admin_username": "admin", "admin_password": "password123",
-            "admin_email": "admin@acme.test", "plan": "not-a-real-plan",
-        }, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers.get("Location") == "/create_org"
 
     @pytest.mark.parametrize("subdomain", [
         "hrms", "www", "api", "admin", "master", "super_admin",
@@ -208,7 +195,6 @@ class TestFullProvisioning:
                 "admin_username": "e2e_admin",
                 "admin_password": "password123",
                 "admin_email": "e2e@test.local",
-                "plan": "growth",
             }, follow_redirects=False)
             # Success now renders the org_created.html page directly (with
             # the tenant's dedicated portal link) instead of redirecting to
@@ -230,7 +216,8 @@ class TestFullProvisioning:
             assert row is not None, "tenant was not registered in att_master.tenants"
             assert row[0] == schema_name
             assert row[1] == "active"
-            assert row[2] == "growth"
+            import utils.plan_limits as plan_limits
+            assert row[2] == plan_limits.PLAN_LABEL  # audit-trail value only, no live tier behind it
 
             cur.execute(f'SELECT username FROM "{schema_name}".admin_users WHERE username=%s', ("e2e_admin",))
             assert cur.fetchone() is not None, "admin user was not seeded into the new tenant schema"
@@ -238,7 +225,9 @@ class TestFullProvisioning:
         finally:
             _drop_schema(db_engine, schema_name)
 
-    def test_default_plan_is_starter_when_not_selected(self, client, db_engine):
+    def test_plan_field_in_post_is_ignored(self, client, db_engine):
+        # A stray "plan" field (e.g. from an old cached client) must not
+        # affect provisioning -- billing is purely employee-count-based now.
         from app import init_master_db
         init_master_db()
 
@@ -249,12 +238,15 @@ class TestFullProvisioning:
             resp = client.post("/create_org", data={
                 "company_name": "Default Plan Org", "subdomain": subdomain,
                 "admin_username": "dp_admin", "admin_password": "password123",
-                "admin_email": "dp@test.local",
+                "admin_email": "dp@test.local", "plan": "not-a-real-plan",
             }, follow_redirects=False)
             assert resp.status_code == 200
+            import utils.plan_limits as plan_limits
             cur = db_engine.cursor()
-            cur.execute("SELECT plan FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
-            assert cur.fetchone()[0] == "starter"
+            cur.execute("SELECT plan, status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            row = cur.fetchone()
+            assert row[0] == plan_limits.PLAN_LABEL
+            assert row[1] == "active"
             cur.close()
         finally:
             _drop_schema(db_engine, schema_name)

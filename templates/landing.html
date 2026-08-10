@@ -125,6 +125,23 @@
     .closing-cta h2 { font-size: clamp(1.6rem, 3vw, 2.3rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 1rem; }
     .closing-cta p { color: var(--muted); margin-bottom: 2rem; max-width: 480px; margin-left: auto; margin-right: auto; }
 
+    /* REQUEST INFO */
+    .info-section { background: var(--navy-mid); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 5rem 1.5rem; }
+    .info-inner { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; align-items: center; }
+    .info-copy h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.9rem; }
+    .info-copy p { color: var(--muted); font-size: 0.95rem; line-height: 1.65; }
+    .info-form { background: var(--navy-light); border: 1px solid var(--border); border-radius: 18px; padding: 1.8rem; }
+    .info-field { margin-bottom: 1rem; }
+    .info-field label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.4rem; }
+    .info-field input, .info-field textarea { width: 100%; padding: 0.7rem 0.85rem; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: inherit; font-size: 0.9rem; outline: none; transition: border-color 0.15s; resize: vertical; }
+    .info-field input:focus, .info-field textarea:focus { border-color: #3B82F6; }
+    .info-submit { width: 100%; padding: 0.8rem; border: none; border-radius: 10px; background: linear-gradient(135deg, #2563EB, #7C3AED); color: #fff; font-size: 0.9rem; font-weight: 700; cursor: pointer; margin-top: 0.3rem; transition: opacity 0.15s; }
+    .info-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .info-status { font-size: 0.82rem; margin-top: 0.8rem; text-align: center; display: none; }
+    .info-status.ok { color: #6EE7B7; display: block; }
+    .info-status.err { color: #FCA5A5; display: block; }
+    @media (max-width: 780px) { .info-inner { grid-template-columns: 1fr; } }
+
     /* FOOTER */
     footer { border-top: 1px solid var(--border); padding: 2.4rem 1.5rem; }
     .footer-inner { max-width: 1100px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
@@ -153,6 +170,7 @@
       <a href="#features">Features</a>
       <a href="#how-it-works">How it works</a>
       <a href="#pricing">Pricing</a>
+      <a href="#contact">Talk to Us</a>
     </div>
     <div class="navbar-cta">
       <a href="/get-started" class="navbar-login">Login</a>
@@ -236,8 +254,8 @@
         </div>
         <div class="how-step">
           <div class="num">2</div>
-          <h4>Choose a plan</h4>
-          <p>See live pricing as you set your employee count — Basic, Medium or Prime.</p>
+          <h4>Add your team</h4>
+          <p>See live pricing update as you set your employee count — one flat rate, no tiers.</p>
         </div>
         <div class="how-step">
           <div class="num">3</div>
@@ -256,29 +274,48 @@
   <!-- PRICING PREVIEW -->
   <section class="pricing-preview" id="pricing">
     <div class="section-label">
-      <div class="eyebrow">Plans</div>
-      <h2>A plan for every stage of growth</h2>
-      <p>Every plan includes the core attendance, leave and payroll suite. Higher tiers unlock stronger authentication and security tooling.</p>
+      <div class="eyebrow">Pricing</div>
+      <h2>One flat rate. Every feature included.</h2>
+      <p>No tiers, no feature paywalls — face/fingerprint check-in, payroll, onboarding and everything else is included for every company, at every size.</p>
     </div>
-    <div class="pp-grid">
-      <div class="pp-card basic">
-        <div class="pp-name">{{ plan_tiers.starter.display_name }}</div>
-        <div class="pp-price">{{ plan_tiers.starter.base_price_paise | plan_price }}<span>/mo · up to {{ plan_tiers.starter.employee_limit }} employees</span></div>
-        <div class="pp-desc">{{ plan_tiers.starter.description }}</div>
-        <a href="/create_org?plan=starter" class="pp-cta">Get Started</a>
-      </div>
-      <div class="pp-card growth">
-        <div class="pp-name">{{ plan_tiers.growth.display_name }}</div>
-        <div class="pp-price">{{ plan_tiers.growth.base_price_paise | plan_price }}<span>/mo · up to {{ plan_tiers.growth.employee_limit }} employees</span></div>
-        <div class="pp-desc">{{ plan_tiers.growth.description }}</div>
-        <a href="/create_org?plan=growth" class="pp-cta">Get Started</a>
-      </div>
+    <div class="pp-grid" style="max-width:420px;margin:0 auto;">
       <div class="pp-card enterprise">
-        <div class="pp-name">{{ plan_tiers.enterprise.display_name }}</div>
-        <div class="pp-price">{{ plan_tiers.enterprise.base_price_paise | plan_price }}<span>/mo · unlimited employees</span></div>
-        <div class="pp-desc">{{ plan_tiers.enterprise.description }}</div>
-        <a href="/create_org?plan=enterprise" class="pp-cta">Get Started</a>
+        <div class="pp-name">Per Employee</div>
+        <div class="pp-price">{{ per_employee_paise | plan_price }}<span>/employee/month</span></div>
+        <div class="pp-desc">No minimum charge, no employee cap. Your bill scales exactly with your headcount — add or remove people any time.</div>
+        <a href="/create_org" class="pp-cta">Get Started</a>
       </div>
+    </div>
+  </section>
+
+  <!-- REQUEST INFO -->
+  <section class="info-section" id="contact">
+    <div class="info-inner">
+      <div class="info-copy">
+        <div class="eyebrow">Not Ready to Self-Register?</div>
+        <h2>Talk to us first</h2>
+        <p>Have questions about the rollout, need a walkthrough for your team, or want someone to set your company up for you? Leave your details and we'll follow up directly — no commitment.</p>
+      </div>
+      <form class="info-form" id="leadForm">
+        <div class="info-field">
+          <label for="leadName">Name</label>
+          <input type="text" id="leadName" name="name" placeholder="Jane Doe" required />
+        </div>
+        <div class="info-field">
+          <label for="leadEmail">Email</label>
+          <input type="email" id="leadEmail" name="email" placeholder="jane@company.com" required />
+        </div>
+        <div class="info-field">
+          <label for="leadCompany">Company (optional)</label>
+          <input type="text" id="leadCompany" name="company_name" placeholder="Acme Corp" />
+        </div>
+        <div class="info-field">
+          <label for="leadMessage">What would you like to know?</label>
+          <textarea id="leadMessage" name="message" rows="3" placeholder="e.g. Can someone walk me through pricing for 40 employees?"></textarea>
+        </div>
+        <button type="submit" class="info-submit" id="leadSubmitBtn">Request Info</button>
+        <div class="info-status" id="leadStatus"></div>
+      </form>
     </div>
   </section>
 
@@ -300,5 +337,50 @@
     </div>
   </footer>
 
+  <script>
+    document.getElementById('leadForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var form = e.target;
+      var btn = document.getElementById('leadSubmitBtn');
+      var status = document.getElementById('leadStatus');
+      status.className = 'info-status';
+      status.textContent = '';
+
+      var payload = {
+        name: form.name.value.trim(),
+        email: form.email.value.trim(),
+        company_name: form.company_name.value.trim(),
+        message: form.message.value.trim(),
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Sending…';
+
+      fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          btn.disabled = false;
+          btn.textContent = 'Request Info';
+          if (!data.ok) {
+            status.textContent = data.msg || 'Something went wrong. Please try again.';
+            status.className = 'info-status err';
+            return;
+          }
+          status.textContent = data.msg || "Thanks! We'll be in touch shortly.";
+          status.className = 'info-status ok';
+          form.reset();
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.textContent = 'Request Info';
+          status.textContent = 'Could not reach the server. Please try again.';
+          status.className = 'info-status err';
+        });
+    });
+  </script>
 </body>
 </html>

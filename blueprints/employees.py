@@ -13,7 +13,6 @@ from database import get_db_connection, transaction
 from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
 from utils.helpers import _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id
-from utils.plan_limits import check_employee_limit
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import _td_to_time
@@ -131,12 +130,6 @@ def admin_action():
                     if sfx.isdigit():
                         max_seq = max(max_seq, int(sfx))
                 emp_id = f"{prefix}{max_seq + 1:0{pad_width}d}"
-        _plan_ok, _plan_err = check_employee_limit(g.tenant_db)
-        if not _plan_ok:
-            flash(_plan_err, "error")
-            cursor.close()
-            db.close()
-            return redirect("/admin")
         _img_ok, _img_err = _validate_image_file(file)
         if not _img_ok:
             flash(_img_err, "error")
@@ -988,13 +981,6 @@ def add_employee_page():
     file = request.files.get("face")
     if not file or not file.filename:
         flash("A face photo is required.", "error")
-        cursor.close()
-        db.close()
-        return redirect("/employees")
-
-    _plan_ok, _plan_err = check_employee_limit(g.tenant_db)
-    if not _plan_ok:
-        flash(_plan_err, "error")
         cursor.close()
         db.close()
         return redirect("/employees")
@@ -2025,9 +2011,6 @@ def api_register_employee():
         return jsonify({"ok": False, "msg": "name, emp_id and face image required"}), 400
     if not validate_emp_id(emp_id):
         return jsonify({"ok": False, "msg": "emp_id may only contain letters, digits, hyphens and underscores"}), 400
-    _plan_ok, _plan_err = check_employee_limit(g.tenant_db)
-    if not _plan_ok:
-        return jsonify({"ok": False, "msg": _plan_err}), 403
     # Validate extension, MIME type, magic bytes and size before writing to disk.
     ok, err = _validate_image_file(file)
     if not ok:

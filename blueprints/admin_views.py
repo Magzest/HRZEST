@@ -36,7 +36,6 @@ from utils.helpers import (
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
     _validate_image_file,
 )
-from utils.plan_limits import check_feature_allowed, set_tenant_plan, PLAN_TIERS
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
     get_or_create_admin_totp_secret, mark_totp_enabled, verify_totp_code, totp_qr_data_uri,
@@ -60,19 +59,6 @@ _TOGGLE_LABEL_MAP = {
     "face": "Face Recognition",
     "location": "Location Verification",
     "password": "Password Login",
-}
-# Maps toggle_auth_method()'s `method` values to utils/plan_limits.py's
-# tier feature keys. "password" is deliberately absent -- password login
-# stays global/unrestricted regardless of plan (see the _cfs_map comment
-# in toggle_auth_method below).
-_TOGGLE_PLAN_FEATURE_MAP = {
-    "fingerprint": "fingerprint", "qr": "qr", "face": "face", "location": "geo",
-}
-# Same idea for toggle_feature()'s `feature` values.
-_TOGGLE_FEATURE_PLAN_MAP = {
-    "face_auth_enabled": "face", "geo_enabled": "geo", "qr_enabled": "qr",
-    "pin_enabled": "pin", "fingerprint_enabled": "fingerprint",
-    "biometric_enabled": "biometric",
 }
 
 
@@ -1025,16 +1011,6 @@ def toggle_auth_method():
         return redirect("/settings?tab=attendance")
     column = _TOGGLE_COLUMN_MAP[method]
     label = _TOGGLE_LABEL_MAP[method]
-    # Turning a method OFF is always allowed regardless of plan -- only
-    # enabling something new is a billing decision. "password" isn't a
-    # plan_limits feature key (password auth stays global, see _cfs_map
-    # below), so it's never plan-gated.
-    plan_feature_key = _TOGGLE_PLAN_FEATURE_MAP.get(method)
-    if enabled and plan_feature_key:
-        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, plan_feature_key)
-        if not _plan_ok:
-            flash(_plan_err, "danger")
-            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     # Map old column names to company_feature_settings column names
     _cfs_map = {"face_enabled": "face_auth_enabled", "location_enabled": "geo_enabled",
@@ -1062,11 +1038,6 @@ def toggle_auth_method():
 @role_required("admin")
 def toggle_fingerprint():
     enabled = request.form.get("enabled", "0") == "1"
-    if enabled:
-        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, "fingerprint")
-        if not _plan_ok:
-            flash(_plan_err, "danger")
-            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     if active_cid:
         _upsert_co_feature(active_cid, "fingerprint_enabled", 1 if enabled else 0)
@@ -1158,11 +1129,6 @@ def toggle_feature():
     cs_col = _CS_COL_MAP.get(feature)
     if not cs_col:
         return jsonify({"ok": False, "error": "unknown feature"}), 400
-    plan_feature_key = _TOGGLE_FEATURE_PLAN_MAP.get(feature)
-    if value and plan_feature_key:
-        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, plan_feature_key)
-        if not _plan_ok:
-            return jsonify({"ok": False, "error": _plan_err}), 403
     if active_cid:
         _upsert_co_feature(active_cid, cs_col, value)
     else:
@@ -2369,27 +2335,6 @@ def api_org_chart_data():
     tree = [sort_tree(r) for r in roots]
     return jsonify({"ok": True, "tree": tree, "total": len(emp_map)})
 
-
-# ── Self-Service Plan Upgrade Endpoint ─────────────────────────────────────────
-@admin_views_bp.route("/api/admin/upgrade_plan", methods=["POST"])
-@admin_required
-def api_upgrade_plan():
-    """Self-service endpoint for admins to change their tenant's subscription
-    plan (no payment gateway yet -- see utils/plan_limits.py module
-    docstring; this is a straight write, not tied to any billing charge)."""
-    data = request.get_json() or {}
-    new_plan = data.get("plan", "").strip().lower()
-    if not new_plan:
-        new_plan = request.form.get("plan", "").strip().lower()
-
-    if new_plan not in PLAN_TIERS:
-        return jsonify({"ok": False, "msg": f"Invalid plan '{new_plan}'. "
-                        f"Must be one of: {', '.join(PLAN_TIERS)}."}), 400
-
-    set_tenant_plan(g.tenant_db, new_plan)
-    msg = f"Plan successfully updated to {PLAN_TIERS[new_plan]['display_name']}."
-    flash(msg, "success")
-    return jsonify({"ok": True, "msg": msg, "plan": new_plan})
 
 
 # ── Instant SMTP Connection Test Endpoint ─────────────────────────────────────

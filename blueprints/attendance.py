@@ -25,7 +25,6 @@ from utils.attendance_utils import (
     is_within_range, is_within_office_range,
     check_attendance_lockout, record_attendance_failure, clear_attendance_lockout,
 )
-from utils.plan_limits import get_tenant_plan, plan_rank
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified
 import utils.config as cfg
@@ -1227,19 +1226,16 @@ def attendance():
         err_msg = "Employee ID is required." if auth_combo == "fingerprint_only" else "No QR code data received."
         return jsonify({"ok": False, "msg": err_msg})
 
-    # Attendance auto-lockout (Medium/Prime plans only, utils/plan_limits.py's
-    # "attendance_lockout" feature) -- 4 failed identity-mismatch attempts
-    # (face mismatch / fingerprint verify failure) locks online check-in for
-    # this employee/day; only an admin manually marking attendance
+    # Attendance auto-lockout -- 4 failed identity-mismatch attempts (face
+    # mismatch / fingerprint verify failure) locks online check-in for this
+    # employee/day; only an admin manually marking attendance
     # (correct_attendance/bulk_mark_attendance) clears it. Checked before any
     # biometric work so a locked-out employee doesn't burn a face-recognition
-    # pass for nothing.
-    _lockout_gated = plan_rank(get_tenant_plan(g.tenant_db)) >= plan_rank("growth")
+    # pass for nothing. Available to every tenant.
     _today = datetime.date.today()
-    if _lockout_gated:
-        _locked, _lock_msg = check_attendance_lockout(emp_id, _today)
-        if _locked:
-            return jsonify({"ok": False, "msg": _lock_msg}), 403
+    _locked, _lock_msg = check_attendance_lockout(emp_id, _today)
+    if _locked:
+        return jsonify({"ok": False, "msg": _lock_msg}), 403
 
     auth_cfg = get_auth_config()
 
@@ -1439,10 +1435,9 @@ def api_checkin():
     lon = data.get("lon")
     if not emp_id:
         return jsonify({"ok": False, "msg": "employee_id required"}), 400
-    if plan_rank(get_tenant_plan(g.tenant_db)) >= plan_rank("growth"):
-        _locked, _lock_msg = check_attendance_lockout(emp_id, datetime.date.today())
-        if _locked:
-            return jsonify({"ok": False, "msg": _lock_msg}), 403
+    _locked, _lock_msg = check_attendance_lockout(emp_id, datetime.date.today())
+    if _locked:
+        return jsonify({"ok": False, "msg": _lock_msg}), 403
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(

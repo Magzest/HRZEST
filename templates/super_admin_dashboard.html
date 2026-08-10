@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Platform Admin — SaaS Operator Console</title>
+    <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <style>
+      :root {
+        --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.85);
+        --border-color: rgba(51, 65, 85, 0.6);
+        --primary: #6366f1; --danger: #ef4444; --warning: #f59e0b; --success: #10b981;
+        --text-bright: #f8fafc; --text-muted: #94a3b8; --text-dim: #64748b;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+      body { background: var(--bg-main); color: var(--text-bright); min-height: 100vh; padding: 24px; }
+      .container { max-width: 1280px; margin: 0 auto; }
+      .header {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+        padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: 16px; margin-bottom: 24px;
+      }
+      .header h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+      .header h1 i { color: var(--primary); }
+      .logout-btn {
+        background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5;
+        padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+      .alert {
+        padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 18px;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .alert-error { background: rgba(239, 68, 68, .15); border: 1px solid rgba(239, 68, 68, .35); color: #fca5a5; }
+      .alert-success { background: rgba(16, 185, 129, .15); border: 1px solid rgba(16, 185, 129, .35); color: #6ee7b7; }
+      .card {
+        background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px;
+        padding: 20px; overflow-x: auto;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th {
+        text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 11px;
+        text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border-color);
+      }
+      td { padding: 12px; border-bottom: 1px solid rgba(51, 65, 85, .3); vertical-align: middle; }
+      .co-name { font-weight: 700; }
+      .subdomain { color: var(--text-muted); font-size: 12px; }
+      .bill { font-variant-numeric: tabular-nums; font-weight: 700; }
+      .badge {
+        display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+        text-transform: uppercase;
+      }
+      .badge-active { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+      .badge-suspended { background: rgba(239, 68, 68, .15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .35); }
+      .badge-payment-online { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+      .badge-payment-manual { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
+      .badge-payment-trial { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
+      .mini-btn {
+        background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 5px 8px; font-size: 12px; font-weight: 600; cursor: pointer;
+      }
+      .mini-btn-danger { border-color: rgba(239, 68, 68, .4); color: #fca5a5; }
+      .mini-btn-success { border-color: rgba(16, 185, 129, .4); color: #6ee7b7; }
+      .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
+      .new-co-btn {
+        background: rgba(99, 102, 241, .15); border: 1px solid rgba(99, 102, 241, .4); color: #a5b4fc;
+        padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+      details.new-co { margin-bottom: 20px; }
+      details.new-co summary { list-style: none; cursor: pointer; }
+      details.new-co summary::-webkit-details-marker { display: none; }
+      .new-co-form {
+        margin-top: 12px; padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr);
+        gap: 14px 16px;
+      }
+      .new-co-form .field { display: flex; flex-direction: column; gap: 5px; }
+      .new-co-form .field.span2 { grid-column: 1 / -1; }
+      .new-co-form label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; }
+      .new-co-form input, .new-co-form select {
+        background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 9px 10px; font-size: 13.5px;
+      }
+      .new-co-form .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+      .new-co-form .submit-btn {
+        background: var(--primary); border: none; color: white; padding: 10px 20px;
+        border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
+      }
+
+      /* ── Stats row ── */
+      .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+      .stat-card {
+        background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px 18px;
+      }
+      .stat-card .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); font-weight: 700; margin-bottom: 6px; }
+      .stat-card .stat-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .stat-card .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+      .op-price-summary {
+        grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
+        border: 1px dashed var(--border-color); border-radius: 10px; padding: 10px 14px;
+        background: rgba(99, 102, 241, .06);
+      }
+      .op-price-summary .op-price-amount { font-size: 17px; font-weight: 800; }
+      .op-price-summary .op-price-note { font-size: 11px; color: var(--text-dim); }
+
+      /* ── Activity feed ── */
+      .activity-card { margin-top: 20px; }
+      .activity-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .activity-card > h2 i { color: var(--primary); }
+      .activity-list { display: flex; flex-direction: column; gap: 0; }
+      .activity-row {
+        display: flex; align-items: baseline; gap: 10px; padding: 9px 0;
+        border-bottom: 1px solid rgba(51, 65, 85, .3); font-size: 12.5px;
+      }
+      .activity-row:last-child { border-bottom: none; }
+      .activity-row .a-level { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; }
+      .activity-row .a-level.INFO { background: var(--success); }
+      .activity-row .a-level.WARNING { background: var(--warning); }
+      .activity-row .a-level.ERROR { background: var(--danger); }
+      .activity-row .a-msg { flex: 1; color: var(--text-bright); }
+      .activity-row .a-who { color: var(--text-muted); }
+      .activity-row .a-when { color: var(--text-dim); font-size: 11px; white-space: nowrap; }
+
+      /* ── Security Dashboard button ── */
+      .secops-btn {
+        display: inline-flex; align-items: center; gap: 6px; background: rgba(239, 68, 68, .12);
+        border: 1px solid rgba(239, 68, 68, .35); color: #fca5a5; padding: 8px 16px; border-radius: 10px;
+        font-size: 13px; font-weight: 700; text-decoration: none;
+      }
+
+      /* ── Traffic sparkline ── */
+      .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 24px; margin-top: 8px; }
+      .sparkline .bar { flex: 1; background: var(--primary); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .8; }
+      .sparkline .bar:last-child { opacity: 1; }
+
+      /* ── Source badge ── */
+      .badge-source-self { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .35); }
+      .badge-source-manual { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
+
+      /* ── Leads / payments panels ── */
+      .section-card { margin-top: 20px; }
+      .section-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .section-card > h2 i { color: var(--primary); }
+      .lead-msg { max-width: 280px; color: var(--text-muted); font-size: 12.5px; white-space: normal; }
+      .badge-lead-new { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .35); }
+      .badge-lead-contacted { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
+      .badge-lead-converted { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1><i class="ti ti-building-fortress"></i> Platform Admin Console</h1>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').open = !document.getElementById('newCoPanel').open;">
+            <i class="ti ti-plus"></i> New Company (Free)
+          </button>
+          <a href="/create_org" target="_blank" rel="noopener" title="Opens the same public registration + Razorpay checkout a self-service customer would use — hand this to a client to pay on the spot."
+             style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
+            <i class="ti ti-credit-card"></i> New Company (Paid Signup)
+          </a>
+          <a href="/sp_admin/login" class="secops-btn" title="Opens the Security Dashboard (SecOps console) — separate login">
+            <i class="ti ti-shield-lock"></i> Security Dashboard
+          </a>
+          <form action="/super_admin/logout" method="POST" style="margin:0;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="logout-btn"><i class="ti ti-logout"></i> Sign Out</button>
+          </form>
+        </div>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+        <div class="alert alert-{{ 'error' if cat == 'error' else 'success' }}">
+          <i class="ti ti-{{ 'circle-x' if cat == 'error' else 'circle-check' }}"></i> {{ msg }}
+        </div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Monthly Recurring Revenue</div>
+          <div class="stat-value">{{ mrr_display }}</div>
+          <div class="stat-sub">Active tenants only</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Companies</div>
+          <div class="stat-value">{{ active_tenant_count }}</div>
+          <div class="stat-sub">of {{ tenants|length }} total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Employees Billed</div>
+          <div class="stat-value">{{ total_employee_count }}</div>
+          <div class="stat-sub">across every tenant</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Rate</div>
+          <div class="stat-value">{{ per_employee_paise | plan_price }}</div>
+          <div class="stat-sub">per employee / month, flat</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Website Visits Today</div>
+          <div class="stat-value">{{ traffic.today_total }}</div>
+          <div class="stat-sub">landing + get-started + create_org</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Visits (7 Days)</div>
+          <div class="stat-value">{{ traffic.week_total }}</div>
+          <div class="sparkline">
+            {% set max_v = (traffic.trend | max) or 1 %}
+            {% for v in traffic.trend %}
+            <div class="bar" style="height:{{ [4, (v / max_v * 24) | round(0, 'floor')] | max }}px;" title="{{ v }} visits"></div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <details class="new-co card" id="newCoPanel">
+        <summary><strong><i class="ti ti-building-plus"></i> Create a new company (free / manual)</strong></summary>
+        <p style="margin:10px 4px 0;font-size:12px;color:var(--text-muted);">
+          Provisions immediately at no charge — for sales-assisted or trial onboarding. To actually
+          charge a client via Razorpay instead, use <strong>New Company (Paid Signup)</strong> above.
+          Billing for every tenant is {{ per_employee_paise | plan_price }}/employee/month, live-computed
+          from headcount — there's nothing to select here.
+        </p>
+        <form class="new-co-form" action="/super_admin/tenants/create" method="POST">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+          <div class="field">
+            <label>Company Name</label>
+            <input type="text" name="company_name" required />
+          </div>
+          <div class="field">
+            <label>Subdomain</label>
+            <input type="text" name="subdomain" pattern="[a-z0-9\-]+" placeholder="acme-corp" required />
+          </div>
+          <div class="field">
+            <label>Admin Username</label>
+            <input type="text" name="admin_username" required />
+          </div>
+          <div class="field">
+            <label>Admin Email</label>
+            <input type="email" name="admin_email" required />
+          </div>
+          <div class="field">
+            <label>Admin Password</label>
+            <input type="password" name="admin_password" minlength="8" required />
+          </div>
+          <div class="field">
+            <label>Payment Option</label>
+            <select name="payment_option">
+              <option value="online">Online (Razorpay)</option>
+              <option value="manual" selected>Bank Transfer / Manual Invoice</option>
+              <option value="trial">Free / Trial</option>
+            </select>
+          </div>
+          <div class="actions">
+            <button type="submit" class="submit-btn"><i class="ti ti-check"></i> Create Company</button>
+          </div>
+        </form>
+      </details>
+
+      <div class="card">
+        {% if tenants %}
+        <table>
+          <thead>
+            <tr>
+              <th>Company</th><th>Source</th><th>Payment</th><th>Employees</th><th>Monthly Bill</th><th>Status</th><th>Created</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tenants %}
+            <tr>
+              <td>
+                <div class="co-name">{{ t.company_name }}</div>
+                <div class="subdomain">{{ t.subdomain }}.hrzest.com</div>
+              </td>
+              <td>
+                {% if t.self_signup %}
+                <span class="badge badge-source-self" title="Registered themselves via the public landing page"><i class="ti ti-user"></i> Self-Signup</span>
+                {% else %}
+                <span class="badge badge-source-manual" title="Created directly by a platform admin">Platform Admin</span>
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge badge-payment-{{ t.payment_option }}">
+                  {{ {'online': 'Online', 'manual': 'Manual', 'trial': 'Trial'}.get(t.payment_option, t.payment_option) }}
+                </span>
+              </td>
+              <td>{{ t.employee_count }}</td>
+              <td class="bill">{{ t.monthly_bill_display }}</td>
+              <td><span class="badge badge-{{ t.status }}">{{ t.status }}</span></td>
+              <td class="subdomain">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</td>
+              <td>
+                <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+                  {% if t.status == 'active' %}
+                  <input type="hidden" name="status" value="suspended" />
+                  <button type="submit" class="mini-btn mini-btn-danger">Suspend</button>
+                  {% else %}
+                  <input type="hidden" name="status" value="active" />
+                  <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
+                  {% endif %}
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state"><i class="ti ti-building-off" style="font-size:32px;"></i><p style="margin-top:8px;">No companies registered yet.</p></div>
+        {% endif %}
+      </div>
+
+      <div class="card section-card">
+        <h2><i class="ti ti-message-2"></i> Leads — "Talk to Us" Requests</h2>
+        {% if leads %}
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Company</th><th>Message</th><th>Status</th><th>Submitted</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for lead in leads %}
+            <tr>
+              <td class="co-name">{{ lead.name }}</td>
+              <td class="subdomain">{{ lead.email }}</td>
+              <td class="subdomain">{{ lead.company_name or '—' }}</td>
+              <td class="lead-msg">{{ lead.message or '—' }}</td>
+              <td><span class="badge badge-lead-{{ lead.status }}">{{ lead.status }}</span></td>
+              <td class="subdomain">{{ lead.created_at.strftime('%Y-%m-%d %H:%M') if lead.created_at else '—' }}</td>
+              <td>
+                <form action="/super_admin/leads/{{ lead.id }}/status" method="POST" style="margin:0;">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+                  <select name="status" onchange="this.form.submit()" aria-label="Lead status for {{ lead.name }}" title="Lead status">
+                    <option value="new" {% if lead.status == 'new' %}selected{% endif %}>New</option>
+                    <option value="contacted" {% if lead.status == 'contacted' %}selected{% endif %}>Contacted</option>
+                    <option value="converted" {% if lead.status == 'converted' %}selected{% endif %}>Converted</option>
+                  </select>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" style="padding:20px;"><p>No inquiries yet — submissions from the landing page's "Talk to Us" form will show up here.</p></div>
+        {% endif %}
+      </div>
+
+      <div class="card section-card">
+        <h2><i class="ti ti-receipt"></i> Recent Payments</h2>
+        {% if recent_payments %}
+        <table>
+          <thead>
+            <tr><th>Company</th><th>Employees</th><th>Amount</th><th>Status</th><th>Type</th><th>Date</th></tr>
+          </thead>
+          <tbody>
+            {% for p in recent_payments %}
+            <tr>
+              <td>
+                <div class="co-name">{{ p.company_name }}</div>
+                <div class="subdomain">{{ p.subdomain }}</div>
+              </td>
+              <td>{{ p.employee_count }}</td>
+              <td class="bill">{{ p.amount_display }}</td>
+              <td><span class="badge badge-{{ 'active' if p.status in ('paid', 'provisioned') else 'suspended' }}">{{ p.status }}</span></td>
+              <td>{% if p.is_demo %}<span class="badge badge-source-manual">Demo</span>{% else %}<span class="badge badge-source-self">Razorpay</span>{% endif %}</td>
+              <td class="subdomain">{{ (p.paid_at or p.created_at).strftime('%Y-%m-%d %H:%M') if (p.paid_at or p.created_at) else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" style="padding:20px;"><p>No payments yet.</p></div>
+        {% endif %}
+      </div>
+
+      <div class="card activity-card">
+        <h2><i class="ti ti-history"></i> Recent Activity</h2>
+        {% if recent_activity %}
+        <div class="activity-list">
+          {% for ev in recent_activity %}
+          <div class="activity-row">
+            <div class="a-level {{ ev.level }}"></div>
+            <div class="a-msg">{{ ev.message }}</div>
+            {% if ev.identifier %}<div class="a-who">{{ ev.identifier }}</div>{% endif %}
+            <div class="a-when">{{ ev.created_at.strftime('%Y-%m-%d %H:%M') if ev.created_at else '' }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:20px;"><p>No recent platform admin activity.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

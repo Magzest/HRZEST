@@ -1,9 +1,9 @@
 """Org blueprint — multi-tenant org self-registration."""
 import re
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
-from extensions import app_log
+from extensions import app_log, limiter
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
-from utils.plan_limits import PLAN_TIERS
+from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 
 org_bp = Blueprint("org", __name__)
@@ -46,7 +46,7 @@ def _clean_subdomain_slug(raw, company_name=""):
     s = re.sub(r'[^a-z0-9\-]', '', s)
     return s
 
-def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan):
+def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email):
     """Shared field validation for all three tenant-creation entry points
     (/create_org, /api/create_org, and the platform-admin-initiated create
     flow in platform_admin.py) -- keeps the reserved-subdomain and
@@ -63,15 +63,13 @@ def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_p
         return f"Subdomain '{subdomain}' is reserved. Choose another."
     if len(admin_password) < 8:
         return "Admin password must be at least 8 characters."
-    if plan not in PLAN_TIERS:
-        return "Choose a valid plan."
     return None
 
 
 _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
-def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan,
+def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
                       payment_option="online"):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
@@ -155,7 +153,7 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         mcur.execute(
             "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, payment_option, status) "
             "VALUES (%s, %s, %s, %s, %s, %s, 'active')",
-            (company_name, subdomain, db_name, admin_email, plan, payment_option)
+            (company_name, subdomain, db_name, admin_email, PLAN_LABEL, payment_option)
         )
         mconn.commit()
         mcur.close()
@@ -218,7 +216,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 
 
 def send_payment_confirmation_email(admin_email, company_name, portal_url, set_password_url,
-                                     plan_display_name, amount_paise, razorpay_payment_id):
+                                     employee_count, amount_paise, razorpay_payment_id):
     """Post-payment welcome email for the paid /create_org flow
     (blueprints/billing.py's verify_payment). Like send_portal_ready_email,
     never includes a plaintext password -- instead links to a one-time
@@ -229,9 +227,9 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
         email_cfg = get_email_config()
         if not email_cfg:
             return False
-        from utils.plan_limits import format_price_inr
         import datetime as _dt
         amount_display = format_price_inr(amount_paise)
+        plan_display_name = f"₹{PER_EMPLOYEE_PAISE // 100}/employee × {employee_count}"
         paid_on = _dt.datetime.now().strftime("%d %b %Y")
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
@@ -247,7 +245,7 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
     <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">This link expires in 1 hour. Or copy it: {set_password_url}</p>
     <div style="background:#f1f5f9;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">Payment Receipt</div>
-      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Plan</span><strong>{plan_display_name}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Billing</span><strong>{plan_display_name}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Amount Paid</span><strong>{amount_display}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Date</span><strong>{paid_on}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;"><span>Payment ID</span><strong>{razorpay_payment_id}</strong></div>
@@ -267,15 +265,15 @@ def get_started_page():
     """Public entry point for the SaaS product: 'login to your existing
     company' (redirects to <subdomain>.hrzest.com/admin_login) vs
     'register a new company' (/create_org). The root "/" route
-    (blueprints/core.py's home()) is the platform operator's own login,
-    not this page -- link here explicitly (e.g. from /pricing) rather
-    than via "/"."""
+    (blueprints/core.py's home()) is the marketing landing page for
+    anonymous apex-domain visitors, whose "Login" link points here."""
+    from utils.analytics import track_page_view
+    track_page_view("/get-started")
     return render_template("get_started.html")
 
 
 @org_bp.route("/create_org", methods=["GET"])
 def create_org_page():
-    from utils.plan_limits import FEATURE_LABELS
     # Flashed messages live in the session cookie, not scoped to any one
     # page -- an unrelated admin-session-expiry notice (category
     # "warning", queued by app.py's _enforce_session_lifetime /
@@ -287,13 +285,11 @@ def create_org_page():
     # category "error" -- keep only those, drop everything else.
     if session.get("_flashes"):
         session["_flashes"] = [f for f in session["_flashes"] if f[0] == "error"]
-    requested_plan = request.args.get("plan", "").strip().lower()
-    selected_plan = requested_plan if requested_plan in PLAN_TIERS else None
+    from utils.analytics import track_page_view
+    track_page_view("/create_org")
     return render_template(
         "create_org.html",
-        plan_tiers=PLAN_TIERS,
-        feature_labels=FEATURE_LABELS,
-        selected_plan=selected_plan,
+        per_employee_paise=PER_EMPLOYEE_PAISE,
         show_captcha=turnstile_enabled(),
         turnstile_site_key=_TURNSTILE_SITE_KEY,
     )
@@ -334,14 +330,13 @@ def create_org():
     admin_username = request.form.get("admin_username", "").strip()
     admin_password = request.form.get("admin_password", "").strip()
     admin_email = request.form.get("admin_email", "").strip()
-    plan = request.form.get("plan", "starter").strip()
 
-    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email)
     if error:
         flash(error, "error")
         return redirect("/create_org")
 
-    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email)
     if not ok:
         flash(error, "error")
         return redirect("/create_org")
@@ -359,14 +354,22 @@ def create_org():
 @org_bp.route("/org_payment_success", methods=["GET"])
 def org_payment_success():
     """Landing page after templates/create_org.html's JS successfully
-    verifies payment (blueprints/billing.py's verify_payment) -- portal_url
-    and email are just for display, Jinja auto-escapes both so a tampered
-    query string can't inject anything, and no sensitive data (order ID,
-    amount) is exposed here since those already went out in the
-    confirmation email, not the URL."""
+    verifies payment (blueprints/billing.py's verify_payment) -- every value
+    here is display-only, Jinja auto-escapes all of them so a tampered
+    query string can't inject anything, and none of them drive any
+    server-side decision (the real charge already happened via Razorpay
+    before this page ever loads) -- a tampered employee_count/amount_display
+    would at worst show the visitor an inaccurate receipt summary, not
+    grant or alter anything. Order ID stays out of the URL regardless,
+    since that one IS still only in the confirmation email."""
     portal_url = request.args.get("portal_url", "")
     email = request.args.get("email", "")
-    return render_template("org_payment_success.html", portal_url=portal_url, email=email)
+    employee_count = request.args.get("employee_count", "")
+    amount_display = request.args.get("amount_display", "")
+    return render_template(
+        "org_payment_success.html", portal_url=portal_url, email=email,
+        employee_count=employee_count, amount_display=amount_display,
+    )
 
 
 @org_bp.route("/api/create_org", methods=["POST"])
@@ -385,13 +388,12 @@ def api_create_org():
         admin_username = data.get("admin_username", "").strip()
         admin_password = data.get("admin_password", "").strip()
         admin_email = data.get("admin_email", "").strip()
-        plan = data.get("plan", "starter").strip().lower()
 
-        error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+        error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email)
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email)
         if not ok:
             # "Already taken" is client-correctable (400); anything else is
             # a provisioning-side failure (schema creation, seeding, master
@@ -414,3 +416,45 @@ def api_create_org():
 @org_bp.route("/superadmin")
 def superadmin_redirect():
     return redirect("/super_admin/login")
+
+
+@org_bp.route("/api/leads", methods=["POST"])
+@limiter.limit("5 per minute")
+def submit_lead():
+    """"Request info" form on the public landing page (templates/landing.html)
+    -- for visitors who want more details before self-registering via
+    /create_org. Stored in att_master.leads, surfaced on the Platform Admin
+    dashboard for manual follow-up. Deliberately has no admin-facing error
+    detail beyond "required" -- this is a public, unauthenticated endpoint."""
+    if turnstile_enabled():
+        token = request.form.get("cf-turnstile-response") or (request.get_json(silent=True) or {}).get("cf_turnstile_response", "")
+        if not verify_turnstile(token, request.remote_addr):
+            return jsonify({"ok": False, "msg": "Captcha verification failed. Please try again."}), 400
+
+    data = request.get_json(silent=True) or request.form
+    name = (data.get("name") or "").strip()[:200]
+    email = (data.get("email") or "").strip()[:200]
+    company_name = (data.get("company_name") or "").strip()[:200] or None
+    message = (data.get("message") or "").strip()[:2000] or None
+
+    if not name or not email:
+        return jsonify({"ok": False, "msg": "Name and email are required."}), 400
+    if not _EMAIL_RE.match(email):
+        return jsonify({"ok": False, "msg": "Enter a valid email address."}), 400
+
+    try:
+        from database import get_master_db
+        conn = get_master_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO leads (name, email, company_name, message) VALUES (%s, %s, %s, %s)",
+            (name, email, company_name, message)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        app_log.error("submit_lead failed: %s", exc)
+        return jsonify({"ok": False, "msg": "Could not submit right now. Please try again."}), 500
+
+    return jsonify({"ok": True, "msg": "Thanks! We'll be in touch shortly."})

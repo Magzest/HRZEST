@@ -13,7 +13,7 @@ from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
 )
-from utils.helpers import _db, get_auth_config
+from utils.helpers import _db, get_auth_config, get_company_settings
 from utils.session_risk import is_session_compromised
 
 core_bp = Blueprint("core", __name__)
@@ -41,11 +41,34 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
+    # session["tenant_db"] is only ever set by _resolve_tenant() (app.py)
+    # when the request host matched a real tenant subdomain in
+    # att_master.tenants -- so its absence here means this visit landed on
+    # the bare/apex domain (or an unrecognized host), not a company's own
+    # subdomain. That's the signal used to decide "marketing landing page"
+    # vs. "this company's own portal", without needing a second lookup.
+    if session.get("tenant_db"):
+        co = get_company_settings()
+        if not co.get("setup_done"):
+            return redirect("/setup")
+        if session.get("admin_logged_in"):
+            return redirect("/admin")
+        if session.get("employee_id"):
+            return redirect("/employee_portal")
+        return redirect("/login")
+
+    # Apex/marketing domain: send anyone with a live session straight to
+    # where they were going; anonymous visitors get the public pitch.
     if session.get("admin_logged_in"):
         return redirect("/admin")
     if session.get("employee_id"):
         return redirect("/employee_portal")
-    return redirect("/login")
+    if session.get("platform_admin_logged_in"):
+        return redirect("/super_admin")
+    from utils.analytics import track_page_view
+    from utils.plan_limits import PER_EMPLOYEE_PAISE
+    track_page_view("/")
+    return render_template("landing.html", per_employee_paise=PER_EMPLOYEE_PAISE)
 
 
 @core_bp.route("/checkin")
@@ -283,19 +306,10 @@ def api_employee_login():
             (_hash_token(token), emp_id)
         )
         conn.commit()
-    from utils.plan_limits import get_tenant_plan, PLAN_TIERS
-    plan_name = get_tenant_plan(g.tenant_db)
-    _tier = PLAN_TIERS[plan_name]
-    plan_info = {
-        "display_name": _tier["display_name"],
-        "employee_limit": _tier["employee_limit"],
-        "features": sorted(_tier["features"]),  # frozenset isn't JSON-serializable
-    }
 
     return jsonify({
         "ok": True, "token": token, "employee_id": emp_id,
         "name": row[0], "email": row[1],
-        "plan": plan_name, "plan_info": plan_info
     })
 
 

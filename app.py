@@ -152,8 +152,8 @@ def time_seconds_filter(value):
 
 @app.template_filter("plan_price")
 def plan_price_filter(paise):
-    """paise -> "₹1,999" for plan-pricing displays (super_admin_dashboard.html,
-    pricing.html) -- thin wrapper so templates don't import utils.plan_limits."""
+    """paise -> "₹1,999" for billing displays (super_admin_dashboard.html,
+    create_org.html) -- thin wrapper so templates don't import utils.plan_limits."""
     from utils.plan_limits import format_price_inr
     return format_price_inr(paise)
 
@@ -2129,6 +2129,35 @@ def init_master_db():
                 paid_at TIMESTAMP DEFAULT NULL
             )
         """)
+        # Lightweight traffic counter for the public marketing pages
+        # (landing page, get-started, create_org) -- one row per
+        # (path, day), incremented via ON CONFLICT below rather than one
+        # row per visit, so this stays cheap regardless of traffic volume.
+        # No cookies/fingerprinting/IP storage -- just a count.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS page_views (
+                id SERIAL PRIMARY KEY,
+                path VARCHAR(255) NOT NULL,
+                view_date DATE NOT NULL,
+                count INT NOT NULL DEFAULT 0,
+                UNIQUE(path, view_date)
+            )
+        """)
+        # "Request info" / contact-form submissions from the public landing
+        # page (templates/landing.html) -- visitors not ready to
+        # self-register yet, surfaced to the Platform Admin dashboard for
+        # manual follow-up.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS leads (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                email VARCHAR(200) NOT NULL,
+                company_name VARCHAR(200) DEFAULT NULL,
+                message TEXT DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'new',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         db.commit()
         cur.close()
         db.close()
@@ -3091,29 +3120,31 @@ if "core.home" not in app.view_functions:
     from blueprints.email_blast import email_blast_bp
     from blueprints.daily_report import daily_report_bp
     from blueprints.billing import billing_bp
+    from blueprints.platform_admin import platform_admin_bp
+    from blueprints.secops import secops_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp):
+                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, platform_admin_bp,
+                secops_bp):
         app.register_blueprint(_bp)
 
 
-# ── Pricing page & Plan Context ──────────────────────────────────────────────
+# ── Billing context (flat per-employee rate) ─────────────────────────────────
 @app.context_processor
-def inject_plan_context():
+def inject_billing_context():
     try:
         from flask import g as _g
-        from utils.plan_limits import get_tenant_plan, PLAN_TIERS
-        p = get_tenant_plan(_g.tenant_db)
-        tier = PLAN_TIERS[p]
-        plan_info = {
-            "display_name": tier["display_name"],
-            "employee_limit": tier["employee_limit"],
-            "features": sorted(tier["features"]),
-        }
-        return dict(current_plan=p, plan_info=plan_info, plan_tiers=PLAN_TIERS)
+        from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, PER_EMPLOYEE_PAISE
+        employee_count = get_tenant_employee_count(_g.tenant_db)
+        monthly_bill_paise = calculate_price(employee_count)
+        return dict(
+            employee_count=employee_count,
+            per_employee_paise=PER_EMPLOYEE_PAISE,
+            monthly_bill_display=format_price_inr(monthly_bill_paise),
+        )
     except Exception:
-        return dict(current_plan="starter", plan_info={}, plan_tiers={})
+        return dict(employee_count=0, per_employee_paise=9900, monthly_bill_display="₹0")
 
 
 
