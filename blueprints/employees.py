@@ -14,7 +14,7 @@ from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
 from utils.helpers import (
     tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
-    validate_employee_email_domain, validate_employee_seat_available, get_company_settings,
+    validate_employee_email_domain, validate_employee_seat_available, get_company_settings, employee_login_url,
 )
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
@@ -211,6 +211,7 @@ def admin_action():
                 if not _ecfg:
                     flash("⚠️ SMTP not configured — credentials email not sent. Go to Email Settings to set it up.", "error")
                 else:
+                    _login_url = employee_login_url()
                     _welcome_html = f"""
 <div style="font-family:'Segoe UI',sans-serif;max-width:520px;margin:0 auto;background:#f8fafc;padding:32px 24px;border-radius:16px;">
   <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:12px;padding:28px 24px;text-align:center;margin-bottom:24px;">
@@ -231,6 +232,8 @@ def admin_action():
       </tr>
     </table>
   </div>
+  <a href="{_login_url}" style="display:block;text-align:center;padding:14px 24px;background:#1e3a8a;color:#fff;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:16px;">Go to Login Page</a>
+  <p style="color:#94a3b8;font-size:11px;text-align:center;margin:-8px 0 20px;word-break:break-all;">{_login_url}</p>
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400e;margin-bottom:20px;">
     🔒 Please change your password after your first login for security.
   </div>
@@ -1140,9 +1143,11 @@ def add_employee_page():
         if email:
             _ecfg = get_email_config()
             if _ecfg:
+                _login_url = employee_login_url()
                 _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
                          f"<p>Employee ID: <strong>{emp_id}</strong><br>"
-                         f"Password: <strong>{auto_pass}</strong></p>")
+                         f"Password: <strong>{auto_pass}</strong></p>"
+                         f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
                 try:
                     send_email_smtp(email, f"Welcome {name} — Your Login Credentials", _html, _ecfg)
                     flash(f"Credentials email sent to {email}", "success")
@@ -2073,6 +2078,18 @@ def api_register_employee():
         return jsonify({"ok": False, "msg": "Failed to create employee. Check for duplicate ID."}), 400
     cursor.close()
     db.close()
+    if email:
+        _ecfg = get_email_config()
+        if _ecfg:
+            _login_url = employee_login_url()
+            _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
+                     f"<p>Employee ID: <strong>{emp_id}</strong><br>"
+                     f"Password: <strong>{init_pass}</strong></p>"
+                     f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
+            try:
+                send_email_smtp(email, f"Welcome {name} — Your Login Credentials", _html, _ecfg)
+            except Exception:
+                app_log.error("api_register_employee: welcome email failed", exc_info=True)
     return jsonify({"ok": True, "msg": f"Employee {name} registered."})
 
 

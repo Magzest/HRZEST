@@ -21,7 +21,7 @@ import pytest
 # ── Session / token helpers ──────────────────────────────────────────────────
 
 def _admin_session(client, seed_admin):
-    client.post("/admin_login", data={
+    client.post("/login", data={
         "identifier": seed_admin["username"],
         "password":   seed_admin["password"],
     })
@@ -1398,18 +1398,18 @@ class TestAssignShift:
 
 class TestEditShiftEdgeCases:
 
-    def test_no_sid_in_form_redirects_to_schedule(self, client, seed_admin):
-        """Unparseable shift_id triggers the except branch → redirect."""
+    def test_unparseable_sid_in_url_404s(self, client, seed_admin):
+        """/edit_shift/<int:sid> -- the id lives in the URL path (Flask's
+        int converter), not a form field, so a non-numeric id never even
+        reaches the view; it 404s at the routing layer."""
         _admin_session(client, seed_admin)
-        rv = client.post("/edit_shift", data={
+        rv = client.post("/edit_shift/not_an_int", data={
             "shift_name": "Morning",
             "start_time": "09:00",
             "half_time":  "13:00",
             "end_time":   "18:00",
-            "shift_id":   "not_an_int",
         })
-        assert rv.status_code == 302
-        assert "schedule" in rv.headers["Location"]
+        assert rv.status_code == 404
 
     def test_missing_name_skips_db_update(self, client, seed_admin, shift_a, db_engine):
         """Empty name causes early redirect without updating the DB."""
@@ -1429,32 +1429,37 @@ class TestEditShiftEdgeCases:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# delete_shift_form — POST /delete_shift (form-based, without path param)
+# delete_shift — POST /delete_shift/<int:sid>
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestDeleteShiftForm:
 
-    def test_missing_shift_id_just_redirects(self, client, seed_admin):
+    def test_bare_path_with_no_id_404s(self, client, seed_admin):
+        """/delete_shift/<int:sid> requires the id in the URL -- a bare
+        POST with no id segment at all never matches the route."""
         _admin_session(client, seed_admin)
         rv = client.post("/delete_shift", data={"shift_id": ""})
-        assert rv.status_code == 302
+        assert rv.status_code == 404
 
-    def test_deletes_shift_and_clears_employee_assignments(self, client, seed_admin, db_engine):
+    def test_deletes_shift_and_clears_employee_assignments(self, client, seed_admin, seed_employee, db_engine):
         cur = db_engine.cursor()
         cur.execute(
             "INSERT INTO shifts (name, start_time, half_time, end_time) "
             "VALUES ('Temp Delete Shift','10:00','14:00','19:00') RETURNING id"
         )
         sid = cur.fetchone()[0]
+        cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id=%s", (sid, seed_employee["employee_id"]))
         cur.close()
 
         _admin_session(client, seed_admin)
-        rv = client.post("/delete_shift", data={"shift_id": str(sid)})
+        rv = client.post(f"/delete_shift/{sid}")
         assert rv.status_code == 302
 
         cur = db_engine.cursor()
         cur.execute("SELECT id FROM shifts WHERE id=%s", (sid,))
         assert cur.fetchone() is None
+        cur.execute("SELECT shift_id FROM employees WHERE employee_id=%s", (seed_employee["employee_id"],))
+        assert cur.fetchone()[0] is None
         cur.close()
 
 

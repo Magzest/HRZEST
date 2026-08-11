@@ -62,6 +62,8 @@
       }
       .mini-btn-danger { border-color: rgba(239, 68, 68, .4); color: #fca5a5; }
       .mini-btn-success { border-color: rgba(16, 185, 129, .4); color: #6ee7b7; }
+      .mini-btn-link { display: inline-block; text-decoration: none; margin: 0 4px 4px 0; }
+      .row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
       .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
       .new-co-btn {
         background: rgba(99, 102, 241, .15); border: 1px solid rgba(99, 102, 241, .4); color: #a5b4fc;
@@ -406,7 +408,7 @@
             <tr>
               <td>
                 <div class="co-name">{{ t.company_name }}</div>
-                <div class="subdomain">www.hrzest.com/{{ t.subdomain }}</div>
+                <a class="subdomain" href="https://www.hrzest.com/{{ t.subdomain }}/login" target="_blank" rel="noopener" style="text-decoration:underline;">www.hrzest.com/{{ t.subdomain }}</a>
               </td>
               <td>
                 {% if t.self_signup %}
@@ -425,16 +427,20 @@
               <td><span class="badge badge-{{ t.status }}">{{ t.status }}</span></td>
               <td class="subdomain">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</td>
               <td>
-                <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
-                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
-                  {% if t.status == 'active' %}
-                  <input type="hidden" name="status" value="suspended" />
-                  <button type="submit" class="mini-btn mini-btn-danger">Suspend</button>
-                  {% else %}
-                  <input type="hidden" name="status" value="active" />
-                  <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
-                  {% endif %}
-                </form>
+                <div class="row-actions">
+                  <a class="mini-btn mini-btn-link" href="https://www.hrzest.com/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard"><i class="ti ti-layout-dashboard"></i> Admin</a>
+                  <a class="mini-btn mini-btn-link" href="https://www.hrzest.com/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page"><i class="ti ti-users"></i> Employees</a>
+                  <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+                    {% if t.status == 'active' %}
+                    <input type="hidden" name="status" value="suspended" />
+                    <button type="submit" class="mini-btn mini-btn-danger">Suspend</button>
+                    {% else %}
+                    <input type="hidden" name="status" value="active" />
+                    <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
+                    {% endif %}
+                  </form>
+                </div>
               </td>
             </tr>
             {% endfor %}

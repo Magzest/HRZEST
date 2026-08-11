@@ -286,8 +286,13 @@ def employee_required(f):
         if not session.get("employee_id"):
             log_security_event("access.denied", "Unauthenticated request to employee-only route",
                                level="INFO", required="employee")
-            return redirect("/employee_login")
-        _killed = _reject_if_compromised("auth.employee_login")
+            # There is no standalone "employee_login" endpoint anymore --
+            # employee and admin credentials are both checked by the one
+            # unified /login page. The literal "/employee_login" path this
+            # used to redirect to 404s (dead route); auth.admin_login is
+            # also what url_for(...) resolves to a build error for below.
+            return redirect(url_for("auth.admin_login"))
+        _killed = _reject_if_compromised("auth.admin_login")
         if _killed:
             return _killed
         # Prevent bypassing forced password change by navigating directly to portal
@@ -548,9 +553,22 @@ def require_security_settings_2fa(f):
 
 
 def require_email_2fa(f):
-    """Direct pass-through for Email Settings routes."""
+    """Gate for Email Settings routes (SMTP config, including a
+    reveal-plaintext-password action) behind a recent TOTP step-up --
+    see email_settings_step_up_valid() above. Mirrors
+    require_security_settings_2fa's shape exactly, without its own
+    refresh-on-every-request: the step-up window here is only renewed at
+    the explicit /api/settings/verify-2fa and /2fa/enable call sites, so
+    it's a fixed re-auth window rather than one that silently extends for
+    as long as the tab stays open."""
     @wraps(f)
     def wrapper(*args, **kwargs):
+        if not email_settings_step_up_valid():
+            log_security_event(
+                "access.denied", "Email Settings accessed without a valid 2FA step-up",
+                level="WARNING", identifier=session.get("admin_username"),
+            )
+            return jsonify({"ok": False, "msg": "2FA verification required"}), 403
         return f(*args, **kwargs)
     return wrapper
 

@@ -132,14 +132,17 @@ class TestToggleFingerprint:
         cur.close()
 
 
-class TestPlanGatingOnToggles:
-    """The test tenant is registered as plan='enterprise' by conftest.py
-    (so the rest of the suite is unaffected by plan_limits) -- these tests
-    temporarily downgrade it to exercise the actual gating behavior added
-    in blueprints/admin_views.py's toggle_auth_method/toggle_fingerprint/
-    toggle_feature, then restore 'enterprise' so later tests aren't
-    affected. See tests/test_plan_limits.py for the underlying module's
-    own unit tests."""
+class TestFeatureTogglesAreUnmetered:
+    """Tiered plans (Basic/Medium/Prime/Starter/Growth/Enterprise) were
+    retired in favor of a single flat per-employee rate -- see
+    utils/plan_limits.py's module docstring: "every feature is available
+    to every tenant regardless of headcount". blueprints/admin_views.py's
+    toggle_auth_method/toggle_fingerprint/toggle_feature no longer contain
+    any plan check at all (confirmed by reading the current source), so
+    this now regression-guards the opposite of what it used to: a
+    starter-plan tenant can enable every feature, including the ones a
+    since-removed gate used to block. See tests/test_plan_limits.py for
+    the pricing-math unit tests."""
 
     @pytest.fixture
     def as_starter(self, db_engine):
@@ -153,11 +156,16 @@ class TestPlanGatingOnToggles:
         cur.execute("UPDATE att_master.tenants SET plan='enterprise' WHERE db_name=%s", (schema,))
         cur.close()
 
-    def test_starter_blocks_enabling_face_via_toggle_auth_method(self, client, seed_admin, as_starter):
+    def test_starter_can_enable_face_via_toggle_auth_method(self, client, seed_admin, as_starter, db_engine):
         _admin_session(client, seed_admin["username"])
         resp = client.post("/toggle_auth_method", data={"method": "face", "enabled": "1"},
-                           follow_redirects=True)
-        assert b"Starter" in resp.data or b"plan" in resp.data.lower()
+                           follow_redirects=False)
+        assert resp.status_code == 302
+        cur = db_engine.cursor()
+        cur.execute("SELECT face_enabled FROM company_settings LIMIT 1")
+        assert cur.fetchone()[0] == 1
+        cur.execute("UPDATE company_settings SET face_enabled=0")
+        cur.close()
 
     def test_starter_allows_enabling_qr_via_toggle_auth_method(self, client, seed_admin, as_starter, db_engine):
         _admin_session(client, seed_admin["username"])
@@ -169,46 +177,30 @@ class TestPlanGatingOnToggles:
         assert cur.fetchone()[0] == 1
         cur.close()
 
-    def test_starter_allows_disabling_face_even_though_gated_for_enabling(self, client, seed_admin, as_starter):
-        # Turning a feature OFF is never a billing decision, even on the
-        # most restrictive plan.
+    def test_starter_allows_disabling_face(self, client, seed_admin, as_starter):
         _admin_session(client, seed_admin["username"])
         resp = client.post("/toggle_auth_method", data={"method": "face", "enabled": "0"},
                            follow_redirects=False)
         assert resp.status_code == 302
 
-    def test_starter_blocks_toggle_fingerprint_route(self, client, seed_admin, as_starter, db_engine):
+    def test_starter_can_enable_fingerprint_route(self, client, seed_admin, as_starter, db_engine):
         _admin_session(client, seed_admin["username"])
         resp = client.post("/toggle_fingerprint", data={"enabled": "1"}, follow_redirects=False)
         assert resp.status_code == 302
         cur = db_engine.cursor()
         cur.execute("SELECT fingerprint_enabled FROM company_settings LIMIT 1")
-        assert cur.fetchone()[0] == 0
+        assert cur.fetchone()[0] == 1
+        cur.execute("UPDATE company_settings SET fingerprint_enabled=0")
         cur.close()
 
-    def test_starter_blocks_toggle_feature_biometric(self, client, seed_admin, as_starter):
+    def test_starter_can_enable_biometric_via_toggle_feature(self, client, seed_admin, as_starter, db_engine):
         _admin_session(client, seed_admin["username"])
         resp = client.post("/toggle_feature", json={"feature": "biometric_enabled", "value": True})
-        assert resp.status_code == 403
-        assert resp.get_json()["ok"] is False
-
-    def test_growth_allows_geo_but_not_biometric(self, client, seed_admin, db_engine):
-        import os
-        schema = os.environ.get("DB_NAME")
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
         cur = db_engine.cursor()
-        cur.execute("UPDATE att_master.tenants SET plan='growth' WHERE db_name=%s", (schema,))
+        cur.execute("UPDATE company_settings SET biometric_enabled=0")
         cur.close()
-        try:
-            _admin_session(client, seed_admin["username"])
-            resp = client.post("/toggle_feature", json={"feature": "geo_enabled", "value": True})
-            assert resp.status_code == 200
-            resp = client.post("/toggle_feature", json={"feature": "biometric_enabled", "value": True})
-            assert resp.status_code == 403
-        finally:
-            cur = db_engine.cursor()
-            cur.execute("UPDATE att_master.tenants SET plan='enterprise' WHERE db_name=%s", (schema,))
-            cur.execute("UPDATE company_settings SET geo_enabled=1")
-            cur.close()
 
 
 class TestSaveCompanyCode:

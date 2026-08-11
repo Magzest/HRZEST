@@ -66,7 +66,7 @@ class TestAddShift:
 class TestDeleteShiftForm:
     def test_success(self, client, seed_admin, temp_shift, db_engine):
         _admin_session(client, seed_admin["username"])
-        resp = client.post("/delete_shift", data={"shift_id": str(temp_shift)}, follow_redirects=False)
+        resp = client.post(f"/delete_shift/{temp_shift}", follow_redirects=False)
         assert resp.status_code == 302
         cur = db_engine.cursor()
         cur.execute("SELECT 1 FROM shifts WHERE id=%s", (temp_shift,))
@@ -86,17 +86,13 @@ class TestEditShift:
         assert cur.fetchone()[0] == "Renamed Shift"
         cur.close()
 
-    def test_success_via_form_id(self, client, seed_admin, temp_shift):
+    def test_unparseable_id_in_url_404s(self, client, seed_admin):
+        """/edit_shift/<int:sid> -- the id lives in the URL path, so a
+        non-numeric id 404s at the routing layer rather than reaching the
+        view at all."""
         _admin_session(client, seed_admin["username"])
-        resp = client.post("/edit_shift", data={
-            "shift_id": str(temp_shift), "shift_name": "Renamed2", "start_time": "09:00",
-            "half_time": "13:00", "end_time": "18:00"}, follow_redirects=False)
-        assert resp.status_code == 302
-
-    def test_invalid_form_id_redirects(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.post("/edit_shift", data={"shift_id": "not-an-int"}, follow_redirects=False)
-        assert resp.status_code == 302
+        resp = client.post("/edit_shift/not-an-int", data={"shift_name": "x"}, follow_redirects=False)
+        assert resp.status_code == 404
 
 
 class TestBulkAssignShift:
@@ -283,10 +279,12 @@ class TestAddBreak:
 
 
 class TestUpdateBreak:
-    def test_invalid_form_id_redirects(self, client, seed_admin):
+    def test_unparseable_id_in_url_404s(self, client, seed_admin):
+        """/update_break/<int:bid> -- the id lives in the URL path, so a
+        non-numeric id 404s at the routing layer."""
         _admin_session(client, seed_admin["username"])
-        resp = client.post("/update_break", data={"break_id": "bad"}, follow_redirects=False)
-        assert resp.status_code == 302
+        resp = client.post("/update_break/bad", data={"break_name": "x"}, follow_redirects=False)
+        assert resp.status_code == 404
 
     def test_success_via_url_id(self, client, seed_admin, db_engine):
         cur = db_engine.cursor()
@@ -319,10 +317,12 @@ class TestDeleteBreak:
         assert cur.fetchone() is None
         cur.close()
 
-    def test_invalid_form_id_redirects(self, client, seed_admin):
+    def test_unparseable_id_in_url_404s(self, client, seed_admin):
+        """/delete_break/<int:bid> -- the id lives in the URL path, so a
+        non-numeric id 404s at the routing layer."""
         _admin_session(client, seed_admin["username"])
-        resp = client.post("/delete_break", data={"break_id": "bad"}, follow_redirects=False)
-        assert resp.status_code == 302
+        resp = client.post("/delete_break/bad", follow_redirects=False)
+        assert resp.status_code == 404
 
 
 class TestMonthlyReport:

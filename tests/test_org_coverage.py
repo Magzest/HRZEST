@@ -5,7 +5,7 @@ import pytest
 
 
 def _admin_session(client, seed_admin):
-    client.post("/admin_login", data={
+    client.post("/login", data={
         "identifier": seed_admin["username"],
         "password":   seed_admin["password"],
     })
@@ -53,7 +53,7 @@ class TestOrgChartPage:
     def test_unauthenticated_redirects(self, client):
         rv = client.get("/org_chart")
         assert rv.status_code == 302
-        assert "admin_login" in rv.headers["Location"]
+        assert "/login" in rv.headers["Location"]
 
     def test_renders_for_admin(self, client, seed_admin):
         _admin_session(client, seed_admin)

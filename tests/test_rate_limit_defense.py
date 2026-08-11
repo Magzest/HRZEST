@@ -31,14 +31,14 @@ class TestRateLimitBreachResponse:
         ip = "203.0.113.201"
         _unban(db_engine, ip)
         try:
-            # /admin_login is limited to 20/minute (blueprints/auth.py) —
+            # /login is limited to 20/minute (blueprints/auth.py) —
             # raised from 5/minute because rootless Podman's port-forwarding
             # proxy collapses every visitor to one apparent IP in production
             # (see blueprints/auth.py's comment on admin_login), so a tight
             # per-IP limit there was shared by the whole site's traffic.
             last = None
             for _ in range(25):
-                last = client.post("/admin_login", data={"username": "nobody", "password": "wrong"},
+                last = client.post("/login", data={"username": "nobody", "password": "wrong"},
                                    environ_overrides={"REMOTE_ADDR": ip})
             assert last.status_code == 429
         finally:
@@ -54,7 +54,7 @@ class TestRateLimitBreachResponse:
                             lambda event_type, message, level="WARNING", **f: calls.append(event_type))
         try:
             for _ in range(25):
-                client.post("/admin_login", data={"username": "nobody", "password": "wrong"},
+                client.post("/login", data={"username": "nobody", "password": "wrong"},
                             environ_overrides={"REMOTE_ADDR": ip})
             assert "ratelimit.exceeded" in calls
         finally:
@@ -71,7 +71,7 @@ class TestProgressiveBanFromRepeatedBreaches:
             # Each burst of >5/min triggers one 429; repeat past
             # _BREACH_THRESHOLD 429s to cross the auto-ban counter.
             for _ in range((waf_module._BREACH_THRESHOLD + 2) * 6):
-                client.post("/admin_login", data={"username": "nobody", "password": "wrong"},
+                client.post("/login", data={"username": "nobody", "password": "wrong"},
                             environ_overrides={"REMOTE_ADDR": ip})
 
             cur = db_engine.cursor()
@@ -82,7 +82,7 @@ class TestProgressiveBanFromRepeatedBreaches:
             assert row[0] > datetime.datetime.now()
 
             # Once banned, _enforce_ip_ban blocks the very next request outright.
-            blocked = client.get("/admin_login", environ_overrides={"REMOTE_ADDR": ip})
+            blocked = client.get("/login", environ_overrides={"REMOTE_ADDR": ip})
             assert blocked.status_code == 403
         finally:
             waf_module._breach_log.pop(ip, None)

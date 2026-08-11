@@ -554,9 +554,10 @@ def _enforce_csrf():
         # Browser form submissions: redirect to login so the user gets a fresh session+token
         if request.accept_mimetypes.accept_html and not request.headers.get("X-Requested-With"):
             flash("Your session expired. Please log in again.", "warning")
-            if request.path.startswith("/employee") or "employee" in request.path:
-                login_url = url_for("auth.employee_login")
-            elif request.path.startswith("/super_admin"):
+            # There is no standalone "employee_login" endpoint -- employee and
+            # admin credentials are both checked by the one unified /login
+            # page (auth.admin_login).
+            if request.path.startswith("/super_admin"):
                 login_url = "/super_admin/login"
             else:
                 login_url = url_for("auth.admin_login")

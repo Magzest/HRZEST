@@ -14,7 +14,7 @@ import pytest
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _admin_session(client, seed_admin):
-    client.post("/admin_login", data={
+    client.post("/login", data={
         "identifier": seed_admin["username"],
         "password":   seed_admin["password"],
     })

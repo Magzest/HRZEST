@@ -14,7 +14,7 @@ import blueprints.onboarding as onboarding_module
 
 
 def _admin_session(client, seed_admin):
-    resp = client.post("/admin_login", data={
+    resp = client.post("/login", data={
         "identifier": seed_admin["username"],
         "password": seed_admin["password"],
     }, follow_redirects=True)
@@ -682,4 +682,4 @@ class TestMyOnboardingEmployeeFacing:
             sess["employee_id"] = "DOES_NOT_EXIST"
         resp = client.get("/my_onboarding", follow_redirects=False)
         assert resp.status_code in (301, 302)
-        assert "/employee_login" in resp.headers["Location"]
+        assert "/login" in resp.headers["Location"]

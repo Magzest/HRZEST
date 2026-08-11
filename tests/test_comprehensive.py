@@ -65,7 +65,9 @@ class TestHealthAndStatic:
         assert resp.status_code in (200, 302)
 
     def test_static_css_served(self, client):
-        resp = client.get("/static/shared.css")
+        # shared.css was minified to shared.min.css (see templates' <link>
+        # tags) -- the unminified file no longer exists on disk.
+        resp = client.get("/static/shared.min.css")
         assert resp.status_code in (200, 304)
 
     def test_static_chart_js_served(self, client):
@@ -79,20 +81,20 @@ class TestHealthAndStatic:
 
 class TestAdminAuth:
     def test_login_page_renders(self, client):
-        resp = client.get("/admin_login")
+        resp = client.get("/login")
         assert resp.status_code == 200
 
     def test_valid_login_sets_session(self, client, seed_admin):
         with client.session_transaction() as sess:
             sess.clear()
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         }, follow_redirects=True)
         assert resp.status_code == 200
 
     def test_wrong_password_stays_on_login(self, client, seed_admin):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": "BADPASSWORD!",
         }, follow_redirects=True)
@@ -100,7 +102,7 @@ class TestAdminAuth:
         assert b"Invalid credentials" in resp.data
 
     def test_nonexistent_user_rejected(self, client):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "ghost_user_xyz_404",
             "password": "whatever",
         }, follow_redirects=True)
@@ -111,7 +113,7 @@ class TestAdminAuth:
         assert resp.status_code in (302, 401)
 
     def test_logout_clears_session(self, client, seed_admin):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -122,7 +124,7 @@ class TestAdminAuth:
         assert resp2.status_code in (302, 401)
 
     def test_empty_credentials_rejected(self, client):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "", "password": "",
         }, follow_redirects=True)
         assert resp.status_code == 200
@@ -733,27 +735,27 @@ class TestReportsAPI:
 
 class TestSecurityHeaders:
     def test_x_content_type_options(self, client):
-        resp = client.get("/admin_login")
+        resp = client.get("/login")
         assert resp.headers.get("X-Content-Type-Options") == "nosniff"
 
     def test_x_frame_options(self, client):
-        resp = client.get("/admin_login")
+        resp = client.get("/login")
         val = resp.headers.get("X-Frame-Options", "")
         assert val.upper() in ("DENY", "SAMEORIGIN")
 
     def test_x_xss_protection(self, client):
         # Modern browsers deprecate X-XSS-Protection; app omits it intentionally
-        resp = client.get("/admin_login")
+        resp = client.get("/login")
         assert resp.status_code in (200, 304)  # header presence is optional
 
     def test_no_server_header_leak(self, client):
-        resp = client.get("/admin_login")
+        resp = client.get("/login")
         server = resp.headers.get("Server", "")
         assert "werkzeug" not in server.lower()
 
     def test_csp_header_present(self, client, seed_admin):
         # Need to be logged in for protected routes that set CSP
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -778,7 +780,7 @@ class TestSecurityHeaders:
     def test_other_pages_csp_does_not_allow_posture_agent(self, client, seed_admin):
         """The 127.0.0.1:47823 connect-src exception is scoped to
         /employee_portal only -- it must not leak onto unrelated pages."""
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -828,7 +830,7 @@ class TestDashboardLiveAPI:
         assert resp.status_code in (302, 401)
 
     def test_dashboard_live_after_login(self, client, seed_admin):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -838,7 +840,7 @@ class TestDashboardLiveAPI:
         assert "total" in data or "employees" in data or isinstance(data, dict)
 
     def test_attendance_chart_data_after_login(self, client, seed_admin):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -857,7 +859,7 @@ class TestOrgChart:
 
     def test_org_chart_data_authenticated(self, client, seed_admin):
         # /api/org_chart_data uses @admin_required (session-based), not Bearer token
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -898,7 +900,7 @@ class TestWebAuthn:
 class TestAdminPageSmoke:
     @pytest.fixture(autouse=True)
     def _login(self, client, seed_admin):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -1014,7 +1016,7 @@ class TestEmployeePortalPageSmoke:
 
 class TestInputValidation:
     def test_sql_injection_in_login_identifier(self, client):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "' OR '1'='1",
             "password": "anything",
         }, follow_redirects=True)
@@ -1022,7 +1024,7 @@ class TestInputValidation:
         assert b"Invalid credentials" in resp.data or b"error" in resp.data.lower()
 
     def test_xss_in_login_field(self, client):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "<script>alert(1)</script>",
             "password": "pw",
         }, follow_redirects=True)
@@ -1074,14 +1076,17 @@ class TestInputValidation:
 # ===========================================================================
 
 class TestEmailConfigAPI:
-    def test_get_email_config_requires_auth(self, client):
-        assert client.get("/api/email_config").status_code == 401
-
-    def test_get_email_config_authenticated(self, client, seed_admin):
+    def test_bearer_token_email_config_route_stays_removed(self, client, seed_admin):
+        """SMTP config (including a reveal-plaintext-password action) used
+        to be reachable via a plain Bearer-token API route. It was
+        relocated to the session-based, 2FA-step-up-gated /api/settings/email
+        (see tests/test_email_2fa.py) -- a real security tightening, not
+        an oversight. Regression guard: the old, weaker-auth path must not
+        come back."""
         token = _admin_token(client, seed_admin)
         resp = client.get("/api/email_config",
                           headers={"Authorization": f"Bearer {token}"})
-        assert resp.status_code == 200
+        assert resp.status_code == 404
 
 
 # ===========================================================================
@@ -1119,7 +1124,7 @@ class TestIDCardRoute:
         assert resp.status_code in (302, 401)
 
     def test_id_card_nonexistent_employee(self, client, seed_admin):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -1127,7 +1132,7 @@ class TestIDCardRoute:
         assert resp.status_code == 404
 
     def test_id_card_existing_employee(self, client, seed_admin, seed_employee):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })
@@ -1136,7 +1141,7 @@ class TestIDCardRoute:
         assert resp.content_type == "image/png"
 
     def test_id_card_download(self, client, seed_admin, seed_employee):
-        client.post("/admin_login", data={
+        client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         })

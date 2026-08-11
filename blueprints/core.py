@@ -15,8 +15,9 @@ from utils.auth import (
 )
 from utils.helpers import (
     tpath, _db, get_auth_config, get_company_settings, validate_employee_email_domain,
-    validate_employee_seat_available,
+    validate_employee_seat_available, employee_login_url,
 )
+from utils.email_utils import get_email_config, send_email_smtp
 from utils.session_risk import is_session_compromised
 
 core_bp = Blueprint("core", __name__)
@@ -384,6 +385,17 @@ def api_employee_signup():
         db.commit()
         cursor.close()
         db.close()
+        if email:
+            _ecfg = get_email_config()
+            if _ecfg:
+                _login_url = employee_login_url()
+                _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
+                         f"<p>Employee ID: <strong>{emp_id}</strong></p>"
+                         f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
+                try:
+                    send_email_smtp(email, f"Welcome {name} — Your Account is Ready", _html, _ecfg)
+                except Exception:
+                    app_log.error("api_employee_signup: welcome email failed", exc_info=True)
         return jsonify({
             "ok": True,
             "msg": f"Employee account for {name} ({emp_id}) created successfully! You can now sign in.",

@@ -1,4 +1,4 @@
-"""Tests for the Turnstile CAPTCHA gate on /admin_login (blueprints/auth.py)
+"""Tests for the Turnstile CAPTCHA gate on /login (blueprints/auth.py)
 and its supporting helpers in utils/auth.py: _get_failed_count,
 _mask_identifier, verify_turnstile, turnstile_enabled. The existing
 5-strikes/15-minute lockout (utils/auth.py's _LOGIN_MAX_ATTEMPTS) is
@@ -123,7 +123,7 @@ class TestAdminLoginCaptchaGate:
 
     def test_no_captcha_widget_when_turnstile_unconfigured(self, client, seed_employee, monkeypatch):
         monkeypatch.setattr(auth_bp_module, "turnstile_enabled", lambda: False)
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": "wrong",
         })
         assert resp.status_code == 200
@@ -144,7 +144,7 @@ class TestAdminLoginCaptchaGate:
         cur.close()
 
         # This is the 2nd failure (count was 1) -> widget should be shown for the NEXT attempt.
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": "wrong",
         })
         assert resp.status_code == 200
@@ -166,7 +166,7 @@ class TestAdminLoginCaptchaGate:
         db_engine.commit()
         cur.close()
 
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
         })
         assert resp.status_code == 200
@@ -187,7 +187,7 @@ class TestAdminLoginCaptchaGate:
         db_engine.commit()
         cur.close()
 
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
             "cf-turnstile-response": "any-nonempty-token",
         }, follow_redirects=False)

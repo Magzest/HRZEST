@@ -105,7 +105,7 @@ flask_app.config["MANDATORY_ADMIN_MFA"] = False
 
 # Disable the mandatory-emailed-OTP-at-login gate (blueprints/auth.py's
 # MANDATORY_LOGIN_MFA) for the same reason: nearly the entire suite uses a
-# plain POST /admin_login as its "get an authenticated session" setup and
+# plain POST /login as its "get an authenticated session" setup and
 # expects it to complete immediately. Tests for the gate itself
 # (tests/test_login_mfa.py) re-enable it locally.
 flask_app.config["MANDATORY_LOGIN_MFA"] = False
@@ -140,7 +140,7 @@ def _init_test_db(db_engine):
     # environment (it seeds an admin from env, then marks setup complete
     # since one now exists) -- CI's pytest job doesn't set that var, so on
     # a fresh database setup_done stays 0 and every test that logs in via
-    # the real /admin_login POST route (rather than the session_transaction
+    # the real /login POST route (rather than the session_transaction
     # bypass some test files use) gets redirected to /setup before its
     # credentials are even checked. Tests assume setup is already done
     # (see test_auth_blueprint.py's test_get_when_setup_done_redirects_to_login),
@@ -203,7 +203,7 @@ def seed_admin(db_engine):
     is low enough that a handful of legitimate wrong-password tests
     elsewhere in a 1900+-test run can accumulate a real 15-minute lockout
     partway through, silently breaking every subsequent test that expects
-    a plain POST /admin_login to succeed (assertions failing with a 302
+    a plain POST /login to succeed (assertions failing with a 302
     back to the login page instead of the expected 200/redirect-to-admin).
     A session-scoped one-time reset only guards against stale state from a
     *previous* run; it does nothing once a run's own tests start

@@ -123,7 +123,7 @@ class TestSignupValidation:
 
 class TestPortalLinkOnSuccess:
     """After signup, the success page must show the tenant's OWN dedicated
-    subdomain link -- not a redirect to /admin_login on whatever host the
+    subdomain link -- not a redirect to /login on whatever host the
     signup form happened to be submitted from, which for a fresh company
     would never be their real subdomain until wildcard DNS resolves it."""
 
@@ -199,7 +199,7 @@ class TestFullProvisioning:
             }, follow_redirects=False)
             # Success now renders the org_created.html page directly (with
             # the tenant's dedicated portal link) instead of redirecting to
-            # /admin_login on whatever host the signup form was submitted
+            # /login on whatever host the signup form was submitted
             # from -- that host isn't necessarily the new tenant's subdomain.
             assert resp.status_code == 200
             assert b"Organisation Created" in resp.data

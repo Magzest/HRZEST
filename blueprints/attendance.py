@@ -1245,8 +1245,7 @@ def attendance():
         # Real, server-verified, one-time, employee-bound proof from
         # /api/employee/webauthn-verify-challenge — not a client-supplied flag.
         if not _wa_fingerprint_recently_verified(emp_id):
-            if _lockout_gated:
-                record_attendance_failure(emp_id, _today, "Fingerprint verification failed")
+            record_attendance_failure(emp_id, _today, "Fingerprint verification failed")
             return jsonify({"ok": False, "msg": "Fingerprint verification failed. Please try again."}), 401
 
     needs_face = (auth_combo == "qr_face")
@@ -1328,8 +1327,7 @@ def attendance():
         if not matched:
             cursor.close()
             db.close()
-            if _lockout_gated:
-                record_attendance_failure(emp_id, _today, "Face does not match")
+            record_attendance_failure(emp_id, _today, "Face does not match")
             return jsonify({"ok": False, "msg": "Face does not match. Please try again."})
 
     now = datetime.datetime.now()
