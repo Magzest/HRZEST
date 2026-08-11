@@ -1667,6 +1667,8 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS is_half_day SMALLINT DEFAULT 0",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS half_day_session VARCHAR(10) DEFAULT NULL",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS company_code VARCHAR(10) DEFAULT NULL",
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS paid_employee_slots INT DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT DEFAULT NULL",
@@ -2180,6 +2182,34 @@ def init_master_db():
                 admin_email VARCHAR(200) NOT NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'created',
                 tenant_id INT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                paid_at TIMESTAMP DEFAULT NULL
+            )
+        """)
+        # Company email domain, carried from create_order() through to
+        # verify_payment() (where provision_tenant() actually runs) since
+        # the tenant's own company_settings row doesn't exist yet at
+        # create_order() time.
+        cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL")
+        # Seat top-up orders: an existing tenant paying for MORE employee
+        # slots after exhausting the count they paid for at signup (see
+        # utils/plan_limits.py's validate_employee_seat_available and
+        # blueprints/billing.py's create_seat_order/verify_seat_payment).
+        # Separate from payment_orders (that table's NOT NULL
+        # company_name/admin_username/subdomain fields describe a
+        # brand-new signup, not a top-up against an existing tenant) --
+        # tenant_id here always refers to an already-provisioned row in
+        # `tenants`.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS seat_orders (
+                id SERIAL PRIMARY KEY,
+                razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
+                razorpay_payment_id VARCHAR(100) DEFAULT NULL,
+                tenant_id INT NOT NULL REFERENCES tenants(id),
+                subdomain VARCHAR(100) NOT NULL,
+                seats INT NOT NULL,
+                amount_paise INT NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'created',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 paid_at TIMESTAMP DEFAULT NULL
             )

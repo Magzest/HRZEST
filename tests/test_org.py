@@ -141,7 +141,7 @@ class TestPortalLinkOnSuccess:
             resp = client.post("/create_org", data={
                 "company_name": "Portal Link Org", "subdomain": subdomain,
                 "admin_username": "portal_admin", "admin_password": "password123",
-                "admin_email": "portal@test.local",
+                "admin_email": "portal@test.local", "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
             assert f"https://www.hrzest.com/{subdomain}/login".encode() in resp.data
@@ -170,7 +170,7 @@ class TestPortalLinkOnSuccess:
             resp = client.post("/create_org", data={
                 "company_name": "Portal Link Email Org", "subdomain": subdomain,
                 "admin_username": "portal_admin2", "admin_password": "password123",
-                "admin_email": "portal2@test.local",
+                "admin_email": "portal2@test.local", "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
             assert b"We've also emailed this link to" in resp.data
@@ -195,6 +195,7 @@ class TestFullProvisioning:
                 "admin_username": "e2e_admin",
                 "admin_password": "password123",
                 "admin_email": "e2e@test.local",
+                "email_domain": "test.local",
             }, follow_redirects=False)
             # Success now renders the org_created.html page directly (with
             # the tenant's dedicated portal link) instead of redirecting to
@@ -239,6 +240,7 @@ class TestFullProvisioning:
                 "company_name": "Default Plan Org", "subdomain": subdomain,
                 "admin_username": "dp_admin", "admin_password": "password123",
                 "admin_email": "dp@test.local", "plan": "not-a-real-plan",
+                "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
             import utils.plan_limits as plan_limits
@@ -292,7 +294,7 @@ class TestFullProvisioning:
             payload = {
                 "company_name": "Dup Org", "subdomain": subdomain,
                 "admin_username": "dup_admin", "admin_password": "password123",
-                "admin_email": "dup@test.local",
+                "admin_email": "dup@test.local", "email_domain": "test.local",
             }
             r1 = client.post("/create_org", data=payload, follow_redirects=False)
             assert r1.status_code == 200

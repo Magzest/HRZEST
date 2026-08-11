@@ -137,6 +137,13 @@
       Enter a short subdomain slug (e.g. <strong>acme</strong>). Full URLs like <em>https://hrzest.com/</em> will automatically be cleaned.
     </div>
 
+    <label class="field-label">Company Email Domain</label>
+    <input class="field-input" type="text" name="email_domain" id="email_domain_input"
+           placeholder="acme.com" required title="e.g. acme.com" />
+    <div style="font-size:11px; color:#94a3b8; margin-top:4px; margin-bottom:14px;">
+      Every employee you add later must have an email ending in this domain (e.g. name@acme.com).
+    </div>
+
     <label class="field-label">Number of Employees</label>
     <input class="field-input" type="number" name="employee_count" id="employeeCount"
            placeholder="e.g. 15" min="1" value="1" required oninput="updatePriceSummary()" />
@@ -351,6 +358,7 @@ document.getElementById('createOrgForm').addEventListener('submit', function (e)
     employee_count: document.getElementById('employeeCount').value,
     admin_username: form.admin_username.value.trim(),
     admin_email: form.admin_email.value.trim(),
+    email_domain: form.email_domain.value.trim().toLowerCase(),
   };
   var turnstileEl = form.querySelector('[name="cf-turnstile-response"]');
   if (turnstileEl) payload.cf_turnstile_response = turnstileEl.value;

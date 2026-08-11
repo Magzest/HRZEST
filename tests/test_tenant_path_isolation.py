@@ -31,6 +31,7 @@ def _provision(client, subdomain, admin_username, admin_password):
         "admin_username": admin_username,
         "admin_password": admin_password,
         "admin_email": f"{admin_username}@test.local",
+        "email_domain": "test.local",
     }, follow_redirects=False)
     assert resp.status_code == 200, resp.data
     return "att_" + subdomain.replace("-", "_")

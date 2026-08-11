@@ -13,7 +13,10 @@ from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
 )
-from utils.helpers import tpath, _db, get_auth_config, get_company_settings
+from utils.helpers import (
+    tpath, _db, get_auth_config, get_company_settings, validate_employee_email_domain,
+    validate_employee_seat_available,
+)
 from utils.session_risk import is_session_compromised
 
 core_bp = Blueprint("core", __name__)
@@ -353,6 +356,13 @@ def api_employee_signup():
 
     if len(password) < 6:
         return jsonify({"ok": False, "msg": "Password must be at least 6 characters."}), 400
+
+    _domain_error = validate_employee_email_domain(email)
+    if _domain_error:
+        return jsonify({"ok": False, "msg": _domain_error}), 400
+    _seat_error = validate_employee_seat_available()
+    if _seat_error:
+        return jsonify({"ok": False, "msg": _seat_error, "buy_seats_url": tpath("/buy_seats")}), 402
 
     db = None
     cursor = None

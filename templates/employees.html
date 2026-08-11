@@ -313,6 +313,15 @@
         </div>
       </div>
 
+      {% if paid_employee_slots is not none %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;background:{{ '#fee2e2' if total >= paid_employee_slots else '#eff6ff' }};border:1px solid {{ '#fca5a5' if total >= paid_employee_slots else '#bfdbfe' }};border-radius:12px;padding:10px 16px;margin-bottom:16px;font-size:13px;color:{{ '#dc2626' if total >= paid_employee_slots else '#1e40af' }};font-weight:600;">
+        <span><i class="ti ti-users u-fs-13"></i> Employee seats: {{ total }} / {{ paid_employee_slots }} used
+          {% if total >= paid_employee_slots %}— you've used every paid seat, new registrations need more seats.{% endif %}
+        </span>
+        <a href="{{ tpath('/buy_seats') }}" style="color:inherit;text-decoration:underline;white-space:nowrap;">Buy more seats</a>
+      </div>
+      {% endif %}
+
       <!-- DEPARTMENT TABS -->
       {% if departments %}
       <div class="dept-tabs" id="deptTabs">
@@ -736,7 +745,10 @@
             </div>
             <div class="field-group">
               <label>Email <span class="u-c-dc2626">*</span></label>
-              <input type="email" name="email" placeholder="employee@company.com" required />
+              <input type="email" name="email" placeholder="{{ 'name@' + email_domain if email_domain else 'employee@company.com' }}" required />
+              {% if email_domain %}
+              <div class="u-fs-11 u-c-64748b u-mt-4">Must be a @{{ email_domain }} address.</div>
+              {% endif %}
             </div>
             <div class="field-group">
               <label>Date of Joining <span class="u-c-dc2626">*</span></label>

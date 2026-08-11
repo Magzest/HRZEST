@@ -35,7 +35,7 @@ from utils.helpers import (
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
-    _validate_image_file,
+    _validate_image_file, clean_email_domain, validate_email_domain_format, invalidate_settings_cache,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
@@ -436,15 +436,26 @@ def save_company_profile():
     contact_email = request.form.get("contact_email", "").strip()
     contact_phone = request.form.get("contact_phone", "").strip()
     address = request.form.get("address", "").strip()
+    email_domain = clean_email_domain(request.form.get("email_domain", ""))
+
+    # Empty is allowed (clears it, reverting to no enforcement on employee
+    # registration) -- only a non-empty value has to be a plausible domain.
+    if email_domain:
+        domain_error = validate_email_domain_format(email_domain)
+        if domain_error:
+            flash(domain_error, "error")
+            return redirect(tpath("/settings?tab=company"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     try:
         cursor.execute("""
-            UPDATE company_settings 
-            SET company_name=%s, company_code=%s, contact_email=%s, contact_phone=%s, address=%s
-        """, (company_name, company_code, contact_email, contact_phone, address))
+            UPDATE company_settings
+            SET company_name=%s, company_code=%s, contact_email=%s, contact_phone=%s, address=%s,
+                email_domain=%s
+        """, (company_name, company_code, contact_email, contact_phone, address, email_domain or None))
         db.commit()
+        invalidate_settings_cache()
     except Exception:
         pass
     cursor.close()

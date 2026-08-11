@@ -522,6 +522,24 @@
                 </div>
               </div>
 
+              <div class="field u-m-0">
+                <label class="u-fs-12 u-fw-700 u-c-475569">Employee Email Domain</label>
+                <input type="text" name="email_domain" value="{{ co.email_domain if co and co.email_domain else '' }}" placeholder="e.g. acme.com (leave blank to not require one)" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
+                <div class="u-fs-11 u-c-64748b u-mt-4">When set, every new employee's email must end in @{{ co.email_domain if co and co.email_domain else 'yourdomain.com' }} — leave blank to allow any email.</div>
+              </div>
+
+              <div class="field u-m-0">
+                <label class="u-fs-12 u-fw-700 u-c-475569">Employee Seats</label>
+                {% if co and co.paid_employee_slots is not none %}
+                  <div style="padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <span>{{ total_employees }} / {{ co.paid_employee_slots }} used</span>
+                    <a href="{{ tpath('/buy_seats') }}" style="color:#1e3a8a; font-weight:700; text-decoration:none; white-space:nowrap;">Buy more seats</a>
+                  </div>
+                {% else %}
+                  <div style="padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; color:#15803d; font-weight:600;">Unlimited (not on the metered seat plan)</div>
+                {% endif %}
+              </div>
+
               <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
                 <div class="field u-m-0">
                   <label class="u-fs-12 u-fw-700 u-c-475569">Primary Contact Email</label>

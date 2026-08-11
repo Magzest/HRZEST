@@ -415,6 +415,8 @@ def get_company_settings():
                 "session_timeout": row_dict.get("session_timeout") or 30,
                 "logo_url": row_dict.get("logo_url") or "",
                 "plan": row_dict.get("plan") or "basic",
+                "email_domain": row_dict.get("email_domain") or "",
+                "paid_employee_slots": row_dict.get("paid_employee_slots"),
             }
             with _settings_lock:
                 _co_cache["data"] = result
@@ -424,7 +426,81 @@ def get_company_settings():
         pass
     return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
-            "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic"}
+            "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
+            "email_domain": "", "paid_employee_slots": None}
+
+
+# ── Company email domain (employee-registration gate) ────────────────────────
+_DOMAIN_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
+
+
+def clean_email_domain(raw: str) -> str:
+    """Normalize a user-entered company domain -- strips a leading
+    scheme/"@"/"www.", any path, and lowercases it, so "https://Acme.com/"
+    and "acme.com" both land on "acme.com"."""
+    s = (raw or "").strip().lower()
+    s = re.sub(r'^https?://', '', s)
+    s = s.lstrip('@')
+    s = s.split('/')[0].split(':')[0]
+    if s.startswith('www.'):
+        s = s[4:]
+    return s
+
+
+def validate_email_domain_format(domain: str) -> str:
+    """Returns an error message, or None if the domain string is a
+    plausible one (e.g. "acme.com") -- format only, no DNS/MX lookup."""
+    if not domain:
+        return "Company email domain is required."
+    if not _DOMAIN_RE.match(domain):
+        return "Enter a valid domain, e.g. acme.com."
+    return None
+
+
+def validate_employee_email_domain(email) -> str:
+    """Enforces "employee email must match the company's configured
+    domain" -- but only once a company has actually set one
+    (get_company_settings()["email_domain"]); companies that haven't
+    configured a domain yet keep today's behavior (email optional, no
+    domain check), so this never breaks an existing tenant that predates
+    the feature. Returns an error message, or None if OK."""
+    domain = (get_company_settings().get("email_domain") or "").strip().lower()
+    if not domain:
+        return None
+    email = (email or "").strip().lower()
+    if not email:
+        return f"Employee email is required (must be a @{domain} address)."
+    if not email.endswith("@" + domain):
+        return f"Employee email must be a @{domain} address."
+    return None
+
+
+# ── Paid employee-seat cap (employee-registration gate) ──────────────────────
+def validate_employee_seat_available() -> str:
+    """Enforces "can't register more employees than the company has paid
+    for" -- but only once a company actually went through the metered
+    signup/top-up flow (get_company_settings()["paid_employee_slots"] is
+    set); tenants that predate this feature, were created free by the
+    Platform Admin, or came through the local/dev fallback signup keep
+    unlimited registration, exactly like validate_employee_email_domain's
+    no-domain-configured case. Returns an error message, or None if a new
+    employee can be registered."""
+    slots = get_company_settings().get("paid_employee_slots")
+    if slots is None:
+        return None
+    try:
+        db = get_db_connection()
+        cur = db.cursor(buffered=True)
+        cur.execute("SELECT COUNT(*) FROM employees")
+        current = cur.fetchone()[0]
+        cur.close()
+        db.close()
+    except Exception:
+        return None
+    if current >= slots:
+        return (f"You've used all {slots} paid employee seats. "
+                f"Buy more seats to register additional employees.")
+    return None
 
 
 # ── Companies list + overdue-onboarding count caches (short TTL) ─────────────

@@ -458,6 +458,7 @@ def platform_admin_create_tenant():
     onboarded company gets an identical, fully-isolated schema rather than
     a second, softer path into tenant creation."""
     from blueprints.org import _validate_new_tenant_fields, provision_tenant, send_portal_ready_email
+    from utils.helpers import clean_email_domain
 
     company_name = request.form.get("company_name", "").strip()
     subdomain = request.form.get("subdomain", "").strip().lower()
@@ -465,14 +466,16 @@ def platform_admin_create_tenant():
     admin_password = request.form.get("admin_password", "").strip()
     admin_email = request.form.get("admin_email", "").strip()
     payment_option = request.form.get("payment_option", "manual").strip()
+    email_domain = clean_email_domain(request.form.get("email_domain", ""))
 
-    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email)
+    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                         email_domain)
     if error:
         flash(error, "error")
         return redirect("/super_admin")
 
     ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                                              payment_option)
+                                              payment_option, email_domain=email_domain)
     if not ok:
         flash(error, "error")
         return redirect("/super_admin")

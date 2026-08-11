@@ -12,7 +12,10 @@ from extensions import app, app_log, limiter, log_security_event
 from database import get_db_connection, transaction
 from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
-from utils.helpers import tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id
+from utils.helpers import (
+    tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
+    validate_employee_email_domain, validate_employee_seat_available, get_company_settings,
+)
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import _td_to_time
@@ -87,6 +90,18 @@ def admin_action():
             db.close()
             flash("Full name is required.", "error")
             return redirect(tpath("/admin"))
+        _domain_error = validate_employee_email_domain(email)
+        if _domain_error:
+            cursor.close()
+            db.close()
+            flash(_domain_error, "error")
+            return redirect(tpath("/admin"))
+        _seat_error = validate_employee_seat_available()
+        if _seat_error:
+            cursor.close()
+            db.close()
+            flash(_seat_error, "error")
+            return redirect(tpath("/buy_seats"))
         # Plaintext fields still bounded by a VARCHAR column width (the PII
         # fields below this point are Fernet-encrypted into TEXT columns, so
         # they can't overflow) — checked here with a clear message instead of
@@ -715,6 +730,8 @@ def view_employees():
                            pending_resignations=pending_resignations,
                            pending_tickets=pending_tickets,
                            active_nav="employees",
+                           email_domain=get_company_settings().get("email_domain"),
+                           paid_employee_slots=get_company_settings().get("paid_employee_slots"),
                            )
 
 
@@ -959,6 +976,14 @@ def add_employee_page():
     if not validate_emp_id(emp_id):
         flash("Employee ID may only contain letters, digits, hyphens and underscores.", "error")
         return redirect(tpath("/employees"))
+    _domain_error = validate_employee_email_domain(email)
+    if _domain_error:
+        flash(_domain_error, "error")
+        return redirect(tpath("/employees"))
+    _seat_error = validate_employee_seat_available()
+    if _seat_error:
+        flash(_seat_error, "error")
+        return redirect(tpath("/buy_seats"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -2011,6 +2036,12 @@ def api_register_employee():
         return jsonify({"ok": False, "msg": "name, emp_id and face image required"}), 400
     if not validate_emp_id(emp_id):
         return jsonify({"ok": False, "msg": "emp_id may only contain letters, digits, hyphens and underscores"}), 400
+    _domain_error = validate_employee_email_domain(email)
+    if _domain_error:
+        return jsonify({"ok": False, "msg": _domain_error}), 400
+    _seat_error = validate_employee_seat_available()
+    if _seat_error:
+        return jsonify({"ok": False, "msg": _seat_error, "buy_seats_url": tpath("/buy_seats")}), 402
     # Validate extension, MIME type, magic bytes and size before writing to disk.
     ok, err = _validate_image_file(file)
     if not ok:

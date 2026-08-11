@@ -6,6 +6,7 @@ from utils.auth import generate_password_hash, turnstile_enabled, verify_turnsti
 from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 from utils.tenant_routing import RESERVED_PATH_SEGMENTS
+from utils.helpers import clean_email_domain, validate_email_domain_format
 
 org_bp = Blueprint("org", __name__)
 
@@ -39,12 +40,20 @@ def _clean_subdomain_slug(raw, company_name=""):
     s = re.sub(r'[^a-z0-9\-]', '', s)
     return s
 
-def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email):
+def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                 email_domain=None):
     """Shared field validation for all three tenant-creation entry points
     (/create_org, /api/create_org, and the platform-admin-initiated create
     flow in platform_admin.py) -- keeps the reserved-subdomain and
     email-format checks from drifting out of sync across call sites.
-    Returns an error message, or None if every field is valid."""
+    Returns an error message, or None if every field is valid.
+
+    email_domain is required for every new company (e.g. "acme.com") --
+    it's what utils/helpers.py's validate_employee_email_domain() later
+    checks new employees' emails against. Existing tenants provisioned
+    before this field existed simply have none set, which keeps that
+    check a no-op for them (see validate_employee_email_domain's
+    docstring) -- this requirement only applies going forward."""
     subdomain = _clean_subdomain_slug(subdomain, company_name)
     if not all([company_name, subdomain, admin_username, admin_password, admin_email]):
         return "All fields (company name, subdomain, admin email/username/password) are required."
@@ -56,6 +65,9 @@ def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_p
         return f"Subdomain '{subdomain}' is reserved. Choose another."
     if len(admin_password) < 8:
         return "Admin password must be at least 8 characters."
+    domain_error = validate_email_domain_format(clean_email_domain(email_domain))
+    if domain_error:
+        return domain_error
     return None
 
 
@@ -63,7 +75,7 @@ _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
 def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                      payment_option="online"):
+                      payment_option="online", email_domain=None, paid_employee_slots=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
@@ -74,6 +86,20 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     Razorpay, "manual" bank-transfer/invoice, or "trial") -- it doesn't
     trigger any charge itself, that already happened (or didn't, for
     "manual"/"trial") before this function is called.
+
+    email_domain (e.g. "acme.com") is stored on the new tenant's own
+    company_settings row -- utils/helpers.py's validate_employee_email_domain()
+    reads it from there to require/check new employees' emails going forward.
+
+    paid_employee_slots is how many employees this tenant paid for at
+    signup -- stored on company_settings so utils/plan_limits.py's
+    validate_employee_seat_available() can cap free registrations at that
+    count (more seats bought later via blueprints/billing.py's
+    create_seat_order/verify_seat_payment top the number up). None means
+    unlimited/unmetered -- the billing.py Razorpay flow always passes a
+    real number; the free dev-fallback /create_org POST and the Platform
+    Admin's own "create company" form intentionally leave this unset
+    (see their call sites' comments).
 
     Returns (ok, error_message_or_None, portal_url_or_None).
     """
@@ -123,8 +149,8 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         tconn = get_tenant_db(db_name)
         tcur = tconn.cursor()
         tcur.execute(
-            "UPDATE company_settings SET company_name=%s, setup_done=1 WHERE id=1",
-            (company_name,)
+            "UPDATE company_settings SET company_name=%s, email_domain=%s, paid_employee_slots=%s, setup_done=1 WHERE id=1",
+            (company_name, clean_email_domain(email_domain) or None, paid_employee_slots)
         )
         # Plain INSERT, no ON CONFLICT: the schema-existence check above
         # guarantees this is a brand-new schema, so a conflict here means a
@@ -328,13 +354,16 @@ def create_org():
     admin_username = request.form.get("admin_username", "").strip()
     admin_password = request.form.get("admin_password", "").strip()
     admin_email = request.form.get("admin_email", "").strip()
+    email_domain = clean_email_domain(request.form.get("email_domain", ""))
 
-    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email)
+    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                         email_domain)
     if error:
         flash(error, "error")
         return redirect("/create_org")
 
-    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email)
+    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                                              email_domain=email_domain)
     if not ok:
         flash(error, "error")
         return redirect("/create_org")
@@ -387,11 +416,15 @@ def api_create_org():
         admin_password = data.get("admin_password", "").strip()
         admin_email = data.get("admin_email", "").strip()
 
-        error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email)
+        email_domain = clean_email_domain(data.get("email_domain", ""))
+
+        error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                             email_domain)
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email)
+        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                                                    email_domain=email_domain)
         if not ok:
             # "Already taken" is client-correctable (400); anything else is
             # a provisioning-side failure (schema creation, seeding, master
