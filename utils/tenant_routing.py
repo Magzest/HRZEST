@@ -42,21 +42,34 @@ class TenantPrefixMiddleware:
         self.wsgi_app = wsgi_app
 
     def __call__(self, environ, start_response):
-        from werkzeug.wsgi import peek_path_info, pop_path_info
-
         try:
-            seg = peek_path_info(environ)
+            seg = environ.get("PATH_INFO", "").lstrip("/").split("/", 1)[0] or None
         except Exception:
             seg = None
 
         if seg and seg.lower() not in RESERVED_PATH_SEGMENTS:
             row = self._lookup_tenant(seg.lower())
             if row:
-                pop_path_info(environ)
+                self._pop_path_info(environ)
                 environ["hrz.tenant_slug"] = seg.lower()
                 environ["hrz.tenant_db"] = row[0]
 
         return self.wsgi_app(environ, start_response)
+
+    @staticmethod
+    def _pop_path_info(environ):
+        """Shift the first PATH_INFO segment into SCRIPT_NAME, in place."""
+        path = environ.get("PATH_INFO", "").lstrip("/")
+        script_name = environ.get("SCRIPT_NAME", "")
+        if "/" in path:
+            segment, rest = path.split("/", 1)
+            environ["PATH_INFO"] = "/" + rest
+        else:
+            segment = path
+            environ["PATH_INFO"] = ""
+        if segment:
+            environ["SCRIPT_NAME"] = script_name.rstrip("/") + "/" + segment
+        return segment or None
 
     @staticmethod
     def _lookup_tenant(slug):
