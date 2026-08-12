@@ -195,7 +195,7 @@ def decrypt_pii_date(value):
 @contextmanager
 def _db():
     conn = get_db_connection()
-    cursor = conn.cursor(buffered=True)
+    cursor = conn.cursor()
     try:
         yield cursor, conn
     finally:
@@ -217,14 +217,16 @@ def _audit(action, table=None, record_id=None, detail=None):
         ip = request.remote_addr or ""
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO audit_logs (actor, actor_type, action, target_table, target_id, detail, ip_address) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (actor, actor_type, action, table, str(record_id) if record_id is not None else None, detail, ip)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
+        try:
+            cursor.execute(
+                "INSERT INTO audit_logs (actor, actor_type, action, target_table, target_id, detail, ip_address) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (actor, actor_type, action, table, str(record_id) if record_id is not None else None, detail, ip)
+            )
+            db.commit()
+        finally:
+            cursor.close()
+            db.close()
     except Exception:
         pass
 
@@ -234,13 +236,15 @@ def _create_notification(recipient_type, title, message, employee_id=None):
     try:
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO notifications (recipient_type, employee_id, title, message) VALUES (%s,%s,%s,%s)",
-            (recipient_type, employee_id, title, message)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
+        try:
+            cursor.execute(
+                "INSERT INTO notifications (recipient_type, employee_id, title, message) VALUES (%s,%s,%s,%s)",
+                (recipient_type, employee_id, title, message)
+            )
+            db.commit()
+        finally:
+            cursor.close()
+            db.close()
     except Exception:
         pass
 

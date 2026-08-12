@@ -1,5 +1,6 @@
 """Shared Flask extensions — imported by blueprints to avoid circular imports."""
 import os
+import json
 import logging
 import sys
 import secrets
@@ -121,20 +122,21 @@ def _persist_security_event(event_type, level, message, identifier, ip, path, me
     Never let a persistence failure here affect the caller; log_security_event
     has already done its real job (the log line + any webhook) by the time
     this runs."""
-    import json as _json
     from database import get_db_connection
     try:
         db = get_db_connection()
         cur = db.cursor()
-        cur.execute(
-            "INSERT INTO security_events (event_type, level, message, identifier, ip, path, method, extra_json) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
-            (event_type[:80], level[:10], message[:500], identifier, ip, path, method,
-             _json.dumps(extra_fields, default=str)[:4000] if extra_fields else None),
-        )
-        db.commit()
-        cur.close()
-        db.close()
+        try:
+            cur.execute(
+                "INSERT INTO security_events (event_type, level, message, identifier, ip, path, method, extra_json) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (event_type[:80], level[:10], message[:500], identifier, ip, path, method,
+                 json.dumps(extra_fields, default=str)[:4000] if extra_fields else None),
+            )
+            db.commit()
+        finally:
+            cur.close()
+            db.close()
     except Exception as e:
         app_log.error("Failed to persist security event to DB: %s", e)
 
@@ -162,8 +164,12 @@ else:
             pass
 
 app.config["SESSION_COOKIE_HTTPONLY"] = True   # blocks document.cookie read via injected/XSS'd JS
-app.config["SESSION_COOKIE_SECURE"] = os.environ.get(
-    "APP_ENV", "production") != "development"  # never sent over plaintext HTTP
+# Secure flag is always True — browsers exempt 127.0.0.1/localhost from the
+# Secure requirement (RFC 6265bis §5.2.7), so local dev still works over
+# plain HTTP while the flag is present for every environment. Leaving it
+# False in dev caused scanners (including our own security_scan.py) to flag
+# it as a gap because the Set-Cookie header never contains Secure locally.
+app.config["SESSION_COOKIE_SECURE"] = True
 # never attached to a cross-site request — closes CSRF via cookie-riding
 app.config["SESSION_COOKIE_SAMESITE"] = "Strict"
 app.config["SESSION_COOKIE_PATH"] = "/"    # explicit for clarity; Flask's own default, stated rather than implied

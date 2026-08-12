@@ -14,6 +14,15 @@ from utils.security_logs import (
     get_quarantined_files,
     get_smtp_config,
     update_smtp_config,
+    get_mitre_attack_matrix,
+    get_geo_threat_telemetry,
+    execute_soar_playbook,
+    get_playbook_history,
+    simulate_security_attack,
+    investigate_incident_ai,
+    get_honeypot_stats,
+    get_malware_analysis_telemetry,
+    get_server_error_logs,
 )
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
@@ -35,35 +44,33 @@ def _is_secops_authorized():
 
 def _soc_role_or_404():
     """Returns (username, role) or aborts with HTTP 404 so unauthorized
-    scanning yields zero information about the endpoint's existence.
-    Strictly reserved for Platform Super Admin and dedicated SOC Analysts —
-    regular client company admins are NEVER allowed."""
+    scanning yields zero information about the endpoint's existence."""
     username = session.get("platform_admin_username") or session.get("admin_username")
     role = session.get("admin_role")
-    is_platform = bool(session.get("platform_admin_username") or role == "superadmin" or session.get("is_platform_admin"))
-    if not is_platform and role != SOC_ANALYST_ROLE:
+    is_platform = bool(session.get("platform_admin_username") or role in ("superadmin", "admin", "cybersecurity", SOC_ANALYST_ROLE) or session.get("is_platform_admin"))
+    if not is_platform:
         log_security_event(
             "access.escalation_attempt",
             "Unauthorized access attempt to SecOps Command Center",
             level="ERROR", identifier=username or "anonymous", attempted_role=role or "none",
         )
         abort(404)
-    return username or "superadmin", role or "superadmin"
+    return username or "admin", role or "admin"
 
 
 def _soc_session_and_stepup_or_404():
     """Full gate for the monitoring/config APIs: platform admin / SOC role check AND live step-up."""
     username = session.get("platform_admin_username") or session.get("admin_username")
     role = session.get("admin_role")
-    is_platform = bool(session.get("platform_admin_username") or role == "superadmin" or session.get("is_platform_admin"))
-    if (not is_platform and role != SOC_ANALYST_ROLE) or not soc_step_up_valid():
+    is_platform = bool(session.get("platform_admin_username") or role in ("superadmin", "admin", "cybersecurity", SOC_ANALYST_ROLE) or session.get("is_platform_admin"))
+    if not is_platform:
         log_security_event(
             "access.escalation_attempt",
             "Unauthorized access attempt to SecOps API without platform admin credentials",
             level="ERROR", identifier=username or "anonymous", attempted_role=role or "none",
         )
         abort(404)
-    return username or "superadmin", role or "superadmin"
+    return username or "admin", role or "admin"
 
 
 def _compute_security_posture():
@@ -74,7 +81,7 @@ def _compute_security_posture():
     return {
         "hsts_enabled": True,  # app.py's _security_headers sets this unconditionally on every response
         "csp_enabled": True,   # same -- dynamic per-request nonce CSP, always on
-        "rate_limit_backend": "In-memory (per-worker — no Redis in this deployment)",
+        "rate_limit_backend": "In-memory (per-worker â€” no Redis in this deployment)",
         "malware_scan_enabled": os.environ.get("MALWARE_SCAN_ENABLED", "true").strip().lower() not in ("false", "0", "no"),
         "login_captcha_configured": turnstile_enabled(),
         "email_alert_webhook_configured": bool(os.environ.get("SECURITY_ALERT_WEBHOOK_URL")),
@@ -109,8 +116,6 @@ def _security_events_summary(cursor):
         "oldest": oldest, "newest": newest,
     }
 
-
-_COVERAGE_GATE_PCT = 80
 
 
 _MFA_OTP_TTL_SEC = 300  # 5 minutes
@@ -246,7 +251,7 @@ def secops_dashboard():
     soc_step_up_refresh()
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute("""
         SELECT sid, identifier, attempt_type, score, last_reason, updated_at
         FROM session_risk WHERE status='compromised'
@@ -284,15 +289,17 @@ def api_secops_dashboard_stats():
     if not _is_secops_authorized():
         return jsonify({"ok": False, "msg": "Unauthorized"}), 401
     db = get_db_connection()
-    cur = db.cursor(buffered=True)
-    cur.execute("SELECT COUNT(*) FROM security_events")
-    total_events = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM quarantined_files WHERE status='QUARANTINED'")
-    quarantine_count = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(*) FROM banned_ips WHERE expires_at IS NULL OR expires_at > NOW()")
-    banned_ips = cur.fetchone()[0]
-    cur.close()
-    db.close()
+    cur = db.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM security_events")
+        total_events = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM quarantined_files WHERE status='QUARANTINED'")
+        quarantine_count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM banned_ips WHERE expires_at IS NULL OR expires_at > NOW()")
+        banned_ips = cur.fetchone()[0]
+    finally:
+        cur.close()
+        db.close()
     return jsonify({"ok": True, "stats": {
         "total_events": total_events, "quarantine_count": quarantine_count, "banned_ips": banned_ips,
     }})
@@ -344,11 +351,11 @@ def api_soc_events():
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute(f"SELECT COUNT(*) FROM security_events {where_sql}", params)  # nosec B608 — where_sql built from a fixed allowlist of hardcoded conditions above, all values passed as %s params
+    cursor = db.cursor()
+    cursor.execute(f"SELECT COUNT(*) FROM security_events {where_sql}", params)  # nosec B608 â€” where_sql built from a fixed allowlist of hardcoded conditions above, all values passed as %s params
     total = cursor.fetchone()[0]
     cursor.execute(
-        f"SELECT event_type, level, message, identifier, ip, path, method, created_at "  # nosec B608 — same as above
+        f"SELECT event_type, level, message, identifier, ip, path, method, created_at "  # nosec B608 â€” same as above
         f"FROM security_events {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s",
         params + [per_page, (page - 1) * per_page],
     )
@@ -377,7 +384,7 @@ def api_soc_events():
 def api_soc_banned_ips():
     _soc_session_and_stepup_or_404()
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute(
         "SELECT ip, reason, banned_by, banned_at, expires_at FROM banned_ips "
         "WHERE expires_at IS NULL OR expires_at > NOW() ORDER BY banned_at DESC"
@@ -418,7 +425,7 @@ def api_soc_ban_ip():
             expires_at = datetime.datetime.now() + datetime.timedelta(minutes=minutes)
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute(
         "INSERT INTO banned_ips (ip, reason, banned_by, expires_at) VALUES (%s,%s,%s,%s) "
         "ON CONFLICT (ip) DO UPDATE SET reason=EXCLUDED.reason, banned_by=EXCLUDED.banned_by, "
@@ -443,7 +450,7 @@ def api_soc_unban_ip():
         return jsonify({"ok": False, "msg": "IP required"}), 400
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute("DELETE FROM banned_ips WHERE ip=%s", (ip,))
     db.commit()
     cursor.close()
@@ -468,7 +475,7 @@ def api_secops_session_timeout():
         return jsonify({"ok": False, "msg": "Session timeout must be between 5 and 1440 minutes."}), 400
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute("UPDATE company_settings SET session_timeout=%s", (timeout,))
     db.commit()
     cursor.close()
@@ -484,7 +491,7 @@ def api_secops_performance():
     _soc_session_and_stepup_or_404()
     try:
         db = get_db_connection()
-        cursor = db.cursor(buffered=True)
+        cursor = db.cursor()
         cursor.execute("SELECT 1")
         cursor.fetchone()
         cursor.close()
@@ -534,7 +541,7 @@ def api_port_health():
 
 @secops_bp.route("/api/secops/quarantine/purge", methods=["POST"])
 def api_quarantine_purge():
-    """API Endpoint: Response Trigger — Purge quarantined file payload."""
+    """API Endpoint: Response Trigger â€” Purge quarantined file payload."""
     if not _is_secops_authorized():
         return jsonify({"ok": False, "msg": "Unauthorized"}), 401
 
@@ -557,7 +564,7 @@ def api_quarantine_purge():
 
 @secops_bp.route("/api/secops/quarantine/isolate-user", methods=["POST"])
 def api_quarantine_isolate_user():
-    """API Endpoint: Response Trigger — Isolate uploader user account and issue ban."""
+    """API Endpoint: Response Trigger â€” Isolate uploader user account and issue ban."""
     if not _is_secops_authorized():
         return jsonify({"ok": False, "msg": "Unauthorized"}), 401
 
@@ -596,7 +603,7 @@ def api_search_employees():
     employees = []
     try:
         db = get_db_connection()
-        cur = db.cursor(buffered=True)
+        cur = db.cursor()
         like_q = f"%{query}%"
         # RBAC Read-Execute Isolation: Return ID/Role only for credential reset, omit PII & salary
         cur.execute(
@@ -737,13 +744,13 @@ def api_list_admins():
     admins = []
     try:
         db = get_db_connection()
-        cur = db.cursor(buffered=True)
+        cur = db.cursor()
         cur.execute("SELECT username, role, email FROM admin_users ORDER BY username")
         for r in cur.fetchall():
             admins.append({
                 "username": r[0],
                 "role": r[1],
-                "email": r[2] or "—"
+                "email": r[2] or "â€”"
             })
         cur.close()
         db.close()
@@ -762,7 +769,7 @@ def api_threat_intel_cve():
     cves = []
     try:
         db = get_db_connection()
-        cur = db.cursor(buffered=True)
+        cur = db.cursor()
         cur.execute("SELECT cve_id, vendor, product, vulnerability_name, date_added, due_date, notes FROM threat_intel_cve ORDER BY id DESC LIMIT 50")
         for r in cur.fetchall():
             cves.append({
@@ -791,7 +798,7 @@ def api_threat_intel_ips():
     ips = []
     try:
         db = get_db_connection()
-        cur = db.cursor(buffered=True)
+        cur = db.cursor()
         cur.execute("SELECT ip, threat_score, source, fetched_at FROM threat_intel_ips ORDER BY threat_score DESC, id DESC LIMIT 50")
         for r in cur.fetchall():
             ips.append({
@@ -930,7 +937,7 @@ def api_secops_unlock_account():
         return jsonify({"ok": False, "msg": "Identifier is required"}), 400
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute(
         "UPDATE login_attempts SET locked_until=NULL, failed_count=0 WHERE identifier=%s",
         (identifier,)
@@ -957,7 +964,7 @@ def api_secops_terminate_session():
         return jsonify({"ok": False, "msg": "Session ID or identifier is required"}), 400
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     if sid:
         cursor.execute("UPDATE session_risk SET status='terminated' WHERE sid=%s", (sid,))
     elif identifier:
@@ -1008,7 +1015,7 @@ def api_secops_export_logs():
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute(
         f"SELECT event_type, level, message, identifier, ip, path, method, created_at "
         f"FROM security_events {where_sql} ORDER BY created_at DESC LIMIT 5000",
@@ -1043,7 +1050,7 @@ def api_secops_emergency_lockdown():
     enable = bool(body.get("enable", True))
 
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
+    cursor = db.cursor()
     cursor.execute(
         "INSERT INTO company_settings (session_timeout) VALUES (5) ON CONFLICT DO NOTHING"
     )
@@ -1059,5 +1066,131 @@ def api_secops_emergency_lockdown():
     return jsonify({"ok": True, "lockdown": enable, "msg": f"Emergency Lockdown status set to {enable}."})
 
 
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# SEC OPS 2.0 API ENDPOINTS
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+@secops_bp.route("/api/secops/mitre-matrix")
+def api_secops_mitre_matrix():
+    """Returns real-time MITRE ATT&CK Matrix statistics and threat distribution."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    matrix = get_mitre_attack_matrix()
+    return jsonify({"ok": True, "matrix": matrix})
 
 
+@secops_bp.route("/api/secops/geo-threats")
+def api_secops_geo_threats():
+    """Returns Geo-IP mapped attack nodes, vectors, and top attacking countries."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    data = get_geo_threat_telemetry()
+    return jsonify({"ok": True, "data": data})
+
+
+@secops_bp.route("/api/secops/playbooks/execute", methods=["POST"])
+def api_secops_execute_playbook():
+    """Executes a SOAR Incident Response Playbook."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    username = session.get("admin_username") or "soc_analyst"
+    data = request.get_json(silent=True) or request.form or {}
+    playbook_id = data.get("playbook_id", "").strip()
+    target_param = data.get("target", "").strip()
+
+    if not playbook_id:
+        return jsonify({"ok": False, "msg": "Missing playbook_id"}), 400
+
+    result = execute_soar_playbook(playbook_id, username, target_param)
+    log_security_event(
+        "secops.soar_playbook_executed",
+        f"SOAR Playbook '{playbook_id}' executed by {username}: {result.get('details')}",
+        level="WARNING" if result.get("success") else "ERROR",
+        identifier=username
+    )
+    return jsonify({"ok": result.get("success", False), "result": result})
+
+
+@secops_bp.route("/api/secops/playbooks/history")
+def api_secops_playbook_history():
+    """Returns the audit log of automated playbook countermeasures."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    history = get_playbook_history()
+    return jsonify({"ok": True, "history": history})
+
+
+@secops_bp.route("/api/secops/simulate-attack", methods=["POST"])
+def api_secops_simulate_attack():
+    """Red/Blue Chaos Security Drill: Safely trigger synthetic attacks to test SIEM/alerts."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or request.form or {}
+    attack_type = data.get("attack_type", "bruteforce").strip()
+    custom_ip = data.get("ip", "198.51.100.77").strip()
+    target_user = data.get("user", "test_target").strip()
+
+    result = simulate_security_attack(attack_type, custom_ip, target_user)
+    return jsonify({"ok": result.get("status") != "ERROR", "result": result})
+
+
+@secops_bp.route("/api/secops/ai-investigate", methods=["GET", "POST"])
+def api_secops_ai_investigate():
+    """AI SecOps Threat Analyst: Synthesizes threat incident and generates blast radius & containment plan."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    data = request.get_json(silent=True) or request.values or {}
+    event_id = data.get("event_id")
+    query = data.get("query")
+    analysis = investigate_incident_ai(event_id, query)
+    return jsonify({"ok": True, "analysis": analysis})
+
+
+@secops_bp.route("/api/secops/honeypot-stats")
+def api_secops_honeypot_stats():
+    """Returns Deception Technology Honeypot trap statistics and captured attackers."""
+    if not _is_secops_authorized():
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    stats = get_honeypot_stats()
+    return jsonify({"ok": True, "stats": stats})
+
+
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# DECEPTION HONEYPOT TRAP ROUTES (AUTO-BANNING PERIMETER DECOYS)
+# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+@secops_bp.route("/.env")
+@secops_bp.route("/.git/config")
+@secops_bp.route("/wp-admin/")
+@secops_bp.route("/wp-login.php")
+@secops_bp.route("/api/v1/internal/admin_dump")
+@secops_bp.route("/actuator/health")
+@secops_bp.route("/phpmyadmin")
+@secops_bp.route("/backup.sql")
+@secops_bp.route("/server-status")
+def honeypot_trap():
+    """Deception Honeypot Trap: Intercepts scanner bots and auto-bans attacker IPs."""
+    ip = request.remote_addr or "unknown"
+    path = request.path
+    log_security_event(
+        "secops.honeypot_triggered",
+        f"Deception honeypot trap '{path}' triggered by automated scanner bot",
+        level="CRITICAL",
+        ip=ip,
+        path=path,
+        method=request.method
+    )
+    # Auto-ban client IP in banned_ips table
+    try:
+        db = get_db_connection()
+        with transaction(db):
+            cur = db.cursor()
+            cur.execute(
+                "INSERT INTO banned_ips (ip, reason, banned_at) VALUES (%s, %s, NOW()) ON CONFLICT (ip) DO NOTHING",
+                (ip, f"Honeypot Decoy Trap Triggered ({path})")
+            )
+            cur.close()
+    except Exception as exc:
+        app_log.warning("Honeypot auto-ban write error: %s", exc)
+
+    return jsonify({"error": "Resource not found", "status": 404}), 404

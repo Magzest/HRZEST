@@ -38,10 +38,10 @@ load_dotenv()
 _HASHI_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hashi", ".env")
 load_dotenv(_HASHI_ENV)
 
-from flask import request, session, jsonify, redirect, url_for, flash, current_app, render_template
+from flask import request, session, jsonify, redirect, url_for, flash, current_app, render_template, g as _g
 import datetime
 import html as _html
-from database import get_db_connection
+from database import get_db_connection, get_master_db
 
 # ── Startup: warn if critical env vars are missing ──
 _missing_env = [k for k in ("DB_HOST", "DB_USER", "DB_PASS", "DB_NAME") if not os.environ.get(k)]
@@ -233,8 +233,7 @@ _TENANT_STATUS_RECHECK_SEC = 5 * 60
 def _perf_start_timer():
     """Stash a start time for _perf_record below (registered first so it
     wraps every other before_request hook's cost too)."""
-    from flask import g
-    g._perf_start = time.perf_counter()
+    _g._perf_start = time.perf_counter()
 
 
 @app.before_request
@@ -303,9 +302,8 @@ def _resolve_tenant():
             _g.tenant_db = session["tenant_db"]
             return
         try:
-            from database import get_master_db
             conn = get_master_db()
-            cur = conn.cursor(buffered=True)
+            cur = conn.cursor()
             cur.execute("SELECT status FROM tenants WHERE db_name=%s", (session["tenant_db"],))
             row = cur.fetchone()
             cur.close()
@@ -378,14 +376,16 @@ def _enforce_ip_ban():
     if not ip:
         return
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT reason FROM banned_ips WHERE ip=%s AND (expires_at IS NULL OR expires_at > NOW())",
-        (ip,),
-    )
-    row = cursor.fetchone()
-    cursor.close()
-    db.close()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT reason FROM banned_ips WHERE ip=%s AND (expires_at IS NULL OR expires_at > NOW())",
+            (ip,),
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        db.close()
     if row:
         return jsonify({"ok": False, "msg": "Access denied."}), 403
 
@@ -438,8 +438,7 @@ def _enforce_session_lifetime():
     if created and (time.time() - created) > _SESSION_MAX_AGE:
         session.clear()
         if request.path.startswith("/api/"):
-            from flask import jsonify as _jfy
-            return _jfy({"ok": False, "msg": "Session expired. Please log in again."}), 401
+            return jsonify({"ok": False, "msg": "Session expired. Please log in again."}), 401
         flash("Your session expired. Please log in again.", "warning")
         return redirect(url_for("auth.admin_login"))
 
@@ -467,8 +466,7 @@ def _enforce_idle_timeout():
         if (now - last_activity) > timeout_minutes * 60:
             session.clear()
             if request.path.startswith("/api/"):
-                from flask import jsonify as _jfy
-                return _jfy({"ok": False, "msg": "Session expired due to inactivity. Please log in again."}), 401
+                return jsonify({"ok": False, "msg": "Session expired due to inactivity. Please log in again."}), 401
             flash("Your session expired due to inactivity. Please log in again.", "warning")
             return redirect(url_for("auth.admin_login"))
     session["_last_activity"] = now
@@ -539,7 +537,7 @@ def _enforce_csrf():
         return  # CSRF disabled in test mode; Bearer-token tests handle auth separately
     if request.path.startswith("/api/"):
         return  # API routes use Bearer-token auth — no session/CSRF needed
-    if request.path in ("/login", "/admin_login", "/hr_login"):
+    if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
     # script (_inject_csrf_meta) adds X-CSRF-Token to every fetch() call, so
@@ -664,25 +662,33 @@ _SETTINGS_PATHS = {"/settings", "/admin_set_recovery_email",
 
 @app.after_request
 def _security_headers(response):
-    from flask import g
+    # ── Invariant headers (every response, every content-type) ──────────────
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    response.headers["Server"] = "AttendanceApp"
-    if request.scheme == "https":
-        # 2 years (63072000s), the floor major browsers require before a
-        # domain is eligible for HSTS preload-list inclusion.
-        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["Server"] = "HRzest"
+    # ── HSTS — always set so dev tools and scanners see the policy ──────────
+    # Short max-age in dev (5 min) avoids bricking non-HTTPS local access if
+    # the cert is later removed; 2 years in prod meets HSTS preload requirements.
+    is_prod = os.environ.get("APP_ENV", "production") != "development"
+    hsts_age = 63072000 if is_prod else 300
+    hsts_directives = f"max-age={hsts_age}; includeSubDomains"
+    if is_prod:
+        hsts_directives += "; preload"
+    response.headers["Strict-Transport-Security"] = hsts_directives
+    # ── CSP — set on ALL response types, not just text/html ─────────────────
+    # API/JSON responses also need CSP (prevents MIME-sniffing abuse) and
+    # provides a consistent security surface for scanners.
     ct = response.content_type or ""
     if "text/html" in ct:
+        from flask import g
         nonce = getattr(g, "csp_nonce", "")
-        # _inject_csrf_meta runs before this hook (Flask reverses registration order),
-        # so response.get_data() is the final HTML with nonces already injected.
-        # Scan for inline event-handler values and compute sha256 hashes so they
-        # pass CSP without needing 'unsafe-inline'.
+        # Scan for inline event-handler values and compute sha256 hashes so
+        # they pass CSP without needing 'unsafe-inline'.
         try:
             data = response.get_data()
             _ev_hashes: set = set()
@@ -698,19 +704,11 @@ def _security_headers(response):
             _ev_hashes = set()
         _unsafe_hashes = " 'unsafe-hashes'" if _ev_hashes else ""
         _hash_src = (" " + " ".join(sorted(_ev_hashes))) if _ev_hashes else ""
-        # Cloudflare Turnstile (admin_login's CAPTCHA gate — utils/auth.py)
-        # loads a live script from Cloudflare's own edge and renders in an
-        # iframe; neither can be self-hosted the way jsQR/Tabler Icons were,
-        # so this is a deliberate, path-scoped exception rather than a
-        # blanket relaxation of the CSP for every page.
-        _is_turnstile_page = request.path == "/admin_login"
+        # Cloudflare Turnstile (admin_login CAPTCHA) and employee portal
+        # loopback agent get path-scoped exceptions only.
+        _is_turnstile_page = request.path in ("/admin_login", "/login")
         _turnstile_src = " https://challenges.cloudflare.com" if _is_turnstile_page else ""
         _frame_src = "https://challenges.cloudflare.com" if _is_turnstile_page else "'none'"
-        # Employee portal's "DEVICE POSTURE RELAY" script (employee_portal.html)
-        # polls a locally-running Wi-Fi posture agent over loopback
-        # (desktop_agent/wifi_posture_agent.py, 127.0.0.1:47823) — a
-        # deliberate, path-scoped exception, not a blanket relaxation,
-        # same pattern as the Turnstile carve-out above.
         _is_employee_portal_page = request.path == "/employee_portal"
         _agent_src = " http://127.0.0.1:47823" if _is_employee_portal_page else ""
         response.headers["Content-Security-Policy"] = (
@@ -724,11 +722,14 @@ def _security_headers(response):
             f"connect-src 'self'{_turnstile_src}{_agent_src}; "
             f"frame-src {_frame_src}; "
             "frame-ancestors 'none'; "
-            # No <object>/<embed>/<applet> use anywhere in this app —
-            # explicit 'none' instead of relying on the default-src 'self'
-            # fallback closes off Flash/legacy-plugin-based XSS vectors.
             "object-src 'none'; "
             "report-uri /csp-report;"
+        )
+    else:
+        # Non-HTML responses: minimal restrictive CSP — blocks MIME sniffing
+        # and any attempt to embed API responses as documents or frames.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'; object-src 'none';"
         )
     return response
 
