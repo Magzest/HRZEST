@@ -20,7 +20,7 @@
          gradient that made this page's nav look different from every
          other admin page depending on when you loaded it. */
       :root {
-        --brand-accent: #fbbf24;
+        --brand-accent: #60a5fa;
       }
       .sidebar {
         width: 240px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
@@ -56,7 +56,6 @@
       .nav-item.active {
         background: rgba(255,255,255,0.15);
         color: #fff; font-weight: 700;
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
       }
       .nav-item.active::before {
         content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
@@ -74,46 +73,6 @@
         margin-left: auto; background: #ef4444; color: white;
         border-radius: 20px; padding: 1px 7px; font-size: 10px; font-weight: 700;
         box-shadow: 0 2px 6px rgba(239,68,68,0.4);
-      }
-      /* ── COMPANY LIST PANEL ── */
-      .co-panel {
-        margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);
-        padding-top: 12px;
-      }
-      .co-panel-label {
-        font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35);
-        text-transform: uppercase; letter-spacing: 1px;
-        padding: 0 10px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;
-      }
-      .co-panel-label a {
-        color: rgba(255,255,255,0.35); text-decoration: none; font-size: 10px;
-        transition: color 0.15s;
-      }
-      .co-panel-label a:hover { color: rgba(255,255,255,0.7); }
-      .co-list { display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
-      .co-list::-webkit-scrollbar { width: 3px; }
-      .co-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
-      .co-entry {
-        display: flex; align-items: center; gap: 8px;
-        padding: 6px 10px; border-radius: 8px;
-        transition: background 0.15s; text-decoration: none;
-      }
-      .co-entry:hover { background: rgba(255,255,255,0.08); }
-      .co-dot {
-        width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 10px; font-weight: 800; letter-spacing: 0;
-        background: rgba(96,165,250,0.18); color: #93c5fd;
-      }
-      .co-info { min-width: 0; }
-      .co-name { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.82); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .co-code { font-size: 10px; color: rgba(255,255,255,0.38); margin-top: 1px; }
-      .co-empty { font-size: 11px; color: rgba(255,255,255,0.3); padding: 6px 10px; }
-
-      .sidebar-footer {
-        margin-top: auto; font-size: 11px; color: rgba(255,255,255,0.4);
-        padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);
-        display: flex; align-items: center; gap: 7px;
       }
 
       /* ── MAIN ── */
@@ -393,50 +352,29 @@
         </div>
       </div>
 
-      <a class="nav-item active" href="{{ tpath('/admin') }}"><span class="nav-icon"><i class="ti ti-home"></i></span>Dashboard</a>
-      <a class="nav-item" href="{{ tpath('/employees') }}"><span class="nav-icon"><i class="ti ti-users"></i></span>Employees</a>
+      {% set _tp = (pending_leaves|default(0)) + (pending_resignations|default(0)) + (pending_tickets|default(0)) %}
 
-      <a class="nav-item" href="{{ tpath('/monthly_report') }}"><span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance</a>
-      <a class="nav-item" href="{{ tpath('/bulk_mark_attendance') }}"><span class="nav-icon"><i class="ti ti-pencil-check"></i></span>Mark Attendance</a>
-      <a class="nav-item" href="{{ tpath('/salary_report') }}"><span class="nav-icon"><i class="ti ti-coin"></i></span>Salary &amp; Payslips</a>
-      <a class="nav-item" href="{{ tpath('/leave_holidays') }}"><span class="nav-icon"><i class="ti ti-calendar-event"></i></span>Leaves &amp; Holidays{% set _tp=(pending_leaves|default(0))+(pending_resignations|default(0))+(pending_tickets|default(0)) %}{% if _tp>0 %}<span class="badge-count">{{ _tp }}</span>{% endif %}</a>
+      <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="{{ tpath('/admin') }}"><span class="nav-icon"><i class="ti ti-home"></i></span>Dashboard</a>
+      <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}"><span class="nav-icon"><i class="ti ti-users"></i></span>Employees</a>
+      <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}"><span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance</a>
+      <a class="nav-item {{ 'active' if active_nav == 'salary' }}" href="{{ tpath('/salary_report') }}"><span class="nav-icon"><i class="ti ti-coin"></i></span>Salary &amp; Payslips</a>
+      <a class="nav-item {{ 'active' if active_nav == 'leaves' }}" href="{{ tpath('/leave_holidays') }}"><span class="nav-icon"><i class="ti ti-calendar-event"></i></span>Leaves &amp; Holidays{% if _tp>0 %}<span class="badge-count">{{ _tp }}</span>{% endif %}</a>
       <hr class="nav-sep u-mt-12" />
-      <a class="nav-item" href="{{ tpath('/overtime') }}"><span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off</a>
-      <a class="nav-item" href="{{ tpath('/performance') }}"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
-  <a class="nav-item" href="{{ tpath('/onboarding') }}"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
-      <a class="nav-item" href="{{ tpath('/analytics') }}"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
+      <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}"><span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off</a>
+      <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
+      <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
+      <a class="nav-item {{ 'active' if active_nav == 'tickets' }}" href="{{ tpath('/tickets') }}"><span class="nav-icon"><i class="ti ti-ticket"></i></span>Tickets</a>
+      <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}"><span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents</a>
+      <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
   {% if session.get('admin_role') == 'superadmin' %}
   <a class="nav-item" href="/super_admin/login" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal</a>
   {% endif %}
-  <a class="nav-item" href="{{ tpath('/org_chart') }}"><span class="nav-icon"><i class="ti ti-hierarchy"></i></span>Org Chart</a>
-  <a class="nav-item" href="{{ tpath('/admin_tools') }}"><span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools</a>
+  <a class="nav-item {{ 'active' if active_nav == 'admin_tools' }}" href="{{ tpath('/admin_tools') }}"><span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools</a>
     
-  <a class="nav-item" href="{{ tpath('/settings') }}"><span class="nav-icon"><i class="ti ti-settings"></i></span>Settings</a>
+  <a class="nav-item {{ 'active' if active_nav == 'settings' }}" href="{{ tpath('/settings') }}"><span class="nav-icon"><i class="ti ti-settings"></i></span>Settings</a>
       <a class="nav-item" href="{{ tpath('/logout') }}"><span class="nav-icon"><i class="ti ti-logout"></i></span>Logout</a>
-      
-      <div class="co-panel">
-        <div class="co-panel-label">
-          <span>Companies</span>
-          <a href="{{ tpath('/companies') }}" title="Manage companies"><i class="ti ti-settings u-fs-10"></i></a>
-        </div>
-        <div class="co-list">
-          {% if all_companies %}
-            {% for c in all_companies %}
-            <a class="co-entry" href="{{ tpath('/companies') }}">
-              <div class="co-dot">{{ (c.code or c.name[:2]) | upper }}</div>
-              <div class="co-info">
-                <div class="co-name">{{ c.name }}</div>
-                {% if c.code %}<div class="co-code">{{ c.code }}</div>{% endif %}
-              </div>
-            </a>
-            {% endfor %}
-          {% else %}
-            <div class="co-empty">No companies yet.</div>
-          {% endif %}
-        </div>
-      </div>
 
-      <div class="sidebar-footer"><i class="ti ti-clock u-fs-13"></i> Shift: {{ shift_start }} – {{ shift_end }}</div>
+      <div class="sidebar-footer"><i class="ti ti-clock u-fs-13"></i> <span class="sb-live-clock"></span></div>
 
     </div>
 
