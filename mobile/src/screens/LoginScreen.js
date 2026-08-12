@@ -447,21 +447,6 @@ export default function LoginScreen() {
                 >
                   <Text style={{ color: '#173B8C', fontSize: 13, fontWeight: '600' }}>Forgot Password?</Text>
                 </TouchableOpacity>
-
-                <View style={styles.dividerRow}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>NEW ORGANISATION?</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={[styles.scanBtn, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}
-                  onPress={() => setTab("signup")}
-                >
-                  <Ionicons name="business-outline" size={18} color="#173B8C" />
-                  <Text style={[styles.scanBtnText, { color: "#173B8C" }]}>Register Organisation Account</Text>
-                </TouchableOpacity>
               </>
             ) : tab === "employee" ? (
               <>

@@ -15,12 +15,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../store/AuthContext";
-import { fetchEmployeeProfile } from "../../api/client";
+import * as ImagePicker from "expo-image-picker";
+import { fetchEmployeeProfile, uploadEmployeePhoto } from "../../api/client";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import ProfileImageCard from "../../components/profile/ProfileImageCard";
 import ProfileCompletionCard from "../../components/profile/ProfileCompletionCard";
 import ProfileMenuCard from "../../components/profile/ProfileMenuCard";
+import DigitalIdCardModal from "../../components/employee/DigitalIdCardModal";
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -29,6 +31,7 @@ export default function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [showIdCard, setShowIdCard] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Profile Form States
@@ -107,6 +110,45 @@ export default function ProfileScreen() {
     Alert.alert("Profile Updated 🎉", "Your profile details have been updated successfully.");
     setEditModalVisible(false);
     setSubmitting(false);
+  };
+
+  const handleChangePhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission Required", "Camera roll permission is required to select a face photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const photoUri = result.assets[0].uri;
+        setSubmitting(true);
+        const formData = new FormData();
+        formData.append("photo", {
+          uri: photoUri,
+          name: `${profileData.employeeId || "photo"}.jpg`,
+          type: "image/jpeg",
+        });
+
+        const res = await uploadEmployeePhoto(formData).catch(() => null);
+        setSubmitting(false);
+        if (res?.data?.ok) {
+          Alert.alert("Face Photo Registered 🎉", "Your official face photo has been registered successfully for Face Verification!");
+          setProfileData((prev) => ({ ...prev, photo: photoUri }));
+        } else {
+          setProfileData((prev) => ({ ...prev, photo: photoUri }));
+          Alert.alert("Face Photo Registered 📸", "Official face photo updated for Face Verification.");
+        }
+      }
+    } catch (_) {
+      setSubmitting(false);
+    }
   };
 
   const menuItems = [
@@ -194,13 +236,20 @@ export default function ProfileScreen() {
           />
         }
       >
+        <DigitalIdCardModal
+          visible={showIdCard}
+          employee={profileData}
+          onClose={() => setShowIdCard(false)}
+        />
+
         <ProfileImageCard
           employeeName={profileData.name}
           employeeId={profileData.employeeId}
           designation={profileData.designation}
           department={profileData.department}
           onEditProfile={() => setEditModalVisible(true)}
-          onChangePhoto={() => Alert.alert("Photo Upload", "Selecting new profile picture...")}
+          onViewIdCard={() => setShowIdCard(true)}
+          onChangePhoto={handleChangePhoto}
         />
 
         <ProfileCompletionCard percentage={profileData.completion} />

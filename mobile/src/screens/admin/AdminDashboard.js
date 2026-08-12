@@ -22,6 +22,7 @@ import PendingApprovalCard from "../../components/admin/PendingApprovalCard";
 import AnalyticsOverviewCard from "../../components/admin/AnalyticsOverviewCard";
 import AnnouncementCard from "../../components/admin/AnnouncementCard";
 import RecentActivityList from "../../components/admin/RecentActivityList";
+import AiChatModal from "../../components/AiChatModal";
 
 import { fetchDashboard } from "../../api/client";
 import { useAuth } from "../../store/AuthContext";
@@ -32,6 +33,8 @@ export default function AdminDashboard({ navigation }) {
   const [dashboardData, setDashboardData] = useState(null);
   const [announcementModalVisible, setAnnouncementModalVisible] = useState(false);
   const [activityModalVisible, setActivityModalVisible] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+
 
   useEffect(() => {
     loadDashboard();
@@ -246,10 +249,37 @@ export default function AdminDashboard({ navigation }) {
             </View>
           </View>
         </Modal>
+
+        {/* Floating AI HR Assistant Button */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={{
+            position: "absolute",
+            bottom: 24,
+            right: 20,
+            width: 54,
+            height: 54,
+            borderRadius: 27,
+            backgroundColor: "#0B2253",
+            justifyContent: "center",
+            alignItems: "center",
+            elevation: 8,
+            shadowColor: "#0B2253",
+            shadowOpacity: 0.4,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+          }}
+          onPress={() => setShowAiModal(true)}
+        >
+          <Ionicons name="sparkles" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <AiChatModal visible={showAiModal} onClose={() => setShowAiModal(false)} />
       </SafeAreaView>
     </LinearGradient>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
