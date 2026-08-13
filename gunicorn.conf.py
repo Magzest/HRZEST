@@ -7,6 +7,17 @@ import os
 # ── Binding ──────────────────────────────────────────────────────────────────
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
 
+# ── TLS (internal nginx<->app hop only — nginx terminates the real cert) ──────
+# nginx's proxy_pass talks to this backend over https:// (see nginx.conf /
+# nginx.conf.template), so gunicorn must actually terminate TLS here or every
+# proxied request hangs until nginx's read timeout, surfacing as 504s. Same
+# cert.pem/key.pem path wsgi.py's own dev-server fallback uses.
+_cert = os.environ.get("SSL_CERT_PATH", os.path.join(os.path.dirname(__file__), "cert.pem"))
+_key = os.environ.get("SSL_KEY_PATH", os.path.join(os.path.dirname(__file__), "key.pem"))
+if os.path.exists(_cert) and os.path.exists(_key):
+    certfile = _cert
+    keyfile = _key
+
 # ── Workers ──────────────────────────────────────────────────────────────────
 # gthread: multi-threaded workers — ideal for I/O-bound face recognition
 # Rule of thumb: (2 × CPU cores) + 1, capped at 8 for a 4 GB VPS

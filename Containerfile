@@ -36,6 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 \
     libssl3 \
     curl \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1001 appuser \
     && useradd --uid 1001 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser

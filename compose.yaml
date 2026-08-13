@@ -42,12 +42,13 @@ services:
         limits:
           cpus: "1.0"
           memory: 1gb
+          pids: 200
     # k8s-file driver + explicit caps: without a bound, container logs grow
     # unbounded on disk — a flood of requests (accidental or a deliberate
     # DoS attempt) fills the volume over time. 3 x 10MB per service is
     # generous for normal operation and bounded worst-case.
     logging:
-      driver: k8s-file
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
@@ -61,7 +62,6 @@ services:
     tmpfs:
       - /tmp
       - /var/run/postgresql
-    pids_limit: 200
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -86,8 +86,9 @@ services:
           # 1.5-2.5GB RAM — tune based on actual usage, this is a starting point.
           cpus: "1.0"
           memory: 3gb
+          pids: 100
     logging:
-      driver: k8s-file
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
@@ -105,11 +106,15 @@ services:
       - /tmp
       - /run
       - /var/log
-    pids_limit: 100
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    # clamav's own entrypoint chowns /run/clamav on startup — needs CAP_CHOWN
+    # back even with cap_drop: ALL, or it fails before clamd ever starts.
+    cap_add:
+      - CHOWN
+      - FOWNER
     healthcheck:
       # --ping asks clamd to respond without doing a full scan. Long
       # start_period because the first boot downloads the full signature
@@ -137,8 +142,9 @@ services:
         limits:
           cpus: "0.25"
           memory: 128mb
+          pids: 50
     logging:
-      driver: k8s-file
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
@@ -146,11 +152,14 @@ services:
     tmpfs:
       - /tmp
       - /data
-    pids_limit: 50
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -183,6 +192,7 @@ services:
         limits:
           cpus: "1.5"
           memory: 2gb
+          pids: 200
     depends_on:
       db:
         condition: service_healthy
@@ -199,7 +209,7 @@ services:
       redis:
         condition: service_started
     logging:
-      driver: k8s-file
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
@@ -228,7 +238,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    pids_limit: 200
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -273,15 +282,15 @@ services:
         limits:
           cpus: "0.25"
           memory: 128mb
+          pids: 20
     logging:
-      driver: k8s-file
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
     read_only: true
     tmpfs:
       - /tmp
-    pids_limit: 20
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -302,8 +311,9 @@ services:
         limits:
           cpus: "0.5"
           memory: 256mb
+          pids: 50
     logging:
-      driver: k8s-file
+      driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
@@ -331,7 +341,6 @@ services:
       - /tmp
       - /var/cache/nginx
       - /var/run
-    pids_limit: 50
     security_opt:
       - no-new-privileges:true
     cap_drop:
