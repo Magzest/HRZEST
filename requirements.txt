@@ -59,7 +59,7 @@ typing-extensions>=4.7.0
 pytz>=2025.2
 
 # ── AWS Secrets Manager (production secret loading — see utils/secrets_loader.py)
-boto3>=1.34.0
+boto3>=1.43.63
 
 # ── AI assistant (employee chat widget — see utils/ai_assistant.py) ────────────
 # No package needed: talks to the Anthropic API directly over HTTPS via
