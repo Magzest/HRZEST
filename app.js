@@ -132,9 +132,9 @@ function initHeroScanner() {
   const scannerAvatar = document.getElementById('scannerAvatar');
 
   const mockUsers = [
-    { name: 'Elena Rostova', role: 'UX Specialist', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80' },
-    { name: 'David Kim', role: 'Backend Lead', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80' },
-    { name: 'Sarah Jenkins', role: 'Lead Architect', img: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80' }
+    { name: 'Elena Rostova', role: 'UX Specialist', img: 'assets/waving_avatar.jpg' },
+    { name: 'David Kim', role: 'Backend Lead', img: 'assets/waving_avatar.jpg' },
+    { name: 'Sarah Jenkins', role: 'Lead Architect', img: 'assets/waving_avatar.jpg' }
   ];
 
   let isScanning = false;
@@ -325,19 +325,19 @@ function initOrgVault() {
       name: 'Sarah Jenkins',
       role: 'Senior Software Architect',
       id: 'ID: HR-994821 | Dept: Engineering',
-      photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'
+      photo: 'assets/waving_avatar.jpg'
     },
     alex: {
       name: 'Alex Rivera',
       role: 'Product Designer',
       id: 'ID: HR-884102 | Dept: Product UI/UX',
-      photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80'
+      photo: 'assets/waving_avatar.jpg'
     },
     david: {
       name: 'David Kim',
       role: 'DevOps Lead',
       id: 'ID: HR-773919 | Dept: Cloud Infra',
-      photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80'
+      photo: 'assets/waving_avatar.jpg'
     }
   };
 
