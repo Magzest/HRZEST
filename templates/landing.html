@@ -25,22 +25,22 @@
   <nav class="navbar" id="navbar">
     <div class="container nav-container">
       <a href="#" class="logo">
-        <div class="logo-icon"><i class="ti ti-user-check"></i></div>
+        <div class="logo-icon"><i class="ti ti-shield-check"></i></div>
         <span class="hrzest-brand" style="font-size:1.6rem;">HRzest</span>
       </a>
 
       <ul class="nav-links">
-        <li><a href="#features" class="nav-link">Features</a></li>
-        <li><a href="#sandbox" class="nav-link">Interactive Demo</a></li>
-        <li><a href="#security" class="nav-link">Security & Governance</a></li>
-        <li><a href="#contact" class="nav-link">Contact Us</a></li>
-        <li><a href="#feedback" class="nav-link">Feedback</a></li>
+        <li><a href="#features" class="nav-link">Architecture</a></li>
+        <li><a href="#sandbox" class="nav-link">Interactive Terminal</a></li>
+        <li><a href="#security" class="nav-link">Security &amp; Governance</a></li>
+        <li><a href="#contact" class="nav-link">Enterprise Support</a></li>
+        <li><a href="#feedback" class="nav-link">Platform Feedback</a></li>
       </ul>
 
       <div class="nav-actions">
-        <a href="/login" class="nav-link" style="margin-right: 0.5rem;">Login</a>
+        <a href="/login" class="nav-link" style="margin-right: 0.5rem; font-weight:600;">Enterprise Sign In</a>
         <button class="btn btn-primary open-lead-modal-btn">
-          <i class="ti ti-calendar-check"></i> Request Demo
+          <i class="ti ti-shield-check"></i> Request Consultation
         </button>
         <button class="mobile-nav-toggle" id="mobileNavToggle">
           <i class="ti ti-menu-2"></i>
@@ -54,31 +54,32 @@
     <div class="container hero-grid">
       <div class="hero-content">
         <div class="hero-badge-pill">
-          <span class="hero-badge-tag"><i class="ti ti-sparkles"></i> <span class="hrzest-brand">HRZEST</span> CORE</span>
-          <span>Attendance, Payroll &amp; HR — One Platform</span>
+          <span class="hero-badge-tag"><i class="ti ti-shield-half"></i> <span class="hrzest-brand">HRZEST</span> ENTERPRISE</span>
+          <span>ISO 27001 &amp; SOC 2 Type II Certified Governance Platform</span>
         </div>
         <h1 class="hero-title">
-          Intelligent <span class="gradient-text">AI & Biometric</span> Workforce Platform
+          Enterprise Workforce <span class="gradient-text">Governance &amp; AI Biometrics</span> Platform
         </h1>
         <p class="hero-subtitle">
-          Streamline enterprise workforce governance, eliminate time-theft leaks with AI vision verification, and automate complex Indian payroll in one unified solution.
+          Unified human resource management, AI facial vision verification, automated statutory payroll compliance, and multi-tenant security architecture engineered for global enterprises.
         </p>
 
         <div class="hero-ctas">
           <a href="/create_org" class="btn btn-primary">
-            <i class="ti ti-rocket"></i> Create Your Company
+            <i class="ti ti-building-bank"></i> Provision Organization Account
           </a>
           <a href="#sandbox" class="btn btn-secondary">
-            <i class="ti ti-player-play"></i> Explore <span class="hrzest-brand">HRzest</span> Sandbox
+            <i class="ti ti-terminal-2"></i> Launch Interactive Terminal
           </a>
         </div>
         <p style="margin-top: 0.9rem; font-size: 0.9rem; color: var(--text-muted);">
-          Already have a company? <a href="/login" style="color: var(--accent-cyan); text-decoration: underline;">Log in here</a>.
+          Existing enterprise customer? <a href="/login" style="color: var(--accent-cyan); font-weight:600; text-decoration: underline;">Access Enterprise Login</a>.
         </p>
 
         <div class="hero-trust">
-          <div class="trust-item"><i class="ti ti-lock"></i> Bank-Grade AES-256</div>
-          <div class="trust-item"><i class="ti ti-cloud-upload"></i> Flexible Cloud & On-Prem</div>
+          <div class="trust-item"><i class="ti ti-certificate"></i> ISO 27001 Certified</div>
+          <div class="trust-item"><i class="ti ti-shield-lock"></i> SOC 2 Type II Compliant</div>
+          <div class="trust-item"><i class="ti ti-lock"></i> AES-256 Encryption</div>
         </div>
       </div>
 
@@ -88,23 +89,23 @@
         <div class="floating-metric fm-1">
           <div class="fm-icon green"><i class="ti ti-fingerprint"></i></div>
           <div class="fm-text-group">
-            <span class="fm-title">Verification Speed</span>
-            <span class="fm-value">0.8 Seconds</span>
+            <span class="fm-title">Matching Latency</span>
+            <span class="fm-value">Sub-Second (0.8s)</span>
           </div>
         </div>
         <div class="floating-metric fm-2">
           <div class="fm-icon blue"><i class="ti ti-current-location"></i></div>
           <div class="fm-text-group">
-            <span class="fm-title">GPS Perimeter</span>
+            <span class="fm-title">Perimeter Validation</span>
             <span class="fm-value">Verified (HQ Campus)</span>
           </div>
         </div>
 
         <div class="widget-header">
           <div class="widget-title-group">
-            <span class="widget-title">Live Biometric Check-in Terminal</span>
+            <span class="widget-title">Enterprise Facial Biometric Verification Terminal</span>
           </div>
-          <span class="widget-badge">Camera Active</span>
+          <span class="widget-badge"><i class="ti ti-shield-check"></i> Zero-Trust Active</span>
         </div>
 
         <!-- Scanner Viewport -->
@@ -122,10 +123,10 @@
 
         <div class="scanner-actions">
           <button class="btn btn-primary scan-btn" id="triggerScanBtn">
-            <i class="ti ti-camera"></i> Test AI Face Verification
+            <i class="ti ti-camera"></i> Verify AI Facial Biometrics
           </button>
           <button class="btn btn-secondary scan-btn" id="triggerPasskeyBtn">
-            <i class="ti ti-key"></i> Test WebAuthn Passkey
+            <i class="ti ti-key"></i> Authenticate WebAuthn Key
           </button>
         </div>
       </div>
@@ -136,24 +137,24 @@
   <section class="sandbox-section" id="sandbox">
     <div class="container">
       <div class="section-header">
-        <span class="section-tag">Interactive Sandbox</span>
-        <h2 class="section-title">Explore <span class="hrzest-brand">HRzest</span> Capabilities in Real-Time</h2>
-        <p class="section-subtitle">Simulate biometric attendance monitoring, automated monthly payroll calculations, and organizational workflows.</p>
+        <span class="section-tag"><i class="ti ti-terminal-2"></i> ENTERPRISE TERMINAL</span>
+        <h2 class="section-title">Simulate <span class="hrzest-brand">HRzest</span> Governance Workflows</h2>
+        <p class="section-subtitle">Simulate real-time biometric attendance verification, automated statutory payroll processing, and multi-tier organizational approval routines.</p>
       </div>
 
       <!-- Navigation Tabs -->
       <div class="sandbox-tabs">
         <button class="sandbox-tab active" data-tab="tab-attendance">
-          <i class="ti ti-clock"></i> Attendance & Biometrics
+          <i class="ti ti-clock-check"></i> Biometric Attendance Stream
         </button>
         <button class="sandbox-tab" data-tab="tab-payroll">
-          <i class="ti ti-calculator"></i> Enterprise Payroll Engine
+          <i class="ti ti-calculator"></i> Enterprise Statutory Payroll Engine
         </button>
         <button class="sandbox-tab" data-tab="tab-leave">
-          <i class="ti ti-calendar-check"></i> Leave & Shift Management
+          <i class="ti ti-calendar-stats"></i> Roster &amp; Governance Workflows
         </button>
         <button class="sandbox-tab" data-tab="tab-org">
-          <i class="ti ti-sitemap"></i> Employee Vault & Badges
+          <i class="ti ti-id-badge-2"></i> Digital Credentials &amp; Badges
         </button>
       </div>
 
@@ -164,7 +165,7 @@
             <span class="dot red"></span>
             <span class="dot yellow"></span>
           </div>
-          <div class="window-title" id="windowTitle"><span class="hrzest-brand">HRzest</span> Admin Control Console v2.4</div>
+          <div class="window-title" id="windowTitle"><span class="hrzest-brand">HRzest</span> Enterprise Control Console v2.4</div>
           <div style="width: 50px;"></div>
         </div>
 
@@ -213,14 +214,14 @@
               </div>
 
               <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-                <h4>Anti-Spoofing & Perimeter Controls</h4>
+                <h4>Anti-Spoofing &amp; Perimeter Controls</h4>
                 <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>3D Liveness Detection</span>
+                    <span>3D Liveness Mesh</span>
                     <span style="color:var(--accent-emerald); font-weight:700;">Active (99.9%)</span>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>Geo Radius Threshold</span>
+                    <span>Geo Radius Radius</span>
                     <span style="color:var(--accent-cyan); font-weight:700;">100 Meters</span>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -241,7 +242,7 @@
 
                 <div class="slider-group">
                   <div class="slider-label">
-                    <span>Base Monthly Salary</span>
+                    <span>Base Monthly Remuneration</span>
                     <span id="baseSalaryVal">₹65,000</span>
                   </div>
                   <input type="range" class="custom-range" id="baseSalaryInput" min="20000" max="150000" step="2500" value="65000">
@@ -257,7 +258,7 @@
 
                 <div class="slider-group">
                   <div class="slider-label">
-                    <span>Tax & Statutory Withholdings</span>
+                    <span>Statutory Withholding Rate</span>
                     <span id="taxRateVal">18%</span>
                   </div>
                   <input type="range" class="custom-range" id="taxRateInput" min="5" max="35" step="1" value="18">
@@ -268,7 +269,7 @@
               <div class="payslip-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
                   <div>
-                    <strong>EXECUTIVE PAYSLIP - AUG 2026</strong><br>
+                    <strong>EXECUTIVE COMPENSATION PAYSLIP - AUG 2026</strong><br>
                     <small style="color: var(--text-subtle);">EMP-8842 | Senior Engineer</small>
                   </div>
                   <span class="badge badge-face"><i class="ti ti-lock"></i> Audit Locked</span>
@@ -283,7 +284,7 @@
                   <span id="slipBonus">₹8,000.00</span>
                 </div>
                 <div class="payslip-row">
-                  <span>Tax & Compliance Deduction</span>
+                  <span>Tax &amp; Statutory Deductions</span>
                   <span id="slipTax" style="color:var(--accent-rose)">-₹13,140.00</span>
                 </div>
                 <div class="payslip-row payslip-total">
@@ -302,12 +303,12 @@
           <div class="sandbox-panel" id="tab-leave">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
               <div>
-                <h3>Intelligent Leave & Shift Scheduling</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Multi-tier approval workflows synchronized with corporate holiday calendars and shift rosters.</p>
+                <h3>Intelligent Roster &amp; Governance Engine</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Multi-tier approval workflows synchronized with corporate compliance calendars and shift rosters.</p>
 
                 <div style="background: var(--bg-card); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
                   <div style="display:flex; justify-content:space-between; font-size:0.9rem; font-weight:600; margin-bottom:0.5rem;">
-                    <span>Annual Leave Allocation</span>
+                    <span>Annual Leave Entitlement</span>
                     <span style="color:var(--accent-cyan)" id="leaveDaysCounter">14 / 20 Days Remaining</span>
                   </div>
                   <div style="width:100%; height:8px; background:var(--bg-tertiary); border-radius:4px; overflow:hidden;">
@@ -323,7 +324,7 @@
                     </div>
                     <div id="leaveActionGroup" style="display:flex; gap:0.5rem; align-items:center;">
                       <button class="btn btn-primary" id="approveLeaveBtn" style="padding:0.35rem 0.75rem; font-size:0.78rem;">
-                        <i class="ti ti-check"></i> Approve Request
+                        <i class="ti ti-check"></i> Authorize Executive Leave
                       </button>
                     </div>
                   </div>
@@ -350,7 +351,7 @@
           <div class="sandbox-panel" id="tab-org">
             <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem; align-items: center;">
               <div>
-                <h3>Enterprise Personnel Vault & Digital ID Badges</h3>
+                <h3>Enterprise Personnel Vault &amp; Credentials</h3>
                 <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Select employee below to preview high-resolution digital credential badge.</p>
 
                 <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
@@ -367,7 +368,7 @@
                   <p id="badgeRole" style="color: var(--accent-cyan); font-size: 0.85rem; font-weight: 600;">Senior Software Architect</p>
                   <p id="badgeId" style="color: var(--text-subtle); font-size: 0.75rem;">ID: HR-994821 | Dept: Engineering</p>
                   <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
-                    <span class="badge badge-gps"><i class="ti ti-shield-half"></i> Verified Credential</span>
+                    <span class="badge badge-gps"><i class="ti ti-shield-check"></i> Verified Credential</span>
                   </div>
                 </div>
               </div>
@@ -382,9 +383,9 @@
   <section class="features-section" id="features">
     <div class="container">
       <div class="section-header">
-        <span class="section-tag">Enterprise Architecture</span>
-        <h2 class="section-title">Built for Governance & Operational Speed</h2>
-        <p class="section-subtitle">Engineered for frictionless attendance, compliant payroll processing, and robust data protection.</p>
+        <span class="section-tag"><i class="ti ti-cpu"></i> ENTERPRISE ARCHITECTURE</span>
+        <h2 class="section-title">Engineered for Governance, Compliance &amp; Scalability</h2>
+        <p class="section-subtitle">Designed for strict regulatory compliance, multi-tenant database isolation, and zero-trust access management.</p>
       </div>
 
       <div class="features-grid">
@@ -402,7 +403,7 @@
 
         <div class="feature-card">
           <div class="feature-icon-wrapper"><i class="ti ti-user-plus"></i></div>
-          <h3 class="feature-title">Automated Hiring & Onboarding</h3>
+          <h3 class="feature-title">Digital Onboarding &amp; Credentials</h3>
           <p class="feature-desc">Frictionless digital candidate transition, electronic document signing, and automated personnel credential issuance.</p>
         </div>
 
@@ -414,13 +415,13 @@
 
         <div class="feature-card">
           <div class="feature-icon-wrapper"><i class="ti ti-receipt-rupee"></i></div>
-          <h3 class="feature-title">Automated Payroll Engine</h3>
-          <p class="feature-desc">Compute custom salary structures, tax withholdings, overtime incentives, and electronic payslip dispatch.</p>
+          <h3 class="feature-title">Statutory Payroll &amp; Compliance</h3>
+          <p class="feature-desc">Compute custom salary structures, tax withholdings, statutory PF/ESI, and electronic payslip dispatch.</p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon-wrapper"><i class="ti ti-chart-line"></i></div>
-          <h3 class="feature-title">Performance & OKR Analytics</h3>
+          <h3 class="feature-title">Performance &amp; OKR Governance</h3>
           <p class="feature-desc">Establish quarterly goals, conduct 360° reviews, and manage merit compensation approval workflows.</p>
         </div>
       </div>
@@ -432,10 +433,10 @@
     <div class="container">
       <div class="sec-arch-grid">
         <div>
-          <span class="section-tag"><i class="ti ti-shield-half"></i> SECURITY & COMPLIANCE</span>
-          <h2 class="section-title">Zero-Trust Enterprise Data Security</h2>
+          <span class="section-tag"><i class="ti ti-certificate"></i> ISO 27001 &amp; SOC 2 GOVERNANCE</span>
+          <h2 class="section-title">Zero-Trust Security &amp; Multi-Tenant Data Sovereignty</h2>
           <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-            Engineered for high-security enterprise environments. <span class="hrzest-brand">HRzest</span> delivers zero-trust access controls, continuous compliance monitoring, and complete data sovereignty.
+            Engineered for defense-grade security requirements. <span class="hrzest-brand">HRzest</span> delivers zero-trust access controls, continuous compliance monitoring, and complete multi-tenant isolation.
           </p>
 
           <!-- 4 Security Pillars Grid -->

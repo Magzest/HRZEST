@@ -179,18 +179,18 @@ function initHeroScanner() {
     if (scannerAvatar && scannerAvatar.tagName !== 'IMG') scannerAvatar.textContent = randomUser.initials;
 
     faceTargetBox.className = 'face-target-box scanning';
-    hudStatus.textContent = 'Mapping 128d Face Mesh...';
-    hudConfidence.textContent = 'Analyzing Liveness...';
+    hudStatus.textContent = 'Extracting 128d Facial Vector Mesh...';
+    hudConfidence.textContent = 'Executing 3D Liveness Mesh Analysis...';
 
     setTimeout(() => {
-      hudStatus.textContent = 'Matching Database Vector...';
-      hudConfidence.textContent = 'Confidence: 99.7%';
+      hudStatus.textContent = 'Verifying Encrypted Biometric Hash...';
+      hudConfidence.textContent = 'Confidence: 99.8%';
     }, 1000);
 
     setTimeout(() => {
       faceTargetBox.className = 'face-target-box success';
-      hudStatus.textContent = `SUCCESS: ${randomUser.name}`;
-      hudConfidence.textContent = 'GPS & Biometrics Verified!';
+      hudStatus.textContent = `VERIFIED: ${randomUser.name}`;
+      hudConfidence.textContent = 'Biometrics & Perimeter Verified';
 
       appendAttendanceLog(randomUser.name, randomUser.role, 'AI Face ID', 'badge-face', 'ti-camera');
 
@@ -206,12 +206,12 @@ function initHeroScanner() {
     isScanning = true;
 
     faceTargetBox.className = 'face-target-box scanning';
-    hudStatus.textContent = 'Waiting for TouchID / FIDO2 Passkey...';
-    hudConfidence.textContent = 'Hardware Token Handshake';
+    hudStatus.textContent = 'Awaiting FIDO2 Hardware Token Handshake...';
+    hudConfidence.textContent = 'Verifying WebAuthn Cryptographic Keys...';
 
     setTimeout(() => {
       faceTargetBox.className = 'face-target-box success';
-      hudStatus.textContent = 'FIDO2 Passkey Authenticated!';
+      hudStatus.textContent = 'FIDO2 Hardware Token Authenticated!';
       hudConfidence.textContent = 'Zero-Knowledge Cryptographic Signature';
 
       appendAttendanceLog('Alex Rivera', 'Product Designer', 'TouchID Passkey', 'badge-passkey', 'ti-key');
