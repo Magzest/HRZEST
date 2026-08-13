@@ -46,7 +46,7 @@ clamd>=1.0.2
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.2.2
 python-json-logger>=4.1.0
-setuptools>=78.1.1,<81
+setuptools>=84.0.0,<85
 # face_recognition_models (pulled in by face-recognition, above) still does
 # `from pkg_resources import resource_filename` at import time. setuptools
 # 81 dropped pkg_resources' auto-provisioning, so import face_recognition_models
