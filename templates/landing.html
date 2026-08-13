@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HRzest.com - Enterprise AI HR & Biometric Platform</title>
-  <meta name="description" content="Unified enterprise HR platform featuring AI Face Recognition, WebAuthn Passkeys, GPS Geo-fencing, Automated Payroll Engine, and Employee Governance.">
+  <title>HRzest.com - Enterprise HR & Biometric Platform</title>
+  <meta name="description" content="Unified enterprise HR platform featuring Face Recognition, WebAuthn Passkeys, GPS Geo-fencing, Automated Payroll Engine, and Employee Governance.">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 
   <!-- Icons: local Tabler set (no external CDN -- the app's CSP is style-src-elem 'self', which blocks cross-origin stylesheets) -->
@@ -13,13 +13,6 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='landing_v2.css') }}">
 </head>
 <body>
-
-  <!-- Background Glowing Orbs -->
-  <div class="bg-glow-container">
-    <div class="glow-orb glow-orb-1"></div>
-    <div class="glow-orb glow-orb-2"></div>
-    <div class="glow-orb glow-orb-3"></div>
-  </div>
 
   <!-- Navigation Bar -->
   <nav class="navbar" id="navbar">
@@ -30,17 +23,18 @@
       </a>
 
       <ul class="nav-links">
-        <li><a href="#features" class="nav-link">Architecture</a></li>
-        <li><a href="#sandbox" class="nav-link">Interactive Terminal</a></li>
-        <li><a href="#security" class="nav-link">Security &amp; Governance</a></li>
-        <li><a href="#contact" class="nav-link">Enterprise Support</a></li>
-        <li><a href="#feedback" class="nav-link">Platform Feedback</a></li>
+        <li><a href="#features" class="nav-link">Features</a></li>
+        <li><a href="#sandbox" class="nav-link">Live Demo</a></li>
+        <li><a href="#security" class="nav-link">Security</a></li>
+        <li><a href="#contact" class="nav-link">Contact</a></li>
       </ul>
 
       <div class="nav-actions">
-        <a href="/login" class="nav-link" style="margin-right: 0.5rem; font-weight:600;">Enterprise Sign In</a>
+        <a href="/login" class="btn btn-secondary" style="padding: 0.6rem 1.25rem;">
+          <i class="ti ti-login"></i> Log In
+        </a>
         <button class="btn btn-primary open-lead-modal-btn">
-          <i class="ti ti-shield-check"></i> Request Consultation
+          <i class="ti ti-calendar-check"></i> Get a Demo
         </button>
         <button class="mobile-nav-toggle" id="mobileNavToggle">
           <i class="ti ti-menu-2"></i>
@@ -53,33 +47,29 @@
   <section class="hero-section">
     <div class="container hero-grid">
       <div class="hero-content">
-        <div class="hero-badge-pill">
-          <span class="hero-badge-tag"><i class="ti ti-shield-half"></i> <span class="hrzest-brand">HRZEST</span> ENTERPRISE</span>
-          <span>ISO 27001 &amp; SOC 2 Type II Certified Governance Platform</span>
-        </div>
         <h1 class="hero-title">
-          Enterprise Workforce <span class="gradient-text">Governance &amp; AI Biometrics</span> Platform
+          HR, attendance, and payroll <span class="accent-text">on one secure platform</span>
         </h1>
         <p class="hero-subtitle">
-          Unified human resource management, AI facial vision verification, automated statutory payroll compliance, and multi-tenant security architecture engineered for global enterprises.
+          Face recognition and passkey check-ins, GPS geo-fencing, automated payroll, and multi-tenant security — built for teams that need it to just work.
         </p>
 
         <div class="hero-ctas">
           <a href="/create_org" class="btn btn-primary">
-            <i class="ti ti-building-bank"></i> Provision Organization Account
+            <i class="ti ti-building-bank"></i> Start Free Trial
           </a>
           <a href="#sandbox" class="btn btn-secondary">
-            <i class="ti ti-terminal-2"></i> Launch Interactive Terminal
+            <i class="ti ti-player-play"></i> See It In Action
           </a>
         </div>
         <p style="margin-top: 0.9rem; font-size: 0.9rem; color: var(--text-muted);">
-          Existing enterprise customer? <a href="/login" style="color: var(--accent-cyan); font-weight:600; text-decoration: underline;">Access Enterprise Login</a>.
+          Already have an account? <a href="/login" style="color: var(--accent-cyan); font-weight:600; text-decoration: underline;">Sign in</a>.
         </p>
 
         <div class="hero-trust">
-          <div class="trust-item"><i class="ti ti-certificate"></i> ISO 27001 Certified</div>
-          <div class="trust-item"><i class="ti ti-shield-lock"></i> SOC 2 Type II Compliant</div>
           <div class="trust-item"><i class="ti ti-lock"></i> AES-256 Encryption</div>
+          <div class="trust-item"><i class="ti ti-users-group"></i> Role-Based Access</div>
+          <div class="trust-item"><i class="ti ti-history"></i> Full Audit Trail</div>
         </div>
       </div>
 
@@ -89,23 +79,23 @@
         <div class="floating-metric fm-1">
           <div class="fm-icon green"><i class="ti ti-fingerprint"></i></div>
           <div class="fm-text-group">
-            <span class="fm-title">Matching Latency</span>
-            <span class="fm-value">Sub-Second (0.8s)</span>
+            <span class="fm-title">Match Speed</span>
+            <span class="fm-value">Under 1 Second</span>
           </div>
         </div>
         <div class="floating-metric fm-2">
           <div class="fm-icon blue"><i class="ti ti-current-location"></i></div>
           <div class="fm-text-group">
-            <span class="fm-title">Perimeter Validation</span>
+            <span class="fm-title">Location Check</span>
             <span class="fm-value">Verified (HQ Campus)</span>
           </div>
         </div>
 
         <div class="widget-header">
           <div class="widget-title-group">
-            <span class="widget-title">Enterprise Facial Biometric Verification Terminal</span>
+            <span class="widget-title">Face Check-In</span>
           </div>
-          <span class="widget-badge"><i class="ti ti-shield-check"></i> Zero-Trust Active</span>
+          <span class="widget-badge"><i class="ti ti-shield-check"></i> Live Demo</span>
         </div>
 
         <!-- Scanner Viewport -->
@@ -113,7 +103,7 @@
           <div class="scanner-overlay"></div>
           <div class="face-target-box" id="faceTargetBox">
             <div class="scan-laser"></div>
-            <img src="/static/waving_avatar.jpg?v=2" alt="Waving Person Avatar" class="avatar-preview" id="scannerAvatar">
+            <div class="avatar-preview avatar-photo" id="scannerAvatar" style="background-image:url('/static/face_scan_demo.jpg');" role="img" aria-label="Employee face scan preview"></div>
           </div>
           <div class="scanner-hud">
             <div class="hud-item"><i class="ti ti-focus-2"></i> <span id="hudStatus">Target Acquired</span></div>
@@ -123,10 +113,10 @@
 
         <div class="scanner-actions">
           <button class="btn btn-primary scan-btn" id="triggerScanBtn">
-            <i class="ti ti-camera"></i> Verify AI Facial Biometrics
+            <i class="ti ti-camera"></i> Scan Face
           </button>
           <button class="btn btn-secondary scan-btn" id="triggerPasskeyBtn">
-            <i class="ti ti-key"></i> Authenticate WebAuthn Key
+            <i class="ti ti-key"></i> Use Passkey
           </button>
         </div>
       </div>
@@ -137,24 +127,24 @@
   <section class="sandbox-section" id="sandbox">
     <div class="container">
       <div class="section-header">
-        <span class="section-tag"><i class="ti ti-terminal-2"></i> ENTERPRISE TERMINAL</span>
-        <h2 class="section-title">Simulate <span class="hrzest-brand">HRzest</span> Governance Workflows</h2>
-        <p class="section-subtitle">Simulate real-time biometric attendance verification, automated statutory payroll processing, and multi-tier organizational approval routines.</p>
+        <span class="section-tag"><i class="ti ti-terminal-2"></i> LIVE DEMO</span>
+        <h2 class="section-title">Try <span class="hrzest-brand">HRzest</span> right here</h2>
+        <p class="section-subtitle">No sign-up required — explore attendance, payroll, leave, and ID badges with sample data.</p>
       </div>
 
       <!-- Navigation Tabs -->
       <div class="sandbox-tabs">
         <button class="sandbox-tab active" data-tab="tab-attendance">
-          <i class="ti ti-clock-check"></i> Biometric Attendance Stream
+          <i class="ti ti-clock-check"></i> Attendance
         </button>
         <button class="sandbox-tab" data-tab="tab-payroll">
-          <i class="ti ti-calculator"></i> Enterprise Statutory Payroll Engine
+          <i class="ti ti-calculator"></i> Payroll
         </button>
         <button class="sandbox-tab" data-tab="tab-leave">
-          <i class="ti ti-calendar-stats"></i> Roster &amp; Governance Workflows
+          <i class="ti ti-calendar-stats"></i> Leave &amp; Rosters
         </button>
         <button class="sandbox-tab" data-tab="tab-org">
-          <i class="ti ti-id-badge-2"></i> Digital Credentials &amp; Badges
+          <i class="ti ti-id-badge-2"></i> ID Badges
         </button>
       </div>
 
@@ -165,7 +155,7 @@
             <span class="dot red"></span>
             <span class="dot yellow"></span>
           </div>
-          <div class="window-title" id="windowTitle"><span class="hrzest-brand">HRzest</span> Enterprise Control Console v2.4</div>
+          <div class="window-title" id="windowTitle"><span class="hrzest-brand">HRzest</span> Dashboard Preview</div>
           <div style="width: 50px;"></div>
         </div>
 
@@ -174,8 +164,8 @@
           <div class="sandbox-panel active" id="tab-attendance">
             <div class="attendance-demo-grid">
               <div>
-                <h3>Real-Time Live Attendance Stream</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Live monitoring feed across global enterprise campuses with automated multi-factor verification.</p>
+                <h3>Live Attendance Feed</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Every check-in verified automatically — face, passkey, or QR.</p>
                 
                 <table class="log-table">
                   <thead>
@@ -190,7 +180,7 @@
                   <tbody id="attendanceLogsBody">
                     <tr>
                       <td><strong>Sarah Jenkins</strong><br><small style="color:var(--text-subtle)">Senior Software Architect</small></td>
-                      <td><span class="badge badge-face"><i class="ti ti-camera"></i> AI Face ID</span></td>
+                      <td><span class="badge badge-face"><i class="ti ti-camera"></i> Face ID</span></td>
                       <td>HQ - Floor 4 (GPS Valid)</td>
                       <td>08:59 AM</td>
                       <td><span style="color:var(--accent-emerald)"><i class="ti ti-circle-check"></i> Verified</span></td>
@@ -214,14 +204,14 @@
               </div>
 
               <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-                <h4>Anti-Spoofing &amp; Perimeter Controls</h4>
+                <h4>Anti-Spoofing Controls</h4>
                 <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem;">
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>3D Liveness Mesh</span>
+                    <span>Liveness Detection</span>
                     <span style="color:var(--accent-emerald); font-weight:700;">Active (99.9%)</span>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span>Geo Radius Radius</span>
+                    <span>Geo-Fence Radius</span>
                     <span style="color:var(--accent-cyan); font-weight:700;">100 Meters</span>
                   </div>
                   <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -237,12 +227,12 @@
           <div class="sandbox-panel" id="tab-payroll">
             <div class="payroll-calculator-grid">
               <div>
-                <h3>Automated Monthly Compensation Engine</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Adjust parameters below to see instantaneous salary calculation, tax withholdings, and electronic payslip generation.</p>
+                <h3>Payroll Calculator</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Adjust the numbers and watch the payslip update instantly.</p>
 
                 <div class="slider-group">
                   <div class="slider-label">
-                    <span>Base Monthly Remuneration</span>
+                    <span>Base Monthly Salary</span>
                     <span id="baseSalaryVal">₹65,000</span>
                   </div>
                   <input type="range" class="custom-range" id="baseSalaryInput" min="20000" max="150000" step="2500" value="65000">
@@ -250,7 +240,7 @@
 
                 <div class="slider-group">
                   <div class="slider-label">
-                    <span>Performance Incentive</span>
+                    <span>Performance Bonus</span>
                     <span id="bonusVal">₹8,000</span>
                   </div>
                   <input type="range" class="custom-range" id="bonusInput" min="0" max="30000" step="1000" value="8000">
@@ -258,7 +248,7 @@
 
                 <div class="slider-group">
                   <div class="slider-label">
-                    <span>Statutory Withholding Rate</span>
+                    <span>Tax Withholding Rate</span>
                     <span id="taxRateVal">18%</span>
                   </div>
                   <input type="range" class="custom-range" id="taxRateInput" min="5" max="35" step="1" value="18">
@@ -269,31 +259,31 @@
               <div class="payslip-card">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
                   <div>
-                    <strong>EXECUTIVE COMPENSATION PAYSLIP - AUG 2026</strong><br>
+                    <strong>PAYSLIP — AUG 2026</strong><br>
                     <small style="color: var(--text-subtle);">EMP-8842 | Senior Engineer</small>
                   </div>
-                  <span class="badge badge-face"><i class="ti ti-lock"></i> Audit Locked</span>
+                  <span class="badge badge-face"><i class="ti ti-lock"></i> Locked</span>
                 </div>
 
                 <div class="payslip-row">
-                  <span>Gross Remuneration</span>
+                  <span>Gross Salary</span>
                   <span id="slipGross">₹65,000.00</span>
                 </div>
                 <div class="payslip-row">
-                  <span>Performance Incentive</span>
+                  <span>Performance Bonus</span>
                   <span id="slipBonus">₹8,000.00</span>
                 </div>
                 <div class="payslip-row">
-                  <span>Tax &amp; Statutory Deductions</span>
+                  <span>Tax Deductions</span>
                   <span id="slipTax" style="color:var(--accent-rose)">-₹13,140.00</span>
                 </div>
                 <div class="payslip-row payslip-total">
-                  <span>Net Disbursed Payout</span>
+                  <span>Net Pay</span>
                   <span id="slipNet">₹59,860.00</span>
                 </div>
 
                 <button class="btn btn-primary open-lead-modal-btn" style="width: 100%; margin-top: 1.25rem;">
-                  <i class="ti ti-file-type-pdf"></i> Generate Electronic Payslips
+                  <i class="ti ti-file-type-pdf"></i> Generate Payslip PDF
                 </button>
               </div>
             </div>
@@ -303,12 +293,12 @@
           <div class="sandbox-panel" id="tab-leave">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
               <div>
-                <h3>Intelligent Roster &amp; Governance Engine</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Multi-tier approval workflows synchronized with corporate compliance calendars and shift rosters.</p>
+                <h3>Leave &amp; Approvals</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Simple approval workflows synced with shift rosters and holiday calendars.</p>
 
                 <div style="background: var(--bg-card); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
                   <div style="display:flex; justify-content:space-between; font-size:0.9rem; font-weight:600; margin-bottom:0.5rem;">
-                    <span>Annual Leave Entitlement</span>
+                    <span>Annual Leave Balance</span>
                     <span style="color:var(--accent-cyan)" id="leaveDaysCounter">14 / 20 Days Remaining</span>
                   </div>
                   <div style="width:100%; height:8px; background:var(--bg-tertiary); border-radius:4px; overflow:hidden;">
@@ -319,12 +309,12 @@
                 <div style="display:flex; flex-direction:column; gap:0.75rem;">
                   <div style="padding:0.75rem 1rem; background:var(--bg-tertiary); border-radius:var(--radius-sm); display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                      <strong>Executive Leave Request (2 Days)</strong><br>
+                      <strong>Leave Request (2 Days)</strong><br>
                       <small style="color:var(--text-subtle)">Aug 18 - Aug 19</small>
                     </div>
                     <div id="leaveActionGroup" style="display:flex; gap:0.5rem; align-items:center;">
                       <button class="btn btn-primary" id="approveLeaveBtn" style="padding:0.35rem 0.75rem; font-size:0.78rem;">
-                        <i class="ti ti-check"></i> Authorize Executive Leave
+                        <i class="ti ti-check"></i> Approve
                       </button>
                     </div>
                   </div>
@@ -332,15 +322,15 @@
               </div>
 
               <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
-                <h4>Shift Roster Distribution</h4>
+                <h4>Shift Coverage</h4>
                 <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:1rem;">
                   <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:0.5rem;">
-                    <span>Primary Shift (08:00 - 17:00)</span>
-                    <span style="color:var(--accent-cyan); font-weight:600;">42 Personnel Assigned</span>
+                    <span>Morning Shift (08:00 - 17:00)</span>
+                    <span style="color:var(--accent-cyan); font-weight:600;">42 Assigned</span>
                   </div>
                   <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:0.5rem;">
-                    <span>Secondary Shift (16:00 - 01:00)</span>
-                    <span style="color:var(--accent-purple); font-weight:600;">18 Personnel Assigned</span>
+                    <span>Night Shift (16:00 - 01:00)</span>
+                    <span style="color:var(--accent-purple); font-weight:600;">18 Assigned</span>
                   </div>
                 </div>
               </div>
@@ -351,8 +341,8 @@
           <div class="sandbox-panel" id="tab-org">
             <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 2rem; align-items: center;">
               <div>
-                <h3>Enterprise Personnel Vault &amp; Credentials</h3>
-                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Select employee below to preview high-resolution digital credential badge.</p>
+                <h3>Digital ID Badges</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Pick an employee to preview their digital ID badge.</p>
 
                 <div style="display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap;">
                   <button class="btn btn-secondary org-user-btn active" data-user="sarah" style="padding:0.4rem 0.85rem; font-size:0.82rem;">Sarah Jenkins</button>
@@ -361,8 +351,8 @@
                 </div>
               </div>
 
-              <div style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(99, 102, 241, 0.08)); border: 1px solid var(--border-color-glow); padding: 1.5rem; border-radius: var(--radius-xl); display: flex; gap: 1rem; align-items: center;">
-                <img id="badgePhoto" src="/static/waving_avatar.jpg?v=2" alt="ID Card Avatar" style="width: 90px; height: 90px; border-radius: var(--radius-md); object-fit: cover;">
+              <div style="background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(67, 56, 202, 0.1)); border: 1px solid var(--border-color-glow); padding: 1.5rem; border-radius: var(--radius-xl); display: flex; gap: 1rem; align-items: center;">
+                <div id="badgePhoto" class="avatar-photo" style="width: 90px; height: 90px; border-radius: var(--radius-md); background-image:url('/static/face_scan_demo.jpg');" role="img" aria-label="Employee ID badge photo"></div>
                 <div>
                   <h4 id="badgeName" style="font-size: 1.1rem; margin-bottom: 0.2rem;">Sarah Jenkins</h4>
                   <p id="badgeRole" style="color: var(--accent-cyan); font-size: 0.85rem; font-weight: 600;">Senior Software Architect</p>
@@ -379,124 +369,92 @@
     </div>
   </section>
 
-  <!-- High-Impact Feature Cards -->
-  <section class="features-section" id="features">
+  <!-- Chapter 1: Attendance -->
+  <section class="chapter-section" id="features">
     <div class="container">
-      <div class="section-header">
-        <span class="section-tag"><i class="ti ti-cpu"></i> ENTERPRISE ARCHITECTURE</span>
-        <h2 class="section-title">Engineered for Governance, Compliance &amp; Scalability</h2>
-        <p class="section-subtitle">Designed for strict regulatory compliance, multi-tenant database isolation, and zero-trust access management.</p>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon-wrapper"><i class="ti ti-camera"></i></div>
-          <h3 class="feature-title">AI Vision Biometric Verification</h3>
-          <p class="feature-desc">Facial recognition engine paired with 3D liveness detection to eliminate proxy attendance and time fraud.</p>
+      <div class="chapter">
+        <div>
+          <span class="chapter-eyebrow">Attendance</span>
+          <h2 class="chapter-heading">Attendance that verifies itself</h2>
+          <p class="chapter-copy">Liveness-checked face recognition and WebAuthn passkeys end buddy-punching for good — no badges, no passwords, no manual review.</p>
+          <ul class="chapter-checklist">
+            <li><i class="ti ti-circle-check"></i> Face recognition check-in</li>
+            <li><i class="ti ti-circle-check"></i> Passkeys &amp; WebAuthn</li>
+            <li><i class="ti ti-circle-check"></i> GPS geo-fencing</li>
+            <li><i class="ti ti-circle-check"></i> Dynamic QR check-in</li>
+          </ul>
         </div>
-
-        <div class="feature-card">
-          <div class="feature-icon-wrapper"><i class="ti ti-fingerprint"></i></div>
-          <h3 class="feature-title">WebAuthn FIDO2 Passkeys</h3>
-          <p class="feature-desc">Hardware-backed biometric authentication allowing personnel to check in via TouchID, FaceID, or hardware keys.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon-wrapper"><i class="ti ti-user-plus"></i></div>
-          <h3 class="feature-title">Digital Onboarding &amp; Credentials</h3>
-          <p class="feature-desc">Frictionless digital candidate transition, electronic document signing, and automated personnel credential issuance.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon-wrapper"><i class="ti ti-map-pin"></i></div>
-          <h3 class="feature-title">Location-Aware Geo-Fencing</h3>
-          <p class="feature-desc">Enforce precise perimeter radius rules for corporate campuses, remote locations, and client sites.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon-wrapper"><i class="ti ti-receipt-rupee"></i></div>
-          <h3 class="feature-title">Statutory Payroll &amp; Compliance</h3>
-          <p class="feature-desc">Compute custom salary structures, tax withholdings, statutory PF/ESI, and electronic payslip dispatch.</p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon-wrapper"><i class="ti ti-chart-line"></i></div>
-          <h3 class="feature-title">Performance &amp; OKR Governance</h3>
-          <p class="feature-desc">Establish quarterly goals, conduct 360° reviews, and manage merit compensation approval workflows.</p>
+        <div class="chapter-media wash-warm">
+          <div class="chapter-panel">
+            <div class="chapter-panel-row"><span>Liveness Detection</span><span style="color:var(--accent-emerald);">Active (99.9%)</span></div>
+            <div class="chapter-panel-row"><span>Geo-Fence Radius</span><span style="color:var(--accent-cyan);">100 Meters</span></div>
+            <div class="chapter-panel-row"><span>Passkey Protocol</span><span style="color:var(--accent-purple);">FIDO2 / WebAuthn</span></div>
+            <div class="chapter-panel-row"><span>Today's Check-Ins</span><span style="color:var(--text-main);">3 Verified</span></div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- World-Class Security & Governance Section -->
-  <section class="features-section" id="security">
+  <!-- Chapter 2: Payroll -->
+  <section class="chapter-section">
     <div class="container">
-      <div class="sec-arch-grid">
+      <div class="chapter chapter-reverse">
         <div>
-          <span class="section-tag"><i class="ti ti-certificate"></i> ISO 27001 &amp; SOC 2 GOVERNANCE</span>
-          <h2 class="section-title">Zero-Trust Security &amp; Multi-Tenant Data Sovereignty</h2>
-          <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-            Engineered for defense-grade security requirements. <span class="hrzest-brand">HRzest</span> delivers zero-trust access controls, continuous compliance monitoring, and complete multi-tenant isolation.
-          </p>
-
-          <!-- 4 Security Pillars Grid -->
-          <div class="security-pillars-grid">
-            <div class="security-pillar-card">
-              <div class="security-pillar-header">
-                <div class="security-pillar-icon cyan"><i class="ti ti-fingerprint"></i></div>
-                <h4 class="security-pillar-title">Biometric Liveness Protection</h4>
+          <span class="chapter-eyebrow">Payroll</span>
+          <h2 class="chapter-heading">Payroll that runs itself</h2>
+          <p class="chapter-copy">Custom salary structures, tax and statutory deductions, and payslips generated automatically — no spreadsheets, no manual math.</p>
+          <ul class="chapter-checklist">
+            <li><i class="ti ti-circle-check"></i> Custom salary rules</li>
+            <li><i class="ti ti-circle-check"></i> Automated deductions</li>
+            <li><i class="ti ti-circle-check"></i> One-click payslips</li>
+            <li><i class="ti ti-circle-check"></i> Excel export &amp; email</li>
+          </ul>
+        </div>
+        <div class="chapter-media wash-cool">
+          <div class="chapter-panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+              <div>
+                <strong>PAYSLIP — AUG 2026</strong><br>
+                <small style="color: var(--text-subtle);">EMP-8842 | Senior Engineer</small>
               </div>
-              <p class="security-pillar-desc">3D facial mesh liveness detection and WebAuthn FIDO2 authentication prevent credential spoofing and unauthorized access.</p>
+              <span class="badge badge-face"><i class="ti ti-lock"></i> Locked</span>
             </div>
-
-            <div class="security-pillar-card">
-              <div class="security-pillar-header">
-                <div class="security-pillar-icon purple"><i class="ti ti-lock"></i></div>
-                <h4 class="security-pillar-title">AES-256 Field Encryption</h4>
-              </div>
-              <p class="security-pillar-desc">All employee PII, salary figures, and biometric vectors are cryptographically encrypted at rest and in transit via TLS 1.3.</p>
-            </div>
-
-            <div class="security-pillar-card">
-              <div class="security-pillar-header">
-                <div class="security-pillar-icon emerald"><i class="ti ti-database"></i></div>
-                <h4 class="security-pillar-title">Isolated Tenant Governance</h4>
-              </div>
-              <p class="security-pillar-desc">Strict logical database isolation per enterprise tenant with fine-grained Role-Based Access Controls (RBAC).</p>
-            </div>
-
-            <div class="security-pillar-card">
-              <div class="security-pillar-header">
-                <div class="security-pillar-icon amber"><i class="ti ti-shield-check"></i></div>
-                <h4 class="security-pillar-title">Immutable Audit Trails</h4>
-              </div>
-              <p class="security-pillar-desc">Tamper-proof audit logs recording all administrative actions, salary adjustments, and check-ins for regulatory audits.</p>
-            </div>
+            <div class="chapter-panel-row"><span>Gross Salary</span><span>₹65,000.00</span></div>
+            <div class="chapter-panel-row"><span>Performance Bonus</span><span>₹8,000.00</span></div>
+            <div class="chapter-panel-row"><span>Tax Deductions</span><span style="color:var(--accent-rose);">-₹13,140.00</span></div>
+            <div class="chapter-panel-row"><span style="font-weight:700; color:var(--text-main);">Net Pay</span><span style="color:var(--accent-emerald); font-size:1.15rem;">₹59,860.00</span></div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
 
-        <div style="background: linear-gradient(160deg, rgba(56,189,248,0.08), rgba(99,102,241,0.08)); border: 1px solid var(--border-color-glow); border-radius: var(--radius-xl); padding: 1.75rem; box-shadow: var(--shadow-lg);">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; padding-bottom:1rem; border-bottom:1px solid var(--border-color);">
-            <span style="font-weight:700;"><i class="ti ti-lock"></i> Security Console</span>
-            <span class="badge badge-face"><i class="ti ti-circle-check"></i> All Systems Operational</span>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:0.9rem;">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="color:var(--text-muted);">Field Encryption</span>
-              <span style="color:var(--accent-emerald); font-weight:700;">AES-256, Active</span>
+  <!-- Chapter 3: Security -->
+  <section class="chapter-section" id="security">
+    <div class="container">
+      <div class="chapter">
+        <div>
+          <span class="chapter-eyebrow">Security</span>
+          <h2 class="chapter-heading">Security you don't have to think about</h2>
+          <p class="chapter-copy"><span class="hrzest-brand">HRzest</span> keeps every organization's data isolated, encrypted, and logged — by default, not as an add-on.</p>
+          <ul class="chapter-checklist">
+            <li><i class="ti ti-circle-check"></i> AES-256 encryption</li>
+            <li><i class="ti ti-circle-check"></i> Tenant isolation</li>
+            <li><i class="ti ti-circle-check"></i> Role-based access</li>
+            <li><i class="ti ti-circle-check"></i> Full audit trail</li>
+          </ul>
+        </div>
+        <div class="chapter-media wash-mint">
+          <div class="chapter-panel">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--border-color);">
+              <span style="font-weight:700;"><i class="ti ti-lock"></i> Security Console</span>
+              <span class="badge badge-face"><i class="ti ti-circle-check"></i> Operational</span>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="color:var(--text-muted);">Tenant Isolation</span>
-              <span style="color:var(--accent-cyan); font-weight:700;">Schema-Per-Company</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="color:var(--text-muted);">Passkey / MFA</span>
-              <span style="color:var(--accent-purple); font-weight:700;">FIDO2 / WebAuthn</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-              <span style="color:var(--text-muted);">Audit Trail</span>
-              <span style="color:var(--accent-amber); font-weight:700;">Immutable Log</span>
-            </div>
+            <div class="chapter-panel-row"><span>Field Encryption</span><span style="color:var(--accent-emerald);">AES-256, Active</span></div>
+            <div class="chapter-panel-row"><span>Tenant Isolation</span><span style="color:var(--accent-cyan);">Schema-Per-Company</span></div>
+            <div class="chapter-panel-row"><span>Passkey / MFA</span><span style="color:var(--accent-purple);">FIDO2 / WebAuthn</span></div>
+            <div class="chapter-panel-row"><span>Audit Trail</span><span style="color:var(--accent-amber);">Immutable Log</span></div>
           </div>
         </div>
       </div>
@@ -509,7 +467,7 @@
       <div class="section-header">
         <span class="section-tag">Get in Touch</span>
         <h2 class="section-title" style="margin-bottom: 0.25rem;">Contact <span class="hrzest-brand" style="color:var(--accent-cyan);">HRzest</span></h2>
-        <p class="section-subtitle">Have questions about deployment options, enterprise SLAs, or custom HR integrations? Reach out to our dedicated specialists.</p>
+        <p class="section-subtitle">Questions about deployment, pricing, or integrations? We usually reply within a few hours.</p>
       </div>
 
       <div class="contact-grid">
@@ -518,13 +476,13 @@
           <div class="contact-company-badge">
             <i class="ti ti-building"></i> <span class="hrzest-brand" style="font-size:0.85rem;">HRzest.com</span>
           </div>
-          <h3 style="font-size: 1.8rem; margin-bottom: 1rem;">Let's Build Your HR Infrastructure Together</h3>
-          <p style="color: var(--text-muted); margin-bottom: 2rem;">Our enterprise team responds within 2 business hours for all deployment and technical inquiries.</p>
+          <h3 style="font-size: 1.8rem; margin-bottom: 1rem;">Let's Talk About Your HR Setup</h3>
+          <p style="color: var(--text-muted); margin-bottom: 2rem;">Reach out for a demo, pricing, or technical questions — a real person will get back to you.</p>
 
           <div class="contact-detail-item">
             <div class="contact-icon cyan"><i class="ti ti-mail"></i></div>
             <div>
-              <span class="contact-detail-label">Official Email</span>
+              <span class="contact-detail-label">Email</span>
               <a href="mailto:contact@hrzest.com" class="contact-detail-value">contact@hrzest.com</a>
             </div>
           </div>
@@ -532,7 +490,7 @@
           <div class="contact-detail-item">
             <div class="contact-icon emerald"><i class="ti ti-phone-call"></i></div>
             <div>
-              <span class="contact-detail-label">Enterprise Support Line</span>
+              <span class="contact-detail-label">Phone</span>
               <a href="tel:+918919901489" class="contact-detail-value">+91 89199 01489</a>
             </div>
           </div>
@@ -540,7 +498,7 @@
           <div class="contact-detail-item">
             <div class="contact-icon purple"><i class="ti ti-shield-half"></i></div>
             <div>
-              <span class="contact-detail-label">Security & Compliance Desk</span>
+              <span class="contact-detail-label">Security Questions</span>
               <a href="mailto:contact@hrzest.com" class="contact-detail-value">contact@hrzest.com</a>
             </div>
           </div>
@@ -590,8 +548,8 @@
     <div class="container">
       <div class="section-header">
         <span class="section-tag">Your Voice Matters</span>
-        <h2 class="section-title">Product Feedback & Suggestions</h2>
-        <p class="section-subtitle">Help us continually shape <span class="hrzest-brand">HRzest</span> to serve your workforce needs better. Share your feature ideas or experiences with us.</p>
+        <h2 class="section-title">Feedback &amp; Suggestions</h2>
+        <p class="section-subtitle">Tell us what's working, what isn't, and what you'd like to see next in <span class="hrzest-brand">HRzest</span>.</p>
       </div>
 
       <div class="feedback-card">
@@ -646,7 +604,7 @@
         </form>
 
         <div id="feedbackSuccessMsg" class="form-success-banner" style="display: none;">
-          <i class="ti ti-heart" style="color:var(--accent-rose)"></i> Thank you for your feedback! Your insights directly guide <span class="hrzest-brand">HRzest</span>'s product roadmap.
+          <i class="ti ti-heart" style="color:var(--accent-rose)"></i> Thanks for the feedback! It goes straight to our product team.
         </div>
       </div>
     </div>
@@ -655,10 +613,10 @@
   <!-- CTA Banner -->
   <div class="container">
     <div class="cta-banner">
-      <h2 style="font-size: 2.5rem; margin-bottom: 1rem;">Transform Your Enterprise HR Operations Today</h2>
-      <p style="max-width: 600px; margin: 0 auto 2rem auto; opacity: 0.9;">Join forward-thinking organizations using <span class="hrzest-brand">HRzest</span> for intelligent biometric verification and automated HR workflows.</p>
+      <h2 style="font-size: 2.5rem; margin-bottom: 1rem;">Ready to simplify your HR operations?</h2>
+      <p style="max-width: 600px; margin: 0 auto 2rem auto; opacity: 0.9;">Join the teams already using <span class="hrzest-brand">HRzest</span> for faster attendance, cleaner payroll, and less admin work.</p>
       <button class="btn btn-secondary open-lead-modal-btn" style="background:#fff; color:#0f172a; font-weight:700;">
-        <i class="ti ti-rocket"></i> Request Workspace Access
+        <i class="ti ti-rocket"></i> Get Started Free
       </button>
     </div>
   </div>
@@ -672,7 +630,7 @@
             <div class="logo-icon"><i class="ti ti-user-check"></i></div>
             <span class="hrzest-brand" style="font-size:1.6rem;">HRzest</span>
           </a>
-          <p style="margin-bottom: 1.25rem;">The ultimate AI & biometric employee management solution built for security, speed, and privacy.</p>
+          <p style="margin-bottom: 1.25rem;">Biometric attendance and payroll, built for security, speed, and privacy.</p>
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
             <p style="font-size: 0.9rem; color: var(--text-muted);">
               <i class="ti ti-mail" style="margin-right: 0.4rem; color: var(--accent-cyan);"></i> <a href="mailto:contact@hrzest.com" style="color: var(--text-main); text-decoration: underline;">contact@hrzest.com</a>
@@ -686,7 +644,7 @@
         <div>
           <h4 style="margin-bottom: 1rem;">Platform</h4>
           <ul style="list-style: none; display: flex; flex-direction: column; gap: 0.5rem;">
-            <li><a href="#features">AI Biometrics</a></li>
+            <li><a href="#features">Biometrics</a></li>
             <li><a href="#sandbox">WebAuthn Passkeys</a></li>
             <li><a href="#sandbox">Payroll Engine</a></li>
             <li><a href="#security">Mobile Suite</a></li>
@@ -718,8 +676,8 @@
       <button class="modal-close-btn" id="closeLeadModal">&times;</button>
       <div class="modal-header">
         <div class="modal-logo-icon"><i class="ti ti-user-check"></i></div>
-        <h2>Request an Enterprise Workspace Demo</h2>
-        <p>Enter your contact information to schedule an enterprise consultation with our team.</p>
+        <h2>Get a Demo</h2>
+        <p>Leave your details and our team will reach out to schedule a walkthrough.</p>
       </div>
 
       <form id="leadRegistrationForm">
@@ -748,16 +706,16 @@
         <p id="leadFormError" style="display:none; color:var(--accent-rose); font-size:0.85rem; margin-top:0.75rem;"></p>
 
         <button type="submit" class="btn btn-primary form-submit-btn" style="margin-top: 0.5rem;">
-          <i class="ti ti-calendar-check"></i> Request Consultation
+          <i class="ti ti-calendar-check"></i> Request Demo
         </button>
       </form>
 
       <!-- Confirmation Screen -->
       <div class="modal-success-msg" id="modalSuccessMsg" style="display: none;">
         <div class="success-icon"><i class="ti ti-circle-check"></i></div>
-        <h3>Consultation Request Received!</h3>
-        <p>Thank you, <strong id="successUserName"></strong>. Our enterprise team will reach out regarding workspace setup for <strong id="successCompName"></strong>.</p>
-        <p style="font-size:0.85rem; color:var(--text-subtle); margin-top:0.5rem;">A confirmation email has been dispatched to your address.</p>
+        <h3>Request Received!</h3>
+        <p>Thanks, <strong id="successUserName"></strong>. We'll be in touch about setting up <strong id="successCompName"></strong> shortly.</p>
+        <p style="font-size:0.85rem; color:var(--text-subtle); margin-top:0.5rem;">A confirmation email is on its way to your inbox.</p>
         <button class="btn btn-secondary" id="closeSuccessBtn" style="margin-top:1.5rem; width:100%;">Close Window</button>
       </div>
     </div>

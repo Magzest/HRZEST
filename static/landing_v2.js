@@ -176,7 +176,7 @@ function initHeroScanner() {
     isScanning = true;
 
     const randomUser = mockUsers[Math.floor(Math.random() * mockUsers.length)];
-    if (scannerAvatar && scannerAvatar.tagName !== 'IMG') scannerAvatar.textContent = randomUser.initials;
+    if (scannerAvatar && !scannerAvatar.classList.contains('avatar-photo')) scannerAvatar.textContent = randomUser.initials;
 
     faceTargetBox.className = 'face-target-box scanning';
     hudStatus.textContent = 'Extracting 128d Facial Vector Mesh...';
@@ -381,7 +381,7 @@ function initOrgVault() {
       const userKey = btn.getAttribute('data-user');
       const emp = employees[userKey];
       if (emp) {
-        if (badgePhoto && badgePhoto.tagName !== 'IMG') badgePhoto.textContent = emp.initials;
+        if (badgePhoto && !badgePhoto.classList.contains('avatar-photo')) badgePhoto.textContent = emp.initials;
         if (badgeName) badgeName.textContent = emp.name;
         if (badgeRole) badgeRole.textContent = emp.role;
         if (badgeId) badgeId.textContent = emp.id;
