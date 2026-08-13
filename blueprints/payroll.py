@@ -294,9 +294,10 @@ def salary_report_export():
                                      leave_dates=leave_map.get(emp_id, set()))
         inc = incentive_map.get(emp_id, 0.0)
         net = round(entry["net"] + inc, 2)
+        present_days = entry["full_days"] + entry["half_days"] + entry["late_days"]
         row_data = [
             idx, emp_id, name, role, dept,
-            float(spd), entry["billable"], entry["present"],
+            float(spd), entry["billable"], present_days,
             entry["absent"], entry["deduction"], inc, net
         ]
         fill = alt_fill if idx % 2 == 0 else None

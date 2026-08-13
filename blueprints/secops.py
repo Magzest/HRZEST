@@ -119,6 +119,7 @@ def _security_events_summary(cursor):
 
 
 _MFA_OTP_TTL_SEC = 300  # 5 minutes
+_COVERAGE_GATE_PCT = 80  # Target coverage % shown on the SOC performance panel (CI's enforced --cov-fail-under is 40, see .github/workflows/deploy.yml)
 
 
 @secops_bp.route("/sp_admin/login", methods=["GET", "POST"])
