@@ -923,18 +923,24 @@ textarea { resize: vertical; }
 
 /* CTA Banner & Footer */
 .cta-banner {
-  background: var(--gradient-brand);
+  background: linear-gradient(135deg, #EEF0FF 0%, #F7ECF7 50%, #FDF3E3 100%);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-xl);
   padding: 4.5rem 2.5rem;
   text-align: center;
-  color: #fff;
-  box-shadow: var(--shadow-glow);
+  color: var(--text-main);
+  box-shadow: var(--shadow-lg);
   margin: 100px 0 60px 0;
 }
 
+/* Medium-tone indigo footer -- the same brand color already used for buttons,
+   links, and the logo elsewhere on the page, so it highlights without
+   introducing an unrelated dark tone. */
 .footer {
-  background: var(--bg-secondary);
-  border-top: 1px solid var(--border-color);
+  --text-main: #F8FAFC;
+  --text-muted: #C7CAF5;
+  --border-color: rgba(255, 255, 255, 0.14);
+  background: var(--accent-blue);
   padding: 70px 0 35px 0;
   font-size: 0.92rem;
   color: var(--text-muted);
