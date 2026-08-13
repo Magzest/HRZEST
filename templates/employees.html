@@ -716,18 +716,9 @@
               <input type="text" name="name" required placeholder="Ravi Kumar" />
             </div>
             <div class="field-group">
-              <label>Company <span class="u-c-dc2626">*</span></label>
-              <select name="company_id" id="addCompanyId" onchange="generateEmpId()" required>
-                <option value="">— Select Company —</option>
-                {% for cid, cname in companies %}
-                  <option value="{{ cid }}">{{ cname }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="field-group">
               <label>Employee ID *</label>
               <div class="u-d-flex u-gap-8 u-ai-center">
-                <input class="u-fx-1 u-fw-700 u-ls-1" type="text" name="emp_id" id="addEmpId" required placeholder="Select company to auto-generate" />
+                <input class="u-fx-1 u-fw-700 u-ls-1" type="text" name="emp_id" id="addEmpId" required placeholder="Generating…" />
                 <button class="u-p-9-12 u-bd-1-solid-dbeafe u-br-9 u-bg-eff6ff u-c-1e3a8a u-cur-pointer u-ws-nowrap u-fs-13 u-fw-600" type="button" onclick="generateEmpId()" title="Re-generate ID">
                   🔄 Generate
                 </button>
@@ -1638,20 +1629,12 @@
       }
 
       async function generateEmpId() {
-        var hint      = document.getElementById('empIdHint');
-        var inp       = document.getElementById('addEmpId');
-        var compSel   = document.getElementById('addCompanyId');
+        var hint = document.getElementById('empIdHint');
+        var inp  = document.getElementById('addEmpId');
         if (!inp) return;
-        var companyId = compSel ? compSel.value : '';
-        if (!companyId) {
-          inp.value = '';
-          inp.placeholder = 'Select company first';
-          if (hint) { hint.textContent = 'Select a company to auto-generate the Employee ID.'; hint.style.color = '#dc2626'; }
-          return;
-        }
         inp.placeholder = 'Generating…';
         try {
-          var res  = await fetch('/api/generate_emp_id?company_id=' + encodeURIComponent(companyId));
+          var res  = await fetch('/api/generate_emp_id');
           if (!res.ok) { throw new Error('HTTP ' + res.status); }
           var data = await res.json();
           if (data.error) { throw new Error(data.error); }
@@ -1659,10 +1642,10 @@
           inp.placeholder = '';
           if (hint) {
             if (!data.code) {
-              hint.innerHTML = '⚠ No code set for this company. Go to <a class="u-c-1e3a8a" href="{{ tpath('/companies') }}" target="_blank">Companies</a> and add a short code, then click 🔄 Generate.';
+              hint.innerHTML = '⚠ No company code set. Go to <a class="u-c-1e3a8a" href="{{ tpath('/settings') }}" target="_blank">Settings</a> and add one, then click 🔄 Generate.';
               hint.style.color = '#dc2626';
             } else {
-              hint.textContent = '✓ ' + data.emp_id + ' — ' + data.company_name + ' employee #' + data.seq;
+              hint.textContent = '✓ ' + data.emp_id + ' — employee #' + data.seq;
               hint.style.color = '#16a34a';
             }
           }
