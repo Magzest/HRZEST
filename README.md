@@ -164,14 +164,15 @@ All variables are documented with examples in [.env.example](.env.example).
 
 ```
 employee-attendance-system/
-├── app.py                  # Main Flask application (routes — being migrated to blueprints/)
+├── app.py                  # Shared setup only: hooks, context processors, DB init/migrations, error handlers (no routes)
 ├── wsgi.py                 # WSGI entry point, blueprint registration
 ├── extensions.py           # Shared Flask app, rate limiter, session config
 ├── database.py             # PostgreSQL connection helpers
-├── blueprints/             # Route blueprints (incremental migration from app.py)
+├── blueprints/             # All routes (21 blueprints, ~18k lines total)
 │   ├── health.py           # /healthz, /favicon.ico
 │   ├── notifications.py    # /api/notifications, /web/notifications/*
-│   └── ...                 # (14 blueprints total — see wsgi.py for migration status)
+│   ├── auth.py, employees.py, attendance.py, payroll.py, leave.py, ...
+│   └── ...                 # see wsgi.py header for the full registered list
 ├── utils/
 │   ├── auth.py             # Auth decorators, lockout, password hashing
 │   ├── helpers.py          # Audit log, caching, encryption, validation
@@ -194,7 +195,7 @@ employee-attendance-system/
 
 ## Architecture notes
 
-- **Blueprint migration in progress** — all routes currently live in `app.py` and are being incrementally moved to `blueprints/`. `health.py` and `notifications.py` are the first completed migrations. See `wsgi.py` for the migration status of each module.
+- **Blueprint migration complete** — all routes live in `blueprints/` (21 blueprints, ~18k lines). `app.py` (~3.3k lines) now holds only shared setup: context processors, request hooks (CSRF/WAF/CSP/session timeout), DB schema init/migrations, and error handlers. See `wsgi.py` for the full blueprint registration list.
 - **CSP** — Content-Security-Policy is generated dynamically per-response. Inline event handlers are sha256-hashed at render time; no `'unsafe-inline'` is used.
 - **Multi-tenancy** — subdomain-based tenant routing via `_resolve_tenant()` in `app.py`. Each organisation gets its own PostgreSQL schema within the shared database. `/create_org` self-signup is open by default (Turnstile-protected when `TURNSTILE_SITE_KEY`/`TURNSTILE_SECRET_KEY` are set), with pricing tiers enforced from `utils/plan_limits.py`. Company subdomains require wildcard DNS/TLS (not yet configured — see the SaaS pivot plan) to actually route; until then, new tenants provision correctly but aren't reachable by subdomain.
 - **Platform admin console** — `/super_admin` (`blueprints/platform_admin.py`), a cross-tenant operator panel (list all companies, change plan, suspend/reactivate) with its own login identity in `att_master.platform_admins`, separate from any tenant's `admin_users`. No account is seeded automatically — insert one manually: `INSERT INTO att_master.platform_admins (username, password, email) VALUES (...)` with a bcrypt hash from `utils.auth.generate_password_hash`.
