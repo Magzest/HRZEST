@@ -51,7 +51,7 @@ def api_email_blast():
         {clean_body}
       </div>
       <div style="border-top: 1px solid #e2e8f0; padding-top: 12px; font-size: 11px; color: #94a3b8;">
-        Sent via Employee Attendance & HRMS Portal. Please do not reply directly to this automated email.
+        Sent via HRzest.com. Please do not reply directly to this automated email.
       </div>
     </div>
     """

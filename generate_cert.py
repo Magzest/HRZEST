@@ -34,7 +34,7 @@ key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=def
 
 # ── build certificate ────────────────────────────────────────────────────────
 subject = issuer = x509.Name([
-    x509.NameAttribute(NameOID.COMMON_NAME, "Employee Attendance System"),
+    x509.NameAttribute(NameOID.COMMON_NAME, "HRzest.com"),
     x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Local"),
     x509.NameAttribute(NameOID.COUNTRY_NAME, "IN"),
 ])

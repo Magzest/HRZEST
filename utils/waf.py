@@ -22,16 +22,33 @@ from collections import defaultdict, deque
 from extensions import log_security_event, redis_client
 
 _SQLI_PATTERNS = [
+    # UNION-based exfiltration
     re.compile(r"\bunion\b[^;]{0,40}\bselect\b", re.IGNORECASE),
+    # Stacked/terminated statements
     re.compile(r";\s*(drop|delete|update|insert|exec|alter|truncate)\b", re.IGNORECASE),
+    # Numeric tautologies: OR 1=1, AND 2=2, etc.
     re.compile(r"\bor\b\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?", re.IGNORECASE),
     re.compile(r"\band\b\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+['\"]?", re.IGNORECASE),
+    # String tautologies: OR 'a'='a', OR 'x'='x, OR ''='', etc.
+    re.compile(r"\bor\b\s+['\"]([^'\"]{0,20})['\"]\s*=\s*['\"]\1['\"]?", re.IGNORECASE),
+    re.compile(r"\bor\b\s+'[^']*'\s*=\s*'[^']*'", re.IGNORECASE),
+    re.compile(r"\bor\b\s+\"[^\"]*\"\s*=\s*\"[^\"]*\"", re.IGNORECASE),
+    # Classic login-bypass comment terminator: admin'-- or '-- or 1=1--
+    re.compile(r"['\"]\s*--"),
     re.compile(r"--\s"),
     re.compile(r"/\*.*?\*/", re.DOTALL),
+    # OR true/false literals
+    re.compile(r"\bor\b\s+(true|false)\b", re.IGNORECASE),
+    re.compile(r"\band\b\s+(true|false)\b", re.IGNORECASE),
+    # Dangerous proc/functions
     re.compile(r"\bxp_cmdshell\b", re.IGNORECASE),
     re.compile(r"\bexec\s*\(", re.IGNORECASE),
     re.compile(r"\bwaitfor\s+delay\b", re.IGNORECASE),
+    # Schema enumeration
     re.compile(r"\bselect\b[^;]{0,60}\bfrom\b[^;]{0,60}\binformation_schema\b", re.IGNORECASE),
+    # Hex/char encoding evasion
+    re.compile(r"0x[0-9a-fA-F]{4,}"),
+    re.compile(r"\bchar\s*\(\s*\d+", re.IGNORECASE),
 ]
 
 _XSS_PATTERNS = [
@@ -225,16 +242,18 @@ def _auto_ban(ip, reason):
     expires_at = datetime.datetime.now() + datetime.timedelta(minutes=_BAN_MINUTES)
     try:
         db = get_db_connection()
-        cursor = db.cursor(buffered=True)
-        cursor.execute(
-            "INSERT INTO banned_ips (ip, reason, banned_by, expires_at) VALUES (%s,%s,%s,%s) "
-            "ON CONFLICT (ip) DO UPDATE SET reason=EXCLUDED.reason, banned_by=EXCLUDED.banned_by, "
-            "banned_at=CURRENT_TIMESTAMP, expires_at=EXCLUDED.expires_at",
-            (ip, reason, "system:auto", expires_at),
-        )
-        db.commit()
-        cursor.close()
-        db.close()
+        cursor = db.cursor()
+        try:
+            cursor.execute(
+                "INSERT INTO banned_ips (ip, reason, banned_by, expires_at) VALUES (%s,%s,%s,%s) "
+                "ON CONFLICT (ip) DO UPDATE SET reason=EXCLUDED.reason, banned_by=EXCLUDED.banned_by, "
+                "banned_at=CURRENT_TIMESTAMP, expires_at=EXCLUDED.expires_at",
+                (ip, reason, "system:auto", expires_at),
+            )
+            db.commit()
+        finally:
+            cursor.close()
+            db.close()
         log_security_event(
             "waf.auto_ban", f"IP auto-banned for {_BAN_MINUTES} minutes after repeated breaches",
             level="ERROR", identifier=ip, reason=reason,

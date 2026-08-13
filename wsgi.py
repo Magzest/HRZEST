@@ -53,6 +53,25 @@ from extensions import app, app_log  # noqa: F401
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
+# Path-based multi-tenancy (www.hrzest.com/<company-slug>/...) -- strips a
+# recognized tenant slug into SCRIPT_NAME before Flask ever routes the
+# request. See utils/tenant_routing.py for why this has to be WSGI-level
+# rather than a route parameter on every blueprint.
+from utils.tenant_routing import TenantPrefixMiddleware
+app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
+
+# ── Startup DB init ───────────────────────────────────────────────────────────
+with app.app_context():
+    try:
+        from app import init_master_db, init_db
+        from utils.config import load_default_shift, load_salary_rules
+        init_master_db()
+        init_db()
+        load_default_shift()
+        load_salary_rules()
+    except Exception as _e:
+        app_log.warning("Startup init failed (non-fatal): %s", _e)
+
 # ── Start the email queue worker ──────────────────────────────────────────────
 import threading
 from utils.email_utils import _email_queue_worker
@@ -82,72 +101,8 @@ threading.Thread(target=_email_queue_worker, daemon=True, name="email-queue-work
 # shared setup (init_db, error handlers, before/after_request hooks,
 # template filters).
 
-# ✅ All routes migrated to blueprints — app.py now contains only helpers/init
-from blueprints.health import health_bp
-from blueprints.notifications import notifications_bp
-from blueprints.payroll import payroll_bp
-from blueprints.leave import leave_bp
-from blueprints.admin_views import admin_views_bp
-from blueprints.auth import auth_bp
-from blueprints.employees import employees_bp
-from blueprints.attendance import attendance_bp
-from blueprints.tickets import tickets_bp
-from blueprints.performance import performance_bp
-from blueprints.documents import documents_bp
-from blueprints.org import org_bp
-from blueprints.onboarding import onboarding_bp
-from blueprints.employee_portal import employee_portal_bp
-from blueprints.core import core_bp
-from blueprints.ai_hrms import ai_hrms_bp
-from blueprints.secops import secops_bp
-from blueprints.email_blast import email_blast_bp
-from blueprints.compliance import compliance_bp
-from blueprints.hr_portal import hr_bp
-from blueprints.platform_admin import platform_admin_bp
-from blueprints.billing import billing_bp
-
-app.register_blueprint(health_bp)
-app.register_blueprint(notifications_bp)
-app.register_blueprint(payroll_bp)
-app.register_blueprint(leave_bp)
-app.register_blueprint(admin_views_bp)
-app.register_blueprint(auth_bp)
-app.register_blueprint(employees_bp)
-app.register_blueprint(attendance_bp)
-app.register_blueprint(tickets_bp)
-app.register_blueprint(performance_bp)
-app.register_blueprint(documents_bp)
-app.register_blueprint(org_bp)
-app.register_blueprint(onboarding_bp)
-app.register_blueprint(employee_portal_bp)
-app.register_blueprint(core_bp)
-app.register_blueprint(ai_hrms_bp)
-app.register_blueprint(secops_bp)
-app.register_blueprint(email_blast_bp)
-app.register_blueprint(compliance_bp)
-app.register_blueprint(hr_bp)
-app.register_blueprint(platform_admin_bp)
-app.register_blueprint(billing_bp)
-
-from blueprints.daily_report import daily_report_bp
-app.register_blueprint(daily_report_bp)
-
-# ── app.py: shared setup only (init_db, error handlers, before/after_request
-#    hooks, template filters) — no route handlers remain, but it still needs
-#    importing to run that setup code and register those hooks. ─────────────
+# ── Register blueprints & shared app setup ────────────────────────────────────
 import app as _app_module  # noqa: F401
-
-# ── Startup DB init ───────────────────────────────────────────────────────────
-with app.app_context():
-    try:
-        from app import init_master_db, init_db
-        from utils.config import load_default_shift, load_salary_rules
-        init_master_db()
-        init_db()
-        load_default_shift()
-        load_salary_rules()
-    except Exception as _e:
-        app_log.warning("Startup init failed (non-fatal): %s", _e)
 
 # ── Nightly daily report scheduler ───────────────────────────────────────────
 try:
@@ -174,10 +129,14 @@ application = app   # gunicorn / uWSGI entry point
 if __name__ == "__main__":
     _cert = _os.environ.get("SSL_CERT_PATH") or _os.path.join(_os.path.dirname(__file__), "cert.pem")
     _key = _os.environ.get("SSL_KEY_PATH") or _os.path.join(_os.path.dirname(__file__), "key.pem")
+    # threaded=True: /api/session/risk-stream (blueprints/core.py) holds an
+    # SSE connection open for ~20s, and Werkzeug's dev server is single-
+    # threaded by default -- without this, one open stream blocks every
+    # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
         print("SSL cert found — starting on https://0.0.0.0:5000")
-        app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False,  # nosec B104
+        app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 ssl_context=(_cert, _key))
     else:
         print("No cert.pem / key.pem — starting on http://0.0.0.0:5000")
-        app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)  # nosec B104
+        app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False, threaded=True)  # nosec B104

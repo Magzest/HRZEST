@@ -47,13 +47,11 @@ from blueprints.onboarding import onboarding_bp
 from blueprints.employee_portal import employee_portal_bp
 from blueprints.core import core_bp
 from blueprints.ai_hrms import ai_hrms_bp
-from blueprints.secops import secops_bp
 from blueprints.email_blast import email_blast_bp
-from blueprints.compliance import compliance_bp
-from blueprints.hr_portal import hr_bp
-from blueprints.platform_admin import platform_admin_bp
 from blueprints.daily_report import daily_report_bp
 from blueprints.billing import billing_bp
+from blueprints.platform_admin import platform_admin_bp
+from blueprints.secops import secops_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -70,13 +68,17 @@ flask_app.register_blueprint(onboarding_bp)
 flask_app.register_blueprint(employee_portal_bp)
 flask_app.register_blueprint(core_bp)
 flask_app.register_blueprint(ai_hrms_bp)
-flask_app.register_blueprint(secops_bp)
 flask_app.register_blueprint(email_blast_bp)
-flask_app.register_blueprint(compliance_bp)
-flask_app.register_blueprint(hr_bp)
-flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(daily_report_bp)
 flask_app.register_blueprint(billing_bp)
+flask_app.register_blueprint(platform_admin_bp)
+flask_app.register_blueprint(secops_bp)
+
+# Mirror wsgi.py's WSGI-level tenant-prefix stripping so tests exercise the
+# real path-based tenant resolution (www.hrzest.com/<slug>/...), not just
+# the pre-migration subdomain/session-cache branches.
+from utils.tenant_routing import TenantPrefixMiddleware
+flask_app.wsgi_app = TenantPrefixMiddleware(flask_app.wsgi_app)
 
 # Import app AFTER blueprints are registered so all module-level reads pick
 # up test values AND _register_api_v1_aliases() sees the full route set.
@@ -102,11 +104,10 @@ _app_module.limiter.enabled = False
 flask_app.config["MANDATORY_ADMIN_MFA"] = False
 
 # Disable the mandatory-emailed-OTP-at-login gate (blueprints/auth.py's
-# MANDATORY_LOGIN_MFA, blueprints/hr_portal.py's hr_login()) for the same
-# reason: nearly the entire suite uses a plain POST /admin_login or
-# /hr_login as its "get an authenticated session" setup and expects it to
-# complete immediately. Tests for the gate itself (tests/test_login_mfa.py)
-# re-enable it locally.
+# MANDATORY_LOGIN_MFA) for the same reason: nearly the entire suite uses a
+# plain POST /login as its "get an authenticated session" setup and
+# expects it to complete immediately. Tests for the gate itself
+# (tests/test_login_mfa.py) re-enable it locally.
 flask_app.config["MANDATORY_LOGIN_MFA"] = False
 
 
@@ -139,7 +140,7 @@ def _init_test_db(db_engine):
     # environment (it seeds an admin from env, then marks setup complete
     # since one now exists) -- CI's pytest job doesn't set that var, so on
     # a fresh database setup_done stays 0 and every test that logs in via
-    # the real /admin_login POST route (rather than the session_transaction
+    # the real /login POST route (rather than the session_transaction
     # bypass some test files use) gets redirected to /setup before its
     # credentials are even checked. Tests assume setup is already done
     # (see test_auth_blueprint.py's test_get_when_setup_done_redirects_to_login),
@@ -202,7 +203,7 @@ def seed_admin(db_engine):
     is low enough that a handful of legitimate wrong-password tests
     elsewhere in a 1900+-test run can accumulate a real 15-minute lockout
     partway through, silently breaking every subsequent test that expects
-    a plain POST /admin_login to succeed (assertions failing with a 302
+    a plain POST /login to succeed (assertions failing with a 302
     back to the login page instead of the expected 200/redirect-to-admin).
     A session-scoped one-time reset only guards against stale state from a
     *previous* run; it does nothing once a run's own tests start

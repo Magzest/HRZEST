@@ -22,8 +22,11 @@ import datetime
 from flask import Blueprint, request, jsonify
 from extensions import app_log, limiter, log_security_event
 from database import get_master_db
-from utils.plan_limits import PLAN_TIERS, calculate_plan_price, format_price_inr
-from utils.razorpay_utils import create_order as razorpay_create_order, verify_payment_signature, key_id as razorpay_key_id
+from utils.plan_limits import PLAN_LABEL, calculate_price, format_price_inr
+from utils.razorpay_utils import (
+    create_order as razorpay_create_order, verify_payment_signature,
+    key_id as razorpay_key_id, razorpay_configured,
+)
 from utils.auth import turnstile_enabled, verify_turnstile
 
 billing_bp = Blueprint("billing", __name__)
@@ -35,11 +38,22 @@ billing_bp = Blueprint("billing", __name__)
 # passed to provision_tenant() as the real account password.
 _VALIDATION_PLACEHOLDER_PASSWORD = "billing-flow-placeholder"
 
+# Demo/test-mode checkout, used only while RAZORPAY_KEY_ID/SECRET aren't
+# configured -- lets the full register -> pay -> provisioned flow be
+# exercised end-to-end (e.g. templates/create_org.html's mock checkout
+# modal) without real payment credentials. Real Razorpay order IDs are
+# always "order_<their own id>" and never carry this prefix, and
+# verify_payment() below additionally refuses to honor this prefix at all
+# once real keys ARE configured -- so this can never become a bypass in
+# production, only a local/demo convenience before Razorpay is wired up.
+_DEMO_ORDER_PREFIX = "demo_order_"
+
 
 @billing_bp.route("/api/billing/create_order", methods=["POST"])
 @limiter.limit("10 per minute")
 def create_order():
     from blueprints.org import _validate_new_tenant_fields
+    from utils.helpers import clean_email_domain
 
     if turnstile_enabled():
         token = request.form.get("cf-turnstile-response") or (request.get_json(silent=True) or {}).get("cf_turnstile_response", "")
@@ -51,7 +65,7 @@ def create_order():
     subdomain = (data.get("subdomain") or "").strip().lower()
     admin_username = (data.get("admin_username") or "").strip()
     admin_email = (data.get("admin_email") or "").strip()
-    plan = (data.get("plan") or "starter").strip().lower()
+    email_domain = clean_email_domain(data.get("email_domain") or "")
     try:
         employee_count = int(data.get("employee_count") or 1)
     except (TypeError, ValueError):
@@ -60,30 +74,33 @@ def create_order():
         return jsonify({"ok": False, "msg": "Employee count must be at least 1."}), 400
 
     error = _validate_new_tenant_fields(
-        company_name, subdomain, admin_username, _VALIDATION_PLACEHOLDER_PASSWORD, admin_email, plan
+        company_name, subdomain, admin_username, _VALIDATION_PLACEHOLDER_PASSWORD, admin_email, email_domain
     )
     if error:
         return jsonify({"ok": False, "msg": error}), 400
 
-    try:
-        amount_paise = calculate_plan_price(plan, employee_count)
-    except ValueError as exc:
-        return jsonify({"ok": False, "msg": str(exc)}), 400
+    amount_paise = calculate_price(employee_count)
 
-    receipt_id = f"signup_{subdomain}_{int(datetime.datetime.now().timestamp())}"
-    order_id, error = razorpay_create_order(amount_paise, receipt_id)
-    if not order_id:
-        app_log.error("billing.create_order failed: %s", error)
-        return jsonify({"ok": False, "msg": error}), 502
+    is_demo = not razorpay_configured()
+    if is_demo:
+        # No real Razorpay call -- see _DEMO_ORDER_PREFIX comment above.
+        order_id = _DEMO_ORDER_PREFIX + secrets.token_hex(12)
+    else:
+        receipt_id = f"signup_{subdomain}_{int(datetime.datetime.now().timestamp())}"
+        order_id, error = razorpay_create_order(amount_paise, receipt_id)
+        if not order_id:
+            app_log.error("billing.create_order failed: %s", error)
+            return jsonify({"ok": False, "msg": error}), 502
 
     try:
         conn = get_master_db()
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO payment_orders (razorpay_order_id, plan, employee_count, amount_paise, "
-            "company_name, subdomain, admin_username, admin_email, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'created')",
-            (order_id, plan, employee_count, amount_paise, company_name, subdomain, admin_username, admin_email)
+            "company_name, subdomain, admin_username, admin_email, email_domain, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'created')",
+            (order_id, PLAN_LABEL, employee_count, amount_paise, company_name, subdomain, admin_username, admin_email,
+             email_domain)
         )
         conn.commit()
         cur.close()
@@ -99,20 +116,31 @@ def create_order():
         "amount_display": format_price_inr(amount_paise),
         "currency": "INR",
         "key_id": razorpay_key_id(),
+        "demo": is_demo,
     })
 
 
 @billing_bp.route("/api/billing/verify_payment", methods=["POST"])
 @limiter.limit("20 per minute")
 def verify_payment():
-    from blueprints.org import provision_tenant, send_payment_confirmation_email, _TENANT_DOMAIN_SUFFIX
+    from blueprints.org import provision_tenant, send_payment_confirmation_email, _TENANT_APEX_DOMAIN
 
     data = request.get_json(silent=True) or request.form
     razorpay_order_id = (data.get("razorpay_order_id") or "").strip()
     razorpay_payment_id = (data.get("razorpay_payment_id") or "").strip()
     razorpay_signature = (data.get("razorpay_signature") or "").strip()
 
-    if not verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
+    is_demo_order = razorpay_order_id.startswith(_DEMO_ORDER_PREFIX)
+    if is_demo_order:
+        if razorpay_configured():
+            # Real keys exist now but this order was minted before that --
+            # never honor the demo bypass once real payments are live.
+            return jsonify({"ok": False, "msg": "This was a demo order. Please start checkout again."}), 400
+        log_security_event(
+            "billing.demo_checkout_completed", "Demo/test-mode checkout completed (no real payment)",
+            level="INFO", order_id=razorpay_order_id,
+        )
+    elif not verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
         log_security_event(
             "billing.signature_invalid", "Razorpay payment signature verification failed",
             level="ERROR", order_id=razorpay_order_id,
@@ -122,7 +150,7 @@ def verify_payment():
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "SELECT plan, company_name, subdomain, admin_username, admin_email, status "
+        "SELECT employee_count, company_name, subdomain, admin_username, admin_email, email_domain, status "
         "FROM payment_orders WHERE razorpay_order_id=%s",
         (razorpay_order_id,)
     )
@@ -132,7 +160,7 @@ def verify_payment():
         conn.close()
         return jsonify({"ok": False, "msg": "Unknown order."}), 404
 
-    plan, company_name, subdomain, admin_username, admin_email, status = row
+    employee_count, company_name, subdomain, admin_username, admin_email, email_domain, status = row
 
     # Idempotent: a retried/duplicate client POST for an already-provisioned
     # order must not attempt to re-provision (the subdomain is now taken,
@@ -141,7 +169,7 @@ def verify_payment():
     if status == "provisioned":
         cur.close()
         conn.close()
-        portal_url = f"https://{subdomain}.{_TENANT_DOMAIN_SUFFIX}/admin_login"
+        portal_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/login"  # "/admin_login" hasn't been a real route since an earlier rename
         return jsonify({"ok": True, "portal_url": portal_url, "already_provisioned": True})
 
     cur.execute(
@@ -159,7 +187,8 @@ def verify_payment():
     # email, matching this codebase's existing posture everywhere else).
     random_password = secrets.token_urlsafe(24)
     ok, error, portal_url = provision_tenant(
-        company_name, subdomain, admin_username, random_password, admin_email, plan
+        company_name, subdomain, admin_username, random_password, admin_email,
+        email_domain=email_domain
     )
     if not ok:
         app_log.error("billing.verify_payment: provisioning failed for order %s: %s", razorpay_order_id, error)
@@ -197,7 +226,7 @@ def verify_payment():
     except Exception as exc:
         app_log.error("billing.verify_payment: failed to set reset token for order %s: %s", razorpay_order_id, exc)
 
-    set_password_url = f"https://{subdomain}.{_TENANT_DOMAIN_SUFFIX}/admin_reset_password/{reset_token}"
+    set_password_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/admin_reset_password/{reset_token}"
 
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
@@ -218,12 +247,15 @@ def verify_payment():
 
     send_payment_confirmation_email(
         admin_email, company_name, portal_url, set_password_url,
-        PLAN_TIERS[plan]["display_name"], amount_paise, razorpay_payment_id,
+        employee_count, amount_paise, razorpay_payment_id,
     )
 
     log_security_event(
         "billing.tenant_provisioned", f"Paid tenant '{company_name}' provisioned via Razorpay",
-        level="INFO", subdomain=subdomain, plan=plan, order_id=razorpay_order_id,
+        level="INFO", subdomain=subdomain, employee_count=employee_count, order_id=razorpay_order_id,
     )
 
-    return jsonify({"ok": True, "portal_url": portal_url})
+    return jsonify({
+        "ok": True, "portal_url": portal_url,
+        "employee_count": employee_count, "amount_display": format_price_inr(amount_paise),
+    })

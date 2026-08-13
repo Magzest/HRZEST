@@ -11,7 +11,7 @@ import openpyxl
 
 
 def _admin_session(client, seed_admin):
-    resp = client.post("/admin_login", data={
+    resp = client.post("/login", data={
         "identifier": seed_admin["username"],
         "password": seed_admin["password"],
     }, follow_redirects=True)

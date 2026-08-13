@@ -200,7 +200,7 @@
         <button class="u-bg-none u-bd-none u-fs-20 u-c-94a3b8 u-cur-pointer" type="button" onclick="closeImportModal()">✕</button>
       </div>
 
-      <form action="/performance_import" method="POST" enctype="multipart/form-data">
+      <form action="{{ tpath('/performance_import') }}" method="POST" enctype="multipart/form-data">
         <div class="u-d-grid u-gtc-1fr-1fr u-gap-14 u-mb-16">
           <div>
             <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d4 u-d-block u-mb-6">Quarter</label>
@@ -415,7 +415,7 @@
       </div>
       <div class="u-d-none u-p-0-20-20" id="hikeCfgBody">
         <p class="u-fs-12 u-c-64748b u-mb-14">Define the rating thresholds, salary hike %, and quarterly bonus % of monthly CTC for each performance band.</p>
-        <form action="/save_hike_config" method="POST">
+        <form action="{{ tpath('/save_hike_config') }}" method="POST">
           <input type="hidden" name="quarter" value="{{ quarter }}">
           <input type="hidden" name="year" value="{{ year }}">
           <div class="u-ovx-auto">
@@ -648,7 +648,7 @@
     <!-- Post form -->
     <div class="ann-form-card">
       <div class="sec-title"><i class="ti ti-plus"></i> Post New Announcement</div>
-      <form action="/announcements" method="POST">
+      <form action="{{ tpath('/announcements') }}" method="POST">
         <input type="hidden" name="action" value="add"/>
         <div class="form-row u-mb-12">
           <div class="form-group u-gc-span-2">
@@ -716,7 +716,7 @@
               <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
               <span class="badge-vis vis-public"><i class="ti ti-world u-fs-10"></i> Public</span>
               <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
-              <form class="u-d-inline u-ml-auto" action="/announcements" method="POST">
+              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
                 <input type="hidden" name="action" value="delete"/>
                 <input type="hidden" name="ann_id" value="{{ aid }}"/>
                 <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
@@ -746,7 +746,7 @@
               <span class="badge-vis vis-private"><i class="ti ti-lock u-fs-10"></i> Private</span>
               {% if atgt_name %}<span class="u-c-64748b u-fs-11"><i class="ti ti-user u-fs-10"></i> To: {{ atgt_name }}</span>{% endif %}
               <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
-              <form class="u-d-inline u-ml-auto" action="/announcements" method="POST">
+              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
                 <input type="hidden" name="action" value="delete"/>
                 <input type="hidden" name="ann_id" value="{{ aid }}"/>
                 <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">

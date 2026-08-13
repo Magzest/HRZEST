@@ -114,7 +114,7 @@ class TestWafBlocksRealRequests:
         assert resp.status_code == 403
 
     def test_clean_login_request_not_blocked(self, client):
-        resp = client.post("/admin_login", data={"username": "nobody", "password": "wrong"})
+        resp = client.post("/login", data={"username": "nobody", "password": "wrong"})
         assert resp.status_code != 403
 
     def test_static_assets_exempt(self, client):
@@ -127,7 +127,7 @@ class TestWafBlocksRealRequests:
         credentials response, not a WAF 403 — see app.py's _WAF_EXEMPT_PATHS
         and tests/test_auth_routes.py's
         test_injection_shaped_identifier_still_gets_invalid_credentials."""
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "' OR '1'='1", "password": "x",
         }, follow_redirects=True)
         assert resp.status_code != 403

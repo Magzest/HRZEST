@@ -64,7 +64,7 @@ def get_email_config():
             "port": int(os.environ.get("SMTP_PORT", 587)),
             "user": smtp_user,
             "password": smtp_pass,
-            "from_name": os.environ.get("SMTP_FROM_NAME", "Attendance System"),
+            "from_name": os.environ.get("SMTP_FROM_NAME", "HRzest.com"),
             "from_email": os.environ.get("SMTP_FROM_EMAIL", smtp_user),
         }
     return None
@@ -197,7 +197,7 @@ def build_new_ip_login_email(display_name, identifier, ip_address, login_time_st
 <div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #fde68a;">
   <div style="background:#92400e;padding:24px 28px;color:white;">
     <div style="font-size:20px;font-weight:700;">🔐 New Sign-In Detected</div>
-    <div style="font-size:13px;opacity:0.8;margin-top:4px;">Employee Attendance System</div>
+    <div style="font-size:13px;opacity:0.8;margin-top:4px;">HRzest.com</div>
   </div>
   <div style="padding:28px;">
     <p style="color:#334155;font-size:14px;">Hi <strong>{_name}</strong>,</p>

@@ -5,8 +5,8 @@ Signup is open by default now (no shared-secret gate) -- Turnstile
 protects it instead, and turnstile_enabled() is False in tests (no
 TURNSTILE_SITE_KEY/SECRET_KEY configured), so the captcha check no-ops
 here exactly like the rest of the suite's login-flow tests already rely
-on. Plan selection defaults to "starter" and is validated server-side
-against utils.plan_limits.PLAN_TIERS.
+on. Billing is flat per-employee (utils.plan_limits.PER_EMPLOYEE_PAISE)
+-- there's no plan tier to select or validate anymore.
 
 The full provisioning path creates a real Postgres schema via
 create_tenant_schema() + init_tenant_db() (which runs the entire init_db()
@@ -37,31 +37,62 @@ class TestSignupPage:
         assert resp.status_code == 200
         assert b"Create Organisation" in resp.data
 
-    def test_page_lists_all_three_plan_tiers(self, client):
-        # Display names are Basic/Medium/Prime (utils/plan_limits.py's
-        # PLAN_TIERS) even though the internal plan keys stay
-        # starter/growth/enterprise.
+    def test_page_shows_flat_per_employee_rate(self, client):
+        import utils.plan_limits as plan_limits
         resp = client.get("/create_org")
-        assert b"Basic" in resp.data
-        assert b"Medium" in resp.data
-        assert b"Prime" in resp.data
+        assert plan_limits.format_price_inr(plan_limits.PER_EMPLOYEE_PAISE).encode() in resp.data
 
 
 class TestGetStartedPage:
-    """/get-started is the SaaS entry point (login-by-subdomain vs
-    register) -- distinct from "/" (blueprints/core.py's home()), which is
-    the platform operator's own login. The attendance kiosk moved to
-    /checkin (see tests/test_admin_views_coverage.py::TestHome)."""
+    """/get-started is retired -- the landing page ("/") now links directly
+    to /login and /create_org instead of routing through this extra hop.
+    /get-started is kept only as a redirect to "/" for old bookmarks/links.
+    See TestLandingPageLinks below for the replacement coverage."""
 
-    def test_get_page_renders(self, client):
-        resp = client.get("/get-started")
+    def test_get_page_redirects_to_landing(self, client):
+        resp = client.get("/get-started", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"].rstrip("/") in ("", "/")
+
+
+class TestLandingPageLinks:
+    """The apex landing page is now the SaaS entry point (login-by-subdomain
+    vs register) that /get-started used to be."""
+
+    def test_links_to_create_org_and_login(self, client):
+        resp = client.get("/")
         assert resp.status_code == 200
-        assert b"Register Your Company" in resp.data
-        assert b"Login to Your Company" in resp.data
-
-    def test_links_to_create_org(self, client):
-        resp = client.get("/get-started")
         assert b"/create_org" in resp.data
+        assert b"/login" in resp.data
+
+
+class TestLeadSubmission:
+    """/api/leads backs the landing page's "Request Demo" modal
+    (templates/landing.html, static/landing_v2.js) for visitors not ready
+    to self-register yet."""
+
+    def test_submit_lead_stores_all_fields(self, client, db_engine):
+        resp = client.post("/api/leads", json={
+            "name": "Jordan Lead", "email": "jordan.lead@test.local",
+            "phone": "+91 98765 43210", "company_name": "Lead Test Co",
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT name, email, phone, company_name FROM att_master.leads WHERE email=%s",
+            ("jordan.lead@test.local",),
+        )
+        row = cur.fetchone()
+        assert row == ("Jordan Lead", "jordan.lead@test.local", "+91 98765 43210", "Lead Test Co")
+        cur.execute("DELETE FROM att_master.leads WHERE email=%s", ("jordan.lead@test.local",))
+        db_engine.commit()
+
+    def test_missing_email_rejected(self, client):
+        resp = client.post("/api/leads", json={"name": "No Email"})
+        assert resp.status_code == 400
+        assert resp.get_json()["ok"] is False
 
 
 class TestSignupValidation:
@@ -104,22 +135,14 @@ class TestSignupValidation:
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
 
-    def test_unknown_plan_rejected(self, client):
-        resp = client.post("/create_org", data={
-            "company_name": "Acme", "subdomain": "acme-badplan",
-            "admin_username": "admin", "admin_password": "password123",
-            "admin_email": "admin@acme.test", "plan": "not-a-real-plan",
-        }, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers.get("Location") == "/create_org"
-
     @pytest.mark.parametrize("subdomain", [
         "hrms", "www", "api", "admin", "master", "super_admin",
     ])
     def test_reserved_subdomain_rejected(self, client, subdomain):
         # _resolve_tenant() (app.py) parses any 3-label host as
-        # <label1>.<rest> -- registering "hrms" would silently hijack the
-        # bare production domain (hrms.gradzest.com) from that point on.
+        # <label1>.<rest> -- registering "www" would silently hijack
+        # www.hrzest.com from that point on. "hrms" stays reserved too,
+        # a holdover from the old hrms.gradzest.com domain.
         resp = client.post("/create_org", data={
             "company_name": "Evil Org", "subdomain": subdomain,
             "admin_username": "evil_admin", "admin_password": "password123",
@@ -135,7 +158,7 @@ class TestSignupValidation:
 
 class TestPortalLinkOnSuccess:
     """After signup, the success page must show the tenant's OWN dedicated
-    subdomain link -- not a redirect to /admin_login on whatever host the
+    subdomain link -- not a redirect to /login on whatever host the
     signup form happened to be submitted from, which for a fresh company
     would never be their real subdomain until wildcard DNS resolves it."""
 
@@ -153,10 +176,10 @@ class TestPortalLinkOnSuccess:
             resp = client.post("/create_org", data={
                 "company_name": "Portal Link Org", "subdomain": subdomain,
                 "admin_username": "portal_admin", "admin_password": "password123",
-                "admin_email": "portal@test.local",
+                "admin_email": "portal@test.local", "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
-            assert f"https://{subdomain}.hrms.gradzest.com/admin_login".encode() in resp.data
+            assert f"https://www.hrzest.com/{subdomain}/login".encode() in resp.data
             assert b"portal_admin" in resp.data
             # No SMTP configured -- the page must degrade gracefully to
             # "bookmark this link" rather than falsely claiming an email
@@ -182,7 +205,7 @@ class TestPortalLinkOnSuccess:
             resp = client.post("/create_org", data={
                 "company_name": "Portal Link Email Org", "subdomain": subdomain,
                 "admin_username": "portal_admin2", "admin_password": "password123",
-                "admin_email": "portal2@test.local",
+                "admin_email": "portal2@test.local", "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
             assert b"We've also emailed this link to" in resp.data
@@ -207,11 +230,11 @@ class TestFullProvisioning:
                 "admin_username": "e2e_admin",
                 "admin_password": "password123",
                 "admin_email": "e2e@test.local",
-                "plan": "growth",
+                "email_domain": "test.local",
             }, follow_redirects=False)
             # Success now renders the org_created.html page directly (with
             # the tenant's dedicated portal link) instead of redirecting to
-            # /admin_login on whatever host the signup form was submitted
+            # /login on whatever host the signup form was submitted
             # from -- that host isn't necessarily the new tenant's subdomain.
             assert resp.status_code == 200
             assert b"Organisation Created" in resp.data
@@ -229,7 +252,8 @@ class TestFullProvisioning:
             assert row is not None, "tenant was not registered in att_master.tenants"
             assert row[0] == schema_name
             assert row[1] == "active"
-            assert row[2] == "growth"
+            import utils.plan_limits as plan_limits
+            assert row[2] == plan_limits.PLAN_LABEL  # audit-trail value only, no live tier behind it
 
             cur.execute(f'SELECT username FROM "{schema_name}".admin_users WHERE username=%s', ("e2e_admin",))
             assert cur.fetchone() is not None, "admin user was not seeded into the new tenant schema"
@@ -237,7 +261,9 @@ class TestFullProvisioning:
         finally:
             _drop_schema(db_engine, schema_name)
 
-    def test_default_plan_is_starter_when_not_selected(self, client, db_engine):
+    def test_plan_field_in_post_is_ignored(self, client, db_engine):
+        # A stray "plan" field (e.g. from an old cached client) must not
+        # affect provisioning -- billing is purely employee-count-based now.
         from app import init_master_db
         init_master_db()
 
@@ -248,12 +274,16 @@ class TestFullProvisioning:
             resp = client.post("/create_org", data={
                 "company_name": "Default Plan Org", "subdomain": subdomain,
                 "admin_username": "dp_admin", "admin_password": "password123",
-                "admin_email": "dp@test.local",
+                "admin_email": "dp@test.local", "plan": "not-a-real-plan",
+                "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
+            import utils.plan_limits as plan_limits
             cur = db_engine.cursor()
-            cur.execute("SELECT plan FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
-            assert cur.fetchone()[0] == "starter"
+            cur.execute("SELECT plan, status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            row = cur.fetchone()
+            assert row[0] == plan_limits.PLAN_LABEL
+            assert row[1] == "active"
             cur.close()
         finally:
             _drop_schema(db_engine, schema_name)
@@ -299,7 +329,7 @@ class TestFullProvisioning:
             payload = {
                 "company_name": "Dup Org", "subdomain": subdomain,
                 "admin_username": "dup_admin", "admin_password": "password123",
-                "admin_email": "dup@test.local",
+                "admin_email": "dup@test.local", "email_domain": "test.local",
             }
             r1 = client.post("/create_org", data=payload, follow_redirects=False)
             assert r1.status_code == 200

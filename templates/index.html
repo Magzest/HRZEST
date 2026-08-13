@@ -472,7 +472,7 @@
           <div class="tagline">QR &bull; Face Recognition &bull; Location</div>
         </div>
       </div>
-      <a href="/login" class="admin-btn">🔒 Login</a>
+      <a href="{{ tpath('/login') }}" class="admin-btn">🔒 Login</a>
     </div>
 
     <div class="page-body">
@@ -682,7 +682,7 @@
         if (authCfg.fingerprint_enabled) parts.push("Fingerprint");
         if (authCfg.location_enabled)    parts.push("Location");
         const el = document.querySelector(".tagline");
-        if (el) el.textContent = parts.length ? parts.join(" • ") : "Attendance System";
+        if (el) el.textContent = parts.length ? parts.join(" • ") : "HRzest.com";
       }
 
       function selectMethod(combo) {

@@ -369,7 +369,7 @@
       <h3><i class="ti ti-edit u-c-3b82f6"></i> Correct Attendance</h3>
       <div class="modal-sub" id="editModalSub">Editing record for <strong id="editDateLabel"></strong></div>
 
-      <form method="POST" action="/correct_attendance">
+      <form method="POST" action="{{ tpath('/correct_attendance') }}">
         <input type="hidden" name="emp_id"  value="{{ emp[0] }}">
         <input type="hidden" name="year"    value="{{ year }}">
         <input type="hidden" name="month"   value="{{ month }}">

@@ -87,7 +87,9 @@ class TestDecryptPiiDate:
 
 class TestHashToken:
     def test_deterministic_sha256(self):
-        assert helpers._hash_token("abc") == hashlib.sha256(b"abc").hexdigest()
+        # _hash_token lives in utils/auth.py, not utils/helpers.py.
+        from utils.auth import _hash_token
+        assert _hash_token("abc") == hashlib.sha256(b"abc").hexdigest()
 
 
 class TestDbContextManager:

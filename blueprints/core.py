@@ -13,7 +13,11 @@ from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
 )
-from utils.helpers import _db, get_auth_config, get_company_settings
+from utils.helpers import (
+    tpath, _db, get_auth_config, get_company_settings, validate_employee_email_domain,
+    employee_login_url,
+)
+from utils.email_utils import get_email_config, send_email_smtp
 from utils.session_risk import is_session_compromised
 
 core_bp = Blueprint("core", __name__)
@@ -41,11 +45,47 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
+    # session["tenant_db"] is only ever set by _resolve_tenant() (app.py)
+    # when the request resolved to a real tenant (either the URL carried a
+    # recognized company slug, or -- the case that matters here -- an
+    # earlier request in this same session already did, and it's cached).
+    # Its absence means this visit is on the bare/apex domain with no live
+    # tenant session at all. That's the signal used to decide "marketing
+    # landing page" vs. "this company's own portal", without a second
+    # lookup.
+    #
+    # Note this specific route can be hit with NO company slug in the URL
+    # even while session["tenant_db"] is set -- e.g. someone already
+    # logged into a company bookmarks/types the bare www.hrzest.com and
+    # lands here directly. tpath() reflects the *current* request's
+    # (slug-less) prefix, which would build an unprefixed destination and
+    # lose the company slug from the URL bar -- so these redirects build
+    # the destination from the session's own bound tenant_slug instead of
+    # tpath(), to always land back on that company's own path.
+    if session.get("tenant_db"):
+        slug = session.get("tenant_slug")
+        prefix = f"/{slug}" if slug else ""
+        co = get_company_settings()
+        if not co.get("setup_done"):
+            return redirect(prefix + "/setup")
+        if session.get("admin_logged_in"):
+            return redirect(prefix + "/admin")
+        if session.get("employee_id"):
+            return redirect(prefix + "/employee_portal")
+        return redirect(prefix + "/login")
+
+    # Apex/marketing domain: send anyone with a live session straight to
+    # where they were going; anonymous visitors get the public pitch.
     if session.get("admin_logged_in"):
-        return redirect("/admin")
+        return redirect(tpath("/admin"))
     if session.get("employee_id"):
-        return redirect("/employee_portal")
-    return redirect("/login")
+        return redirect(tpath("/employee_portal"))
+    if session.get("platform_admin_logged_in"):
+        return redirect(tpath("/super_admin"))
+    from utils.analytics import track_page_view
+    from utils.plan_limits import PER_EMPLOYEE_PAISE
+    track_page_view("/")
+    return render_template("landing.html", per_employee_paise=PER_EMPLOYEE_PAISE)
 
 
 @core_bp.route("/checkin")
@@ -152,7 +192,61 @@ def api_logout():
 @core_bp.route("/api/dashboard", methods=["GET"])
 @api_required
 def api_dashboard():
-    return jsonify({})
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    today = datetime.date.today()
+
+    cursor.execute("SELECT COUNT(*) FROM employees")
+    total = cursor.fetchone()[0]
+    cursor.execute(
+        "SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL",
+        (today,)
+    )
+    present = cursor.fetchone()[0]
+    cursor.execute(
+        "SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND status='Late Login'",
+        (today,)
+    )
+    late = cursor.fetchone()[0]
+    cursor.execute("""
+        SELECT e.employee_id, e.name, a.login_time, a.logout_time, a.status,
+               a.logout_status, a.attendance_type
+        FROM employees e
+        LEFT JOIN attendance a ON e.employee_id=a.employee_id AND a.date=%s
+        ORDER BY e.name
+    """, (today,))
+    rows = cursor.fetchall()
+    today_rows = [
+        {
+            "employee_id": r[0], "name": r[1],
+            "login_time": str(r[2]) if r[2] else None,
+            "logout_time": str(r[3]) if r[3] else None,
+            "login_status": r[4], "logout_status": r[5], "attendance_type": r[6],
+        }
+        for r in rows
+    ]
+    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
+    pending_leaves = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
+    pending_resignations = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
+    pending_tickets = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_type='admin' AND is_read=FALSE")
+    unread_notifications = cursor.fetchone()[0]
+    cursor.execute("SELECT COALESCE(company_name, '') FROM company_settings LIMIT 1")
+    co_row = cursor.fetchone()
+    company_name = co_row[0] if co_row else ""
+    cursor.close()
+    db.close()
+
+    return jsonify({
+        "ok": True, "total": total, "present": present,
+        "absent": total - present, "late": late,
+        "today": today.strftime("%d %b %Y"), "today_rows": today_rows,
+        "pending_leaves": pending_leaves, "pending_resignations": pending_resignations,
+        "pending_tickets": pending_tickets, "unread_notifications": unread_notifications,
+        "company_name": company_name,
+    })
 
 
 
@@ -205,19 +299,10 @@ def api_employee_login():
             (_hash_token(token), emp_id)
         )
         conn.commit()
-    from utils.plan_limits import get_tenant_plan, PLAN_TIERS
-    plan_name = get_tenant_plan(g.tenant_db)
-    _tier = PLAN_TIERS[plan_name]
-    plan_info = {
-        "display_name": _tier["display_name"],
-        "employee_limit": _tier["employee_limit"],
-        "features": sorted(_tier["features"]),  # frozenset isn't JSON-serializable
-    }
 
     return jsonify({
         "ok": True, "token": token, "employee_id": emp_id,
         "name": row[0], "email": row[1],
-        "plan": plan_name, "plan_info": plan_info
     })
 
 
@@ -249,6 +334,10 @@ def api_employee_signup():
     if len(password) < 6:
         return jsonify({"ok": False, "msg": "Password must be at least 6 characters."}), 400
 
+    _domain_error = validate_employee_email_domain(email)
+    if _domain_error:
+        return jsonify({"ok": False, "msg": _domain_error}), 400
+
     db = None
     cursor = None
     try:
@@ -269,6 +358,17 @@ def api_employee_signup():
         db.commit()
         cursor.close()
         db.close()
+        if email:
+            _ecfg = get_email_config()
+            if _ecfg:
+                _login_url = employee_login_url()
+                _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
+                         f"<p>Employee ID: <strong>{emp_id}</strong></p>"
+                         f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
+                try:
+                    send_email_smtp(email, f"Welcome {name} — Your Account is Ready", _html, _ecfg)
+                except Exception:
+                    app_log.error("api_employee_signup: welcome email failed", exc_info=True)
         return jsonify({
             "ok": True,
             "msg": f"Employee account for {name} ({emp_id}) created successfully! You can now sign in.",

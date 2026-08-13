@@ -1,32 +1,31 @@
 """Org blueprint — multi-tenant org self-registration."""
 import re
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
-from extensions import app_log
+from extensions import app_log, limiter
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
-from utils.plan_limits import PLAN_TIERS
+from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
+from utils.tenant_routing import RESERVED_PATH_SEGMENTS
+from utils.helpers import clean_email_domain, validate_email_domain_format
 
 org_bp = Blueprint("org", __name__)
 
 _SUBDOMAIN_RE = re.compile(r'^[a-z0-9\-]+$')
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
-# Matches the hardcoded ".hrms.gradzest.com" suffix already shown in
-# templates/create_org.html and templates/get_started.html -- kept as one
-# constant here since the portal link is also built server-side (welcome
-# email + the org_created.html success page).
-_TENANT_DOMAIN_SUFFIX = "hrms.gradzest.com"
+# Tenants are addressed by URL path now (www.hrzest.com/<subdomain>/...),
+# not subdomain -- this constant is the apex domain the path lives under.
+# The DB column and every internal variable are still named "subdomain"
+# (no migration needed, it's just a slug string either way).
+_TENANT_APEX_DOMAIN = "www.hrzest.com"
 
-# Subdomains that must never be self-registered: _resolve_tenant() (app.py)
-# treats any 3-label host as <label1>.<rest>, so the bare production domain
-# itself (e.g. hrms.gradzest.com) parses as subdomain candidate "hrms" --
-# letting someone register that subdomain would silently hijack every
-# visitor to the operator's own bare domain from that point on. The rest
-# are conventional infrastructure/admin names worth blocking on principle.
-_RESERVED_SUBDOMAINS = frozenset({
-    "hrms", "www", "api", "admin", "app", "mail", "master", "super_admin",
-    "static", "ns1", "ns2", "assets", "cdn",
-})
+# Slugs that must never be self-registered -- shared with
+# utils/tenant_routing.py's WSGI middleware, which uses the exact same set
+# to decide whether a URL's first path segment is a company slug or a real
+# top-level route (e.g. registering "login" as a company would otherwise
+# make www.hrzest.com/login ambiguous between the global login-picker page
+# and a company's own portal).
+_RESERVED_SUBDOMAINS = RESERVED_PATH_SEGMENTS
 
 
 def _clean_subdomain_slug(raw, company_name=""):
@@ -35,18 +34,26 @@ def _clean_subdomain_slug(raw, company_name=""):
     s = str(raw).strip().lower()
     s = re.sub(r'^https?://', '', s)
     s = s.split('/')[0].split(':')[0]
-    for suffix in [".hrms.gradzest.com", ".gradzest.com", ".gradzest.in", ".com", ".in", ".org", ".net", ".io"]:
+    for suffix in [".hrzest.com", ".hrms.gradzest.com", ".gradzest.com", ".gradzest.in", ".com", ".in", ".org", ".net", ".io"]:
         if s.endswith(suffix):
             s = s[:-len(suffix)]
     s = re.sub(r'[^a-z0-9\-]', '', s)
     return s
 
-def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan):
+def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                 email_domain=None):
     """Shared field validation for all three tenant-creation entry points
     (/create_org, /api/create_org, and the platform-admin-initiated create
     flow in platform_admin.py) -- keeps the reserved-subdomain and
     email-format checks from drifting out of sync across call sites.
-    Returns an error message, or None if every field is valid."""
+    Returns an error message, or None if every field is valid.
+
+    email_domain is required for every new company (e.g. "acme.com") --
+    it's what utils/helpers.py's validate_employee_email_domain() later
+    checks new employees' emails against. Existing tenants provisioned
+    before this field existed simply have none set, which keeps that
+    check a no-op for them (see validate_employee_email_domain's
+    docstring) -- this requirement only applies going forward."""
     subdomain = _clean_subdomain_slug(subdomain, company_name)
     if not all([company_name, subdomain, admin_username, admin_password, admin_email]):
         return "All fields (company name, subdomain, admin email/username/password) are required."
@@ -58,20 +65,36 @@ def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_p
         return f"Subdomain '{subdomain}' is reserved. Choose another."
     if len(admin_password) < 8:
         return "Admin password must be at least 8 characters."
-    if plan not in PLAN_TIERS:
-        return "Choose a valid plan."
+    domain_error = validate_email_domain_format(clean_email_domain(email_domain))
+    if domain_error:
+        return domain_error
     return None
 
 
-def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan):
+_PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
+
+
+def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                      payment_option="online", email_domain=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
     provisioning, which is where the three call sites would otherwise
     duplicate ~80 near-identical lines.
 
+    payment_option is a record of how the tenant is billed ("online" via
+    Razorpay, "manual" bank-transfer/invoice, or "trial") -- it doesn't
+    trigger any charge itself, that already happened (or didn't, for
+    "manual"/"trial") before this function is called.
+
+    email_domain (e.g. "acme.com") is stored on the new tenant's own
+    company_settings row -- utils/helpers.py's validate_employee_email_domain()
+    reads it from there to require/check new employees' emails going forward.
+
     Returns (ok, error_message_or_None, portal_url_or_None).
     """
+    if payment_option not in _PAYMENT_OPTIONS:
+        payment_option = "online"
     db_name = "att_" + subdomain.replace("-", "_")
 
     # See the long comment this replaced in the original /create_org route:
@@ -116,8 +139,8 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         tconn = get_tenant_db(db_name)
         tcur = tconn.cursor()
         tcur.execute(
-            "UPDATE company_settings SET company_name=%s, setup_done=1 WHERE id=1",
-            (company_name,)
+            "UPDATE company_settings SET company_name=%s, email_domain=%s, setup_done=1 WHERE id=1",
+            (company_name, clean_email_domain(email_domain) or None)
         )
         # Plain INSERT, no ON CONFLICT: the schema-existence check above
         # guarantees this is a brand-new schema, so a conflict here means a
@@ -137,9 +160,9 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         mconn = get_master_db()
         mcur = mconn.cursor()
         mcur.execute(
-            "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, status) "
-            "VALUES (%s, %s, %s, %s, %s, 'active')",
-            (company_name, subdomain, db_name, admin_email, plan)
+            "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, payment_option, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, 'active')",
+            (company_name, subdomain, db_name, admin_email, PLAN_LABEL, payment_option)
         )
         mconn.commit()
         mcur.close()
@@ -147,7 +170,12 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     except Exception as exc:
         return False, f"Tenant registered in DB but master registry failed: {exc}", None
 
-    portal_url = f"https://{subdomain}.{_TENANT_DOMAIN_SUFFIX}/admin_login"
+    # NOTE: the live tenant-admin login route is "/login" (auth.py's
+    # admin_login() view) -- "/admin_login" hasn't been a real route since
+    # an earlier rename and 404s. Fixed here since this exact line already
+    # needed touching for the path-based URL migration; not otherwise
+    # in scope for this change.
+    portal_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/login"
     return True, None, portal_url
 
 
@@ -178,11 +206,11 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 <div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
   <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:28px;color:white;text-align:center;">
     <div style="font-size:24px;font-weight:800;">🏢 {company_name}</div>
-    <div style="font-size:14px;opacity:0.85;margin-top:6px;">Your Dedicated HRMS Portal is Ready</div>
+    <div style="font-size:14px;opacity:0.85;margin-top:6px;">Your Dedicated HRzest.com Portal is Ready</div>
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#334155;margin-bottom:16px;line-height:1.6;">
-      Welcome to your Attendance & HRMS Platform! Your company workspace has been fully configured and set up by our onboarding team.
+      Welcome to HRzest.com! Your company workspace has been fully configured and set up by our onboarding team.
     </p>
 
     {creds_block}
@@ -194,7 +222,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
     <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser: <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Your HRMS Portal is Ready — {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Your HRzest.com Portal is Ready — {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_portal_ready_email failed: %s", exc)
@@ -202,7 +230,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 
 
 def send_payment_confirmation_email(admin_email, company_name, portal_url, set_password_url,
-                                     plan_display_name, amount_paise, razorpay_payment_id):
+                                     employee_count, amount_paise, razorpay_payment_id):
     """Post-payment welcome email for the paid /create_org flow
     (blueprints/billing.py's verify_payment). Like send_portal_ready_email,
     never includes a plaintext password -- instead links to a one-time
@@ -213,25 +241,25 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
         email_cfg = get_email_config()
         if not email_cfg:
             return False
-        from utils.plan_limits import format_price_inr
         import datetime as _dt
         amount_display = format_price_inr(amount_paise)
+        plan_display_name = f"₹{PER_EMPLOYEE_PAISE // 100}/employee × {employee_count}"
         paid_on = _dt.datetime.now().strftime("%d %b %Y")
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
-    <div style="font-size:20px;font-weight:700;">Payment received — your HRMS portal is ready</div>
+    <div style="font-size:20px;font-weight:700;">Payment received — your HRzest.com portal is ready</div>
     <div style="font-size:13px;opacity:0.75;margin-top:4px;">{company_name}</div>
   </div>
   <div style="padding:28px;">
-    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRMS portal has been created.</p>
+    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRzest.com portal has been created.</p>
     <a href="{set_password_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
       Set Your Password &amp; Sign In
     </a>
     <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">This link expires in 1 hour. Or copy it: {set_password_url}</p>
     <div style="background:#f1f5f9;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">Payment Receipt</div>
-      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Plan</span><strong>{plan_display_name}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Billing</span><strong>{plan_display_name}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Amount Paid</span><strong>{amount_display}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Date</span><strong>{paid_on}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;"><span>Payment ID</span><strong>{razorpay_payment_id}</strong></div>
@@ -239,21 +267,127 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
     <p style="font-size:12px;color:#94a3b8;">Your portal: {portal_url}</p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Payment confirmed — set up your HRMS portal for {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Payment confirmed — set up your HRzest.com portal for {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_payment_confirmation_email failed: %s", exc)
         return False
 
 
-@org_bp.route("/create_org", methods=["GET", "POST"])
-def create_org_disabled():
-    return redirect("/login")
+@org_bp.route("/get-started", methods=["GET"])
+def get_started_page():
+    """Retired standalone chooser page -- the landing page ("/") now shows
+    its own "Create Your Company" / "Login" links directly instead of
+    sending visitors through this extra hop. Kept as a redirect (rather
+    than removed outright) so old bookmarks/links/emails pointing here
+    still land somewhere useful; "get-started" also stays in
+    RESERVED_PATH_SEGMENTS so no company can ever claim it as a slug."""
+    from utils.analytics import track_page_view
+    track_page_view("/get-started")
+    return redirect("/")
+
+
+@org_bp.route("/create_org", methods=["GET"])
+def create_org_page():
+    # Flashed messages live in the session cookie, not scoped to any one
+    # page -- an unrelated admin-session-expiry notice (category
+    # "warning", queued by app.py's _enforce_session_lifetime /
+    # _enforce_idle_timeout / _enforce_csrf hooks on some earlier request
+    # in this same browser, possibly a different tab entirely) must never
+    # surface on this public signup page just because it shares a cookie
+    # with that admin session. This page's own flashes (validation
+    # errors, captcha failures, from the POST handler below) are always
+    # category "error" -- keep only those, drop everything else.
+    if session.get("_flashes"):
+        session["_flashes"] = [f for f in session["_flashes"] if f[0] == "error"]
+    from utils.analytics import track_page_view
+    track_page_view("/create_org")
+    return render_template(
+        "create_org.html",
+        per_employee_paise=PER_EMPLOYEE_PAISE,
+        show_captcha=turnstile_enabled(),
+        turnstile_site_key=_TURNSTILE_SITE_KEY,
+    )
+
+
+@org_bp.route("/create_org", methods=["POST"])
+def create_org():
+    """Direct-POST provisioning path. templates/create_org.html's JS no
+    longer submits here directly when Razorpay is configured (it goes
+    through blueprints/billing.py's create_order/verify_payment instead,
+    and no longer collects a password at all) -- but this route stays live
+    as a free fallback whenever RAZORPAY_KEY_ID/SECRET aren't set (local
+    dev, CI, and every test fixture that provisions a real tenant via this
+    exact endpoint, e.g. tests/test_ip_ban.py's signup_enabled_org). Once
+    real Razorpay keys are configured, hitting this directly with a
+    crafted POST (bypassing payment) is rejected -- the JSON /api/create_org
+    endpoint below is unrelated (mobile app's own registration flow) and is
+    untouched either way."""
+    from utils.razorpay_utils import razorpay_configured
+    if razorpay_configured():
+        flash("Please use the signup form to complete payment and create your organisation.", "error")
+        return redirect("/create_org")
+
+    # Signup has no prior-failure signal to key a captcha off (unlike
+    # login's CAPTCHA_AFTER_ATTEMPTS) -- it's shown unconditionally
+    # whenever Turnstile is configured, since this is the one endpoint
+    # that creates a brand-new schema. Fails open (signup stays reachable)
+    # when Turnstile isn't configured, matching how the rest of the app
+    # treats an unconfigured gate.
+    if turnstile_enabled():
+        token = request.form.get("cf-turnstile-response", "")
+        if not verify_turnstile(token, request.remote_addr):
+            flash("Captcha verification failed. Please try again.", "error")
+            return redirect("/create_org")
+
+    company_name = request.form.get("company_name", "").strip()
+    subdomain = _clean_subdomain_slug(request.form.get("subdomain", ""), company_name)
+    admin_username = request.form.get("admin_username", "").strip()
+    admin_password = request.form.get("admin_password", "").strip()
+    admin_email = request.form.get("admin_email", "").strip()
+    email_domain = clean_email_domain(request.form.get("email_domain", ""))
+
+    error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                         email_domain)
+    if error:
+        flash(error, "error")
+        return redirect("/create_org")
+
+    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                                              email_domain=email_domain)
+    if not ok:
+        flash(error, "error")
+        return redirect("/create_org")
+
+    email_sent = send_portal_ready_email(admin_email, company_name, admin_username, portal_url)
+
+    return render_template(
+        "org_created.html",
+        company_name=company_name, subdomain=subdomain,
+        admin_username=admin_username, admin_email=admin_email,
+        portal_url=portal_url, email_sent=email_sent,
+    )
 
 
 @org_bp.route("/org_payment_success", methods=["GET"])
 def org_payment_success():
-    return redirect("/login")
+    """Landing page after templates/create_org.html's JS successfully
+    verifies payment (blueprints/billing.py's verify_payment) -- every value
+    here is display-only, Jinja auto-escapes all of them so a tampered
+    query string can't inject anything, and none of them drive any
+    server-side decision (the real charge already happened via Razorpay
+    before this page ever loads) -- a tampered employee_count/amount_display
+    would at worst show the visitor an inaccurate receipt summary, not
+    grant or alter anything. Order ID stays out of the URL regardless,
+    since that one IS still only in the confirmation email."""
+    portal_url = request.args.get("portal_url", "")
+    email = request.args.get("email", "")
+    employee_count = request.args.get("employee_count", "")
+    amount_display = request.args.get("amount_display", "")
+    return render_template(
+        "org_payment_success.html", portal_url=portal_url, email=email,
+        employee_count=employee_count, amount_display=amount_display,
+    )
 
 
 @org_bp.route("/api/create_org", methods=["POST"])
@@ -272,13 +406,16 @@ def api_create_org():
         admin_username = data.get("admin_username", "").strip()
         admin_password = data.get("admin_password", "").strip()
         admin_email = data.get("admin_email", "").strip()
-        plan = data.get("plan", "starter").strip().lower()
 
-        error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+        email_domain = clean_email_domain(data.get("email_domain", ""))
+
+        error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
+                                             email_domain)
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email, plan)
+        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                                                    email_domain=email_domain)
         if not ok:
             # "Already taken" is client-correctable (400); anything else is
             # a provisioning-side failure (schema creation, seeding, master
@@ -301,3 +438,46 @@ def api_create_org():
 @org_bp.route("/superadmin")
 def superadmin_redirect():
     return redirect("/super_admin/login")
+
+
+@org_bp.route("/api/leads", methods=["POST"])
+@limiter.limit("5 per minute")
+def submit_lead():
+    """"Request info" form on the public landing page (templates/landing.html)
+    -- for visitors who want more details before self-registering via
+    /create_org. Stored in att_master.leads, surfaced on the Platform Admin
+    dashboard for manual follow-up. Deliberately has no admin-facing error
+    detail beyond "required" -- this is a public, unauthenticated endpoint."""
+    if turnstile_enabled():
+        token = request.form.get("cf-turnstile-response") or (request.get_json(silent=True) or {}).get("cf_turnstile_response", "")
+        if not verify_turnstile(token, request.remote_addr):
+            return jsonify({"ok": False, "msg": "Captcha verification failed. Please try again."}), 400
+
+    data = request.get_json(silent=True) or request.form
+    name = (data.get("name") or "").strip()[:200]
+    email = (data.get("email") or "").strip()[:200]
+    phone = (data.get("phone") or "").strip()[:30] or None
+    company_name = (data.get("company_name") or "").strip()[:200] or None
+    message = (data.get("message") or "").strip()[:2000] or None
+
+    if not name or not email:
+        return jsonify({"ok": False, "msg": "Name and email are required."}), 400
+    if not _EMAIL_RE.match(email):
+        return jsonify({"ok": False, "msg": "Enter a valid email address."}), 400
+
+    try:
+        from database import get_master_db
+        conn = get_master_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO leads (name, email, phone, company_name, message) VALUES (%s, %s, %s, %s, %s)",
+            (name, email, phone, company_name, message)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        app_log.error("submit_lead failed: %s", exc)
+        return jsonify({"ok": False, "msg": "Could not submit right now. Please try again."}), 500
+
+    return jsonify({"ok": True, "msg": "Thanks! We'll be in touch shortly."})

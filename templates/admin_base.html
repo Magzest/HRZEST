@@ -83,7 +83,7 @@
       <div class="brand-sub">
         {{ co.company_name }}
         <span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:800;background:rgba(255,255,255,0.18);color:#60a5fa;margin-left:4px;letter-spacing:0.5px;">
-          {{ (current_plan|default('starter'))|upper }}
+          {{ monthly_bill_display|default('₹0') }}/MO
         </span>
       </div>
     </div>
@@ -91,68 +91,61 @@
 
   {% set _tp = (pending_leaves|default(0)) + (pending_resignations|default(0)) + (pending_tickets|default(0)) %}
 
-
-  <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="/employees">
+  <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="{{ '/hr' if _is_hr else '/admin' }}">
+    <span class="nav-icon"><i class="ti ti-home"></i></span>Dashboard
+  </a>
+  <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}">
     <span class="nav-icon"><i class="ti ti-users"></i></span>Employees
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="/monthly_report">
+  <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}">
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>
   {% if not _is_hr %}
-  <a class="nav-item {{ 'active' if active_nav == 'salary' }}" href="/salary_report">
+  <a class="nav-item {{ 'active' if active_nav == 'salary' }}" href="{{ tpath('/salary_report') }}">
     <span class="nav-icon"><i class="ti ti-coin"></i></span>Salary &amp; Payslips
   </a>
   {% endif %}
-  <a class="nav-item {{ 'active' if active_nav == 'leaves' }}" href="/leave_holidays">
+  <a class="nav-item {{ 'active' if active_nav == 'leaves' }}" href="{{ tpath('/leave_holidays') }}">
     <span class="nav-icon"><i class="ti ti-calendar-event"></i></span>Leaves &amp; Holidays{% if _tp > 0 %}<span class="badge-count">{{ _tp }}</span>{% endif %}
   </a>
 
   <hr class="nav-sep u-mt-12" />
 
-  <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="/overtime">
+  <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}">
     <span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="/performance">
+  <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}">
     <span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="/onboarding">
+  <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}">
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'tickets' }}" href="/tickets">
+  <a class="nav-item {{ 'active' if active_nav == 'tickets' }}" href="{{ tpath('/tickets') }}">
     <span class="nav-icon"><i class="ti ti-ticket"></i></span>Tickets
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="/documents">
+  <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}">
     <span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents
   </a>
   {% if not _is_hr %}
-  <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="/analytics">
+  <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}">
     <span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics
-  </a>
-  <a class="nav-item {{ 'active' if active_nav == 'compliance' }}" href="/compliance">
-    <span class="nav-icon"><i class="ti ti-shield-check"></i></span>Compliance &amp; System Health
   </a>
   {% if session.get('admin_role') == 'superadmin' %}
   <a class="nav-item" href="/super_admin/login" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;">
     <span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal
   </a>
   {% endif %}
-  <a class="nav-item" href="/download_tax_statement/EMP-1001/2026" target="_blank">
-    <span class="nav-icon"><i class="ti ti-file-text"></i></span>Tax Form 16 / W-2
-  </a>
-  <a class="nav-item {{ 'active' if active_nav == 'admin_tools' }}" href="/admin_tools">
+  <a class="nav-item {{ 'active' if active_nav == 'admin_tools' }}" href="{{ tpath('/admin_tools') }}">
     <span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'settings' }}" href="/settings">
+  <a class="nav-item {{ 'active' if active_nav == 'settings' }}" href="{{ tpath('/settings') }}">
     <span class="nav-icon"><i class="ti ti-settings"></i></span>Settings
   </a>
   {% endif %}
-  <a class="nav-item" href="/logout">
+  <a class="nav-item" href="{{ tpath('/logout') }}">
     <span class="nav-icon"><i class="ti ti-logout"></i></span>Logout
   </a>
 
-  <button class="dm-toggle" onclick="toggleDarkMode(document.body.classList.contains('dark-mode')?false:true)">
-    <i class="ti ti-moon dm-icon"></i> Dark mode
-  </button>
   <div class="sidebar-footer"><i class="ti ti-clock u-fs-13"></i> <span class="sb-live-clock"></span></div>
 </div>
 

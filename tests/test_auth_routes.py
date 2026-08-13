@@ -38,80 +38,23 @@ def _employee_bearer_token(client, seed_employee):
     return resp.get_json()["token"]
 
 
-class TestSetupWizard:
-    """The success path (which DELETEs every admin_users row) is deliberately
-    not exercised here — att_test is shared/persistent and that write would
-    be destructive to every other test's admin fixtures. Only the read-only
-    and validation branches are covered."""
-
-    def test_redirects_when_already_done(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": True})
-        resp = client.get("/setup", follow_redirects=False)
-        assert resp.status_code == 302
-        assert "/admin_login" in resp.headers["Location"]
-
-    def test_renders_form_when_not_done(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.get("/setup")
-        assert resp.status_code == 200
-
-    def test_missing_company_name_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "", "admin_username": "x",
-            "admin_password": "longenough1", "admin_password2": "longenough1",
-        })
-        assert resp.status_code == 200
-        assert b"Company name is required" in resp.data
-
-    def test_missing_admin_username_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "",
-            "admin_password": "longenough1", "admin_password2": "longenough1",
-        })
-        assert b"Admin username is required" in resp.data
-
-    def test_short_password_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "x",
-            "admin_password": "short", "admin_password2": "short",
-        })
-        assert b"at least 8 characters" in resp.data
-
-    def test_mismatched_passwords_rejected(self, client, monkeypatch):
-        monkeypatch.setattr(auth_bp_module, "get_company_settings",
-                            lambda: {"setup_done": False})
-        resp = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "x",
-            "admin_password": "longenough1", "admin_password2": "different1",
-        })
-        assert b"do not match" in resp.data
-
-
 class TestAdminLoginEdgeBranches:
     def test_already_admin_logged_in_redirects_to_admin(self, client, seed_admin):
         _admin_session(client, seed_admin["username"])
-        resp = client.get("/admin_login", follow_redirects=False)
+        resp = client.get("/login", follow_redirects=False)
         assert resp.status_code == 302
         assert resp.headers["Location"].endswith("/admin")
 
     def test_already_employee_logged_in_redirects_to_portal(self, client, seed_employee):
         _employee_session(client, seed_employee["employee_id"])
-        resp = client.get("/admin_login", follow_redirects=False)
+        resp = client.get("/login", follow_redirects=False)
         assert resp.status_code == 302
         assert "/employee_portal" in resp.headers["Location"]
 
     def test_injection_shaped_identifier_still_gets_invalid_credentials(self, client, monkeypatch):
         events = []
         monkeypatch.setattr(auth_bp_module, "log_security_event", lambda *a, **k: events.append(a))
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "admin' OR '1'='1",
             "password": "whatever",
         }, follow_redirects=True)
@@ -124,7 +67,7 @@ class TestAdminLoginEdgeBranches:
             _record_login_failure(ident)
         _wait_for_async_writes()
         try:
-            resp = client.post("/admin_login", data={"identifier": ident, "password": "x"})
+            resp = client.post("/login", data={"identifier": ident, "password": "x"})
             assert b"locked" in resp.data.lower()
         finally:
             _clear_login_failures(ident)
@@ -134,14 +77,14 @@ class TestAdminLoginEdgeBranches:
         monkeypatch.setattr(auth_bp_module, "turnstile_enabled", lambda: True)
         monkeypatch.setattr(auth_bp_module, "_get_failed_count", lambda ident: 5)
         monkeypatch.setattr(auth_bp_module, "verify_turnstile", lambda token, ip: False)
-        resp = client.post("/admin_login", data={"identifier": "someone", "password": "x"})
+        resp = client.post("/login", data={"identifier": "someone", "password": "x"})
         assert b"verification challenge" in resp.data
 
     def test_captcha_passes_with_valid_token_falls_through_to_credential_check(self, client, monkeypatch):
         monkeypatch.setattr(auth_bp_module, "turnstile_enabled", lambda: True)
         monkeypatch.setattr(auth_bp_module, "_get_failed_count", lambda ident: 5)
         monkeypatch.setattr(auth_bp_module, "verify_turnstile", lambda token, ip: True)
-        resp = client.post("/admin_login", data={"identifier": "someone_unknown", "password": "x"})
+        resp = client.post("/login", data={"identifier": "someone_unknown", "password": "x"})
         assert b"Invalid credentials" in resp.data
 
     def test_legacy_admin_hash_upgraded_to_bcrypt_on_login(self, client, db_engine):
@@ -152,7 +95,7 @@ class TestAdminLoginEdgeBranches:
             ("legacy_admin_route_test", wz_hash("LegacyPass1", method="pbkdf2:sha256")),
         )
         try:
-            resp = client.post("/admin_login", data={
+            resp = client.post("/login", data={
                 "identifier": "legacy_admin_route_test", "password": "LegacyPass1",
             }, follow_redirects=False)
             assert resp.status_code == 302
@@ -163,7 +106,7 @@ class TestAdminLoginEdgeBranches:
             cur.close()
 
     def test_employee_login_via_admin_login_route_redirects_to_portal(self, client, seed_employee):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
         }, follow_redirects=False)
         assert resp.status_code == 302
@@ -174,7 +117,7 @@ class TestAdminLoginEdgeBranches:
         cur.execute("UPDATE employees SET force_pin_change=1 WHERE employee_id=%s",
                     (seed_employee["employee_id"],))
         try:
-            resp = client.post("/admin_login", data={
+            resp = client.post("/login", data={
                 "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
             }, follow_redirects=False)
             assert "/force_change_pin" in resp.headers["Location"]
@@ -184,7 +127,7 @@ class TestAdminLoginEdgeBranches:
             cur.close()
 
     def test_employee_wrong_password_records_failure(self, client, seed_employee):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": "WrongPass!",
         })
         assert b"Invalid credentials" in resp.data

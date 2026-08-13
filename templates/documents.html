@@ -91,7 +91,7 @@
       <!-- FILTER -->
       <div class="panel u-mb-16">
         <div class="panel-title"><i class="ti ti-filter u-c-3b82f6"></i> Filter by Employee</div>
-        <form method="GET" action="/documents">
+        <form method="GET" action="{{ tpath('/documents') }}">
           <label>Employee</label>
           <select name="emp_id" onchange="this.form.submit()">
             <option value="">— All Employees —</option>
@@ -100,7 +100,7 @@
             {% endfor %}
           </select>
           {% if sel_emp %}
-          <a href="/documents" class="btn btn-sm u-bg-f1f5f9 u-c-64748b u-bd-1-solid-e2e8f0">Clear filter</a>
+          <a href="{{ tpath('/documents') }}" class="btn btn-sm u-bg-f1f5f9 u-c-64748b u-bd-1-solid-e2e8f0">Clear filter</a>
           {% endif %}
         </form>
       </div>
@@ -108,7 +108,7 @@
       <!-- UPLOAD -->
       <div class="panel">
         <div class="panel-title"><i class="ti ti-upload u-c-22c55e"></i> Upload Document</div>
-        <form action="/upload_document" method="POST" enctype="multipart/form-data">
+        <form action="{{ tpath('/upload_document') }}" method="POST" enctype="multipart/form-data">
           <label>Employee</label>
           <select name="employee_id" required>
             <option value="">— Select employee —</option>

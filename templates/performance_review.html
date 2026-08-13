@@ -125,7 +125,7 @@
     <div class="u-d-flex u-fxd-column u-gap-8">
       <a href="/performance?quarter={{ quarter }}&year={{ year }}" class="btn btn-back"><i class="ti ti-arrow-left"></i> Back</a>
       {% if review %}
-      <form class="u-m-0" method="POST" action="/performance_save_review">
+      <form class="u-m-0" method="POST" action="{{ tpath('/performance_save_review') }}">
         <input type="hidden" name="employee_id" value="{{ emp_id }}"/>
         <input type="hidden" name="quarter" value="{{ quarter }}"/>
         <input type="hidden" name="year" value="{{ year }}"/>
@@ -153,7 +153,7 @@
     {% if not review or review[4] != 'Submitted' %}
     <div class="card">
       <div class="sec-title"><i class="ti ti-plus"></i> Add KPI</div>
-      <form method="POST" action="/performance_add_kpi">
+      <form method="POST" action="{{ tpath('/performance_add_kpi') }}">
         <input type="hidden" name="employee_id" value="{{ emp_id }}"/>
         <input type="hidden" name="quarter" value="{{ quarter }}"/>
         <input type="hidden" name="year" value="{{ year }}"/>
@@ -208,7 +208,7 @@
         <div class="u-d-flex u-ai-center u-gap-8">
           <span class="weight-badge">{{ weight }}%</span>
           {% if not review or review[4] != 'Submitted' %}
-          <form class="u-m-0" method="POST" action="/performance_delete_kpi">
+          <form class="u-m-0" method="POST" action="{{ tpath('/performance_delete_kpi') }}">
             <input type="hidden" name="kpi_id" value="{{ kpi_id }}"/>
             <input type="hidden" name="employee_id" value="{{ emp_id }}"/>
             <input type="hidden" name="quarter" value="{{ quarter }}"/>
@@ -228,7 +228,7 @@
       </div>
 
       {% if not review or review[4] != 'Submitted' %}
-      <form method="POST" action="/performance_rate_kpi">
+      <form method="POST" action="{{ tpath('/performance_rate_kpi') }}">
         <input type="hidden" name="kpi_id" value="{{ kpi_id }}"/>
         <input type="hidden" name="employee_id" value="{{ emp_id }}"/>
         <input type="hidden" name="quarter" value="{{ quarter }}"/>
@@ -293,7 +293,7 @@
   <div class="tab-content" id="tab-feedback">
     <div class="card">
       <div class="sec-title"><i class="ti ti-message-circle"></i> Reviewer Feedback</div>
-      <form method="POST" action="/performance_save_review">
+      <form method="POST" action="{{ tpath('/performance_save_review') }}">
         <input type="hidden" name="employee_id" value="{{ emp_id }}"/>
         <input type="hidden" name="quarter" value="{{ quarter }}"/>
         <input type="hidden" name="year" value="{{ year }}"/>

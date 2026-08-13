@@ -1,4 +1,4 @@
-# ☁️ AWS Deployment Guide — HRMS Employee Attendance Platform
+# ☁️ AWS Deployment Guide — HRzest.com
 
 This guide provides step-by-step instructions for hosting the platform on **AWS EC2** (recommended for full control and lowest cost) or **AWS Elastic Beanstalk / App Runner**.
 

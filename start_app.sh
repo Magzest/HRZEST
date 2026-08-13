@@ -16,6 +16,6 @@ fi
 /usr/lib/postgresql/18/bin/createdb -h /tmp -U postgres employee_attendance 2>/dev/null || true
 
 # Launch WSGI server
-echo "Starting Employee Attendance System application..."
+echo "Starting HRzest.com application..."
 exec ./venv/bin/python wsgi.py
 

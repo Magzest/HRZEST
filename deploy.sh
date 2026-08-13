@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh — One-command VPS deployment for HRMS Attendance Platform
+# deploy.sh — One-command VPS deployment for HRzest.com
 # Usage: bash deploy.sh
 # Requires: Docker + Docker Compose installed on the VPS
 
@@ -7,7 +7,7 @@ set -euo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
-echo -e "${GREEN}🚀 HRMS Attendance Platform — Deployment Script${NC}"
+echo -e "${GREEN}🚀 HRzest.com — Deployment Script${NC}"
 echo "=================================================="
 
 # 1. Check .env exists and is configured

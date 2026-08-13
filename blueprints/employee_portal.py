@@ -9,6 +9,7 @@ from extensions import app, app_log, limiter, log_security_event
 from database import get_db_connection
 from utils.auth import employee_required, employee_api_required, check_password_hash, generate_password_hash
 from utils.helpers import (
+    tpath,
     _audit, _db, encrypt_pii, decrypt_pii, decrypt_pii_date, _validate_image_file, get_auth_config,
 )
 from utils.ai_assistant import build_employee_context, ask_assistant
@@ -69,7 +70,7 @@ def update_my_profile():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?profile_saved=1#my-profile")
+    return redirect(tpath("/employee_portal?profile_saved=1#my-profile"))
 
 
 @employee_portal_bp.route("/update_my_bank_details", methods=["POST"])
@@ -95,7 +96,7 @@ def update_my_bank_details():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?bank_saved=1#my-profile")
+    return redirect(tpath("/employee_portal?bank_saved=1#my-profile"))
 
 
 @employee_portal_bp.route("/add_experience", methods=["POST"])
@@ -109,7 +110,7 @@ def add_experience():
     is_current = 1 if request.form.get("is_current") else 0
     description = request.form.get("description", "").strip() or None
     if not company or not designation or not from_year:
-        return redirect("/employee_portal?exp_error=1#my-profile")
+        return redirect(tpath("/employee_portal?exp_error=1#my-profile"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
@@ -120,7 +121,7 @@ def add_experience():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?exp_saved=1#my-profile")
+    return redirect(tpath("/employee_portal?exp_saved=1#my-profile"))
 
 
 @employee_portal_bp.route("/delete_experience/<int:entry_id>", methods=["POST"])
@@ -133,7 +134,7 @@ def delete_experience(entry_id):
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal#my-profile")
+    return redirect(tpath("/employee_portal#my-profile"))
 
 
 @employee_portal_bp.route("/add_education_entry", methods=["POST"])
@@ -145,7 +146,7 @@ def add_education_entry():
     year_of_passing = request.form.get("year_of_passing", "").strip() or None
     percentage = request.form.get("percentage", "").strip() or None
     if not degree or not institution:
-        return redirect("/employee_portal?edu_error=1#my-profile")
+        return redirect(tpath("/employee_portal?edu_error=1#my-profile"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
@@ -156,7 +157,7 @@ def add_education_entry():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?edu_saved=1#my-profile")
+    return redirect(tpath("/employee_portal?edu_saved=1#my-profile"))
 
 
 @employee_portal_bp.route("/delete_education_entry/<int:entry_id>", methods=["POST"])
@@ -169,7 +170,7 @@ def delete_education_entry(entry_id):
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal#my-profile")
+    return redirect(tpath("/employee_portal#my-profile"))
 
 
 @employee_portal_bp.route("/update_my_photo", methods=["POST"])
@@ -181,14 +182,14 @@ def update_my_photo():
     file = request.files.get("photo")
     ok, err = _validate_image_file(file)
     if not ok:
-        return redirect("/employee_portal?photo_error=bad_format#my-profile")
+        return redirect(tpath("/employee_portal?photo_error=bad_format#my-profile"))
     try:
         img = Image.open(file.stream).convert("RGB")
         img_array = np.array(img)
         if _face_recognition_available:
             locs = face_recognition.face_locations(img_array)
             if not locs:
-                return redirect("/employee_portal?photo_error=no_face#my-profile")
+                return redirect(tpath("/employee_portal?photo_error=no_face#my-profile"))
         save_path = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
         img.save(save_path, "JPEG", quality=90)
         db = get_db_connection()
@@ -197,9 +198,9 @@ def update_my_photo():
         db.commit()
         cursor.close()
         db.close()
-        return redirect("/employee_portal?photo_saved=1#my-profile")
+        return redirect(tpath("/employee_portal?photo_saved=1#my-profile"))
     except Exception:
-        return redirect("/employee_portal?photo_error=failed#my-profile")
+        return redirect(tpath("/employee_portal?photo_error=failed#my-profile"))
 
 
 @employee_portal_bp.route("/my_qr")
@@ -241,7 +242,7 @@ def my_id_card():
 def my_attendance():
     """Deep-link redirect → employee portal attendance tab."""
     from flask import redirect
-    return redirect("/employee_portal#tab-attendance")
+    return redirect(tpath("/employee_portal#tab-attendance"))
 
 
 @employee_portal_bp.route("/my_leaves")
@@ -249,7 +250,7 @@ def my_attendance():
 def my_leaves():
     """Deep-link redirect → employee portal leaves tab."""
     from flask import redirect
-    return redirect("/employee_portal#tab-leaves")
+    return redirect(tpath("/employee_portal#tab-leaves"))
 
 
 @employee_portal_bp.route("/my_salary")
@@ -257,7 +258,7 @@ def my_leaves():
 def my_salary():
     """Deep-link redirect → employee portal salary tab."""
     from flask import redirect
-    return redirect("/employee_portal#tab-salary")
+    return redirect(tpath("/employee_portal#tab-salary"))
 
 
 @employee_portal_bp.route("/my_profile")
@@ -265,7 +266,7 @@ def my_salary():
 def my_profile():
     """Deep-link redirect → employee portal profile tab."""
     from flask import redirect
-    return redirect("/employee_portal#tab-profile")
+    return redirect(tpath("/employee_portal#tab-profile"))
 
 
 @employee_portal_bp.route("/employee_portal")

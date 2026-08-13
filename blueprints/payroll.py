@@ -23,7 +23,7 @@ from flask import (
 from database import get_db_connection
 from extensions import app_log, limiter, log_security_event
 from utils.auth import admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required
-from utils.helpers import _audit, decrypt_pii, encrypt_pii
+from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
@@ -88,7 +88,7 @@ def update_salary():
     cursor.close()
     db.close()
     _audit("update_salary", "salary_config", emp_id, f"salary_per_day set to {salary}")
-    return redirect("/settings?tab=salary")
+    return redirect(tpath("/settings?tab=salary"))
 
 # ---------------- MONTHLY ATTENDANCE REPORT ----------------
 
@@ -294,9 +294,10 @@ def salary_report_export():
                                      leave_dates=leave_map.get(emp_id, set()))
         inc = incentive_map.get(emp_id, 0.0)
         net = round(entry["net"] + inc, 2)
+        present_days = entry["full_days"] + entry["half_days"] + entry["late_days"]
         row_data = [
             idx, emp_id, name, role, dept,
-            float(spd), entry["billable"], entry["present"],
+            float(spd), entry["billable"], present_days,
             entry["absent"], entry["deduction"], inc, net
         ]
         fill = alt_fill if idx % 2 == 0 else None
@@ -329,7 +330,7 @@ def email_config():
     # 2FA-gated Email tab; redirecting (rather than deleting the route)
     # keeps the "Setup Email First" link on the salary report page working.
     if request.method == "GET":
-        return redirect("/settings?tab=email")
+        return redirect(tpath("/settings?tab=email"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -337,7 +338,7 @@ def email_config():
     port = int(request.form["smtp_port"])
     user = request.form["smtp_user"].strip()
     password = request.form.get("smtp_pass", "").strip()
-    from_name = request.form.get("from_name", "Attendance System").strip()
+    from_name = request.form.get("from_name", "HRzest.com").strip()
     from_email = request.form.get("from_email", "").strip() or user
 
     # A blank or masked password means "leave the stored one unchanged" —
@@ -359,7 +360,7 @@ def email_config():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/settings?tab=email&saved=1")
+    return redirect(tpath("/settings?tab=email&saved=1"))
 
 # ---------------- SEND SALARY EMAIL (single) ----------------
 
@@ -766,7 +767,7 @@ def my_attendance_pdf():
 </div>
 <table><thead><tr><th>Date</th><th>Day</th><th>Login</th><th>Logout</th><th>Status</th></tr></thead>
 <tbody>{rows_html}</tbody></table>
-<div class="footer">Employee Attendance System &nbsp;·&nbsp; {emp[1]} &nbsp;·&nbsp; {month_name}</div>
+<div class="footer">HRzest.com &nbsp;·&nbsp; {emp[1]} &nbsp;·&nbsp; {month_name}</div>
 </body></html>"""
     return html
 
@@ -780,7 +781,7 @@ def apply_hike():
     emp_ids = request.form.getlist("emp_ids")
     if not emp_ids:
         flash("No employees selected.", "error")
-        return redirect(f"/performance?tab=hike&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=hike&quarter={q}&year={yr}"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -844,7 +845,7 @@ def apply_hike():
     cursor.close()
     db.close()
     flash(f"Hike applied to {updated} employee(s) successfully.", "success")
-    return redirect(f"/performance?tab=hike&quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance?tab=hike&quarter={q}&year={yr}"))
 
 
 @payroll_bp.route("/award_performance_bonus", methods=["POST"])
@@ -856,7 +857,7 @@ def award_performance_bonus():
     emp_ids = request.form.getlist("emp_ids")
     if not emp_ids:
         flash("No employees selected.", "error")
-        return redirect(f"/performance?tab=hike&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=hike&quarter={q}&year={yr}"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -939,7 +940,7 @@ def award_performance_bonus():
     cursor.close()
     db.close()
     flash(f"Performance bonus awarded to {awarded} employee(s).", "success")
-    return redirect(f"/performance?tab=hike&quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance?tab=hike&quarter={q}&year={yr}"))
 
 
 @payroll_bp.route("/save_hike_config", methods=["POST"])
@@ -957,7 +958,7 @@ def save_hike_config():
     n = min(len(ids), len(labels), len(min_rats), len(max_rats), len(hike_pcts), len(inc_pcts))
     if n == 0:
         flash("No band data received.", "error")
-        return redirect(f"/performance?tab=hike&quarter={q}&year={yr}")
+        return redirect(tpath(f"/performance?tab=hike&quarter={q}&year={yr}"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -974,7 +975,7 @@ def save_hike_config():
     cursor.close()
     db.close()
     flash("Hike band configuration saved.", "success")
-    return redirect(f"/performance?tab=hike&quarter={q}&year={yr}")
+    return redirect(tpath(f"/performance?tab=hike&quarter={q}&year={yr}"))
 
 
 @payroll_bp.route("/api/salary_config", methods=["GET"])
@@ -1164,7 +1165,7 @@ def view_payslip(emp_id, year, month):
     # editing the URL). enforce_ownership() logs any denial at ERROR, which
     # feeds the alerting webhook (utils/alerts.py), not just the log stream.
     if not enforce_ownership(emp_id, "payslip", f"{year}-{month:02d}"):
-        return redirect("/login")
+        return redirect(tpath("/login"))
     # enforce_ownership() grants any admin-side session a bypass regardless
     # of role — too broad for this route specifically, since it renders
     # plaintext PAN/UAN/bank account details. Restrict the non-owner
@@ -1177,7 +1178,7 @@ def view_payslip(emp_id, year, month):
             level="ERROR", identifier=session.get("admin_username"),
             resource_type="payslip", resource_id=f"{emp_id}:{year}-{month:02d}",
         )
-        return redirect("/login")
+        return redirect(tpath("/login"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1338,7 +1339,7 @@ def payroll_settings():
             flash("Invalid values.", "error")
             cursor.close()
             db.close()
-            return redirect("/payroll_settings")
+            return redirect(tpath("/payroll_settings"))
         # NaN would silently corrupt every downstream payroll calculation
         # that compares against these values (NaN comparisons are always
         # False) -- reject it explicitly since float() alone won't.
@@ -1346,7 +1347,7 @@ def payroll_settings():
             flash("Invalid values.", "error")
             cursor.close()
             db.close()
-            return redirect("/payroll_settings")
+            return redirect(tpath("/payroll_settings"))
         cursor.execute("""
             UPDATE payroll_config SET pf_employee_pct=%s, pf_employer_pct=%s,
             professional_tax=%s, tds_annual_pct=%s, pf_basic_cap=%s
@@ -1380,7 +1381,7 @@ def payroll_settings():
         flash("Payroll settings saved.", "success")
         cursor.close()
         db.close()
-        return redirect("/payroll_settings")
+        return redirect(tpath("/payroll_settings"))
 
     cursor.execute(
         "SELECT pf_employee_pct, pf_employer_pct, professional_tax, tds_annual_pct, pf_basic_cap FROM payroll_config LIMIT 1")

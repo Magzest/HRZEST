@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Automated PostgreSQL Backup Script — Employee Attendance Platform
+# Automated PostgreSQL Backup Script — HRzest.com
 # Runs pg_dump to create a compressed, timestamped backup in backups/
 # Deletes backups older than 30 days automatically.
 # ==============================================================================

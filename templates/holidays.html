@@ -223,7 +223,7 @@
 
       <!-- Toolbar -->
       <div class="toolbar">
-        <form class="u-d-inline" action="/import_indian_holidays" method="POST">
+        <form class="u-d-inline" action="{{ tpath('/import_indian_holidays') }}" method="POST">
           <input type="hidden" name="year" value="{{ year }}">
           <button type="submit" class="btn-import"
                   onclick="return confirm('Import Indian public holidays for {{ year }}? Existing entries will not be overwritten.')">
@@ -346,7 +346,7 @@
     <div class="modal-overlay" id="addModal">
       <div class="modal-box">
         <h3>➕ Add Holiday / Leave</h3>
-        <form action="/add_holiday" method="POST">
+        <form action="{{ tpath('/add_holiday') }}" method="POST">
           <div class="form-group">
             <label>Date</label>
             <input type="date" name="date" id="modalDate" required />

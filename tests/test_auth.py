@@ -56,7 +56,7 @@ class TestPasswordHashing:
 
 class TestAdminLogin:
     def test_valid_login_redirects_to_admin(self, client, seed_admin):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": seed_admin["password"],
         }, follow_redirects=False)
@@ -65,7 +65,7 @@ class TestAdminLogin:
             assert "/admin" in resp.headers.get("Location", "")
 
     def test_wrong_password_returns_error(self, client, seed_admin):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": seed_admin["username"],
             "password": "WrongPassword!",
         }, follow_redirects=True)
@@ -73,7 +73,7 @@ class TestAdminLogin:
         assert b"Invalid credentials" in resp.data
 
     def test_unknown_user_returns_error(self, client):
-        resp = client.post("/admin_login", data={
+        resp = client.post("/login", data={
             "identifier": "no_such_user_xyz",
             "password": "doesntmatter",
         }, follow_redirects=True)

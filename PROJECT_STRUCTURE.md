@@ -1,6 +1,6 @@
-# 🏢 HRMS Employee Attendance Platform — Architecture & Structure Guide
+# 🏢 HRzest.com — Architecture & Structure Guide
 
-This document outlines the modular directory structure and architectural layers of the Employee Attendance Platform.
+This document outlines the modular directory structure and architectural layers of HRzest.com.
 
 ---
 
@@ -15,28 +15,28 @@ employee-attendance/
 ├── extensions.py               # Shared extensions (Limiter, Logger, Redis, Security WAF)
 ├── gunicorn.conf.py            # Production Gunicorn WSGI server configuration
 │
-├── blueprints/                 # Modular Flask Route Controllers
+├── blueprints/                 # Modular Flask Route Controllers (21 blueprints, all routes — app.py has none)
 │   ├── admin_views.py          # Admin settings, dashboard, analytics
 │   ├── ai_hrms.py              # AI-assisted candidate screening & HR helpdesk
 │   ├── attendance.py           # Shift scheduling, breaks, time tracking
 │   ├── auth.py                 # Multi-role authentication & WebAuthn biometric login
-│   ├── compliance.py           # Statutory compliance & immutable audit logs
+│   ├── billing.py              # Per-employee billing & pricing tier calculations
+│   ├── core.py                 # Home page, CSP reporting, session-risk stream, token REST API
 │   ├── daily_report.py        # Automated nightly email reports (APScheduler)
-│   ├── documents.py           # Document upload & verification with ClamAV
-│   ├── email_blast.py         # Broadcast emails & announcement dispatch
+│   ├── documents.py            # Document upload & verification with ClamAV
+│   ├── email_blast.py          # Broadcast emails & announcement dispatch
 │   ├── employee_portal.py     # Employee self-service dashboard & profile management
 │   ├── employees.py            # Employee CRUD, photo/QR code management
-│   ├── health.py               # /healthz endpoint for Podman/Nginx health checks
-│   ├── leave.py                # Leave applications, approvals, & comp-offs
+│   ├── health.py                # /healthz endpoint for Podman/Nginx health checks
+│   ├── leave.py                 # Leave applications, approvals, & comp-offs
 │   ├── notifications.py        # In-app notifications & read receipts
-│   ├── onboarding.py           # Automated onboarding workflows & checklists
-│   ├── org.py                  # Multi-company setup & organization management
-│   ├── payroll.py              # Salary structure, payslips, & bulk email distribution
-│   ├── performance.py          # KPI metrics, reviews, & appraisals
-│   ├── plan_guard.py           # Tier-based feature gating (@require_plan)
+│   ├── onboarding.py            # Automated onboarding workflows & checklists
+│   ├── org.py                   # Multi-company setup & organization management
+│   ├── payroll.py               # Salary structure, payslips, & bulk email distribution
+│   ├── performance.py           # KPI metrics, reviews, & appraisals
 │   ├── platform_admin.py       # SaaS Platform Super Admin console (/super_admin)
-│   ├── secops.py               # SecOps Telemetry Command Center (/sp_admin)
-│   └── tickets.py              # HR helpdesk ticketing & resignation requests
+│   ├── secops.py                # SecOps Telemetry Command Center (/sp_admin)
+│   └── tickets.py               # HR helpdesk ticketing & resignation requests
 │
 ├── utils/                      # Core Business Logic & Security Helpers
 │   ├── ai_assistant.py         # Employee AI Chat assistant (n8n / Claude)

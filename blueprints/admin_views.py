@@ -31,12 +31,12 @@ from utils.auth import (
     check_password_hash,
 )
 from utils.helpers import (
+    tpath,
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
-    _validate_image_file,
+    _validate_image_file, clean_email_domain, validate_email_domain_format, invalidate_settings_cache,
 )
-from utils.plan_limits import check_feature_allowed, set_tenant_plan, PLAN_TIERS
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
     get_or_create_admin_totp_secret, mark_totp_enabled, verify_totp_code, totp_qr_data_uri,
@@ -61,25 +61,149 @@ _TOGGLE_LABEL_MAP = {
     "location": "Location Verification",
     "password": "Password Login",
 }
-# Maps toggle_auth_method()'s `method` values to utils/plan_limits.py's
-# tier feature keys. "password" is deliberately absent -- password login
-# stays global/unrestricted regardless of plan (see the _cfs_map comment
-# in toggle_auth_method below).
-_TOGGLE_PLAN_FEATURE_MAP = {
-    "fingerprint": "fingerprint", "qr": "qr", "face": "face", "location": "geo",
-}
-# Same idea for toggle_feature()'s `feature` values.
-_TOGGLE_FEATURE_PLAN_MAP = {
-    "face_auth_enabled": "face", "geo_enabled": "geo", "qr_enabled": "qr",
-    "pin_enabled": "pin", "fingerprint_enabled": "fingerprint",
-    "biometric_enabled": "biometric",
-}
 
 
 @admin_views_bp.route("/admin")
 @admin_required
 def admin():
-    return redirect("/employees")
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    today = datetime.date.today()
+    active_cid = session.get("active_company_id")
+    _co_filter, _co_args = co_scope_column(active_cid, alias="e")
+    _co_sub, _ = co_scope_subquery(active_cid)
+
+    if active_cid:
+        cursor.execute("SELECT COUNT(*) FROM employees WHERE company_id=%s", _co_args)
+    else:
+        cursor.execute("SELECT COUNT(*) FROM employees")
+    total = cursor.fetchone()[0]
+
+    cursor.execute(
+        f"SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL {_co_sub}",  # nosec B608
+        (today,) + _co_args
+    )
+    present = cursor.fetchone()[0]
+
+    cursor.execute(
+        f"SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND status='Late Login' {_co_sub}",  # nosec B608
+        (today,) + _co_args
+    )
+    late = cursor.fetchone()[0]
+
+    cursor.execute(
+        f"SELECT e.employee_id, e.name, a.login_time, a.logout_time, a.status, "  # nosec B608
+        f"       a.logout_status, a.attendance_type, e.role "
+        f"FROM employees e "
+        f"LEFT JOIN attendance a ON e.employee_id=a.employee_id AND a.date=%s "
+        f"WHERE 1=1 {_co_filter} ORDER BY e.name",
+        (today,) + _co_args
+    )
+    today_rows = cursor.fetchall()
+
+    if active_cid:
+        cursor.execute("SELECT employee_id, name FROM employees WHERE company_id=%s ORDER BY name", _co_args)
+    else:
+        cursor.execute("SELECT employee_id, name FROM employees ORDER BY name")
+    all_employees = cursor.fetchall()
+
+    cursor.execute(
+        f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}",  # nosec B608
+        _co_args
+    )
+    pending_leaves = cursor.fetchone()[0]
+
+    cursor.execute(
+        f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub}",  # nosec B608
+        _co_args
+    )
+    pending_resignations = cursor.fetchone()[0]
+
+    cursor.execute(
+        f"SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress') {_co_sub}",  # nosec B608
+        _co_args
+    )
+    pending_tickets = cursor.fetchone()[0]
+
+    try:
+        cursor.execute("SELECT COUNT(*) FROM overtime_records WHERE status='Pending'")
+        pending_ot = cursor.fetchone()[0]
+    except Exception:
+        pending_ot = 0
+
+    cursor.execute("SELECT id, name, COALESCE(code,'') FROM companies ORDER BY name")
+    companies_list = cursor.fetchall()
+
+    # Onboarding summary for dashboard widget
+    try:
+        cursor.execute("""
+            SELECT
+              SUM(CASE WHEN status != 'Completed' THEN 1 ELSE 0 END),
+              SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END),
+              SUM(CASE WHEN status != 'Completed' AND due_date < %s THEN 1 ELSE 0 END)
+            FROM employee_onboarding
+        """, (today,))
+        _ob = cursor.fetchone()
+        ob_active = int(_ob[0] or 0)
+        ob_completed = int(_ob[1] or 0)
+        ob_overdue = int(_ob[2] or 0)
+        cursor.execute("""
+            SELECT eo.id, e.name, ot.name, eo.due_date
+            FROM employee_onboarding eo
+            JOIN employees e ON eo.employee_id = e.employee_id
+            JOIN onboarding_templates ot ON eo.template_id = ot.id
+            WHERE eo.status != 'Completed' AND eo.due_date < %s
+            ORDER BY eo.due_date LIMIT 5
+        """, (today,))
+        ob_overdue_list = cursor.fetchall()
+    except Exception:
+        ob_active = ob_completed = ob_overdue = 0
+        ob_overdue_list = []
+
+    cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active FROM break_config ORDER BY break_time")
+    break_rows = cursor.fetchall()
+    breaks_display = []
+    for b in break_rows:
+        bt = b[2]
+        if hasattr(bt, 'seconds'):
+            h, m = divmod(bt.seconds // 60, 60)
+        else:
+            h, m = bt.hour, bt.minute
+        ampm = "AM" if h < 12 else "PM"
+        h12 = h % 12 or 12
+        breaks_display.append({
+            "id": b[0], "name": b[1],
+            "time_str": "%02d:%02d %s" % (h12, m, ampm),
+            "duration": b[3], "is_active": b[4]
+        })
+
+    cursor.close()
+    db.close()
+
+    return render_template("admin.html",
+                           total=total,
+                           present=present,
+                           absent=total - present,
+                           late=late,
+                           today=today.strftime("%d %b %Y"),
+                           active_nav="dashboard",
+                           today_rows=today_rows,
+                           all_employees=all_employees,
+                           shift_start=cfg.SHIFT_START.strftime("%I:%M %p"),
+                           shift_end=cfg.SHIFT_END.strftime("%I:%M %p"),
+                           pending_leaves=pending_leaves,
+                           pending_resignations=pending_resignations,
+                           pending_ot=pending_ot,
+                           pending_tickets=pending_tickets,
+                           now_month=today.month,
+                           now_year=today.year,
+                           breaks_display=breaks_display,
+                           companies_list=companies_list,
+                           ob_active=ob_active,
+                           ob_completed=ob_completed,
+                           ob_overdue=ob_overdue,
+                           ob_overdue_list=ob_overdue_list,
+                           )
 
 
 @admin_views_bp.route("/api/admin/search")
@@ -302,6 +426,41 @@ def admin_mfa_required_page():
     /api/settings/2fa/enable it calls) is deliberately reachable on
     @admin_required alone."""
     return render_template("admin_mfa_required.html")
+
+
+@admin_views_bp.route("/save_company_profile", methods=["POST"])
+@admin_required
+def save_company_profile():
+    company_name = request.form.get("company_name", "").strip()
+    company_code = request.form.get("company_code", "").strip()
+    contact_email = request.form.get("contact_email", "").strip()
+    contact_phone = request.form.get("contact_phone", "").strip()
+    address = request.form.get("address", "").strip()
+    email_domain = clean_email_domain(request.form.get("email_domain", ""))
+
+    # Empty is allowed (clears it, reverting to no enforcement on employee
+    # registration) -- only a non-empty value has to be a plausible domain.
+    if email_domain:
+        domain_error = validate_email_domain_format(email_domain)
+        if domain_error:
+            flash(domain_error, "error")
+            return redirect(tpath("/settings?tab=company"))
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    try:
+        cursor.execute("""
+            UPDATE company_settings
+            SET company_name=%s, company_code=%s, contact_email=%s, contact_phone=%s, address=%s,
+                email_domain=%s
+        """, (company_name, company_code, contact_email, contact_phone, address, email_domain or None))
+        db.commit()
+        invalidate_settings_cache()
+    except Exception:
+        pass
+    cursor.close()
+    db.close()
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/settings")
@@ -729,7 +888,7 @@ def api_save_email_settings():
     host = (data.get("host") or "").strip()
     port = data.get("port")
     user = (data.get("user") or "").strip()
-    from_name = (data.get("from_name") or "Attendance System").strip()
+    from_name = (data.get("from_name") or "HRzest.com").strip()
     from_email = (data.get("from_email") or "").strip() or user
     password = (data.get("password") or "").strip()
     if not host or not port or not user:
@@ -800,7 +959,7 @@ def save_default_onboarding_template():
     cursor.close()
     db.close()
     flash("Default onboarding template saved.", "success")
-    return redirect("/onboarding?tab=templates")
+    return redirect(tpath("/onboarding?tab=templates"))
 
 
 @admin_views_bp.route("/save_salary_rules", methods=["POST"])
@@ -812,7 +971,7 @@ def save_salary_rules():
         grace_min = max(0, min(120, int(request.form.get("grace_minutes", 15))))
     except (ValueError, TypeError):
         flash("Invalid values.", "error")
-        return redirect("/settings?tab=salary")
+        return redirect(tpath("/settings?tab=salary"))
     holiday_pay = request.form.get("holiday_pay", "paid")
     leave_pay = request.form.get("leave_pay", "exclude")
     if holiday_pay not in ("paid", "unpaid"):
@@ -851,7 +1010,7 @@ def save_salary_rules():
         cfg.load_salary_rules()
         cfg.load_default_shift()
     flash("Salary rules saved.", "success")
-    return redirect("/settings?tab=salary")
+    return redirect(tpath("/settings?tab=salary"))
 
 
 @admin_views_bp.route("/toggle_auth_method", methods=["POST"])
@@ -861,19 +1020,9 @@ def toggle_auth_method():
     enabled = request.form.get("enabled", "0") == "1"
     if method not in _TOGGLE_COLUMN_MAP:
         flash("Invalid authentication method.", "danger")
-        return redirect("/settings?tab=attendance")
+        return redirect(tpath("/settings?tab=attendance"))
     column = _TOGGLE_COLUMN_MAP[method]
     label = _TOGGLE_LABEL_MAP[method]
-    # Turning a method OFF is always allowed regardless of plan -- only
-    # enabling something new is a billing decision. "password" isn't a
-    # plan_limits feature key (password auth stays global, see _cfs_map
-    # below), so it's never plan-gated.
-    plan_feature_key = _TOGGLE_PLAN_FEATURE_MAP.get(method)
-    if enabled and plan_feature_key:
-        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, plan_feature_key)
-        if not _plan_ok:
-            flash(_plan_err, "danger")
-            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     # Map old column names to company_feature_settings column names
     _cfs_map = {"face_enabled": "face_auth_enabled", "location_enabled": "geo_enabled",
@@ -885,7 +1034,7 @@ def toggle_auth_method():
         _VALID_CS_TOGGLE = frozenset(_TOGGLE_COLUMN_MAP.values())
         if column not in _VALID_CS_TOGGLE:
             flash("Invalid setting.", "danger")
-            return redirect("/settings?tab=attendance")
+            return redirect(tpath("/settings?tab=attendance"))
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
         cursor.execute(f"UPDATE company_settings SET {column}=%s", (1 if enabled else 0,))  # nosec B608 nosemgrep: python.flask.security.injection.tainted-sql-string.tainted-sql-string
@@ -894,18 +1043,13 @@ def toggle_auth_method():
         db.close()
     state = "enabled" if enabled else "disabled"
     flash(f"{label} {state}.", "success")
-    return redirect("/settings?tab=attendance")
+    return redirect(tpath("/settings?tab=attendance"))
 
 
 @admin_views_bp.route("/toggle_fingerprint", methods=["POST"])
 @role_required("admin")
 def toggle_fingerprint():
     enabled = request.form.get("enabled", "0") == "1"
-    if enabled:
-        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, "fingerprint")
-        if not _plan_ok:
-            flash(_plan_err, "danger")
-            return redirect("/settings?tab=attendance")
     active_cid = session.get("active_company_id")
     if active_cid:
         _upsert_co_feature(active_cid, "fingerprint_enabled", 1 if enabled else 0)
@@ -918,7 +1062,7 @@ def toggle_fingerprint():
         db.close()
     state = "enabled" if enabled else "disabled"
     flash(f"Fingerprint authentication {state}.", "success")
-    return redirect("/settings?tab=attendance")
+    return redirect(tpath("/settings?tab=attendance"))
 
 
 @admin_views_bp.route("/save_company_code", methods=["POST"])
@@ -932,7 +1076,7 @@ def save_company_code():
     cursor.close()
     db.close()
     flash(f"Company code set to '{code}'.", "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/save_company_info", methods=["POST"])
@@ -947,12 +1091,12 @@ def save_company_info():
     # Validate timezone against pytz database
     if timezone not in _pytz.all_timezones_set:
         flash("Invalid timezone selected.", "danger")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
     # Validate day names
     w_days_set = set(w_days_raw)
     if w_days_set and not w_days_set.issubset(_VALID_DAYS):
         flash("Invalid working days selected.", "danger")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
     w_days = ",".join(d for d in w_days_raw if d in _VALID_DAYS)
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -964,7 +1108,7 @@ def save_company_info():
     cursor.close()
     db.close()
     flash("Company info saved.", "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/toggle_feature", methods=["POST"])
@@ -997,11 +1141,6 @@ def toggle_feature():
     cs_col = _CS_COL_MAP.get(feature)
     if not cs_col:
         return jsonify({"ok": False, "error": "unknown feature"}), 400
-    plan_feature_key = _TOGGLE_FEATURE_PLAN_MAP.get(feature)
-    if value and plan_feature_key:
-        _plan_ok, _plan_err = check_feature_allowed(g.tenant_db, plan_feature_key)
-        if not _plan_ok:
-            return jsonify({"ok": False, "error": _plan_err}), 403
     if active_cid:
         _upsert_co_feature(active_cid, cs_col, value)
     else:
@@ -1023,7 +1162,7 @@ def save_geo_radius():
             raise ValueError
     except (ValueError, TypeError):
         flash("Geo radius must be between 50 and 5000 metres.", "danger")
-        return redirect("/settings?tab=attendance")
+        return redirect(tpath("/settings?tab=attendance"))
     # Office lat/lon are optional -- both blank means "not configured yet",
     # which utils/attendance_utils.py's is_within_office_range() treats as
     # geofencing being a no-op regardless of the location_enabled toggle.
@@ -1038,7 +1177,7 @@ def save_geo_radius():
                 raise ValueError
         except (ValueError, TypeError):
             flash("Office location must be a valid latitude/longitude pair.", "danger")
-            return redirect("/settings?tab=attendance")
+            return redirect(tpath("/settings?tab=attendance"))
     active_cid = session.get("active_company_id")
     if active_cid:
         _upsert_co_feature(active_cid, "geo_radius", radius)
@@ -1060,7 +1199,7 @@ def save_geo_radius():
         cursor.close()
         db.close()
     flash("Attendance settings saved.", "success")
-    return redirect("/settings?tab=attendance")
+    return redirect(tpath("/settings?tab=attendance"))
 
 
 # save_security_settings retired: the Security tab is now the MFA-gated
@@ -1115,7 +1254,7 @@ def set_company_pin():
     pin = request.form.get("pin", "").strip()
     if not cid:
         flash("Invalid request.", "error")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
     db = get_db_connection()
     cur = db.cursor(buffered=True)
     cur.execute("UPDATE companies SET pin=%s WHERE id=%s", (pin or None, int(cid)))
@@ -1124,13 +1263,13 @@ def set_company_pin():
     db.close()
     invalidate_companies_cache()
     flash("PIN " + ("set." if pin else "removed."), "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/companies")
 @role_required("admin")
 def view_companies():
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 def _save_company_image(file_storage, cid, kind):
@@ -1430,7 +1569,7 @@ def id_card_template_upload(cid):
     has_back = bool(back_file and back_file.filename)  # nosemgrep: python.flask.security.injection.nan-injection.nan-injection
     if not has_front and not has_back:
         flash("Upload at least a front or back template image.", "error")
-        return redirect("/settings?tab=company")
+        return redirect(tpath("/settings?tab=company"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1446,14 +1585,14 @@ def id_card_template_upload(cid):
             cursor.close()
             db.close()
             flash(f"Front template: {err}", "error")
-            return redirect("/settings?tab=company")
+            return redirect(tpath("/settings?tab=company"))
     if has_back:
         ok, err = _validate_image_file(back_file)
         if not ok:
             cursor.close()
             db.close()
             flash(f"Back template: {err}", "error")
-            return redirect("/settings?tab=company")
+            return redirect(tpath("/settings?tab=company"))
 
     cursor.execute(
         "SELECT COALESCE(front_image,''), COALESCE(back_image,'') FROM id_card_templates WHERE company_id=%s", (cid,)
@@ -1483,7 +1622,7 @@ def id_card_template_upload(cid):
         _delete_company_image(old_back)
 
     flash("Template image(s) uploaded. Now place the fields.", "success")
-    return redirect(f"/companies/{cid}/id_card_template/editor")
+    return redirect(tpath(f"/companies/{cid}/id_card_template/editor"))
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/editor")
@@ -1531,7 +1670,7 @@ def id_card_template_save_positions(cid):
 
     if not isinstance(positions, dict):
         flash("Invalid field positions submitted.", "error")
-        return redirect(f"/companies/{cid}/id_card_template/editor")
+        return redirect(tpath(f"/companies/{cid}/id_card_template/editor"))
 
     cleaned = {}
     for key, box in positions.items():
@@ -1574,7 +1713,7 @@ def id_card_template_save_positions(cid):
     cursor.close()
     db.close()
     flash("Field positions saved.", "success")
-    return redirect(f"/companies/{cid}/id_card_template/editor")
+    return redirect(tpath(f"/companies/{cid}/id_card_template/editor"))
 
 
 @admin_views_bp.route("/companies/<int:cid>/id_card_template/reset", methods=["POST"])
@@ -1594,7 +1733,7 @@ def id_card_template_reset(cid):
         _delete_company_image(row[0])
         _delete_company_image(row[1])
     flash("ID card template reset to default.", "success")
-    return redirect("/settings?tab=company")
+    return redirect(tpath("/settings?tab=company"))
 
 
 @admin_views_bp.route("/announcements", methods=["GET", "POST"])
@@ -1611,7 +1750,7 @@ def announcements_admin():
                 flash("Please select an employee for a private announcement.", "error")
                 cursor.close()
                 db.close()
-                return redirect("/performance?tab=announcements")
+                return redirect(tpath("/performance?tab=announcements"))
             if visibility == "public":
                 target_emp = None
             title = request.form["title"]
@@ -1645,10 +1784,10 @@ def announcements_admin():
             flash("Announcement deleted.", "success")
         cursor.close()
         db.close()
-        return redirect("/performance?tab=announcements")
+        return redirect(tpath("/performance?tab=announcements"))
     cursor.close()
     db.close()
-    return redirect("/performance?tab=announcements")
+    return redirect(tpath("/performance?tab=announcements"))
 
 
 @admin_views_bp.route("/test_email", methods=["POST"])
@@ -1663,8 +1802,8 @@ def test_email():
     try:
         send_email_smtp(
             to_email,
-            "Test Email - Attendance System",
-            "<h2>Test email from Employee Attendance System</h2><p>Email configuration is working correctly.</p>",
+            "Test Email - HRzest.com",
+            "<h2>Test email from HRzest.com</h2><p>Email configuration is working correctly.</p>",
             config,
         )
         return jsonify({"ok": True, "msg": f"Test email sent to {to_email}"})
@@ -2209,27 +2348,6 @@ def api_org_chart_data():
     return jsonify({"ok": True, "tree": tree, "total": len(emp_map)})
 
 
-# ── Self-Service Plan Upgrade Endpoint ─────────────────────────────────────────
-@admin_views_bp.route("/api/admin/upgrade_plan", methods=["POST"])
-@admin_required
-def api_upgrade_plan():
-    """Self-service endpoint for admins to change their tenant's subscription
-    plan (no payment gateway yet -- see utils/plan_limits.py module
-    docstring; this is a straight write, not tied to any billing charge)."""
-    data = request.get_json() or {}
-    new_plan = data.get("plan", "").strip().lower()
-    if not new_plan:
-        new_plan = request.form.get("plan", "").strip().lower()
-
-    if new_plan not in PLAN_TIERS:
-        return jsonify({"ok": False, "msg": f"Invalid plan '{new_plan}'. "
-                        f"Must be one of: {', '.join(PLAN_TIERS)}."}), 400
-
-    set_tenant_plan(g.tenant_db, new_plan)
-    msg = f"Plan successfully updated to {PLAN_TIERS[new_plan]['display_name']}."
-    flash(msg, "success")
-    return jsonify({"ok": True, "msg": msg, "plan": new_plan})
-
 
 # ── Instant SMTP Connection Test Endpoint ─────────────────────────────────────
 @admin_views_bp.route("/api/admin/test_email", methods=["POST"])
@@ -2249,7 +2367,7 @@ def api_test_email():
     if not cfg or not cfg.get("host"):
         return jsonify({"ok": False, "msg": "No SMTP configuration found in system. Please configure SMTP first."}), 400
 
-    subject = "⚡ SMTP Connection Test — Employee Attendance Platform"
+    subject = "⚡ SMTP Connection Test — HRzest.com"
     now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
     html_body = f"""
     <div style="font-family: Arial, sans-serif; padding: 24px; background: #f8fafc; border-radius: 12px;">

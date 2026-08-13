@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Two-Factor Authentication Required — Attendance System</title>
+    <title>Two-Factor Authentication Required — HRzest.com</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       body {
@@ -63,7 +63,7 @@
              placeholder="000000" autocomplete="one-time-code" />
       <button id="mfa-submit" type="button" onclick="mfaSubmit()">Confirm &amp; Continue</button>
       <div id="mfa-err">Invalid code — please try again.</div>
-      <a class="logout-link" href="/logout">Log out instead</a>
+      <a class="logout-link" href="{{ tpath('/logout') }}">Log out instead</a>
     </div>
 
     <script>

@@ -51,7 +51,7 @@
 </head>
 <body>
   <div class="main">
-    <div class="breadcrumb"><a href="/settings?tab=company">&larr; Back to Settings</a></div>
+    <div class="breadcrumb"><a href="{{ tpath('/settings?tab=company') }}">&larr; Back to Settings</a></div>
     <div class="page-header">
       <h1><i class="ti ti-id-badge-2 u-c-1e3a8a"></i> ID Card Template — {{ company_name }}</h1>
       {% if front_image or back_image %}

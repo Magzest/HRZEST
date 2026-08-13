@@ -32,7 +32,7 @@ def _mock_face_detected(monkeypatch, detected=True):
 
 
 def _admin_session(client, seed_admin):
-    resp = client.post("/admin_login", data={
+    resp = client.post("/login", data={
         "identifier": seed_admin["username"],
         "password": seed_admin["password"],
     }, follow_redirects=True)
@@ -70,7 +70,7 @@ class TestEmployeeRegistrationAuthorization:
     def test_anonymous_request_rejected(self, client):
         resp = client.post("/admin_action", data=_registration_payload("REGTST900"), follow_redirects=False)
         assert resp.status_code in (302, 401)
-        assert resp.headers.get("Location", "").endswith(("/admin_login", "/admin_login?locked=1")) or \
+        assert resp.headers.get("Location", "").endswith(("/login", "/login?locked=1")) or \
             "admin_login" in resp.headers.get("Location", "")
 
     def test_employee_session_rejected(self, client, seed_employee):

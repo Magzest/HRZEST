@@ -1,8 +1,23 @@
-"""Tests for the HR Portal separation: a distinct 'hr' admin_users role with
-its own login (/hr_login) and dashboard (/hr), explicitly blocked from
-completing the regular /admin_login, and explicitly locked out of the
-tenant/system-settings and Compliance & Security Center surfaces that a
-plain admin session can reach."""
+"""Tests for the 'hr' admin_users role's page-level RBAC scoping.
+
+The standalone HR Portal (its own /hr_login page and /hr dashboard,
+blueprints/hr_portal.py) was intentionally removed from the codebase (git
+log: "chore: remove HR portal, SuperAdmin, SecOps, Compliance modules &
+cleanup duplicates") -- unlike SuperAdmin/SecOps, it was never reintroduced,
+and neither was /compliance. There is no login path left that can produce
+an hr-role session in production anymore (blueprints/auth.py's /login
+explicitly rejects role='hr' credentials -- see
+tests/test_login_mfa.py::TestAdminLoginMfa::test_hr_role_cannot_use_admin_login_even_with_mfa_enabled),
+and role='hr' rows in admin_users are effectively orphaned.
+
+What's tested here instead: the generic role_required("admin")/admin_required
+RBAC machinery still correctly scopes an hr-role session (stamped directly
+via session_transaction, the same way test_secops.py exercises the
+soc_analyst role) away from admin-only surfaces and into the shared
+employee-lifecycle ones -- defense-in-depth regression coverage in case
+role='hr' data or a login path for it ever reappears, not a claim that
+real users can reach this today.
+"""
 import pytest
 
 
@@ -28,84 +43,14 @@ def hr_admin(seed_admin, db_engine):
     cur.close()
 
 
-class TestHrLogin:
-    def test_hr_login_page_loads(self, client):
-        resp = client.get("/hr_login")
-        assert resp.status_code == 200
-        assert b"HR Portal" in resp.data
-
-    def test_hr_credentials_succeed_via_hr_login(self, client, hr_admin):
-        resp = client.post("/hr_login", data={
-            "identifier": hr_admin["username"], "password": hr_admin["password"],
-        })
-        assert resp.status_code == 302
-        assert resp.headers.get("Location") == "/hr"
-        with client.session_transaction() as sess:
-            assert sess["admin_logged_in"] is True
-            assert sess["admin_role"] == "hr"
-
-    def test_wrong_password_fails(self, client, hr_admin):
-        resp = client.post("/hr_login", data={
-            "identifier": hr_admin["username"], "password": "wrong-password",
-        })
-        assert resp.status_code == 200
-        assert b"Invalid credentials" in resp.data
-
-    def test_regular_admin_cannot_log_in_via_hr_login(self, client, seed_admin):
-        # seed_admin defaults to role='admin' -- must not be able to reach
-        # the HR portal with regular admin credentials.
-        resp = client.post("/hr_login", data={
-            "identifier": seed_admin["username"], "password": seed_admin["password"],
-        })
-        assert resp.status_code == 200
-        assert b"Invalid credentials" in resp.data
-        with client.session_transaction() as sess:
-            assert not sess.get("admin_logged_in")
-
-    def test_hr_credentials_rejected_by_regular_admin_login(self, client, hr_admin):
-        # The reverse separation: an hr-role account must not be able to
-        # complete the regular /admin_login and get a full admin session.
-        resp = client.post("/admin_login", data={
-            "identifier": hr_admin["username"], "password": hr_admin["password"],
-        })
-        assert resp.status_code == 200
-        assert b"Invalid credentials" in resp.data
-        with client.session_transaction() as sess:
-            assert not sess.get("admin_logged_in")
-
-
-class TestHrDashboardGate:
-    def test_anonymous_redirected_to_admin_login(self, client):
-        resp = client.get("/hr", follow_redirects=False)
-        assert resp.status_code in (302, 401, 403)
-
-    def test_regular_admin_gets_403(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"], role="admin")
-        resp = client.get("/hr")
-        assert resp.status_code == 403
-
-    def test_hr_role_reaches_dashboard(self, client, hr_admin):
-        _admin_session(client, hr_admin["username"], role="hr")
-        resp = client.get("/hr")
-        assert resp.status_code == 200
-        assert b"HR Dashboard" in resp.data
-
-    def test_hr_role_redirected_away_from_full_admin_dashboard(self, client, hr_admin):
-        _admin_session(client, hr_admin["username"], role="hr")
-        resp = client.get("/admin", follow_redirects=False)
-        assert resp.status_code == 302
-        assert resp.headers.get("Location") == "/hr"
-
-
 class TestHrScopeRestrictions:
     """An hr-role session reuses the same admin_logged_in session shape as a
     regular admin (so it can reach the shared employee-lifecycle routes),
-    which means the tenant/system-settings and Compliance & Security Center
-    routes must explicitly reject it via role_required("admin") rather than
-    relying on admin_required alone."""
+    which means the tenant/system-settings routes must explicitly reject it
+    via role_required("admin") rather than relying on admin_required alone."""
 
     @pytest.mark.parametrize("path", [
-        "/settings", "/companies", "/analytics", "/admin_tools", "/compliance",
+        "/settings", "/companies", "/analytics", "/admin_tools",
     ])
     def test_hr_role_blocked_from_admin_only_pages(self, client, hr_admin, path):
         _admin_session(client, hr_admin["username"], role="hr")

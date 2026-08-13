@@ -164,7 +164,7 @@
 
   <!-- TAB: OT Records -->
   <div class="tab-content {% if active_tab == 'ot' %}active{% endif %}" id="tab-ot">
-    <form class="filter-bar" method="GET" action="/overtime">
+    <form class="filter-bar" method="GET" action="{{ tpath('/overtime') }}">
       <input type="hidden" name="tab" value="ot"/>
       <label>Month:</label>
       <select name="month">
@@ -329,7 +329,7 @@
         <i class="ti ti-info-circle u-fs-18 u-fxs-0"></i>
         <span>Set the minimum OT required to qualify for comp-off and how many OT minutes equal 1 comp-off day.</span>
       </div>
-      <form method="POST" action="/compoff_settings">
+      <form method="POST" action="{{ tpath('/compoff_settings') }}">
         <div class="settings-grid">
           <div class="form-group">
             <label>Minimum OT Minutes to Qualify</label>

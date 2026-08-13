@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Successful — HRzest.com</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    html{height:100%}
+    body{min-height:100vh;background:linear-gradient(145deg,#0f172a 0%,#1e3a8a 50%,#1e40af 100%);
+      display:flex;align-items:center;justify-content:center;padding:24px;position:relative;
+      overflow-x:hidden;overflow-y:auto}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:32px 32px}
+    .card{width:100%;max-width:520px;background:rgba(255,255,255,.06);
+      -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+      border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:44px 40px 36px;
+      position:relative;z-index:1;box-shadow:0 32px 80px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.05) inset;
+      text-align:center}
+    .logo-icon{width:68px;height:68px;background:linear-gradient(135deg,#22c55e,#16a34a);border-radius:20px;
+      display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 18px;
+      box-shadow:0 8px 24px rgba(34,197,94,.4);color:#fff}
+    h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.3px;margin-bottom:8px}
+    .sub{font-size:14px;color:rgba(255,255,255,.55);margin-bottom:28px;line-height:1.6}
+    .portal-box{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
+      border-radius:14px;padding:18px;margin-bottom:22px;text-align:left}
+    .portal-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;
+      color:rgba(255,255,255,.45);margin-bottom:8px}
+    .portal-link{font-size:14px;color:#93c5fd;word-break:break-all;font-weight:600}
+    .note{font-size:12px;color:rgba(255,255,255,.4);margin-top:18px;line-height:1.6}
+    .billing-box{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);
+      border-radius:14px;padding:16px 18px;margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;text-align:left}
+    .billing-box .b-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(255,255,255,.45);margin-bottom:4px}
+    .billing-box .b-amount{font-size:20px;font-weight:800;color:#86efac}
+    .billing-box .b-note{font-size:12px;color:rgba(255,255,255,.5);text-align:right}
+  </style>
+  <link rel="stylesheet" href="/static/shared.min.css" />
+</head>
+<body>
+<div class="card">
+  <div class="logo-icon"><i class="ti ti-check"></i></div>
+  <h1>Payment Successful</h1>
+  <p class="sub">Your HRzest.com portal has been created and is ready to use.</p>
+
+  {% if amount_display %}
+  <div class="billing-box">
+    <div>
+      <div class="b-label">Monthly Billing</div>
+      <div class="b-amount">{{ amount_display }}/mo</div>
+    </div>
+    {% if employee_count %}<div class="b-note">{{ employee_count }} employee{{ '' if employee_count == '1' else 's' }}<br>flat rate, no tiers</div>{% endif %}
+  </div>
+  {% endif %}
+
+  {% if portal_url %}
+  <div class="portal-box">
+    <div class="portal-label">Your HRzest.com Portal</div>
+    <div class="portal-link">{{ portal_url }}</div>
+  </div>
+  {% endif %}
+
+  <p class="note">
+    We've sent a "set your password" link{% if email %} to <strong>{{ email }}</strong>{% endif %} —
+    check your inbox to finish setting up your admin account. It also includes your payment receipt.
+    The link expires in 1 hour.
+  </p>
+</div>
+<script src="/static/darkmode.min.js"></script>
+</body>
+</html>

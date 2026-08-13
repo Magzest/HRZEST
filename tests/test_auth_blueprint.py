@@ -10,7 +10,7 @@ import pytest
 
 
 def _admin_session(client, seed_admin):
-    client.post("/admin_login", data={
+    client.post("/login", data={
         "identifier": seed_admin["username"],
         "password":   seed_admin["password"],
     })
@@ -24,66 +24,6 @@ def _emp_session(client, seed_employee):
     return client
 
 
-# ── setup_wizard ──────────────────────────────────────────────────────────────
-
-class TestSetupWizard:
-
-    def test_get_when_setup_done_redirects_to_login(self, client):
-        """Line 29-30: setup_done=True → redirect /admin_login."""
-        rv = client.get("/setup")
-        # Default company has setup_done=True so redirects immediately
-        assert rv.status_code == 302
-        assert "admin_login" in rv.headers["Location"]
-
-    def test_post_missing_company_name_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "", "admin_username": "admin",
-            "admin_password": "pass1234", "admin_password2": "pass1234",
-        })
-        assert rv.status_code == 200
-        assert b"Company name" in rv.data
-
-    def test_post_missing_admin_user_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "",
-            "admin_password": "pass1234", "admin_password2": "pass1234",
-        })
-        assert rv.status_code == 200
-        assert b"username" in rv.data.lower()
-
-    def test_post_short_password_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "admin",
-            "admin_password": "short", "admin_password2": "short",
-        })
-        assert rv.status_code == 200
-        assert b"8 characters" in rv.data
-
-    def test_post_password_mismatch_shows_error(self, client, mocker):
-        mocker.patch(
-            "blueprints.auth.get_company_settings",
-            return_value={"setup_done": False}
-        )
-        rv = client.post("/setup", data={
-            "company_name": "Acme", "admin_username": "admin",
-            "admin_password": "ValidPass1!", "admin_password2": "Different1!",
-        })
-        assert rv.status_code == 200
-        assert b"not match" in rv.data or b"do not match" in rv.data
-
-
 # ── admin_login — employee-already-in-session, employee credentials ────────────
 
 class TestAdminLoginBranches:
@@ -91,20 +31,20 @@ class TestAdminLoginBranches:
     def test_employee_in_session_redirects_to_portal(self, client, seed_employee):
         """Line 63-64 in auth.py: employee_id in session → redirect /employee_portal."""
         _emp_session(client, seed_employee)
-        rv = client.get("/admin_login")
+        rv = client.get("/login")
         assert rv.status_code == 302
         assert "employee_portal" in rv.headers["Location"] or "admin_login" in rv.headers["Location"]
 
     def test_admin_already_logged_in_redirects_to_admin(self, client, seed_admin):
         """Line 144-145: admin_logged_in → redirect /admin."""
         _admin_session(client, seed_admin)
-        rv = client.get("/admin_login")
+        rv = client.get("/login")
         assert rv.status_code == 302
         assert "/admin" in rv.headers["Location"]
 
     def test_employee_can_login_via_admin_login_page(self, client, seed_employee):
         """Lines 182-203: employee credentials on admin_login page → employee session."""
-        rv = client.post("/admin_login", data={
+        rv = client.post("/login", data={
             "identifier": seed_employee["employee_id"],
             "password":   seed_employee["password"],
         })
@@ -115,7 +55,7 @@ class TestAdminLoginBranches:
 
     def test_employee_wrong_password_shows_error(self, client, seed_employee):
         """Line 184-186: wrong employee password → failure message."""
-        rv = client.post("/admin_login", data={
+        rv = client.post("/login", data={
             "identifier": seed_employee["employee_id"],
             "password":   "wrong_password_xyz",
         })
@@ -123,7 +63,7 @@ class TestAdminLoginBranches:
         assert b"Invalid credentials" in rv.data
 
     def test_completely_unknown_identifier_shows_error(self, client):
-        rv = client.post("/admin_login", data={
+        rv = client.post("/login", data={
             "identifier": "GHOST_USER_99",
             "password":   "anything",
         })
@@ -154,11 +94,18 @@ class TestLogoutRoutes:
 
 class TestEmployeeLogin:
 
-    def test_employee_login_redirects_to_admin_login(self, client):
-        """Line 434: /employee_login just redirects to /admin_login."""
+    def test_employee_login_route_no_longer_exists(self, client):
+        """There is no standalone /employee_login page anymore -- employee
+        and admin credentials are both checked by the one unified /login
+        page (see TestAdminLoginBranches::test_employee_can_login_via_admin_login_page).
+        This is a regression guard for app.py's _enforce_csrf(), which used
+        to build url_for("auth.employee_login") for expired-session
+        redirects on /employee* pages -- that endpoint doesn't exist, so it
+        raised a BuildError (500) instead of redirecting. Fixed to reuse
+        auth.admin_login instead; this test just documents that the route
+        is genuinely gone, not merely renamed."""
         rv = client.get("/employee_login")
-        assert rv.status_code == 302
-        assert "admin_login" in rv.headers["Location"]
+        assert rv.status_code == 404
 
 
 # ── change_admin_password ──────────────────────────────────────────────────────

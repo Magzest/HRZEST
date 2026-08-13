@@ -73,7 +73,7 @@ class TestPayslipOwnershipGate:
             sess["employee_id"] = seed_employee["employee_id"]
         resp = client.get("/view_payslip/SOMEONE_ELSE/2026/1", follow_redirects=False)
         assert resp.status_code == 302
-        assert "/employee_login" in resp.headers.get("Location", "")
+        assert "/login" in resp.headers.get("Location", "")
 
     def test_admin_can_view_any_payslip(self, client, seed_employee):
         with client.session_transaction() as sess:

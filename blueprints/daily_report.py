@@ -1,12 +1,8 @@
 """
-daily_report.py — Nightly attendance summary email for Growth & Enterprise plans.
+daily_report.py — Nightly attendance summary email, available to every tenant.
 
 Scheduled by APScheduler (registered in wsgi.py) to run at 23:59 every day.
 Generates a per-company attendance summary and emails it to all admin addresses.
-
-Only runs for tenants on the 'growth' or 'enterprise' plan (see
-utils/plan_limits.py -- plan is per-tenant, not per-admin-user: a company's
-report eligibility can't depend on which admin row happens to get checked).
 
 Note: this job has no per-tenant iteration yet -- it runs once against the
 single-tenant DB_NAME fallback schema (same phasing as the rest of this
@@ -24,7 +20,6 @@ from database import get_db_connection
 from extensions import app, app_log
 from utils.auth import admin_required
 from utils.email_utils import get_email_config, send_email_async, get_admin_emails
-from utils.plan_limits import get_tenant_plan, plan_rank
 
 daily_report_bp = Blueprint("daily_report", __name__)
 
@@ -115,8 +110,8 @@ def _build_email_html(date_str: str, stats: dict) -> str:
     <!-- Footer -->
     <div style="padding:20px 24px;background:#F8FAFC;border-top:1px solid #E2E8F0;text-align:center;">
       <p style="color:#94A3B8;font-size:12px;margin:0;">
-        This is an automated daily report from the Employee Attendance Platform.<br>
-        © {datetime.date.today().year} Employee Attendance Platform
+        This is an automated daily report from HRzest.com.<br>
+        © {datetime.date.today().year} HRzest.com
       </p>
     </div>
   </div>
@@ -150,13 +145,6 @@ def _run_report():
     today = datetime.date.today()
     date_str = today.strftime("%A, %d %B %Y")
     app_log.info(f"daily_report: generating report for {date_str}")
-
-    # Plan is per-tenant (att_master.tenants.plan), not per-admin-user --
-    # one company can't have some admins eligible and others not.
-    plan = get_tenant_plan(_g.tenant_db)
-    if plan_rank(plan) < plan_rank("growth"):
-        app_log.debug(f"daily_report: skipping tenant {_g.tenant_db} (plan={plan})")
-        return
 
     admin_emails = get_admin_emails()
     if not admin_emails:
@@ -235,7 +223,7 @@ def _run_report():
     html    = _build_email_html(date_str, stats)
     for email in admin_emails:
         send_email_async(email, subject, html, cfg)
-    app_log.info(f"daily_report: done — sent to {len(admin_emails)} admins (plan={plan})")
+    app_log.info(f"daily_report: done — sent to {len(admin_emails)} admins")
 
 
 def send_weekly_employee_digests():
@@ -280,11 +268,7 @@ def send_weekly_employee_digests():
 @daily_report_bp.route("/api/admin/trigger_daily_report", methods=["POST"])
 @admin_required
 def trigger_daily_report():
-    """Growth/Enterprise admins can manually trigger the daily report for testing."""
-    from flask import jsonify
-    plan = get_tenant_plan(_g.tenant_db)
-    if plan_rank(plan) < plan_rank("growth"):
-        return jsonify({"ok": False, "msg": "Daily reports require the Growth or Enterprise plan"}), 403
+    """Any admin can manually trigger the daily report for testing."""
     t = threading.Thread(target=generate_and_send_daily_report, daemon=True)
     t.start()
     return jsonify({"ok": True, "msg": "Daily report generation started. Check admin email shortly."})

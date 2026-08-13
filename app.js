@@ -132,9 +132,9 @@ function initHeroScanner() {
   const scannerAvatar = document.getElementById('scannerAvatar');
 
   const mockUsers = [
-    { name: 'Elena Rostova', role: 'UX Specialist', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80' },
-    { name: 'David Kim', role: 'Backend Lead', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80' },
-    { name: 'Sarah Jenkins', role: 'Lead Architect', img: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80' }
+    { name: 'Elena Rostova', role: 'UX Specialist', img: 'assets/waving_avatar.jpg' },
+    { name: 'David Kim', role: 'Backend Lead', img: 'assets/waving_avatar.jpg' },
+    { name: 'Sarah Jenkins', role: 'Lead Architect', img: 'assets/waving_avatar.jpg' }
   ];
 
   let isScanning = false;
@@ -147,18 +147,18 @@ function initHeroScanner() {
     if (scannerAvatar) scannerAvatar.src = randomUser.img;
 
     faceTargetBox.className = 'face-target-box scanning';
-    hudStatus.textContent = 'Mapping 128d Face Mesh...';
-    hudConfidence.textContent = 'Analyzing Liveness...';
+    hudStatus.textContent = 'Extracting 128d Facial Vector Mesh...';
+    hudConfidence.textContent = 'Executing 3D Liveness Mesh Analysis...';
 
     setTimeout(() => {
-      hudStatus.textContent = 'Matching Database Vector...';
-      hudConfidence.textContent = 'Confidence: 99.7%';
+      hudStatus.textContent = 'Verifying Encrypted Biometric Hash...';
+      hudConfidence.textContent = 'Confidence: 99.8%';
     }, 1000);
 
     setTimeout(() => {
       faceTargetBox.className = 'face-target-box success';
-      hudStatus.textContent = `SUCCESS: ${randomUser.name}`;
-      hudConfidence.textContent = 'GPS & Biometrics Verified!';
+      hudStatus.textContent = `VERIFIED: ${randomUser.name}`;
+      hudConfidence.textContent = 'Biometrics & Perimeter Verified';
 
       appendAttendanceLog(randomUser.name, randomUser.role, 'AI Face ID', 'badge-face', 'fa-camera');
 
@@ -174,12 +174,12 @@ function initHeroScanner() {
     isScanning = true;
 
     faceTargetBox.className = 'face-target-box scanning';
-    hudStatus.textContent = 'Waiting for TouchID / FIDO2 Passkey...';
-    hudConfidence.textContent = 'Hardware Token Handshake';
+    hudStatus.textContent = 'Awaiting FIDO2 Hardware Token Handshake...';
+    hudConfidence.textContent = 'Verifying WebAuthn Cryptographic Keys...';
 
     setTimeout(() => {
       faceTargetBox.className = 'face-target-box success';
-      hudStatus.textContent = 'FIDO2 Passkey Authenticated!';
+      hudStatus.textContent = 'FIDO2 Hardware Token Authenticated!';
       hudConfidence.textContent = 'Zero-Knowledge Cryptographic Signature';
 
       appendAttendanceLog('Alex Rivera', 'Product Designer', 'TouchID Passkey', 'badge-passkey', 'fa-key');
@@ -325,19 +325,19 @@ function initOrgVault() {
       name: 'Sarah Jenkins',
       role: 'Senior Software Architect',
       id: 'ID: HR-994821 | Dept: Engineering',
-      photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'
+      photo: 'assets/waving_avatar.jpg'
     },
     alex: {
       name: 'Alex Rivera',
       role: 'Product Designer',
       id: 'ID: HR-884102 | Dept: Product UI/UX',
-      photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80'
+      photo: 'assets/waving_avatar.jpg'
     },
     david: {
       name: 'David Kim',
       role: 'DevOps Lead',
       id: 'ID: HR-773919 | Dept: Cloud Infra',
-      photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80'
+      photo: 'assets/waving_avatar.jpg'
     }
   };
 

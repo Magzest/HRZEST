@@ -1,5 +1,5 @@
 # ==============================================================================
-# Production Dockerfile — Employee Attendance Platform Backend & Web UI
+# Production Dockerfile — HRzest.com Backend & Web UI
 # ==============================================================================
 
 FROM python:3.13-slim
@@ -9,15 +9,24 @@ WORKDIR /app
 # Install system dependencies
 # - gcc / libpq-dev:         psycopg2 compilation
 # - netcat-openbsd:          entrypoint.sh DB health check (nc -z)
-# - cmake / libopenblas-dev / libdlib-dev: build dlib for face-recognition
+# - cmake / g++ / make / libboost-all-dev / libopenblas-dev / liblapack-dev /
+#   libx11-dev / libssl-dev / pkg-config: build dlib for face-recognition
+#   (dlib is C++ — cmake alone can't build it without an actual compiler and
+#   build driver; see Containerfile's builder stage for the same set)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    g++ \
+    make \
     libpq-dev \
     curl \
     netcat-openbsd \
     cmake \
+    libboost-all-dev \
     libopenblas-dev \
-    libdlib-dev \
+    liblapack-dev \
+    libx11-dev \
+    libssl-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies (cached layer — only rebuilds when requirements change)

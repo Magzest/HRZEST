@@ -38,10 +38,10 @@ load_dotenv()
 _HASHI_ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hashi", ".env")
 load_dotenv(_HASHI_ENV)
 
-from flask import request, session, jsonify, redirect, url_for, flash, current_app, render_template
+from flask import request, session, jsonify, redirect, url_for, flash, current_app, render_template, g as _g
 import datetime
 import html as _html
-from database import get_db_connection
+from database import get_db_connection, get_master_db
 
 # ── Startup: warn if critical env vars are missing ──
 _missing_env = [k for k in ("DB_HOST", "DB_USER", "DB_PASS", "DB_NAME") if not os.environ.get(k)]
@@ -152,8 +152,8 @@ def time_seconds_filter(value):
 
 @app.template_filter("plan_price")
 def plan_price_filter(paise):
-    """paise -> "₹1,999" for plan-pricing displays (super_admin_dashboard.html,
-    pricing.html) -- thin wrapper so templates don't import utils.plan_limits."""
+    """paise -> "₹1,999" for billing displays (super_admin_dashboard.html,
+    create_org.html) -- thin wrapper so templates don't import utils.plan_limits."""
     from utils.plan_limits import format_price_inr
     return format_price_inr(paise)
 
@@ -180,6 +180,9 @@ def _csrf_token():
 
 app.jinja_env.globals["csrf_token"] = _csrf_token
 app.jinja_env.globals["timedelta"] = datetime.timedelta
+
+from utils.helpers import tpath as _tpath
+app.jinja_env.globals["tpath"] = _tpath
 
 
 @app.context_processor
@@ -230,8 +233,7 @@ _TENANT_STATUS_RECHECK_SEC = 5 * 60
 def _perf_start_timer():
     """Stash a start time for _perf_record below (registered first so it
     wraps every other before_request hook's cost too)."""
-    from flask import g
-    g._perf_start = time.perf_counter()
+    _g._perf_start = time.perf_counter()
 
 
 @app.before_request
@@ -244,13 +246,48 @@ def _resolve_tenant():
     get_db_connection() directly; running this hook after either of them
     would make both checks query the wrong tenant's data on every single
     request in a multi-tenant deployment — a full bypass of both controls,
-    not a rare edge case."""
+    not a rare edge case.
+
+    Tenants are identified by URL path (www.hrzest.com/<company-slug>/...),
+    not subdomain. utils/tenant_routing.py's WSGI middleware has already
+    stripped a recognized slug into SCRIPT_NAME and left its lookup result
+    on request.environ before Flask ever routed this request -- this hook
+    just reads that, plus enforces session/URL tenant binding (see below)."""
     from flask import g as _g
 
     # Skip for static files and special paths
     skip_prefixes = ("/static/", "/healthz", "/create_org", "/super_admin")
     if any(request.path.startswith(p) for p in skip_prefixes):
         return
+
+    url_slug = request.environ.get("hrz.tenant_slug")
+    url_tenant_db = request.environ.get("hrz.tenant_db")
+
+    # 0. Cross-tenant session isolation. Subdomains used to give this for
+    # free (a host-only cookie for acme.hrzest.com is never sent to
+    # beta.hrzest.com by the browser itself). Now every tenant shares one
+    # hostname, so the app has to enforce it: if this session is bound to
+    # a different company than the one named in the current URL, the
+    # cookie is stale for this request -- hard-clear it rather than
+    # silently keep serving company A's session under company B's URL.
+    # Requests that carry no slug at all (marketing/platform-admin routes,
+    # and token-based API/mobile-app calls, which never addressed tenants
+    # by URL even in the subdomain era) are untouched by this check.
+    if url_slug and session.get("tenant_db"):
+        session_slug = session.get("tenant_slug")
+        if session_slug and session_slug != url_slug:
+            log_security_event(
+                "tenant.session_mismatch",
+                f"Session bound to tenant slug '{session_slug}' saw a request "
+                f"for '{url_slug}' — session cleared.",
+                level="WARNING",
+                identifier=session.get("admin_username") or session.get("employee_id"),
+            )
+            session.clear()
+        elif not session_slug:
+            # Legacy session predating this migration (or a first-touch
+            # backfill) -- trust it, just record which slug it's bound to.
+            session["tenant_slug"] = url_slug
 
     # 1. Already resolved in this session -- but re-validate status every
     # _TENANT_STATUS_RECHECK_SEC instead of trusting the cache forever.
@@ -265,9 +302,8 @@ def _resolve_tenant():
             _g.tenant_db = session["tenant_db"]
             return
         try:
-            from database import get_master_db
             conn = get_master_db()
-            cur = conn.cursor(buffered=True)
+            cur = conn.cursor()
             cur.execute("SELECT status FROM tenants WHERE db_name=%s", (session["tenant_db"],))
             row = cur.fetchone()
             cur.close()
@@ -281,31 +317,48 @@ def _resolve_tenant():
         session.clear()
         return jsonify({"ok": False, "msg": "This organisation's access has been suspended. Contact support."}), 403
 
-    # 2. Subdomain resolution
-    host = request.host.split(":")[0]  # strip port
-    parts = host.split(".")
-    if len(parts) >= 3:
-        subdomain = parts[0]
-        try:
-            from database import get_master_db
-            conn = get_master_db()
-            cur = conn.cursor(buffered=True)
-            cur.execute(
-                "SELECT db_name FROM tenants WHERE subdomain=%s AND status='active'",
-                (subdomain,)
-            )
-            row = cur.fetchone()
-            cur.close()
-            conn.close()
-            if row:
-                _g.tenant_db = row[0]
-                session["tenant_db"] = row[0]
-                return
-        except Exception:
-            pass  # master DB not yet set up — fall through to default
+    # 2. Fresh resolution from the URL's company slug -- already validated
+    # as an active tenant by utils/tenant_routing.py's WSGI middleware, so
+    # reuse its lookup instead of querying the master DB a second time.
+    if url_slug and url_tenant_db:
+        _g.tenant_db = url_tenant_db
+        session["tenant_db"] = url_tenant_db
+        session["tenant_slug"] = url_slug
+        session["_tenant_status_checked_at"] = time.time()
+        return
 
-    # 3. Default single-tenant fallback
+    # 3. Default single-tenant fallback (local dev/test, or any request
+    # that never carried a company slug: marketing pages, token-based
+    # API/mobile-app calls, the platform-admin console).
     _g.tenant_db = os.environ.get("DB_NAME", "employee_attendance")
+
+
+@app.after_request
+def _restamp_tenant_session(response):
+    """Login routes (auth.py's admin_login/employee login, etc.) call
+    session.clear() to prevent session fixation -- which wipes the
+    tenant_db/tenant_slug that _resolve_tenant() (above) already set
+    earlier in this SAME request, before the route handler ran. Without
+    this, the session cookie sent back with a successful login response
+    wouldn't carry the tenant binding at all until a second request came
+    in -- a real gap, since a request landing in that gap (any request
+    without a company slug in its own URL) would fall back to the
+    single-tenant default schema while admin_logged_in is already True.
+
+    g.tenant_db is request-scoped and untouched by session.clear(), so
+    it's still correct here regardless of what the route handler did to
+    the session -- just re-stamp the session from it before the response
+    goes out. No-ops for the overwhelming majority of requests (guarded
+    on the session already being correct), so this isn't forcing a
+    Set-Cookie on every response."""
+    from flask import g as _g
+    tenant_db = getattr(_g, "tenant_db", None)
+    url_slug = request.environ.get("hrz.tenant_slug")
+    if tenant_db and url_slug and session.get("tenant_slug") != url_slug:
+        session["tenant_db"] = tenant_db
+        session["tenant_slug"] = url_slug
+        session["_tenant_status_checked_at"] = time.time()
+    return response
 
 
 @app.before_request
@@ -323,14 +376,16 @@ def _enforce_ip_ban():
     if not ip:
         return
     db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT reason FROM banned_ips WHERE ip=%s AND (expires_at IS NULL OR expires_at > NOW())",
-        (ip,),
-    )
-    row = cursor.fetchone()
-    cursor.close()
-    db.close()
+    cursor = db.cursor()
+    try:
+        cursor.execute(
+            "SELECT reason FROM banned_ips WHERE ip=%s AND (expires_at IS NULL OR expires_at > NOW())",
+            (ip,),
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        db.close()
     if row:
         return jsonify({"ok": False, "msg": "Access denied."}), 403
 
@@ -383,8 +438,7 @@ def _enforce_session_lifetime():
     if created and (time.time() - created) > _SESSION_MAX_AGE:
         session.clear()
         if request.path.startswith("/api/"):
-            from flask import jsonify as _jfy
-            return _jfy({"ok": False, "msg": "Session expired. Please log in again."}), 401
+            return jsonify({"ok": False, "msg": "Session expired. Please log in again."}), 401
         flash("Your session expired. Please log in again.", "warning")
         return redirect(url_for("auth.admin_login"))
 
@@ -412,8 +466,7 @@ def _enforce_idle_timeout():
         if (now - last_activity) > timeout_minutes * 60:
             session.clear()
             if request.path.startswith("/api/"):
-                from flask import jsonify as _jfy
-                return _jfy({"ok": False, "msg": "Session expired due to inactivity. Please log in again."}), 401
+                return jsonify({"ok": False, "msg": "Session expired due to inactivity. Please log in again."}), 401
             flash("Your session expired due to inactivity. Please log in again.", "warning")
             return redirect(url_for("auth.admin_login"))
     session["_last_activity"] = now
@@ -429,10 +482,11 @@ _MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
 # genuine "mandatory," not a step-up an admin can defer indefinitely).
 _MANDATORY_MFA_EXEMPT_PATHS = {
     "/admin/mfa-required", "/api/settings/2fa/setup", "/api/settings/2fa/enable",
-    "/logout", "/admin_login", "/setup", "/hr_login", "/sp_admin/login", "/secops/login", "/secops"
+    "/logout", "/admin_login", "/hr_login"
 }
 
-app.config.setdefault("MANDATORY_ADMIN_MFA", True)
+app.config.setdefault("MANDATORY_ADMIN_MFA", False)
+app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
 
 
 @app.before_request
@@ -483,7 +537,7 @@ def _enforce_csrf():
         return  # CSRF disabled in test mode; Bearer-token tests handle auth separately
     if request.path.startswith("/api/"):
         return  # API routes use Bearer-token auth — no session/CSRF needed
-    if request.path in ("/sp_admin/login", "/secops/login", "/admin_login"):
+    if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
     # script (_inject_csrf_meta) adds X-CSRF-Token to every fetch() call, so
@@ -498,17 +552,11 @@ def _enforce_csrf():
         # Browser form submissions: redirect to login so the user gets a fresh session+token
         if request.accept_mimetypes.accept_html and not request.headers.get("X-Requested-With"):
             flash("Your session expired. Please log in again.", "warning")
-            # Three distinct login identities live at three distinct paths
-            # (tenant admin, platform operator, SecOps) -- bouncing all of
-            # them to auth.admin_login on an expired/missing CSRF token
-            # sent a platform-admin or SecOps session to the wrong login
-            # page entirely.
-            if request.path.startswith("/employee") or "employee" in request.path:
-                login_url = url_for("auth.employee_login")
-            elif request.path.startswith("/super_admin"):
+            # There is no standalone "employee_login" endpoint -- employee and
+            # admin credentials are both checked by the one unified /login
+            # page (auth.admin_login).
+            if request.path.startswith("/super_admin"):
                 login_url = "/super_admin/login"
-            elif request.path.startswith("/sp_admin") or request.path.startswith("/secops"):
-                login_url = "/sp_admin/login"
             else:
                 login_url = url_for("auth.admin_login")
             return redirect(login_url)
@@ -606,34 +654,41 @@ def _set_csp_nonce():
     g.csp_nonce = secrets.token_urlsafe(16)
 
 
-_SETTINGS_PATHS = {"/settings", "/setup", "/admin_set_recovery_email",
+_SETTINGS_PATHS = {"/settings", "/admin_set_recovery_email",
                    "/save_security_settings", "/toggle_auth_feature",
                    "/toggle_fingerprint", "/save_company_code", "/save_geo_settings",
-                   "/save_company_info", "/toggle_feature",
-                   "/api/secops/session-timeout"}
+                   "/save_company_info", "/toggle_feature"}
 
 
 @app.after_request
 def _security_headers(response):
-    from flask import g
+    # ── Invariant headers (every response, every content-type) ──────────────
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(), geolocation=(self)"
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
-    response.headers["Server"] = "AttendanceApp"
-    if request.scheme == "https":
-        # 2 years (63072000s), the floor major browsers require before a
-        # domain is eligible for HSTS preload-list inclusion.
-        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["Server"] = "HRzest"
+    # ── HSTS — always set so dev tools and scanners see the policy ──────────
+    # Short max-age in dev (5 min) avoids bricking non-HTTPS local access if
+    # the cert is later removed; 2 years in prod meets HSTS preload requirements.
+    is_prod = os.environ.get("APP_ENV", "production") != "development"
+    hsts_age = 63072000 if is_prod else 300
+    hsts_directives = f"max-age={hsts_age}; includeSubDomains"
+    if is_prod:
+        hsts_directives += "; preload"
+    response.headers["Strict-Transport-Security"] = hsts_directives
+    # ── CSP — set on ALL response types, not just text/html ─────────────────
+    # API/JSON responses also need CSP (prevents MIME-sniffing abuse) and
+    # provides a consistent security surface for scanners.
     ct = response.content_type or ""
     if "text/html" in ct:
+        from flask import g
         nonce = getattr(g, "csp_nonce", "")
-        # _inject_csrf_meta runs before this hook (Flask reverses registration order),
-        # so response.get_data() is the final HTML with nonces already injected.
-        # Scan for inline event-handler values and compute sha256 hashes so they
-        # pass CSP without needing 'unsafe-inline'.
+        # Scan for inline event-handler values and compute sha256 hashes so
+        # they pass CSP without needing 'unsafe-inline'.
         try:
             data = response.get_data()
             _ev_hashes: set = set()
@@ -649,19 +704,11 @@ def _security_headers(response):
             _ev_hashes = set()
         _unsafe_hashes = " 'unsafe-hashes'" if _ev_hashes else ""
         _hash_src = (" " + " ".join(sorted(_ev_hashes))) if _ev_hashes else ""
-        # Cloudflare Turnstile (admin_login's CAPTCHA gate — utils/auth.py)
-        # loads a live script from Cloudflare's own edge and renders in an
-        # iframe; neither can be self-hosted the way jsQR/Tabler Icons were,
-        # so this is a deliberate, path-scoped exception rather than a
-        # blanket relaxation of the CSP for every page.
-        _is_turnstile_page = request.path == "/admin_login"
+        # Cloudflare Turnstile (admin_login CAPTCHA) and employee portal
+        # loopback agent get path-scoped exceptions only.
+        _is_turnstile_page = request.path in ("/admin_login", "/login")
         _turnstile_src = " https://challenges.cloudflare.com" if _is_turnstile_page else ""
         _frame_src = "https://challenges.cloudflare.com" if _is_turnstile_page else "'none'"
-        # Employee portal's "DEVICE POSTURE RELAY" script (employee_portal.html)
-        # polls a locally-running Wi-Fi posture agent over loopback
-        # (desktop_agent/wifi_posture_agent.py, 127.0.0.1:47823) — a
-        # deliberate, path-scoped exception, not a blanket relaxation,
-        # same pattern as the Turnstile carve-out above.
         _is_employee_portal_page = request.path == "/employee_portal"
         _agent_src = " http://127.0.0.1:47823" if _is_employee_portal_page else ""
         response.headers["Content-Security-Policy"] = (
@@ -675,11 +722,14 @@ def _security_headers(response):
             f"connect-src 'self'{_turnstile_src}{_agent_src}; "
             f"frame-src {_frame_src}; "
             "frame-ancestors 'none'; "
-            # No <object>/<embed>/<applet> use anywhere in this app —
-            # explicit 'none' instead of relying on the default-src 'self'
-            # fallback closes off Flash/legacy-plugin-based XSS vectors.
             "object-src 'none'; "
             "report-uri /csp-report;"
+        )
+    else:
+        # Non-HTML responses: minimal restrictive CSP — blocks MIME sniffing
+        # and any attempt to embed API responses as documents or frames.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; frame-ancestors 'none'; object-src 'none';"
         )
     return response
 
@@ -1373,54 +1423,6 @@ def _init_core_tables(cursor, db):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_eq_status ON email_queue (status)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_eq_created ON email_queue (created_at)")
 
-    # ── SecOps: malware quarantine, threat intel, email broadcast ────────────
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS quarantined_files (
-            id SERIAL PRIMARY KEY,
-            filename VARCHAR(255) NOT NULL,
-            file_hash VARCHAR(64) NOT NULL,
-            uploader_id VARCHAR(50) DEFAULT 'Guest/System',
-            file_path VARCHAR(500),
-            detection_signature VARCHAR(150) DEFAULT 'Heuristic.Malware.SuspiciousExtension',
-            status VARCHAR(20) DEFAULT 'Quarantined',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS threat_intel_cve (
-            id SERIAL PRIMARY KEY,
-            cve_id VARCHAR(50) UNIQUE NOT NULL,
-            vendor VARCHAR(100),
-            product VARCHAR(100),
-            vulnerability_name TEXT,
-            date_added VARCHAR(30),
-            due_date VARCHAR(30),
-            notes TEXT,
-            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS threat_intel_ips (
-            id SERIAL PRIMARY KEY,
-            ip VARCHAR(45) UNIQUE NOT NULL,
-            threat_score INT DEFAULT 1,
-            source VARCHAR(100),
-            fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS broadcast_emails (
-            id SERIAL PRIMARY KEY,
-            sender_username VARCHAR(100) NOT NULL,
-            target_type VARCHAR(50) NOT NULL,
-            target_value VARCHAR(150),
-            subject VARCHAR(255) NOT NULL,
-            body_snippet TEXT,
-            recipient_count INT DEFAULT 0,
-            sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS payroll_runs (
             id SERIAL PRIMARY KEY,
@@ -1572,43 +1574,6 @@ def _init_core_tables(cursor, db):
     """)
     _attach_updated_at_trigger(cursor, "shift_swap_requests")
     db.commit()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS compliance_certifications (
-            id SERIAL PRIMARY KEY,
-            framework VARCHAR(50) NOT NULL UNIQUE,
-            status VARCHAR(20) NOT NULL DEFAULT 'Not Started',
-            owner VARCHAR(150),
-            last_reviewed DATE,
-            next_review DATE,
-            notes TEXT,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    _attach_updated_at_trigger(cursor, "compliance_certifications")
-    db.commit()
-    # Seed the framework rows once so the Compliance Center always has all
-    # four to display; status starts "Not Started" (never fabricate a
-    # compliant/certified claim) until an admin genuinely attests otherwise.
-    for _fw in ("GDPR", "SOC 2 Type II", "ISO 27001", "ISO 9001"):
-        cursor.execute(
-            "INSERT INTO compliance_certifications (framework, status) VALUES (%s, 'Not Started') "
-            "ON CONFLICT (framework) DO NOTHING", (_fw,)
-        )
-    db.commit()
-
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS compliance_deadlines (
-            id SERIAL PRIMARY KEY,
-            title VARCHAR(200) NOT NULL,
-            jurisdiction VARCHAR(100),
-            category VARCHAR(50) DEFAULT 'Regulatory',
-            due_date DATE NOT NULL,
-            status VARCHAR(20) DEFAULT 'Pending',
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
     db.commit()
 
     # Create company_settings table (must precede the migration loop below,
@@ -1619,7 +1584,7 @@ def _init_core_tables(cursor, db):
         CREATE TABLE IF NOT EXISTS company_settings (
             id SERIAL PRIMARY KEY,
             company_name VARCHAR(200) DEFAULT 'My Company',
-            company_tagline VARCHAR(300) DEFAULT 'Employee Attendance System',
+            company_tagline VARCHAR(300) DEFAULT 'HRzest.com',
             company_logo VARCHAR(255) DEFAULT NULL,
             currency_symbol VARCHAR(10) DEFAULT '₹',
             timezone VARCHAR(60) DEFAULT 'Asia/Kolkata',
@@ -1704,6 +1669,8 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS is_half_day SMALLINT DEFAULT 0",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS half_day_session VARCHAR(10) DEFAULT NULL",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS company_code VARCHAR(10) DEFAULT NULL",
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS paid_employee_slots INT DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT DEFAULT NULL",
@@ -2168,10 +2135,14 @@ def init_master_db():
                 db_name VARCHAR(100) UNIQUE NOT NULL,
                 admin_email VARCHAR(200) DEFAULT NULL,
                 plan VARCHAR(50) DEFAULT 'starter',
+                payment_option VARCHAR(20) DEFAULT 'online',
                 status VARCHAR(20) DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Pre-existing masters created before payment_option existed --
+        # CREATE TABLE IF NOT EXISTS above is a no-op against them.
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS payment_option VARCHAR(20) DEFAULT 'online'")
         # Platform-operator identity (blueprints/platform_admin.py) --
         # lives in att_master, not any tenant schema, since tenant
         # admin_users rows only exist inside their own schema and this
@@ -2217,6 +2188,58 @@ def init_master_db():
                 paid_at TIMESTAMP DEFAULT NULL
             )
         """)
+        # Company email domain, carried from create_order() through to
+        # verify_payment() (where provision_tenant() actually runs) since
+        # the tenant's own company_settings row doesn't exist yet at
+        # create_order() time.
+        cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL")
+        # Lightweight traffic counter for the public marketing pages
+        # (landing page, get-started, create_org) -- one row per
+        # (path, day), incremented via ON CONFLICT below rather than one
+        # row per visit, so this stays cheap regardless of traffic volume.
+        # No cookies/fingerprinting/IP storage -- just a count.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS page_views (
+                id SERIAL PRIMARY KEY,
+                path VARCHAR(255) NOT NULL,
+                view_date DATE NOT NULL,
+                count INT NOT NULL DEFAULT 0,
+                UNIQUE(path, view_date)
+            )
+        """)
+        # "Request info" / contact-form submissions from the public landing
+        # page (templates/landing.html) -- visitors not ready to
+        # self-register yet, surfaced to the Platform Admin dashboard for
+        # manual follow-up.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS leads (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                email VARCHAR(200) NOT NULL,
+                company_name VARCHAR(200) DEFAULT NULL,
+                message TEXT DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'new',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Pre-existing leads tables created before phone existed --
+        # CREATE TABLE IF NOT EXISTS above is a no-op against them.
+        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone VARCHAR(30) DEFAULT NULL")
+        # Singleton row (id=1) holding the platform operator's own monthly
+        # running costs -- there's no API that can discover real AWS/
+        # maintenance spend automatically, so these are admin-entered and
+        # compared against MRR to drive the Platform Admin dashboard's
+        # Profit & Loss bar and pricing-adjustment suggestion.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS platform_costs (
+                id SMALLINT PRIMARY KEY DEFAULT 1,
+                monthly_aws_paise INT NOT NULL DEFAULT 0,
+                monthly_maintenance_paise INT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                CHECK (id = 1)
+            )
+        """)
+        cur.execute("INSERT INTO platform_costs (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
         db.commit()
         cur.close()
         db.close()
@@ -3176,37 +3199,35 @@ if "core.home" not in app.view_functions:
     from blueprints.employee_portal import employee_portal_bp
     from blueprints.core import core_bp
     from blueprints.ai_hrms import ai_hrms_bp
-    from blueprints.secops import secops_bp
     from blueprints.email_blast import email_blast_bp
-    from blueprints.compliance import compliance_bp
-    from blueprints.hr_portal import hr_bp
-    from blueprints.platform_admin import platform_admin_bp
     from blueprints.daily_report import daily_report_bp
     from blueprints.billing import billing_bp
+    from blueprints.platform_admin import platform_admin_bp
+    from blueprints.secops import secops_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, secops_bp, email_blast_bp, compliance_bp, hr_bp,
-                platform_admin_bp, daily_report_bp, billing_bp):
+                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, platform_admin_bp,
+                secops_bp):
         app.register_blueprint(_bp)
 
 
-# ── Pricing page & Plan Context ──────────────────────────────────────────────
+# ── Billing context (flat per-employee rate) ─────────────────────────────────
 @app.context_processor
-def inject_plan_context():
+def inject_billing_context():
     try:
         from flask import g as _g
-        from utils.plan_limits import get_tenant_plan, PLAN_TIERS
-        p = get_tenant_plan(_g.tenant_db)
-        tier = PLAN_TIERS[p]
-        plan_info = {
-            "display_name": tier["display_name"],
-            "employee_limit": tier["employee_limit"],
-            "features": sorted(tier["features"]),
-        }
-        return dict(current_plan=p, plan_info=plan_info, plan_tiers=PLAN_TIERS)
+        from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, PER_EMPLOYEE_PAISE
+        employee_count = get_tenant_employee_count(_g.tenant_db)
+        monthly_bill_paise = calculate_price(employee_count)
+        return dict(
+            employee_count=employee_count,
+            per_employee_paise=PER_EMPLOYEE_PAISE,
+            monthly_bill_display=format_price_inr(monthly_bill_paise),
+        )
     except Exception:
-        return dict(current_plan="starter", plan_info={}, plan_tiers={})
+        return dict(employee_count=0, per_employee_paise=9900, monthly_bill_display="₹0")
+
 
 
 _register_api_v1_aliases()
@@ -3242,12 +3263,16 @@ if __name__ == "__main__":
 
     _cert = _os.environ.get("SSL_CERT_PATH") or _os.path.join(_os.path.dirname(__file__), "cert.pem")
     _key = _os.environ.get("SSL_KEY_PATH") or _os.path.join(_os.path.dirname(__file__), "key.pem")
+    # threaded=True: /api/session/risk-stream (blueprints/core.py) holds an
+    # SSE connection open for ~20s, and Werkzeug's dev server is single-
+    # threaded by default -- without this, one open stream blocks every
+    # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
         print("🔒  SSL cert found — starting on https://0.0.0.0:5000")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False,  # nosec B104
+        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 ssl_context=(_cert, _key), request_handler=_QuietRequestHandler)
     else:
         print("⚠   No cert.pem / key.pem — starting on http://0.0.0.0:5000")
         print("    Fingerprint / WebAuthn requires HTTPS. Run: python generate_cert.py")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False,  # nosec B104
+        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 request_handler=_QuietRequestHandler)

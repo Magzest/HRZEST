@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Organisation — HRzest.com</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    html{height:100%}
+    body{min-height:100vh;background:linear-gradient(145deg,#0f172a 0%,#1e3a8a 50%,#1e40af 100%);
+      display:flex;align-items:center;justify-content:center;padding:24px;position:relative;
+      overflow-x:hidden;overflow-y:auto}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:32px 32px}
+    .card{width:100%;max-width:560px;background:rgba(255,255,255,.06);
+      -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+      border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:44px 40px 36px;
+      position:relative;z-index:1;box-shadow:0 32px 80px rgba(0,0,0,.4),0 0 0 1px rgba(255,255,255,.05) inset}
+    .logo{text-align:center;margin-bottom:32px}
+    .logo-icon{width:68px;height:68px;background:linear-gradient(135deg,#3b82f6,#6366f1);border-radius:20px;
+      display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px;
+      box-shadow:0 8px 24px rgba(59,130,246,.4);color:#fff}
+    .logo h1{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.3px;margin-bottom:6px}
+    .logo p{font-size:13px;color:rgba(255,255,255,.5)}
+    .field-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+      letter-spacing:.7px;color:rgba(255,255,255,.55);margin-bottom:8px}
+    .field-input{width:100%;padding:13px 16px;background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.15);border-radius:12px;color:#fff;font-size:15px;
+      outline:none;transition:.2s;margin-bottom:18px}
+    .field-input::placeholder{color:rgba(255,255,255,.3)}
+    .field-input:focus{background:rgba(255,255,255,.12);border-color:rgba(99,102,241,.7);
+      box-shadow:0 0 0 3px rgba(99,102,241,.2)}
+    .subdomain-row{display:flex;align-items:center;gap:0;margin-bottom:18px}
+    .subdomain-row .field-input{border-radius:12px 0 0 12px;margin-bottom:0;flex:1}
+    .subdomain-suffix{padding:13px 14px;background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.15);border-left:none;border-radius:0 12px 12px 0;
+      color:rgba(255,255,255,.4);font-size:14px;white-space:nowrap}
+    .btn{width:100%;padding:15px;border:none;border-radius:12px;
+      background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;font-size:15px;font-weight:700;
+      cursor:pointer;transition:.2s;letter-spacing:.3px;box-shadow:0 6px 20px rgba(59,130,246,.4);margin-top:4px}
+    .btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(59,130,246,.5)}
+    .btn:active{transform:translateY(0)}
+    .alert{padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:18px;
+      display:flex;align-items:center;gap:8px}
+    .alert-error{background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);color:#fca5a5}
+    .alert-success{background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.35);color:#86efac}
+    .divider{border:none;border-top:1px solid rgba(255,255,255,.08);margin:20px 0}
+    .back-link{display:block;text-align:center;font-size:13px;color:rgba(255,255,255,.4);
+      text-decoration:none;margin-top:16px;transition:.2s}
+    .back-link:hover{color:rgba(255,255,255,.75)}
+    .section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;
+      color:rgba(255,255,255,.35);margin-bottom:16px;margin-top:4px}
+    .rate-note{font-size:12px;color:rgba(255,255,255,.5);margin:-10px 0 18px;line-height:1.5}
+    .price-summary{background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);
+      border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center}
+    .price-summary .amount{font-size:20px;font-weight:800;color:#fff}
+    .price-summary .label{font-size:11px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.5px}
+    .btn:disabled{opacity:.6;cursor:not-allowed;transform:none !important}
+    @media(max-width:480px){.card{padding:32px 22px 28px}}
+    /* ── Dark mode ── */
+    body.dark-mode{background:#0d1117 !important}
+    body.dark-mode .card{background:#161b22 !important;border-color:#30363d !important}
+    body.dark-mode input,body.dark-mode select{background:#0d1117 !important;border-color:#30363d !important;color:#cdd9e5 !important}
+
+    /* ── Mock checkout modal (demo mode — no Razorpay keys configured) ── */
+    .mock-overlay{display:none;position:fixed;inset:0;background:rgba(8,11,20,.72);z-index:50;
+      align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto}
+    .mock-overlay.open{display:flex}
+    .mock-sheet{width:100%;max-width:400px;background:#fff;border-radius:16px;overflow:hidden;
+      box-shadow:0 24px 60px rgba(0,0,0,.5);animation:mockIn .18s ease-out}
+    @keyframes mockIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .mock-testbar{background:#fbbf24;color:#78350f;font-size:11px;font-weight:800;letter-spacing:.5px;
+      text-align:center;padding:6px;text-transform:uppercase}
+    .mock-head{background:#0f172a;color:#fff;padding:20px 24px;display:flex;align-items:center;justify-content:space-between}
+    .mock-head-brand{display:flex;align-items:center;gap:10px}
+    .mock-head-brand .m-icon{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#3b82f6,#6366f1);
+      display:flex;align-items:center;justify-content:center;font-size:16px}
+    .mock-head-brand .m-name{font-size:14px;font-weight:800}
+    .mock-head-brand .m-sub{font-size:11px;color:rgba(255,255,255,.5)}
+    .mock-close{background:none;border:none;color:rgba(255,255,255,.6);font-size:20px;cursor:pointer;line-height:1;padding:2px}
+    .mock-close:hover{color:#fff}
+    .mock-amount-row{padding:18px 24px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:baseline}
+    .mock-amount-row .m-label{font-size:12px;color:#64748b}
+    .mock-amount-row .m-amount{font-size:22px;font-weight:800;color:#0f172a}
+    .mock-body{padding:22px 24px 26px}
+    .mock-field-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+      color:#64748b;margin-bottom:6px}
+    .mock-input{width:100%;padding:11px 13px;border:1px solid #cbd5e1;border-radius:9px;font-size:14px;
+      color:#0f172a;margin-bottom:14px;outline:none;transition:.15s}
+    .mock-input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+    .mock-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .mock-pay-btn{width:100%;padding:14px;border:none;border-radius:10px;background:#0f172a;color:#fff;
+      font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;transition:.15s}
+    .mock-pay-btn:hover{background:#1e293b}
+    .mock-pay-btn:disabled{opacity:.65;cursor:not-allowed}
+    .mock-note{font-size:11px;color:#94a3b8;text-align:center;margin-top:14px;line-height:1.5}
+    .mock-note strong{color:#64748b}
+  </style>
+  <link rel="stylesheet" href="/static/shared.min.css" />
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon"><i class="ti ti-building-skyscraper"></i></div>
+    <h1>Create Organisation</h1>
+    <p>Set up your company on HRzest.com</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="alert alert-{{ 'error' if cat == 'error' else 'success' }}">
+      <i class="ti ti-{{ 'circle-x' if cat == 'error' else 'circle-check' }}"></i> {{ msg }}
+    </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form autocomplete="off" id="createOrgForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+
+    <div class="section-title">Company Details</div>
+
+    <label class="field-label">Company Name</label>
+    <input class="field-input" type="text" name="company_name" id="company_name_input"
+           placeholder="Acme Corp" required autofocus oninput="autoFillSubdomain(this.value)" />
+
+    <label class="field-label">Subdomain</label>
+    <div class="subdomain-row">
+      <div class="subdomain-suffix">www.hrzest.com/</div>
+      <input class="field-input" type="text" name="subdomain" id="subdomain_input"
+             placeholder="acme" pattern="[a-z0-9\-]+" required
+             title="Lowercase letters, digits and hyphens only"
+             oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
+    </div>
+    <div style="font-size:11px; color:#94a3b8; margin-top:4px; margin-bottom:14px;">
+      Enter a short subdomain slug (e.g. <strong>acme</strong>). Full URLs like <em>https://hrzest.com/</em> will automatically be cleaned.
+    </div>
+
+    <label class="field-label">Company Email Domain</label>
+    <input class="field-input" type="text" name="email_domain" id="email_domain_input"
+           placeholder="acme.com" required title="e.g. acme.com" />
+    <div style="font-size:11px; color:#94a3b8; margin-top:4px; margin-bottom:14px;">
+      Every employee you add later must have an email ending in this domain (e.g. name@acme.com).
+    </div>
+
+    <label class="field-label">Number of Employees</label>
+    <input class="field-input" type="number" name="employee_count" id="employeeCount"
+           placeholder="e.g. 15" min="1" value="1" required oninput="updatePriceSummary()" />
+    <p class="rate-note">Every feature is included for every company — one flat rate of <strong>{{ per_employee_paise | plan_price }}/employee/month</strong>, no tiers.</p>
+
+    <div class="price-summary">
+      <div>
+        <div class="label">Total (monthly)</div>
+        <div class="amount" id="priceAmount">—</div>
+      </div>
+      <div class="label" id="priceNote"></div>
+    </div>
+
+    <hr class="divider" />
+    <div class="section-title">Admin Account</div>
+
+    <label class="field-label">Admin Username</label>
+    <input class="field-input" type="text" name="admin_username"
+           placeholder="admin" required autocomplete="username" />
+
+    <label class="field-label">Admin Email</label>
+    <input class="field-input" type="email" name="admin_email"
+           placeholder="admin@acme.com" required autocomplete="email" />
+    <p style="font-size:12px;color:rgba(255,255,255,.4);margin:-10px 0 18px;">
+      No password needed here — after payment, we'll email you a link to set your own.
+    </p>
+
+    {% if show_captcha %}
+    <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
+
+    <div id="formError" class="alert alert-error" style="display:none;"></div>
+
+    <button type="submit" class="btn" id="payBtn">Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i></button>
+  </form>
+
+  <a href="/login" class="back-link">← Already have an account? Sign in</a>
+</div>
+
+<!-- Mock checkout — shown only when create_order's response has demo:true
+     (no RAZORPAY_KEY_ID/SECRET configured yet). Purely a local stand-in for
+     the real Razorpay Checkout modal below; nothing typed here is sent
+     anywhere. -->
+<div class="mock-overlay" id="mockOverlay" role="dialog" aria-modal="true" aria-label="Test mode payment">
+  <div class="mock-sheet">
+    <div class="mock-testbar"><i class="ti ti-flask" style="vertical-align:-2px;"></i> Test Mode — No Real Payment</div>
+    <div class="mock-head">
+      <div class="mock-head-brand">
+        <div class="m-icon"><i class="ti ti-building-skyscraper"></i></div>
+        <div>
+          <div class="m-name">HRzest.com</div>
+          <div class="m-sub" id="mockCompanyLabel">Organisation Setup</div>
+        </div>
+      </div>
+      <button type="button" class="mock-close" id="mockCloseBtn" aria-label="Cancel">✕</button>
+    </div>
+    <div class="mock-amount-row">
+      <div class="m-label">Amount Payable</div>
+      <div class="m-amount" id="mockAmount">₹0</div>
+    </div>
+    <div class="mock-body">
+      <label class="mock-field-label">Card Number</label>
+      <input class="mock-input" type="text" id="mockCardNumber" value="4111 1111 1111 1111" inputmode="numeric" maxlength="19" />
+      <div class="mock-row2">
+        <div>
+          <label class="mock-field-label">Expiry</label>
+          <input class="mock-input" type="text" id="mockExpiry" value="12/29" maxlength="5" />
+        </div>
+        <div>
+          <label class="mock-field-label">CVV</label>
+          <input class="mock-input" type="text" id="mockCvv" value="123" maxlength="3" />
+        </div>
+      </div>
+      <button type="button" class="mock-pay-btn" id="mockPayBtn">Pay <span id="mockPayAmount">₹0</span></button>
+      <p class="mock-note">This is a <strong>local test-mode checkout</strong> — no card is charged. Add real Razorpay keys to replace this with the actual payment modal.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="/static/darkmode.min.js"></script>
+<script>
+let subdomainUserEdited = false;
+const PER_EMPLOYEE_PAISE = {{ per_employee_paise }};
+
+function cleanSubdomainInput(el) {
+  subdomainUserEdited = true;
+  let val = el.value.toLowerCase().trim();
+  val = val.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
+  const suffixes = ['.hrzest.com', '.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
+  for (let s of suffixes) {
+    if (val.endsWith(s)) val = val.slice(0, -s.length);
+  }
+  val = val.replace(/[^a-z0-9\-]/g, '');
+  el.value = val;
+}
+
+function autoFillSubdomain(name) {
+  if (subdomainUserEdited) return;
+  const sub = document.getElementById('subdomain_input');
+  if (!sub) return;
+  let val = name.toLowerCase().trim().replace(/[^a-z0-9\-]/g, '');
+  sub.value = val;
+}
+
+function formatInr(paise) {
+  return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+}
+function updatePriceSummary() {
+  var count = parseInt(document.getElementById('employeeCount').value, 10) || 1;
+  document.getElementById('priceAmount').textContent = formatInr(count * PER_EMPLOYEE_PAISE) + '/mo';
+  document.getElementById('priceNote').textContent = count + ' employee' + (count === 1 ? '' : 's');
+}
+document.addEventListener('DOMContentLoaded', updatePriceSummary);
+
+function showFormError(msg) {
+  var el = document.getElementById('formError');
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+
+function resetPayBtn() {
+  var payBtn = document.getElementById('payBtn');
+  payBtn.disabled = false;
+  payBtn.innerHTML = 'Pay &amp; Create Organisation <i class="ti ti-arrow-right"></i>';
+}
+
+// Shared by both the real Razorpay handler and the mock/demo checkout below
+// -- one code path completes provisioning regardless of which modal
+// collected the (real or fake) payment confirmation.
+function completeVerification(razorpayOrderId, razorpayPaymentId, razorpaySignature, payload) {
+  var payBtn = document.getElementById('payBtn');
+  payBtn.textContent = 'Verifying payment…';
+  fetch('/api/billing/verify_payment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      razorpay_order_id: razorpayOrderId,
+      razorpay_payment_id: razorpayPaymentId,
+      razorpay_signature: razorpaySignature,
+    }),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (verifyData) {
+      if (!verifyData.ok) {
+        showFormError(verifyData.msg || 'Payment verification failed.');
+        resetPayBtn();
+        return;
+      }
+      window.location.href = '/org_payment_success?portal_url=' + encodeURIComponent(verifyData.portal_url)
+        + '&email=' + encodeURIComponent(payload.admin_email)
+        + '&employee_count=' + encodeURIComponent(verifyData.employee_count || '')
+        + '&amount_display=' + encodeURIComponent(verifyData.amount_display || '');
+    })
+    .catch(function () {
+      showFormError('Payment succeeded but verification failed to reach the server. Contact support.');
+      resetPayBtn();
+    });
+}
+
+/* ── Mock/demo checkout (used only when create_order responds demo:true) ── */
+var mockState = null; // { orderId, payload }
+
+function openMockCheckout(data, payload) {
+  mockState = { orderId: data.order_id, payload: payload };
+  document.getElementById('mockCompanyLabel').textContent = payload.company_name || 'Organisation Setup';
+  document.getElementById('mockAmount').textContent = data.amount_display;
+  document.getElementById('mockPayAmount').textContent = data.amount_display;
+  document.getElementById('mockOverlay').classList.add('open');
+}
+function closeMockCheckout() {
+  document.getElementById('mockOverlay').classList.remove('open');
+  mockState = null;
+  resetPayBtn();
+}
+document.getElementById('mockCloseBtn').addEventListener('click', closeMockCheckout);
+document.getElementById('mockOverlay').addEventListener('click', function (e) {
+  if (e.target === e.currentTarget) closeMockCheckout();
+});
+document.getElementById('mockPayBtn').addEventListener('click', function () {
+  if (!mockState) return;
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+  // Simulated network delay so this reads as a real payment step, not an
+  // instant no-op -- no real card is ever touched (see mock-note in the
+  // modal itself).
+  setTimeout(function () {
+    document.getElementById('mockOverlay').classList.remove('open');
+    completeVerification(
+      mockState.orderId,
+      'demo_pay_' + Math.random().toString(36).slice(2, 12),
+      'demo_signature',
+      mockState.payload
+    );
+    btn.disabled = false;
+    btn.innerHTML = 'Pay <span id="mockPayAmount">' + document.getElementById('mockAmount').textContent + '</span>';
+    mockState = null;
+  }, 700);
+});
+
+document.getElementById('createOrgForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var form = e.target;
+  var payBtn = document.getElementById('payBtn');
+  document.getElementById('formError').style.display = 'none';
+
+  var payload = {
+    company_name: form.company_name.value.trim(),
+    subdomain: form.subdomain.value.trim().toLowerCase(),
+    employee_count: document.getElementById('employeeCount').value,
+    admin_username: form.admin_username.value.trim(),
+    admin_email: form.admin_email.value.trim(),
+    email_domain: form.email_domain.value.trim().toLowerCase(),
+  };
+  var turnstileEl = form.querySelector('[name="cf-turnstile-response"]');
+  if (turnstileEl) payload.cf_turnstile_response = turnstileEl.value;
+
+  payBtn.disabled = true;
+  payBtn.textContent = 'Starting checkout…';
+
+  fetch('/api/billing/create_order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data.ok) {
+        showFormError(data.msg || 'Could not start checkout.');
+        resetPayBtn();
+        return;
+      }
+
+      if (data.demo) {
+        openMockCheckout(data, payload);
+        return;
+      }
+
+      var rzp = new Razorpay({
+        key: data.key_id,
+        order_id: data.order_id,
+        amount: data.amount_paise,
+        currency: data.currency,
+        name: 'HRzest.com',
+        description: payload.company_name + ' — ' + payload.employee_count + ' employees',
+        prefill: { email: payload.admin_email },
+        handler: function (response) {
+          completeVerification(response.razorpay_order_id, response.razorpay_payment_id, response.razorpay_signature, payload);
+        },
+        modal: { ondismiss: resetPayBtn },
+      });
+      rzp.open();
+    })
+    .catch(function () {
+      showFormError('Could not reach the server. Please try again.');
+      resetPayBtn();
+    });
+});
+</script>
+</body>
+</html>

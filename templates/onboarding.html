@@ -109,7 +109,7 @@
       <p class="sub">Manage employee onboarding checklists and templates</p>
     </div>
     <div class="u-d-flex u-gap-10">
-      <a href="/export_onboarding_csv" class="btn btn-gray"><i class="ti ti-file-spreadsheet"></i> Export CSV</a>
+      <a href="{{ tpath('/export_onboarding_csv') }}" class="btn btn-gray"><i class="ti ti-file-spreadsheet"></i> Export CSV</a>
       <button class="btn btn-navy" onclick="openModal('assignModal')"><i class="ti ti-user-plus"></i> Assign Onboarding</button>
       <button class="btn btn-green" onclick="openModal('templateModal')"><i class="ti ti-plus"></i> New Template</button>
     </div>
@@ -216,7 +216,7 @@
         <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-2"><i class="ti ti-bolt u-c-1e3a8a"></i> Auto-Assign Default Template</div>
         <div class="u-fs-11 u-c-64748b">Automatically assigned to every new employee when they are added.</div>
       </div>
-      <form class="u-d-flex u-gap-8 u-ai-center u-fxw-wrap" method="POST" action="/save_default_onboarding_template">
+      <form class="u-d-flex u-gap-8 u-ai-center u-fxw-wrap" method="POST" action="{{ tpath('/save_default_onboarding_template') }}">
         <select class="u-p-8-12 u-bd-1-solid-e2e8f0 u-br-9 u-fs-13 u-minw-220" name="default_onboarding_template_id">
           <option value="0">— No default —</option>
           {% for tpl in templates %}
@@ -244,11 +244,11 @@
           <span class="u-fs-12 u-c-64748b"><i class="ti ti-list-check"></i> {{ t[4] }} tasks</span>
           <div class="u-d-flex u-gap-6">
             <a href="/onboarding_template_detail/{{ t[0] }}" class="btn btn-gray btn-sm"><i class="ti ti-pencil"></i> Edit</a>
-            <form class="u-d-inline" action="/onboarding_template_duplicate" method="POST">
+            <form class="u-d-inline" action="{{ tpath('/onboarding_template_duplicate') }}" method="POST">
               <input type="hidden" name="template_id" value="{{ t[0] }}" />
               <button type="submit" class="btn btn-gray btn-sm" title="Duplicate template"><i class="ti ti-copy"></i></button>
             </form>
-            <form class="u-d-inline" action="/onboarding_template_delete" method="POST"
+            <form class="u-d-inline" action="{{ tpath('/onboarding_template_delete') }}" method="POST"
                   onsubmit="return confirm('Delete this template?')">
               <input type="hidden" name="template_id" value="{{ t[0] }}" />
               <button type="submit" class="btn btn-red btn-sm"><i class="ti ti-trash"></i></button>
@@ -275,7 +275,7 @@
       <h3><i class="ti ti-template"></i> New Onboarding Template</h3>
       <button class="modal-close" onclick="closeModal('templateModal')">✕</button>
     </div>
-    <form action="/onboarding_template_save" method="POST">
+    <form action="{{ tpath('/onboarding_template_save') }}" method="POST">
       <input type="hidden" name="template_id" value="" />
       <div class="field">
         <label>Template Name *</label>
@@ -309,7 +309,7 @@
       <h3><i class="ti ti-user-plus"></i> Assign Onboarding</h3>
       <button class="modal-close" onclick="closeModal('assignModal')">✕</button>
     </div>
-    <form action="/onboarding_assign" method="POST">
+    <form action="{{ tpath('/onboarding_assign') }}" method="POST">
       <div class="field">
         <label>Employee *</label>
         <select name="employee_id" id="assignEmpSel" required onchange="assignSyncRole(this)">

@@ -197,7 +197,7 @@ def check_attendance_lockout(employee_id, date):
 
 def record_attendance_failure(employee_id, date, reason):
     """Called on every failed kiosk check-in attempt (face mismatch,
-    fingerprint verify failure) for a Medium/Prime tenant. At
+    fingerprint verify failure) -- available to every tenant. At
     ATTENDANCE_LOCKOUT_MAX_ATTEMPTS, locks online attendance for that
     employee/date -- only an admin can mark it after that (correct_attendance/
     bulk_mark_attendance, which also clear the lock on a successful write)."""

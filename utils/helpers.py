@@ -23,6 +23,54 @@ from database import get_db_connection
 from extensions import app_log, log_security_event
 
 
+def tpath(path: str) -> str:
+    """Prefix an absolute-path link/redirect target with the current
+    tenant's URL prefix (request.script_root -- "" on marketing/platform-
+    admin routes, "/<company-slug>" once the WSGI tenant-prefix wrapper in
+    wsgi.py has stripped that slug into SCRIPT_NAME for a resolved tenant
+    request). Used in place of bare redirect("/x")/href="/x" everywhere a
+    link should stay within the current tenant's path, since this codebase
+    builds links as literal absolute-path strings rather than via
+    url_for(), which would pick up SCRIPT_NAME automatically.
+
+    Idempotent by design: some inputs (e.g. a path pulled out of the raw
+    Referer header in _safe_referrer_redirect, which reflects the real
+    browser URL the visitor was on) already carry the tenant prefix, while
+    most call sites pass a bare, unprefixed literal like "/admin" -- rather
+    than track which is which at every call site, tpath() just checks
+    whether the prefix is already there before adding it."""
+    if not path.startswith("/"):
+        return path
+    try:
+        prefix = request.script_root
+    except RuntimeError:
+        return path  # no request context (e.g. called from a script/test)
+    if not prefix or path == prefix or path.startswith(prefix + "/"):
+        return path
+    return prefix + path
+
+
+def employee_login_url() -> str:
+    """Absolute URL to the current tenant's own login page (e.g.
+    "https://www.hrzest.com/acme/login") -- used in employee-welcome-email
+    templates so a new hire has a clickable link straight to their
+    company's portal, not just credentials with nowhere to use them.
+
+    Built from session["tenant_slug"] rather than tpath()/request.script_root:
+    the admin registering this employee may have reached the page via a
+    bare, slug-less URL (an already-resolved tenant session cached from an
+    earlier request -- the same edge case blueprints/core.py's home()
+    documents), in which case tpath() would silently drop the slug and
+    hand a brand-new employee, who has no session of their own yet, a
+    link the WSGI tenant-prefix middleware can't resolve to any company."""
+    try:
+        slug = session.get("tenant_slug")
+        base = request.host_url.rstrip("/")
+    except RuntimeError:
+        return "/login"
+    return f"{base}/{slug}/login" if slug else f"{base}/login"
+
+
 _APP_URL = os.environ.get("APP_URL", "").rstrip("/")
 
 
@@ -41,10 +89,12 @@ def _safe_app_url() -> str:
 
 
 def _safe_redirect(dest: str, fallback: str = "/admin") -> str:
-    """Validate that a redirect target is a relative path (prevents open redirect)."""
+    """Validate that a redirect target is a relative path (prevents open
+    redirect), then stamp it with the current tenant's URL prefix via
+    tpath() so every caller gets a correctly-scoped link for free."""
     if dest and dest.startswith("/") and not dest.startswith("//"):
-        return dest
-    return fallback
+        return tpath(dest)
+    return tpath(fallback)
 
 
 def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
@@ -53,7 +103,7 @@ def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
     relative path first. Referer is client-supplied and can be forged by
     non-browser HTTP clients, so it's never trusted as-is."""
     if not referrer:
-        return fallback
+        return tpath(fallback)
     from urllib.parse import urlparse as _urlparse
     p = _urlparse(referrer)
     if not p.scheme and not p.netloc:
@@ -61,7 +111,7 @@ def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
     if p.netloc == request.host:
         path = p.path or "/"
         return _safe_redirect(path + (("?" + p.query) if p.query else ""), fallback)
-    return fallback
+    return tpath(fallback)
 
 
 # ── PII encryption (Fernet) — fail-secure bootstrap ────────────────────────────
@@ -145,7 +195,7 @@ def decrypt_pii_date(value):
 @contextmanager
 def _db():
     conn = get_db_connection()
-    cursor = conn.cursor(buffered=True)
+    cursor = conn.cursor()
     try:
         yield cursor, conn
     finally:
@@ -167,14 +217,16 @@ def _audit(action, table=None, record_id=None, detail=None):
         ip = request.remote_addr or ""
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO audit_logs (actor, actor_type, action, target_table, target_id, detail, ip_address) "
-            "VALUES (%s,%s,%s,%s,%s,%s,%s)",
-            (actor, actor_type, action, table, str(record_id) if record_id is not None else None, detail, ip)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
+        try:
+            cursor.execute(
+                "INSERT INTO audit_logs (actor, actor_type, action, target_table, target_id, detail, ip_address) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                (actor, actor_type, action, table, str(record_id) if record_id is not None else None, detail, ip)
+            )
+            db.commit()
+        finally:
+            cursor.close()
+            db.close()
     except Exception:
         pass
 
@@ -184,13 +236,15 @@ def _create_notification(recipient_type, title, message, employee_id=None):
     try:
         db = get_db_connection()
         cursor = db.cursor()
-        cursor.execute(
-            "INSERT INTO notifications (recipient_type, employee_id, title, message) VALUES (%s,%s,%s,%s)",
-            (recipient_type, employee_id, title, message)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
+        try:
+            cursor.execute(
+                "INSERT INTO notifications (recipient_type, employee_id, title, message) VALUES (%s,%s,%s,%s)",
+                (recipient_type, employee_id, title, message)
+            )
+            db.commit()
+        finally:
+            cursor.close()
+            db.close()
     except Exception:
         pass
 
@@ -377,7 +431,7 @@ def get_company_settings():
         if row_dict:
             result = {
                 "company_name": row_dict.get("company_name") or "My Company",
-                "company_tagline": row_dict.get("company_tagline") or "Employee Attendance System",
+                "company_tagline": row_dict.get("company_tagline") or "HRzest.com",
                 "company_logo": row_dict.get("company_logo"),
                 "currency_symbol": row_dict.get("currency_symbol") or "₹",
                 "company_code": row_dict.get("company_code") or "COMP",
@@ -386,6 +440,7 @@ def get_company_settings():
                 "session_timeout": row_dict.get("session_timeout") or 30,
                 "logo_url": row_dict.get("logo_url") or "",
                 "plan": row_dict.get("plan") or "basic",
+                "email_domain": row_dict.get("email_domain") or "",
             }
             with _settings_lock:
                 _co_cache["data"] = result
@@ -393,11 +448,58 @@ def get_company_settings():
             return dict(result)
     except Exception:
         pass
-    return {"company_name": "My Company", "company_tagline": "Employee Attendance System",
+    return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
-            "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic"}
+            "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
+            "email_domain": ""}
 
 
+# ── Company email domain (employee-registration gate) ────────────────────────
+_DOMAIN_RE = re.compile(r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$')
+
+
+def clean_email_domain(raw: str) -> str:
+    """Normalize a user-entered company domain -- strips a leading
+    scheme/"@"/"www.", any path, and lowercases it, so "https://Acme.com/"
+    and "acme.com" both land on "acme.com"."""
+    s = (raw or "").strip().lower()
+    s = re.sub(r'^https?://', '', s)
+    s = s.lstrip('@')
+    s = s.split('/')[0].split(':')[0]
+    if s.startswith('www.'):
+        s = s[4:]
+    return s
+
+
+def validate_email_domain_format(domain: str) -> str:
+    """Returns an error message, or None if the domain string is a
+    plausible one (e.g. "acme.com") -- format only, no DNS/MX lookup."""
+    if not domain:
+        return "Company email domain is required."
+    if not _DOMAIN_RE.match(domain):
+        return "Enter a valid domain, e.g. acme.com."
+    return None
+
+
+def validate_employee_email_domain(email) -> str:
+    """Enforces "employee email must match the company's configured
+    domain" -- but only once a company has actually set one
+    (get_company_settings()["email_domain"]); companies that haven't
+    configured a domain yet keep today's behavior (email optional, no
+    domain check), so this never breaks an existing tenant that predates
+    the feature. Returns an error message, or None if OK."""
+    domain = (get_company_settings().get("email_domain") or "").strip().lower()
+    if not domain:
+        return None
+    email = (email or "").strip().lower()
+    if not email:
+        return f"Employee email is required (must be a @{domain} address)."
+    if not email.endswith("@" + domain):
+        return f"Employee email must be a @{domain} address."
+    return None
+
+
+# ── Paid employee-seat cap (employee-registration gate) ──────────────────────
 # ── Companies list + overdue-onboarding count caches (short TTL) ─────────────
 # Both back per-request context processors (app.py's inject_companies_context
 # / inject_overdue_onboardings) that previously ran on every single

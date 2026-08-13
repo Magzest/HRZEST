@@ -20,9 +20,8 @@ from utils.auth import (
     _get_failed_count, verify_turnstile, turnstile_enabled,
     CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE, HR_ROLE,
 )
-from utils.helpers import get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
+from utils.helpers import tpath, get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
-from utils.plan_limits import check_feature_allowed
 from utils.session_risk import ensure_session_id
 from utils.totp import verify_totp_code, send_mfa_login_email, mark_totp_enabled
 from utils.face_utils import verify_uploaded_face
@@ -54,8 +53,6 @@ auth_bp = Blueprint("auth", __name__)
 # is already parameterized (verified separately), so a payload matching
 # this can't actually inject anything; it just tells us someone is
 # probing rather than mistyping a username. Deliberately narrow (classic
-# SQL metacharacters/keywords, obvious script tags) to keep false positives
-# on ordinary usernames near zero.
 _INJECTION_PATTERN_RE = re.compile(
     r"('|--|;|\bunion\b|\bor\b\s+['\"0-9]|<script\b)", re.IGNORECASE
 )
@@ -64,6 +61,10 @@ _MFA_OTP_TTL_SEC = 300
 
 
 def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
+    """Common second step once a password has already checked out (called
+    from admin_login()'s admin/employee branches): email a one-time code
+    instead of completing the session immediately, and redirect to
+    /mfa_verify to finish."""
     if not email:
         log_security_event(
             "auth.mfa_email_missing", "Account has no email on file for login MFA delivery",
@@ -80,7 +81,7 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     session["mfa_user"] = identifier
     session["mfa_otp_code"] = otp_code
     session["mfa_issued_at"] = time.time()
-    return redirect("/mfa_verify")
+    return redirect(tpath("/mfa_verify"))
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -90,9 +91,9 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
 def admin_login():
     co = get_company_settings()
     if session.get("admin_logged_in"):
-        return redirect("/admin")
+        return redirect(tpath("/admin"))
     if session.get("employee_id"):
-        return redirect("/employee_portal")
+        return redirect(tpath("/employee_portal"))
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip()
         password = request.form.get("password", "").strip()
@@ -160,7 +161,7 @@ def admin_login():
                     _uc.execute("UPDATE admin_users SET password=%s WHERE username=%s",
                                 (generate_password_hash(password), identifier))
                     _ud.commit()
-            if app.config.get("MANDATORY_LOGIN_MFA", True):
+            if app.config.get("MANDATORY_LOGIN_MFA", False):
                 return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
                                          "Executive Administrator" if admin_row[1] == "admin" else admin_row[1].title())
             session.clear()
@@ -174,8 +175,8 @@ def admin_login():
             if admin_row[2]:
                 notify_if_new_login_ip(identifier, "admin", request.remote_addr, identifier, admin_row[2])
             if admin_row[1] == "superadmin":
-                return redirect("/superadmin")
-            return redirect("/admin")
+                return redirect(tpath("/superadmin"))
+            return redirect(tpath("/admin"))
         # Try employee credentials
         with _db() as (cursor, db):
             cursor.execute(
@@ -209,8 +210,8 @@ def admin_login():
             if emp_row[5]:
                 notify_if_new_login_ip(emp_row[0], "employee", request.remote_addr, emp_row[1], emp_row[5])
             if emp_row[4]:
-                return redirect("/force_change_pin")
-            return redirect("/employee_portal")
+                return redirect(tpath("/force_change_pin"))
+            return redirect(tpath("/employee_portal"))
         _record_login_failure(identifier)
         return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
                                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
@@ -231,7 +232,7 @@ def mfa_verify():
     username = session.get("mfa_user")
     kind = session.get("mfa_kind")
     if not username or not session.get("mfa_pending") or kind not in ("admin_users", "employee"):
-        return redirect("/login")
+        return redirect(tpath("/login"))
 
     issued_at = session.get("mfa_issued_at") or 0
     if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
@@ -251,7 +252,7 @@ def mfa_verify():
                     row = cursor.fetchone()
                 if not row:
                     session.clear()
-                    return redirect("/login")
+                    return redirect(tpath("/login"))
                 session.clear()
                 session["employee_id"] = row[0]
                 session["employee_name"] = row[1]
@@ -263,15 +264,15 @@ def mfa_verify():
                 if row[4]:
                     notify_if_new_login_ip(row[0], "employee", request.remote_addr, row[1], row[4])
                 if row[3]:
-                    return redirect("/force_change_pin")
-                return redirect("/employee_portal")
+                    return redirect(tpath("/force_change_pin"))
+                return redirect(tpath("/employee_portal"))
             else:
                 with _db() as (cursor, db):
                     cursor.execute("SELECT role, email FROM admin_users WHERE username=%s", (username,))
                     row = cursor.fetchone()
                 if not row:
                     session.clear()
-                    return redirect("/login")
+                    return redirect(tpath("/login"))
                 role = row[0] or "admin"
                 # This emailed code IS this login's MFA -- mark enrolled so
                 # app.py's _enforce_admin_mfa_enrollment (which still applies
@@ -287,7 +288,7 @@ def mfa_verify():
                 ensure_session_id(session)
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
-                return redirect("/hr" if role == "hr" else "/admin")
+                return redirect(tpath("/hr" if role == "hr" else "/admin"))
 
         log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
         return render_template("mfa_verify.html", username=username, error="Invalid code. Please try again.")
@@ -302,7 +303,7 @@ def logout():
     # home()), not somewhere a tenant admin logging out should land --
     # send them back to the check-in kiosk instead, same as before "/"
     # was repurposed.
-    return redirect("/checkin")
+    return redirect(tpath("/checkin"))
 
 
 @auth_bp.route("/change_admin_password", methods=["POST"])
@@ -316,7 +317,7 @@ def change_admin_password():
     # if they know its current value — a cross-account privilege escalation.
     logged_in_as = session.get("admin_username", "admin")
     if not new_pw or new_pw != confirm_pw:
-        return redirect("/admin?pwd_error=mismatch")
+        return redirect(tpath("/admin?pwd_error=mismatch"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT password FROM admin_users WHERE username=%s", (logged_in_as,))
@@ -324,7 +325,7 @@ def change_admin_password():
     if not row or not check_password_hash(row[0], current_pw):
         cursor.close()
         db.close()
-        return redirect("/admin?pwd_error=wrong")
+        return redirect(tpath("/admin?pwd_error=wrong"))
     cursor.execute(
         "UPDATE admin_users SET password=%s WHERE username=%s",
         (generate_password_hash(new_pw), logged_in_as)
@@ -332,7 +333,7 @@ def change_admin_password():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/admin?pwd_ok=1")
+    return redirect(tpath("/admin?pwd_ok=1"))
 
 
 @auth_bp.route("/admin_set_recovery_email", methods=["POST"])
@@ -347,7 +348,7 @@ def admin_set_recovery_email():
         db.commit()
         cursor.close()
         db.close()
-    return redirect("/admin?email_ok=1#password-management")
+    return redirect(tpath("/admin?email_ok=1#password-management"))
 
 
 @auth_bp.route("/admin_forgot_password", methods=["GET", "POST"])
@@ -386,7 +387,7 @@ def admin_forgot_password():
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
     <div style="font-size:20px;font-weight:700;">🔐 Admin Password Reset</div>
-    <div style="font-size:13px;opacity:0.75;margin-top:4px;">Employee Attendance System</div>
+    <div style="font-size:13px;opacity:0.75;margin-top:4px;">HRzest.com</div>
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">You requested a password reset for the admin account.</p>
@@ -398,7 +399,7 @@ def admin_forgot_password():
   </div>
 </div>"""
     try:
-        send_email_smtp(admin_email, "Admin Password Reset — Attendance System", html_body, cfg)
+        send_email_smtp(admin_email, "Admin Password Reset — HRzest.com", html_body, cfg)
     except Exception:
         app_log.error("Failed to send admin password reset email", exc_info=True)
         return render_template("admin_forgot_password.html", sent=False,
@@ -541,7 +542,7 @@ def employee_reset_password(token):
 @auth_bp.route("/employee_logout", methods=["GET", "POST"])
 def employee_logout():
     session.clear()
-    return redirect("/login")
+    return redirect(tpath("/login"))
 
 
 @auth_bp.route("/change_password", methods=["POST"])
@@ -558,15 +559,15 @@ def change_password():
     if not row or not check_password_hash(row[0], current):
         cursor.close()
         db.close()
-        return redirect("/employee_portal?pwd_error=wrong#my-profile")
+        return redirect(tpath("/employee_portal?pwd_error=wrong#my-profile"))
     if len(new_pwd) < 8:
         cursor.close()
         db.close()
-        return redirect("/employee_portal?pwd_error=short#my-profile")
+        return redirect(tpath("/employee_portal?pwd_error=short#my-profile"))
     if new_pwd != confirm:
         cursor.close()
         db.close()
-        return redirect("/employee_portal?pwd_error=mismatch#my-profile")
+        return redirect(tpath("/employee_portal?pwd_error=mismatch#my-profile"))
     cursor.execute(
         "UPDATE employees SET password=%s WHERE employee_id=%s",
         (generate_password_hash(new_pwd), emp_id)
@@ -574,7 +575,7 @@ def change_password():
     db.commit()
     cursor.close()
     db.close()
-    return redirect("/employee_portal?pwd_ok=1#my-profile")
+    return redirect(tpath("/employee_portal?pwd_ok=1#my-profile"))
 
 
 @auth_bp.route("/force_change_pin", methods=["GET", "POST"])
@@ -602,7 +603,7 @@ def force_change_pin():
             cursor.close()
             db.close()
             session.pop("_fpc", None)  # clear forced-change flag so portal is accessible
-            return redirect("/employee_portal")
+            return redirect(tpath("/employee_portal"))
     return render_template("force_change_pin.html", error=error,
                            emp_name=session.get("employee_name", ""))
 
@@ -1031,9 +1032,6 @@ def api_mobile_biometric_nonce():
     """Mobile app calls this (with its employee Bearer token) right before
     prompting the device's local biometric/PIN check. The returned nonce
     must be echoed back to /mobile-biometric-attest within 60s."""
-    allowed, _msg = check_feature_allowed(g.tenant_db, "mobile_app")
-    if not allowed:
-        return jsonify({"ok": False, "msg": "Mobile app access requires the Prime plan."}), 403
     nonce = _mobile_biometric_issue_nonce(g.api_emp_id)
     return jsonify({"ok": True, "nonce": nonce})
 
@@ -1046,9 +1044,6 @@ def api_mobile_biometric_attest():
     LocalAuthentication.authenticateAsync(), turning that local-only signal
     into a server-side, employee-bound, single-use, time-boxed proof that
     /api/employee/qr-face-checkin will accept for fingerprint combos."""
-    allowed, _msg = check_feature_allowed(g.tenant_db, "mobile_app")
-    if not allowed:
-        return jsonify({"ok": False, "msg": "Mobile app access requires the Prime plan."}), 403
     data = request.get_json(force=True, silent=True) or {}
     nonce = (data.get("nonce") or "").strip()
     ok, err = _mobile_biometric_attest(g.api_emp_id, nonce)
@@ -1064,7 +1059,7 @@ def step_up_mfa():
     of (not instead of) the admin session already established at login."""
     username = session.get("admin_username")
     if not username:
-        return redirect("/login")
+        return redirect(tpath("/login"))
 
     if request.method == "POST":
         totp_code = request.form.get("totp_code", "").strip()

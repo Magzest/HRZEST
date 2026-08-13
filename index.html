@@ -24,21 +24,21 @@
   <nav class="navbar" id="navbar">
     <div class="container nav-container">
       <a href="#" class="logo">
-        <div class="logo-icon"><i class="fa-solid fa-user-check"></i></div>
+        <div class="logo-icon"><i class="fa-solid fa-shield-halved"></i></div>
         <span class="hrzest-brand" style="font-size:1.6rem;">HRzest</span>
       </a>
 
       <ul class="nav-links">
-        <li><a href="#features" class="nav-link">Features</a></li>
-        <li><a href="#sandbox" class="nav-link">Interactive Demo</a></li>
-        <li><a href="#security" class="nav-link">Security & Governance</a></li>
-        <li><a href="#contact" class="nav-link">Contact Us</a></li>
-        <li><a href="#feedback" class="nav-link">Feedback</a></li>
+        <li><a href="#features" class="nav-link">Architecture</a></li>
+        <li><a href="#sandbox" class="nav-link">Interactive Terminal</a></li>
+        <li><a href="#security" class="nav-link">Security &amp; Governance</a></li>
+        <li><a href="#contact" class="nav-link">Enterprise Support</a></li>
+        <li><a href="#feedback" class="nav-link">Platform Feedback</a></li>
       </ul>
 
       <div class="nav-actions">
         <button class="btn btn-primary open-lead-modal-btn">
-          <i class="fa-solid fa-calendar-check"></i> Request Demo
+          <i class="fa-solid fa-shield-check"></i> Request Consultation
         </button>
         <button class="mobile-nav-toggle" id="mobileNavToggle">
           <i class="fa-solid fa-bars"></i>
@@ -52,28 +52,29 @@
     <div class="container hero-grid">
       <div class="hero-content">
         <div class="hero-badge-pill">
-          <span class="hero-badge-tag"><i class="fa-solid fa-sparkles"></i> <span class="magzest-brand">MAGZEST</span> CORE</span>
+          <span class="hero-badge-tag"><i class="fa-solid fa-certificate"></i> <span class="magzest-brand">MAGZEST</span> ENTERPRISE</span>
           <span><span class="magzest-brand" style="font-size:0.85rem; letter-spacing:1px;">MAGZEST</span> Consultancy Services Private Limited</span>
         </div>
         <h1 class="hero-title">
-          Intelligent <span class="gradient-text">AI & Biometric</span> Workforce Platform
+          Enterprise Workforce <span class="gradient-text">Governance &amp; AI Biometrics</span> Platform
         </h1>
         <p class="hero-subtitle">
-          Streamline enterprise workforce governance, eliminate time-theft leaks with AI vision verification, and automate complex multi-state payroll in one unified solution by Magzest Consultancy Services Private Limited.
+          Unified human resource management, AI facial vision verification, automated statutory payroll compliance, and multi-tenant security architecture engineered for global enterprises by Magzest Consultancy Services Private Limited.
         </p>
 
         <div class="hero-ctas">
           <button class="btn btn-primary open-lead-modal-btn">
-            <i class="fa-solid fa-rocket"></i> Get Started Free
+            <i class="fa-solid fa-building-columns"></i> Provision Enterprise Account
           </button>
           <a href="#sandbox" class="btn btn-secondary">
-            <i class="fa-solid fa-circle-play"></i> Explore <span class="hrzest-brand">HRzest</span> Sandbox
+            <i class="fa-solid fa-terminal"></i> Launch Interactive Terminal
           </a>
         </div>
 
         <div class="hero-trust">
-          <div class="trust-item"><i class="fa-solid fa-lock"></i> Bank-Grade AES-256</div>
-          <div class="trust-item"><i class="fa-solid fa-cloud-arrow-up"></i> Flexible Cloud & On-Prem</div>
+          <div class="trust-item"><i class="fa-solid fa-certificate"></i> ISO 27001 Certified</div>
+          <div class="trust-item"><i class="fa-solid fa-shield-lock"></i> SOC 2 Type II Compliant</div>
+          <div class="trust-item"><i class="fa-solid fa-lock"></i> AES-256 Encryption</div>
         </div>
       </div>
 
@@ -83,23 +84,23 @@
         <div class="floating-metric fm-1">
           <div class="fm-icon green"><i class="fa-solid fa-fingerprint"></i></div>
           <div class="fm-text-group">
-            <span class="fm-title">Verification Speed</span>
-            <span class="fm-value">0.8 Seconds</span>
+            <span class="fm-title">Matching Latency</span>
+            <span class="fm-value">Sub-Second (0.8s)</span>
           </div>
         </div>
         <div class="floating-metric fm-2">
           <div class="fm-icon blue"><i class="fa-solid fa-location-crosshairs"></i></div>
           <div class="fm-text-group">
-            <span class="fm-title">GPS Perimeter</span>
+            <span class="fm-title">Perimeter Validation</span>
             <span class="fm-value">Verified (HQ Campus)</span>
           </div>
         </div>
 
         <div class="widget-header">
           <div class="widget-title-group">
-            <span class="widget-title">Live Biometric Check-in Terminal</span>
+            <span class="widget-title">Enterprise Facial Biometric Verification Terminal</span>
           </div>
-          <span class="widget-badge">Camera Active</span>
+          <span class="widget-badge"><i class="fa-solid fa-shield-check"></i> Zero-Trust Active</span>
         </div>
 
         <!-- Scanner Viewport -->
@@ -107,7 +108,7 @@
           <div class="scanner-overlay"></div>
           <div class="face-target-box" id="faceTargetBox">
             <div class="scan-laser"></div>
-            <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80" alt="Employee Scanner" class="avatar-preview" id="scannerAvatar">
+            <img src="assets/waving_avatar.jpg?v=2" alt="Waving Person Avatar" class="avatar-preview" id="scannerAvatar">
           </div>
           <div class="scanner-hud">
             <div class="hud-item"><i class="fa-solid fa-expand"></i> <span id="hudStatus">Target Acquired</span></div>
@@ -117,10 +118,10 @@
 
         <div class="scanner-actions">
           <button class="btn btn-primary scan-btn" id="triggerScanBtn">
-            <i class="fa-solid fa-camera"></i> Test AI Face Verification
+            <i class="fa-solid fa-camera"></i> Verify AI Facial Biometrics
           </button>
           <button class="btn btn-secondary scan-btn" id="triggerPasskeyBtn">
-            <i class="fa-solid fa-key"></i> Test WebAuthn Passkey
+            <i class="fa-solid fa-key"></i> Authenticate WebAuthn Key
           </button>
         </div>
       </div>
@@ -356,7 +357,7 @@
               </div>
 
               <div style="background: linear-gradient(135deg, rgba(56, 189, 248, 0.08), rgba(99, 102, 241, 0.08)); border: 1px solid var(--border-color-glow); padding: 1.5rem; border-radius: var(--radius-xl); display: flex; gap: 1rem; align-items: center;">
-                <img id="badgePhoto" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80" style="width: 90px; height: 90px; border-radius: var(--radius-md); object-fit: cover;" alt="ID Card">
+                <img id="badgePhoto" src="assets/waving_avatar.jpg?v=2" style="width: 90px; height: 90px; border-radius: var(--radius-md); object-fit: cover;" alt="ID Card">
                 <div>
                   <h4 id="badgeName" style="font-size: 1.1rem; margin-bottom: 0.2rem;">Sarah Jenkins</h4>
                   <p id="badgeRole" style="color: var(--accent-cyan); font-size: 0.85rem; font-weight: 600;">Senior Software Architect</p>
