@@ -4573,8 +4573,7 @@
         alert('❌ Touch ID / WebAuthn is not supported by your current browser.');
         return;
       }
-      alert('👉 To enroll Touch ID or Windows Hello, please follow your device biometric prompt.');
-      window.location.href = '/webauthn/registration-options';
+      startFpEnroll();
     }
 
     function toggleTheme() {
