@@ -1641,13 +1641,8 @@
           inp.value = data.emp_id;
           inp.placeholder = '';
           if (hint) {
-            if (!data.code) {
-              hint.innerHTML = '⚠ No company code set. Go to <a class="u-c-1e3a8a" href="{{ tpath('/settings') }}" target="_blank">Settings</a> and add one, then click 🔄 Generate.';
-              hint.style.color = '#dc2626';
-            } else {
-              hint.textContent = '✓ ' + data.emp_id + ' — employee #' + data.seq;
-              hint.style.color = '#16a34a';
-            }
+            hint.textContent = '✓ ' + data.emp_id + ' — employee #' + data.seq;
+            hint.style.color = '#16a34a';
           }
         } catch(e) {
           inp.placeholder = 'Enter manually';
