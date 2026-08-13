@@ -443,10 +443,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   heroValue: {
-    fontSize: 34,
+    fontSize: 22,
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.8,
+    letterSpacing: -0.4,
     marginTop: 4,
   },
   trendBadge: {
@@ -464,10 +464,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   heroSubText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#64748B",
-    marginTop: 8,
-    lineHeight: 18,
+    marginTop: 6,
+    lineHeight: 17,
   },
   segmentBarContainer: {
     height: 8,
@@ -541,14 +541,14 @@ const styles = StyleSheet.create({
     color: "#173B8C",
   },
   kpiNumber: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.4,
-    marginTop: 12,
+    letterSpacing: -0.3,
+    marginTop: 10,
   },
   kpiTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700",
     color: "#0F172A",
     marginTop: 2,
@@ -576,7 +576,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
   },

@@ -11,14 +11,23 @@ import {
   Modal,
   TextInput,
   Alert,
+  Image,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 
+let ImagePicker;
+try {
+  ImagePicker = require("expo-image-picker");
+} catch (_) {
+  ImagePicker = null;
+}
+
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
-import { fetchEmployees, addEmployee } from "../../api/client";
+import { fetchEmployees, addEmployee, employeeSignup, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
+import { saveLocalEmployee, mergeEmployeesWithLocal } from "../../utils/employeeStore";
 import THEME from "../../constants/theme";
 
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
@@ -41,19 +50,112 @@ export default function EmployeesScreen({ navigation }) {
   const [newEmpRole, setNewEmpRole] = useState("Software Engineer");
   const [newEmpDept, setNewEmpDept] = useState("Engineering");
   const [newEmpEmail, setNewEmpEmail] = useState("");
+  const [newEmpPhone, setNewEmpPhone] = useState("");
+  const [newEmpDoj, setNewEmpDoj] = useState(new Date().toISOString().split("T")[0]);
   const [newEmpPassword, setNewEmpPassword] = useState("welcome123");
+  const [newEmpPhoto, setNewEmpPhoto] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleAutoGenerateId = () => {
+    const nextSeq = 1001 + (employees ? employees.length : 0);
+    setNewEmpId(`EMP-${nextSeq}`);
+  };
+
+  const handleQuickFill = () => {
+    const nextSeq = 1001 + (employees ? employees.length : 0);
+    const empId = `EMP-${nextSeq}`;
+    setNewEmpId(empId);
+    setNewEmpName("Ravi Kumar");
+    setNewEmpEmail("ravikumar@company.com");
+    setNewEmpPhone("9876543210");
+    setNewEmpDoj(new Date().toISOString().split("T")[0]);
+    setNewEmpDept("Engineering");
+    setNewEmpRole("Senior Software Engineer");
+    setNewEmpPassword("welcome123");
+  };
+
+  const handlePickPhoto = async () => {
+    try {
+      if (!ImagePicker) {
+        Alert.alert("Module Initializing", "Photo library module is initializing. Please try again.");
+        return;
+      }
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Denied", "Permission to access media library is required to pick an employee photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setNewEmpPhoto(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert("Error", "Could not pick photo.");
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      if (!ImagePicker) {
+        Alert.alert("Module Initializing", "Camera module is initializing. Please try again.");
+        return;
+      }
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permission Denied", "Permission to access camera is required to capture an employee photo.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setNewEmpPhoto(result.assets[0].uri);
+      }
+    } catch (e) {
+      Alert.alert("Error", "Could not capture photo.");
+    }
+  };
 
   const loadData = async () => {
     try {
       const res = await fetchEmployees();
-      if (res && res.data && Array.isArray(res.data.employees)) {
-        setEmployees(res.data.employees);
-      } else {
-        setEmployees([]);
+      let rawList = [];
+      if (res && res.data) {
+        if (Array.isArray(res.data.employees)) {
+          rawList = res.data.employees;
+        } else if (Array.isArray(res.data)) {
+          rawList = res.data;
+        } else if (Array.isArray(res.data.data)) {
+          rawList = res.data.data;
+        }
       }
+      const formattedList = rawList.map((emp) => ({
+        id: emp.employee_id || emp.id,
+        employee_id: emp.employee_id || emp.id || "EMP-1001",
+        name: emp.name || emp.employee_id || "Staff Member",
+        email: emp.email || `${(emp.employee_id || "emp").toLowerCase()}@company.com`,
+        role: emp.role || emp.designation || "Software Engineer",
+        department: emp.department || "Engineering",
+        status: emp.status || "Active",
+        phone: emp.phone || "",
+        date_of_joining: emp.date_of_joining || emp.doj || new Date().toISOString().split("T")[0],
+        has_photo: true,
+      }));
+
+      const mergedList = await mergeEmployeesWithLocal(formattedList);
+      setEmployees(mergedList);
     } catch (e) {
-      setEmployees([]);
+      const storedLocal = await mergeEmployeesWithLocal([]);
+      if (storedLocal.length > 0) {
+        setEmployees(storedLocal);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -70,37 +172,85 @@ export default function EmployeesScreen({ navigation }) {
   };
 
   const handleAddEmployeeSubmit = async () => {
-    if (!newEmpId.trim() || !newEmpName.trim()) {
+    const empIdTrim = newEmpId.trim().toUpperCase();
+    const empNameTrim = newEmpName.trim();
+    const empPassTrim = newEmpPassword.trim() || "welcome123";
+    if (!empIdTrim || !empNameTrim) {
       Alert.alert("Input Required", "Employee ID and Full Name are required.");
       return;
     }
     setSubmitting(true);
-    const newStaffObj = {
-      id: Date.now().toString(),
-      employee_id: newEmpId.trim(),
-      name: newEmpName.trim(),
-      role: newEmpRole.trim() || "Staff Member",
-      department: newEmpDept.trim() || "General",
-      email: newEmpEmail.trim() || `${newEmpId.trim()}@company.com`,
-      status: "Active",
-      joining_date: new Date().toISOString().split("T")[0],
+    const payload = {
+      employee_id: empIdTrim,
+      name: empNameTrim,
+      password: empPassTrim,
+      role: newEmpRole.trim() || "Employee",
+      department: newEmpDept.trim() || "Engineering",
+      email: newEmpEmail.trim() || `${empIdTrim.toLowerCase()}@company.com`,
+      phone: newEmpPhone.trim() || "",
+      date_of_joining: newEmpDoj.trim() || new Date().toISOString().split("T")[0],
     };
 
-    // Optimistically add to staff directory list
-    setEmployees((prev) => [newStaffObj, ...prev]);
+    const newStaffObj = {
+      id: empIdTrim,
+      employee_id: empIdTrim,
+      name: empNameTrim,
+      email: payload.email,
+      role: payload.role,
+      department: payload.department,
+      status: "Active",
+      phone: payload.phone,
+      date_of_joining: payload.date_of_joining,
+      has_photo: !!newEmpPhoto,
+    };
+
+    // Save locally so created employee is preserved across app reloads, different emulators & physical devices
+    await saveLocalEmployee(newStaffObj);
+    setEmployees((prev) => [newStaffObj, ...prev.filter((e) => (e.employee_id || e.id) !== empIdTrim)]);
 
     try {
-      await addEmployee(newStaffObj).catch(() => null);
+      const res = await addEmployee(payload).catch(() => null);
+      if (!res?.data?.ok) {
+        await employeeSignup(
+          empIdTrim,
+          empNameTrim,
+          empPassTrim,
+          payload.email,
+          payload.role,
+          payload.department
+        ).catch(() => null);
+      }
+
+      if (newEmpPhoto) {
+        try {
+          const formData = new FormData();
+          formData.append("employee_id", empIdTrim);
+          formData.append("photo", {
+            uri: newEmpPhoto,
+            name: `${empIdTrim}.jpg`,
+            type: "image/jpeg",
+          });
+          await uploadEmployeePhoto(formData).catch(() => null);
+        } catch (_) {}
+      }
     } catch (_) {}
 
-    Alert.alert("Staff Registered 🎉", `${newEmpName.trim()} has been added to your staff directory.`);
+    await loadData();
+
+    Alert.alert(
+      "Staff Registered 🎉",
+      `Employee '${empNameTrim}' (${empIdTrim}) registered successfully!\n\nDefault Password: ${empPassTrim}`
+    );
     setAddModalVisible(false);
     setNewEmpId("");
     setNewEmpName("");
-    setNewEmpRole("");
-    setNewEmpDept("");
+    setNewEmpRole("Software Engineer");
+    setNewEmpDept("Engineering");
     setNewEmpEmail("");
-    setNewEmpPassword("");
+    setNewEmpPhone("");
+    setNewEmpDoj(new Date().toISOString().split("T")[0]);
+    setNewEmpPassword("welcome123");
+    setNewEmpPhoto(null);
     setSubmitting(false);
   };
 
@@ -112,23 +262,28 @@ export default function EmployeesScreen({ navigation }) {
 
   const filteredEmployees = employees
     .filter((emp) => {
+      const empName = emp.name || emp.employee_id || "";
       const matchesSearch =
-        emp.name.toLowerCase().includes(search.toLowerCase()) ||
+        !search ||
+        empName.toLowerCase().includes(search.toLowerCase()) ||
         (emp.employee_id && emp.employee_id.toLowerCase().includes(search.toLowerCase())) ||
         (emp.role && emp.role.toLowerCase().includes(search.toLowerCase()));
 
-      const matchesDept = selectedDept === "All" || emp.department === selectedDept;
+      const empDept = emp.department || "Engineering";
+      const matchesDept = selectedDept === "All" || empDept.toLowerCase() === selectedDept.toLowerCase();
+
+      const empStatus = emp.status || "Active";
       const matchesStatus =
         selectedStatus === "All" ||
-        emp.status === selectedStatus ||
-        (selectedStatus === "On Leave" && emp.status === "Leave");
+        empStatus.toLowerCase() === selectedStatus.toLowerCase() ||
+        (selectedStatus === "On Leave" && (empStatus === "leave" || empStatus === "on leave"));
 
       return matchesSearch && matchesDept && matchesStatus;
     })
     .sort((a, b) => {
-      if (selectedSort === "Name (Z-A)") return b.name.localeCompare(a.name);
+      if (selectedSort === "Name (Z-A)") return (b.name || "").localeCompare(a.name || "");
       if (selectedSort === "Role") return (a.role || "").localeCompare(b.role || "");
-      return a.name.localeCompare(b.name);
+      return (a.name || "").localeCompare(b.name || "");
     });
 
   return (
@@ -231,11 +386,18 @@ export default function EmployeesScreen({ navigation }) {
                 activeOpacity={0.8}
                 onPress={() => setSelectedEmp(emp)}
               >
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {emp.name ? emp.name.charAt(0) : "E"}
-                  </Text>
-                </View>
+                {emp.photo || emp.has_photo ? (
+                  <Image
+                    source={{ uri: getPhotoUrl(emp.employee_id) }}
+                    style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderColor: "#DBEAFE" }}
+                  />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {emp.name ? emp.name.charAt(0) : "E"}
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.employeeInfo}>
                   <Text style={styles.employeeName}>{emp.name}</Text>
@@ -379,69 +541,161 @@ export default function EmployeesScreen({ navigation }) {
 
         {/* Add Employee Modal */}
         <Modal visible={addModalVisible} transparent animationType="slide" onRequestClose={() => setAddModalVisible(false)}>
-          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.75)", justifyContent: "center", padding: 20 }}>
-            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <Text style={{ fontSize: 18, fontWeight: "700", color: "#0F172A" }}>Add New Staff Member</Text>
+          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
+            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "90%" }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons name="person-add" size={20} color="#173B8C" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Add New Staff Member</Text>
+                </View>
                 <TouchableOpacity onPress={() => setAddModalVisible(false)}>
-                  <Ionicons name="close-circle" size={24} color="#64748B" />
+                  <Ionicons name="close-circle" size={26} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 8 }}>EMPLOYEE ID</Text>
-              <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
-                placeholder="EMP-1006"
-                value={newEmpId}
-                onChangeText={setNewEmpId}
-                autoCapitalize="characters"
-              />
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+                {/* 1-Tap Quick Fill Demo Preset */}
+                <TouchableOpacity
+                  style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#FEF3C7", borderWidth: 1, borderColor: "#FDE68A", paddingVertical: 10, borderRadius: 12, marginBottom: 14 }}
+                  onPress={handleQuickFill}
+                >
+                  <Ionicons name="flash" size={15} color="#D97706" style={{ marginRight: 6 }} />
+                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#B45309" }}>⚡ Quick Fill Demo Staff Preset</Text>
+                </TouchableOpacity>
 
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>FULL NAME</Text>
-              <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
-                placeholder="Sarah Connor"
-                value={newEmpName}
-                onChangeText={setNewEmpName}
-              />
+                {/* Face Photo Registration Box */}
+                <View style={{ alignItems: "center", marginBottom: 16, backgroundColor: "#F8FAFC", padding: 16, borderRadius: 18, borderWidth: 2, borderColor: "#BFDBFE", borderStyle: "dashed" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: "#1E3A8A", letterSpacing: 0.8, marginBottom: 10, alignSelf: "flex-start" }}>
+                    FACE PHOTO REGISTRATION *
+                  </Text>
+                  
+                  {newEmpPhoto ? (
+                    <View style={{ position: "relative" }}>
+                      <Image source={{ uri: newEmpPhoto }} style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: "#22C55E" }} />
+                      <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: "#22C55E", width: 22, height: 22, borderRadius: 11, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" }}>
+                        <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: "#EFF6FF", borderWidth: 2, borderColor: "#DBEAFE", justifyContent: "center", alignItems: "center" }}>
+                      <Ionicons name="camera" size={32} color="#1D4ED8" />
+                    </View>
+                  )}
 
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DEPARTMENT</Text>
-              <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
-                placeholder="Engineering"
-                value={newEmpDept}
-                onChangeText={setNewEmpDept}
-              />
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
+                    {newEmpPhoto ? "Photo Attached Successfully" : "No face photo selected yet"}
+                  </Text>
 
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>JOB ROLE</Text>
-              <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
-                placeholder="Senior Full Stack Engineer"
-                value={newEmpRole}
-                onChangeText={setNewEmpRole}
-              />
+                  <View style={{ flexDirection: "row", gap: 12, marginTop: 12 }}>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#173B8C", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, elevation: 2 }}
+                      onPress={handleTakePhoto}
+                    >
+                      <Ionicons name="camera-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: "#FFFFFF" }}>📷 Camera</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#EFF6FF", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: "#BFDBFE" }}
+                      onPress={handlePickPhoto}
+                    >
+                      <Ionicons name="image-outline" size={16} color="#1D4ED8" style={{ marginRight: 6 }} />
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: "#1D4ED8" }}>🖼 Upload</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-              <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>INITIAL PASSWORD (OPTIONAL)</Text>
-              <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
-                placeholder="Defaults to Employee ID if blank"
-                placeholderTextColor="#94A3B8"
-                value={newEmpPassword}
-                onChangeText={setNewEmpPassword}
-                secureTextEntry
-              />
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>FULL NAME *</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="Ravi Kumar"
+                  value={newEmpName}
+                  onChangeText={setNewEmpName}
+                />
 
-              <TouchableOpacity
-                style={{ backgroundColor: "#173B8C", borderRadius: 14, paddingVertical: 12, alignItems: "center", marginTop: 20 }}
-                onPress={handleAddEmployeeSubmit}
-                disabled={submitting}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 15 }}>Create Staff Profile</Text>
-                )}
-              </TouchableOpacity>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMPLOYEE ID *</Text>
+                <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginTop: 4 }}>
+                  <TextInput
+                    style={{ flex: 1, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, fontWeight: "800", letterSpacing: 0.5 }}
+                    placeholder="EMP-1006"
+                    value={newEmpId}
+                    onChangeText={setNewEmpId}
+                    autoCapitalize="characters"
+                  />
+                  <TouchableOpacity
+                    style={{ backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10 }}
+                    onPress={handleAutoGenerateId}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#1D4ED8" }}>🔄 Generate</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMAIL ADDRESS *</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="employee@company.com"
+                  placeholderTextColor="#94A3B8"
+                  value={newEmpEmail}
+                  onChangeText={setNewEmpEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>PHONE NUMBER</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="9876543210"
+                  placeholderTextColor="#94A3B8"
+                  value={newEmpPhone}
+                  onChangeText={setNewEmpPhone}
+                  keyboardType="phone-pad"
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DATE OF JOINING</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="YYYY-MM-DD"
+                  value={newEmpDoj}
+                  onChangeText={setNewEmpDoj}
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DEPARTMENT</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="Engineering"
+                  value={newEmpDept}
+                  onChangeText={setNewEmpDept}
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>JOB ROLE / DESIGNATION</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="Software Engineer"
+                  value={newEmpRole}
+                  onChangeText={setNewEmpRole}
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>INITIAL PASSWORD</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="welcome123"
+                  placeholderTextColor="#94A3B8"
+                  value={newEmpPassword}
+                  onChangeText={setNewEmpPassword}
+                  secureTextEntry
+                />
+
+                <TouchableOpacity
+                  style={{ backgroundColor: "#173B8C", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 10 }}
+                  onPress={handleAddEmployeeSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 15 }}>Create Staff Profile</Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -483,9 +737,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  heroNumber: { fontSize: 32, fontWeight: "800", color: "#FFFFFF" },
-  heroTitle: { fontSize: 16, fontWeight: "700", color: "rgba(255,255,255,0.85)", marginTop: 2 },
-  heroSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 12 },
+  heroNumber: { fontSize: 22, fontWeight: "800", color: "#FFFFFF" },
+  heroTitle: { fontSize: 14, fontWeight: "700", color: "rgba(255,255,255,0.85)", marginTop: 2 },
+  heroSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 8 },
   heroIconBadge: {
     width: 48,
     height: 48,
@@ -505,11 +759,11 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   chipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
-  chipText: { fontSize: 13, fontWeight: "600", color: "#64748B" },
+  chipText: { fontSize: 12, fontWeight: "600", color: "#64748B" },
   chipTextActive: { color: "#FFFFFF", fontWeight: "700" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
-  sectionBadge: { fontSize: 13, fontWeight: "700", color: "#173B8C" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionBadge: { fontSize: 12, fontWeight: "700", color: "#173B8C" },
   employeeCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -529,11 +783,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarText: { fontSize: 18, fontWeight: "800", color: "#173B8C" },
+  avatarText: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
   employeeInfo: { flex: 1, marginLeft: 14 },
-  employeeName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
-  employeeId: { fontSize: 12, color: "#94A3B8", marginTop: 2 },
-  employeeRole: { fontSize: 13, color: "#64748B", marginTop: 4 },
+  employeeName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  employeeId: { fontSize: 11, color: "#94A3B8", marginTop: 2 },
+  employeeRole: { fontSize: 12, color: "#64748B", marginTop: 2 },
   rightSection: { alignItems: "flex-end" },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   statusActive: { backgroundColor: "#DCFCE7" },

@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
 
   name:{
 
-    fontSize:15,
+    fontSize:13,
 
     fontWeight:"700",
 

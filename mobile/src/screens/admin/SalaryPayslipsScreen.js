@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E2E8F0",
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0F172A",
   },
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF6FF",
   },
   pickerOptionText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "600",
     color: "#334155",
   },

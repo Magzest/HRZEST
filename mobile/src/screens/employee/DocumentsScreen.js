@@ -251,13 +251,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   summaryTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
     color: "#0F172A",
   },
   summarySubtitle: {
     marginTop: 5,
-    fontSize: 14,
+    fontSize: 12,
     color: "#64748B",
     fontWeight: "600",
   },
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
     marginBottom: 14,
@@ -308,13 +308,13 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   title: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
   },
   number: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: 12,
     color: "#64748B",
   },
   badge: {
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   badgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "700",
   },
   actionButton: {
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0F172A",
   },

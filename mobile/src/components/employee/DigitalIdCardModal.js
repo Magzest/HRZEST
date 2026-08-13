@@ -5,9 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { API_BASE_URL } from "../../config";
 
+import { useAuth } from "../../store/AuthContext";
+
 export default function DigitalIdCardModal({ visible, employee, onClose }) {
+  const { user } = useAuth();
   if (!employee) return null;
 
+  const companyName = (employee.company || user?.company || "Enterprise Workforce Platform").toUpperCase();
   const empId = employee.employeeId || employee.employee_id || "EMP-1001";
   const serverQrUri = `${API_BASE_URL}/static/qrcodes/${empId}.png`;
   const fallbackQrUri = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(empId)}`;
@@ -20,7 +24,7 @@ export default function DigitalIdCardModal({ visible, employee, onClose }) {
           <LinearGradient colors={["#0F2027", "#203A43", "#2C5364"]} style={styles.cardHeader}>
             <View style={styles.headerRow}>
               <Ionicons name="business" size={22} color="#38BDF8" />
-              <Text style={styles.companyName}>MAGZEST HRMS</Text>
+              <Text style={styles.companyName}>{companyName}</Text>
             </View>
             <Text style={styles.cardSubtitle}>OFFICIAL IDENTIFICATION CARD</Text>
           </LinearGradient>
@@ -79,15 +83,15 @@ const styles = StyleSheet.create({
   cardContainer: { width: "90%", backgroundColor: "#FFFFFF", borderRadius: 24, overflow: "hidden", elevation: 12 },
   cardHeader: { paddingVertical: 18, paddingHorizontal: 20, alignItems: "center" },
   headerRow: { flexDirection: "row", alignItems: "center" },
-  companyName: { fontSize: 18, fontWeight: "800", color: "#FFFFFF", marginLeft: 8, letterSpacing: 1 },
-  cardSubtitle: { fontSize: 10, fontWeight: "700", color: "#94A3B8", letterSpacing: 1.5, marginTop: 4 },
+  companyName: { fontSize: 15, fontWeight: "800", color: "#FFFFFF", marginLeft: 8, letterSpacing: 0.5 },
+  cardSubtitle: { fontSize: 10, fontWeight: "700", color: "#94A3B8", letterSpacing: 1.2, marginTop: 4 },
   cardBody: { alignItems: "center", padding: 20 },
   avatarBorder: { width: 90, height: 90, borderRadius: 45, borderWidth: 3, borderColor: "#38BDF8", justifyContent: "center", alignItems: "center", marginTop: -40, backgroundColor: "#FFFFFF", elevation: 4 },
   avatarImage: { width: 84, height: 84, borderRadius: 42 },
   avatarFallback: { width: 84, height: 84, borderRadius: 42, backgroundColor: "#173B8C", justifyContent: "center", alignItems: "center" },
-  avatarText: { fontSize: 36, fontWeight: "800", color: "#FFFFFF" },
-  empName: { fontSize: 20, fontWeight: "800", color: "#0F172A", marginTop: 12 },
-  empRole: { fontSize: 13, fontWeight: "600", color: "#64748B", marginTop: 2 },
+  avatarText: { fontSize: 24, fontWeight: "800", color: "#FFFFFF" },
+  empName: { fontSize: 16, fontWeight: "800", color: "#0F172A", marginTop: 10 },
+  empRole: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 2 },
   badgeRow: { marginTop: 8 },
   deptBadge: { backgroundColor: "#E0F2FE", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   deptBadgeText: { fontSize: 11, fontWeight: "700", color: "#0369A1" },
@@ -98,5 +102,5 @@ const styles = StyleSheet.create({
   qrContainer: { alignItems: "center", marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#F1F5F9", width: "100%" },
   qrText: { fontSize: 11, color: "#94A3B8", marginTop: 4 },
   closeBtn: { backgroundColor: "#F1F5F9", paddingVertical: 14, alignItems: "center" },
-  closeBtnText: { color: "#64748B", fontWeight: "700", fontSize: 14 },
+  closeBtnText: { color: "#64748B", fontWeight: "700", fontSize: 13 },
 });

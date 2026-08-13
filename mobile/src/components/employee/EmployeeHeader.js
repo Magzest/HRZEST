@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
 
   greeting: {
 
-    fontSize: 13,
+    fontSize: 12,
 
     color: "#64748B",
 
@@ -286,21 +286,21 @@ const styles = StyleSheet.create({
 
     marginTop: 3,
 
-    fontSize: 24,
+    fontSize: 18,
 
     fontWeight: "800",
 
     color: "#0F172A",
 
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
 
   },
 
   designation: {
 
-    marginTop: 4,
+    marginTop: 3,
 
-    fontSize: 14,
+    fontSize: 12,
 
     color: "#64748B",
 

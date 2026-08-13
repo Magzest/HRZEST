@@ -252,8 +252,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
-  heroSub: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: "600" },
-  heroTitle: { color: "#FFFFFF", fontSize: 20, fontWeight: "800", marginTop: 4 },
+  heroSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: "600" },
+  heroTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginTop: 4 },
   heroIconBadge: {
     width: 48,
     height: 48,
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.15)",
   },
   heroStatItem: { alignItems: "center" },
-  heroStatValue: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
+  heroStatValue: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
   heroStatLabel: { color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 2 },
   heroStatDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.15)" },
   sectionHeader: {
@@ -281,8 +281,8 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 12,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
-  sectionBadge: { fontSize: 13, fontWeight: "700", color: "#173B8C" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionBadge: { fontSize: 12, fontWeight: "700", color: "#173B8C" },
   reviewCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -304,9 +304,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarText: { fontSize: 18, fontWeight: "800", color: "#173B8C" },
-  empName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
-  empRole: { fontSize: 13, color: "#64748B", marginTop: 2 },
+  avatarText: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
+  empName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  empRole: { fontSize: 12, color: "#64748B", marginTop: 2 },
   ratingBadge: {
     flexDirection: "row",
     alignItems: "center",

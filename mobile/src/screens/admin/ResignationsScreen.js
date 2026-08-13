@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   statNumber: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     color: "#0F172A",
   },
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 10,
-    fontSize: 13,
+    fontSize: 12,
     color: "#64748B",
   },
   emptyCard: {
@@ -411,13 +411,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "700",
     color: "#0F172A",
     marginTop: 12,
   },
   emptySubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#64748B",
     textAlign: "center",
     marginTop: 4,
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   empName: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
   },

@@ -27,6 +27,42 @@ export default function DashboardHeroCard({
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
+      {/* Executive Company Banner Header */}
+      <View style={styles.companyBannerContainer}>
+        <View style={styles.companyBannerLeft}>
+          {profileImage ? (
+            <Image
+              source={{ uri: profileImage }}
+              style={styles.companyLogoImg}
+              resizeMode="cover"
+            />
+          ) : (
+            <Image
+              source={require("../../../assets/company_logo.png")}
+              style={styles.companyLogoImg}
+              resizeMode="cover"
+            />
+          )}
+          <View style={{ flex: 1, marginLeft: 10 }}>
+            <Text style={styles.companyBannerName} numberOfLines={1}>
+              {(company && company !== "Workforce Portal"
+                ? company
+                : "HRZEST TECHNOLOGIES"
+              ).toUpperCase()}
+            </Text>
+            <View style={styles.tenantMetaRow}>
+              <Ionicons name="globe-outline" size={10} color="#38BDF8" style={{ marginRight: 3 }} />
+              <Text style={styles.companyBannerTenant}>
+                TENANT: {(company || "hrzest").toLowerCase().replace(/[^a-z0-9]/g, "")}.hrzest.com
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.verifiedBadge}>
+          <Ionicons name="shield-checkmark" size={12} color="#10B981" style={{ marginRight: 4 }} />
+          <Text style={styles.verifiedText}>VERIFIED</Text>
+        </View>
+      </View>
 
       <View style={styles.topRow}>
 
@@ -45,9 +81,9 @@ export default function DashboardHeroCard({
 
           <Text
             numberOfLines={1}
-            style={styles.company}
+            style={styles.companySub}
           >
-            {company}
+            Executive Administrator
           </Text>
 
           <View style={styles.dateRow}>
@@ -181,6 +217,72 @@ const styles = StyleSheet.create({
 
     elevation: 12,
 
+  },
+
+  companyBannerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    borderColor: "rgba(255, 255, 255, 0.22)",
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  companyBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    marginRight: 8,
+  },
+  companyLogoImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: "#38BDF8",
+    backgroundColor: "#0B2253",
+  },
+  companyBannerName: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  tenantMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  companyBannerTenant: {
+    color: "#93C5FD",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+  },
+  verifiedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16, 185, 129, 0.2)",
+    borderColor: "rgba(16, 185, 129, 0.4)",
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  verifiedText: {
+    color: "#34D399",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+  companySub: {
+    marginTop: 2,
+    color: "#93C5FD",
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   topRow: {

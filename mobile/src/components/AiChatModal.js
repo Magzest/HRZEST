@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
   },
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   promptText: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#0369A1",
     fontWeight: "600",
   },
@@ -253,8 +253,8 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   msgText: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   userMsgText: {
     color: "#FFFFFF",
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1F5F9",
     borderRadius: 22,
     paddingHorizontal: 16,
-    fontSize: 14,
+    fontSize: 13,
     color: "#0F172A",
     marginRight: 10,
   },

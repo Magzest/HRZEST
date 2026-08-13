@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   avatarText: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: "800",
     color: "#0B2253",
   },
@@ -314,10 +314,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     color: "#FFFFFF",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   empId: {
     color: "rgba(255, 255, 255, 0.8)",

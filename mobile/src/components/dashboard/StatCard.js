@@ -150,9 +150,9 @@ const styles = StyleSheet.create({
   },
 
   value: {
-    marginTop: 8,
-    fontSize: 30,
-    fontWeight: "700",
+    marginTop: 4,
+    fontSize: 22,
+    fontWeight: "800",
     color: "#0F172A",
   },
 

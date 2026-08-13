@@ -71,48 +71,61 @@ export default function LoginScreen() {
   const [showScanner, setShowScanner] = useState(false);
 
   const handleAdminLogin = async () => {
-    if (!username.trim() || !password.trim()) {
+    const trimmedUser = username.trim();
+    const trimmedPass = password.trim();
+    if (!trimmedUser || !trimmedPass) {
       Alert.alert("Input Required", "Please enter both admin username and password.");
       return;
     }
     setLoading(true);
     try {
-      const res = await adminLogin(username.trim(), password.trim());
-      if (res?.data?.ok) {
+      const res = await adminLogin(trimmedUser, trimmedPass);
+      if (res?.data?.ok && res?.data?.token) {
         await signIn(res.data.token, {
           role: "admin",
-          name: res.data.username || username.trim(),
-        });
-        setLoading(false);
-        return;
-      } else {
-        await signIn("admin-session-token", {
-          role: "admin",
-          name: username.trim() || "Administrator",
+          name: res.data.username || trimmedUser,
         });
         setLoading(false);
         return;
       }
+      const errorMsg = res?.data?.msg || "Invalid admin credentials.";
+      Alert.alert("Authentication Failed", errorMsg);
     } catch (err) {
-      await signIn("admin-session-token", {
-        role: "admin",
-        name: username.trim() || "Administrator",
-      });
+      // Fallback: check if an employee entered credentials in the Admin tab
+      try {
+        const empRes = await employeeLogin(trimmedUser, trimmedPass);
+        if (empRes?.data?.ok && empRes?.data?.token) {
+          await signIn(empRes.data.token, {
+            role: "employee",
+            name: empRes.data.name || empRes.data.employee?.name || trimmedUser,
+            employeeId: empRes.data.employee_id || trimmedUser,
+            email: empRes.data.email || `${trimmedUser}@company.com`,
+            company: empRes.data.company_name || empRes.data.company || "Enterprise HRMS",
+            logo: empRes.data.company_logo || null,
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (_) {}
+
+      const errorMsg = err?.response?.data?.msg || err?.message || "Invalid credentials. Please check your username and password.";
+      Alert.alert("Authentication Failed", errorMsg);
     }
     setLoading(false);
   };
 
   const handleEmployeeLogin = async () => {
-    if (!empId.trim() || !empPassword.trim()) {
+    const typedId = empId.trim().toUpperCase();
+    const trimmedPass = empPassword.trim();
+    if (!typedId || !trimmedPass) {
       Alert.alert("Input Required", "Please enter both Employee ID and password.");
       return;
     }
     setLoading(true);
-    const typedId = empId.trim();
     try {
-      const res = await employeeLogin(typedId, empPassword.trim());
-      if (res?.data?.ok || res?.data?.token) {
-        await signIn(res.data.token || "employee-token", {
+      const res = await employeeLogin(typedId, trimmedPass);
+      if ((res?.data?.ok || res?.data?.token) && res?.data?.token) {
+        await signIn(res.data.token, {
           role: "employee",
           name: res.data.name || res.data.employee?.name || typedId,
           employeeId: res.data.employee_id || typedId,
@@ -123,16 +136,25 @@ export default function LoginScreen() {
         setLoading(false);
         return;
       }
-    } catch (_) {}
+      const errorMsg = res?.data?.msg || "Invalid employee credentials.";
+      Alert.alert("Authentication Failed", errorMsg);
+    } catch (err) {
+      // Fallback: check if an admin entered credentials in the Employee tab
+      try {
+        const adminRes = await adminLogin(typedId, trimmedPass);
+        if (adminRes?.data?.ok && adminRes?.data?.token) {
+          await signIn(adminRes.data.token, {
+            role: "admin",
+            name: adminRes.data.username || typedId,
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (_) {}
 
-    // Fallback with typed employee ID
-    await signIn("employee-session-token", {
-      role: "employee",
-      name: typedId,
-      employeeId: typedId,
-      email: `${typedId}@company.com`,
-      company: "Enterprise HRMS",
-    });
+      const errorMsg = err?.response?.data?.msg || err?.message || "Invalid credentials. Please check your Employee ID and password.";
+      Alert.alert("Authentication Failed", errorMsg);
+    }
     setLoading(false);
   };
 
@@ -160,42 +182,24 @@ export default function LoginScreen() {
       if (res?.data?.ok || res?.status === 200) {
         Alert.alert(
           "Organisation Created! 🎉",
-          `Organisation '${companyName.trim()}' registered successfully! Redirecting to Admin Dashboard...`,
+          `Organisation '${companyName.trim()}' registered successfully! Please log in with your admin credentials.`,
           [
             {
-              text: "Access Admin Dashboard",
-              onPress: async () => {
-                await signIn("admin-org-token", {
-                  role: "admin",
-                  name: signupUsername.trim() || "Administrator",
-                  company: companyName.trim(),
-                  logo: companyLogo.trim(),
-                });
+              text: "Sign In as Admin",
+              onPress: () => {
+                setUsername(signupUsername.trim());
+                setPassword(signupPassword.trim());
+                setTab("admin");
               },
             },
           ]
         );
       } else {
-        Alert.alert("Signup Notice", res?.data?.msg || "Organisation registration processed. You can now sign in.");
+        Alert.alert("Signup Failed", res?.data?.msg || "Organisation registration failed.");
       }
     } catch (err) {
-      Alert.alert(
-        "Organisation Created! 🎉",
-        `Organisation '${companyName.trim()}' created successfully! Access your Admin Dashboard now.`,
-        [
-          {
-            text: "Access Admin Dashboard",
-            onPress: async () => {
-              await signIn("admin-org-token", {
-                role: "admin",
-                name: signupUsername.trim() || "Administrator",
-                company: companyName.trim(),
-                logo: companyLogo.trim(),
-              });
-            },
-          },
-        ]
-      );
+      const errorMsg = err?.response?.data?.msg || err?.message || "Organisation registration failed.";
+      Alert.alert("Signup Error", errorMsg);
     }
     setLoading(false);
   };
@@ -439,6 +443,30 @@ export default function LoginScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#EFF6FF",
+                    borderColor: "#BFDBFE",
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    paddingVertical: 9,
+                    marginTop: 12,
+                  }}
+                  onPress={() => {
+                    setUsername("admin");
+                    setPassword("admin123");
+                  }}
+                >
+                  <Ionicons name="flash-outline" size={15} color="#1D4ED8" style={{ marginRight: 6 }} />
+                  <Text style={{ color: "#1D4ED8", fontSize: 13, fontWeight: "700" }}>
+                    Quick Fill Admin (admin / admin123)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
                   style={{ alignSelf: 'center', marginTop: 12 }}
                   onPress={() => {
                     setForgotRole('admin');
@@ -502,6 +530,30 @@ export default function LoginScreen() {
                   ) : (
                     <Text style={styles.submitBtnText}>Sign In as Employee</Text>
                   )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: "#F0FDF4",
+                    borderColor: "#BBF7D0",
+                    borderWidth: 1,
+                    borderRadius: 10,
+                    paddingVertical: 9,
+                    marginTop: 12,
+                  }}
+                  onPress={() => {
+                    setEmpId("EMP-1001");
+                    setEmpPassword("welcome123");
+                  }}
+                >
+                  <Ionicons name="flash-outline" size={15} color="#15803D" style={{ marginRight: 6 }} />
+                  <Text style={{ color: "#15803D", fontSize: 13, fontWeight: "700" }}>
+                    Quick Fill Employee (EMP-1001 / welcome123)
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -910,13 +962,13 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   title: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: "800",
     color: "#FFFFFF",
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
   companyText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "rgba(255, 255, 255, 0.78)",
     marginTop: 4,
   },
@@ -1013,10 +1065,10 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   formTitle: {
-    fontSize: 19,
+    fontSize: 16,
     fontWeight: "800",
     color: "#0F172A",
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   formSubtitle: {
     fontSize: 12,
@@ -1047,7 +1099,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: "100%",
-    fontSize: 14,
+    fontSize: 13,
     color: "#0F172A",
     fontWeight: "600",
   },
@@ -1063,7 +1115,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: "#FFFFFF",
   },

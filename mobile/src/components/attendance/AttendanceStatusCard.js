@@ -228,14 +228,14 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 20,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0F172A",
   },
 
   subtitle: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: 12,
     color: "#64748B",
   },
 
@@ -304,12 +304,12 @@ const styles = StyleSheet.create({
   timeLabel: {
     marginTop: 10,
     color: "#64748B",
-    fontSize: 13,
+    fontSize: 11,
   },
 
   timeValue: {
-    marginTop: 6,
-    fontSize: 22,
+    marginTop: 4,
+    fontSize: 18,
     fontWeight: "800",
     color: "#0F172A",
   },
@@ -329,12 +329,12 @@ const styles = StyleSheet.create({
 
   workLabel: {
     color: "#64748B",
-    fontSize: 12,
+    fontSize: 11,
   },
 
   workHours: {
     marginTop: 2,
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
     color: "#173B8C",
   },
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
 
   statusTitle: {
     fontWeight: "700",
-    fontSize: 16,
+    fontSize: 13,
     color: "#0F172A",
   },
 

@@ -167,7 +167,15 @@ export const fetchEmployeeNotifications = () => client.get('/api/employee/notifi
 export const markEmployeeNotificationsRead = () => client.post('/api/employee/notifications/mark_read');
 
 // ── Admin: Staff & Settings & AI ──────────────────────────────────
-export const addEmployee = (employeeData) => client.post('/api/employees/add', employeeData);
+export const addEmployee = (employeeData) =>
+  client.post('/api/employee/signup', {
+    employee_id: (employeeData.employee_id || employeeData.emp_id || '').toUpperCase(),
+    name: employeeData.name,
+    password: employeeData.password || 'welcome123',
+    email: employeeData.email,
+    role: employeeData.role || 'Software Engineer',
+    department: employeeData.department || 'Engineering',
+  });
 export const editEmployee = (empId, employeeData) => client.post(`/api/employees/${empId}/edit`, employeeData);
 export const deleteEmployee = (empId) => client.post(`/api/employees/${empId}/delete`);
 export const forgotPassword = (email, role = 'employee') => client.post('/api/forgot-password', { email, role });

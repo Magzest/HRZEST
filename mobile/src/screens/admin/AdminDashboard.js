@@ -26,11 +26,13 @@ import AiChatModal from "../../components/AiChatModal";
 
 import { fetchDashboard } from "../../api/client";
 import { useAuth } from "../../store/AuthContext";
+import { mergeEmployeesWithLocal } from "../../utils/employeeStore";
 
 export default function AdminDashboard({ navigation }) {
   const { user, updateUser } = useAuth();
   const [search, setSearch] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
+  const [totalEmpsCount, setTotalEmpsCount] = useState(0);
   const [announcementModalVisible, setAnnouncementModalVisible] = useState(false);
   const [activityModalVisible, setActivityModalVisible] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
@@ -42,17 +44,21 @@ export default function AdminDashboard({ navigation }) {
 
   const loadDashboard = async () => {
     try {
-      const res = await fetchDashboard();
+      const [res, allEmps] = await Promise.all([
+        fetchDashboard().catch(() => null),
+        mergeEmployeesWithLocal([]).catch(() => []),
+      ]);
       if (res?.data) {
         setDashboardData(res.data);
         if (res.data.company_name && updateUser) {
           updateUser({ company: res.data.company_name });
         }
       }
+      setTotalEmpsCount(Math.max(res?.data?.total_employees || 0, allEmps.length));
     } catch (_) {}
   };
 
-  const totalEmps = dashboardData?.total_employees ?? dashboardData?.total ?? dashboardData?.employees_count ?? 0;
+  const totalEmps = totalEmpsCount || dashboardData?.total_employees ?? dashboardData?.total ?? dashboardData?.employees_count ?? 0;
   const presentEmps = dashboardData?.present ?? dashboardData?.present_count ?? 0;
   const absentEmps = dashboardData?.absent ?? dashboardData?.absent_count ?? 0;
   const lateEmps = dashboardData?.late ?? dashboardData?.late_count ?? 0;
@@ -317,7 +323,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E2E8F0",
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0F172A",
     marginLeft: 10,
@@ -353,7 +359,7 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
     marginRight: 6,
@@ -369,9 +375,9 @@ const styles = StyleSheet.create({
   },
   itemMsg: {
     marginTop: 6,
-    fontSize: 13,
+    fontSize: 12,
     color: "#475569",
-    lineHeight: 18,
+    lineHeight: 17,
   },
   itemDate: {
     marginTop: 8,

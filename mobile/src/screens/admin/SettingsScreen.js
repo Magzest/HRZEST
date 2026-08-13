@@ -904,7 +904,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   cardHeaderTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "800",
     color: "#0F172A",
     marginLeft: 8,
@@ -928,7 +928,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     color: "#0F172A",
   },
@@ -975,7 +975,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     marginLeft: 8,
   },
@@ -990,7 +990,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#F1F5F9",
   },
   settingRowTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
   },
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   shiftName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
     color: "#0F172A",
   },
@@ -1080,7 +1080,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   securityStatusTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: "#065F46",
   },
@@ -1125,7 +1125,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   profileName: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "800",
     color: "#0F172A",
   },

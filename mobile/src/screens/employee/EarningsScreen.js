@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
     marginBottom: 12,
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     marginLeft: 10,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
   },
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
 
   rowLabel: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "600",
     color: "#475569",
   },

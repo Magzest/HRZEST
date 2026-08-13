@@ -114,6 +114,6 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   summaryText: { flex: 1 },
-  name: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
-  subText: { fontSize: 13, fontWeight: "600", color: "#64748B", marginTop: 2 },
+  name: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  subText: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 2 },
 });

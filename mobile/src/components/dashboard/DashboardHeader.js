@@ -7,12 +7,15 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../store/AuthContext';
 
 export default function DashboardHeader({
   adminName = "Administrator",
   date = "",
   onLogout,
 }) {
+  const { user } = useAuth();
+  const companyName = user?.company || "Enterprise HRMS Platform";
 
   const hour = new Date().getHours();
 
@@ -29,6 +32,11 @@ export default function DashboardHeader({
       <View style={styles.headerRow}>
 
         <View style={{flex:1}}>
+
+          <View style={styles.companyBadge}>
+            <Ionicons name="business-outline" size={12} color="#1D4ED8" style={{ marginRight: 4 }} />
+            <Text style={styles.companyBadgeText}>{companyName.toUpperCase()}</Text>
+          </View>
 
           <Text style={styles.greeting}>
             {greeting}
@@ -138,9 +146,29 @@ const styles = StyleSheet.create({
 
   },
 
+  companyBadge:{
+    flexDirection:"row",
+    alignItems:"center",
+    alignSelf:"flex-start",
+    backgroundColor:"#EFF6FF",
+    borderColor:"#BFDBFE",
+    borderWidth:1,
+    paddingHorizontal:8,
+    paddingVertical:3,
+    borderRadius:8,
+    marginBottom:6,
+  },
+
+  companyBadgeText:{
+    fontSize:10,
+    fontWeight:"800",
+    color:"#1D4ED8",
+    letterSpacing:0.6,
+  },
+
   greeting:{
 
-    fontSize:14,
+    fontSize:12,
 
     color:"#64748B",
 
@@ -152,21 +180,21 @@ const styles = StyleSheet.create({
 
     marginTop:2,
 
-    fontSize:30,
+    fontSize:20,
 
-    fontWeight:"700",
+    fontWeight:"800",
 
     color:"#0F172A",
 
-    letterSpacing:-0.8,
+    letterSpacing:-0.4,
 
   },
 
   date:{
 
-    marginTop:6,
+    marginTop:4,
 
-    fontSize:13,
+    fontSize:12,
 
     color:"#94A3B8",
 

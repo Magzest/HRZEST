@@ -145,8 +145,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   execBadgeText: { color: "#93C5FD", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
-  execName: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
-  execCompany: { color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 2 },
+  execName: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
+  execCompany: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
   execStats: { marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)" },
   execStatsText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
   treeConnector: {
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   sectionHeader: { marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
   deptCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  deptName: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
+  deptName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
   deptHead: { fontSize: 13, color: "#64748B", marginTop: 2 },
   countBadge: {
     backgroundColor: "#F1F5F9",

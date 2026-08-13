@@ -309,7 +309,7 @@ export default function ProfileScreen() {
         <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.75)", justifyContent: "center", padding: 20 }}>
           <View style={{ backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Edit Profile Details</Text>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }}>Edit Profile Details</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                 <Ionicons name="close-circle" size={24} color="#64748B" />
               </TouchableOpacity>
@@ -376,11 +376,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
     marginBottom: 12,
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
   },
   quickCard: {
     backgroundColor: "#FFFFFF",

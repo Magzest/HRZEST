@@ -12,8 +12,14 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     (async () => {
       try {
+        const token = await AsyncStorage.getItem('token');
         const saved = await AsyncStorage.getItem('user');
-        if (saved) setUser(JSON.parse(saved));
+        if (token && saved) {
+          setUser(JSON.parse(saved));
+        } else {
+          await AsyncStorage.multiRemove(['token', 'user', 'user_role', 'user_id']);
+          setUser(null);
+        }
       } catch (_) {}
       setLoading(false);
     })();

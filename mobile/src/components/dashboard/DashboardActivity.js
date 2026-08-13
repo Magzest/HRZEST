@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
 
   heading: {
 
-    fontSize: 20,
+    fontSize: 14,
 
     fontWeight: '700',
 
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
 
   title: {
 
-    fontSize: 15,
+    fontSize: 13,
 
     fontWeight: '700',
 

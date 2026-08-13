@@ -515,13 +515,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   summaryValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "800",
     color: "#0F172A",
     marginTop: 8,
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#64748B",
     marginTop: 2,
     fontWeight: "600",
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
   },

@@ -143,13 +143,13 @@ const styles = StyleSheet.create({
     marginTop: 26,
     marginBottom: 16,
 
-    fontSize: 22,
+    fontSize: 16,
 
     fontWeight: "800",
 
     color: "#0F172A",
 
-    letterSpacing: -0.5,
+    letterSpacing: -0.4,
   },
 
   card: {
@@ -174,6 +174,26 @@ const styles = StyleSheet.create({
     },
 
     elevation: 3,
+  },
+
+  cardHeader: {
+    flexDirection: "row",
+
+    alignItems: "center",
+  },
+
+  iconBox: {
+    width: 44,
+    height: 44,
+
+    borderRadius: 14,
+
+    backgroundColor: "#EEF4FF",
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    marginRight: 14,
   },
 
   row: {
@@ -217,7 +237,7 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 16,
+    fontSize: 13,
 
     fontWeight: "700",
 
@@ -227,13 +247,13 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 3,
 
-    fontSize: 13,
+    fontSize: 12,
 
     color: "#64748B",
   },
 
   value: {
-    fontSize: 16,
+    fontSize: 14,
 
     fontWeight: "800",
 
@@ -257,7 +277,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    fontSize: 12,
+    fontSize: 11,
   },
 
   infoCard: {
@@ -275,7 +295,7 @@ const styles = StyleSheet.create({
   },
 
   infoTitle: {
-    fontSize: 16,
+    fontSize: 14,
 
     fontWeight: "800",
 
@@ -287,9 +307,9 @@ const styles = StyleSheet.create({
   infoText: {
     color: "#475569",
 
-    fontSize: 14,
+    fontSize: 12,
 
-    lineHeight: 22,
+    lineHeight: 18,
 
     fontWeight: "500",
   },
@@ -327,7 +347,7 @@ const styles = StyleSheet.create({
   },
 
   footerTitle: {
-    fontSize: 18,
+    fontSize: 14,
 
     fontWeight: "800",
 
@@ -337,9 +357,9 @@ const styles = StyleSheet.create({
   },
 
   footerText: {
-    fontSize: 14,
+    fontSize: 12,
 
-    lineHeight: 22,
+    lineHeight: 18,
 
     color: "#64748B",
   },
@@ -383,7 +403,7 @@ const styles = StyleSheet.create({
   statNumber: {
     marginTop: 6,
 
-    fontSize: 24,
+    fontSize: 20,
 
     fontWeight: "800",
 

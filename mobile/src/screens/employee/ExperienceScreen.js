@@ -185,14 +185,14 @@ const styles = StyleSheet.create({
   },
 
   summaryTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: "800",
     color: "#0F172A",
   },
 
   summarySubtitle: {
     marginTop: 5,
-    fontSize: 14,
+    fontSize: 12,
     color: "#64748B",
     fontWeight: "600",
   },
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
     marginBottom: 14,
@@ -261,13 +261,13 @@ const styles = StyleSheet.create({
   },
 
   designation: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
     color: "#0F172A",
   },
 
   company: {
-    fontSize: 15,
+    fontSize: 13,
     color: "#173B8C",
     fontWeight: "700",
     marginTop: 4,

@@ -61,7 +61,7 @@ export default function PersonalInfoScreen() {
           {/* Summary Card */}
           <View style={styles.summaryCard}>
             <View style={styles.avatar}>
-              <Text style={{ fontSize: 24, fontWeight: "900", color: "#FFFFFF" }}>
+              <Text style={{ fontSize: 18, fontWeight: "900", color: "#FFFFFF" }}>
                 {profile.fullName.charAt(0).toUpperCase()}
               </Text>
             </View>
@@ -110,6 +110,6 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   summaryText: { flex: 1 },
-  name: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
-  idText: { fontSize: 13, fontWeight: "600", color: "#64748B", marginTop: 2 },
+  name: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  idText: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 2 },
 });

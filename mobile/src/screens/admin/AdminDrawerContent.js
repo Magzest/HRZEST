@@ -302,10 +302,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   name: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800",
     color: "#FFFFFF",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   empId: {
     color: "rgba(255, 255, 255, 0.8)",
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     color: "#0F172A",
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13,
   },
   activeMenuText: {
     color: "#FFFFFF",
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     color: "#EF4444",
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13,
   },
   version: {
     marginTop: 10,
