@@ -458,9 +458,9 @@
         <div class="s3-tab-icon u-bg-eff6ff"><i class="ti ti-building u-c-1e3a8a"></i></div>
         <div class="s3-tab-text">
           <div class="s3-tab-title">Organisation</div>
-          <div class="s3-tab-sub">Company · Attendance</div>
+          <div class="s3-tab-sub">Attendance</div>
         </div>
-        <span class="s3-tab-count">3</span>
+        <span class="s3-tab-count">1</span>
       </button>
       <button class="s3-tab" id="s3tab-fin" onclick="switchGroup('fin')">
         <div class="s3-tab-icon u-bg-fefce8"><i class="ti ti-coin u-c-ca8a04"></i></div>
@@ -491,91 +491,13 @@
           Sections
         </button>
         <div class="subnav-dd-menu" id="dd-org">
-          <button class="subnav-dd-item active" id="ddi-company"    onclick="switchSub('org','company')">   <i class="ti ti-building"></i>   Company</button>
-          <button class="subnav-dd-item"        id="ddi-attendance" onclick="switchSub('org','attendance')"><i class="ti ti-fingerprint"></i> Attendance</button>
+          <button class="subnav-dd-item active" id="ddi-attendance" onclick="switchSub('org','attendance')"><i class="ti ti-fingerprint"></i> Attendance</button>
         </div>
       </div>
     </div>
 
-          <!-- COMPANY -->
-          <div class="s3-section active" id="ss-company">
-            <div class="sec-header">
-              <div class="sec-icon u-bg-eff6ff"><i class="ti ti-building u-c-1e3a8a u-fs-20"></i></div>
-              <div><div class="sec-title">Company</div><div class="sec-sub">Organisation details, timezone and working schedule</div></div>
-            </div>
-
-
-          <!-- Company Profile & General Details -->
-          <div class="section u-mb-20">
-            <div class="section-title u-mb-2">🏢 Organization Profile &amp; General Details</div>
-            <div class="u-fs-12 u-c-64748b u-mb-14">Configure your primary organization name, contact details, currency, and business profile.</div>
-
-            <form method="POST" action="{{ tpath('/save_company_profile') }}" class="u-d-flex u-fxd-column u-gap-14">
-              <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
-                <div class="field u-m-0">
-                  <label class="u-fs-12 u-fw-700 u-c-475569">Company Name</label>
-                  <input type="text" name="company_name" value="{{ co.company_name if co and co.company_name else 'My Organization' }}" placeholder="e.g. Acme Corp" required style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
-                </div>
-                <div class="field u-m-0">
-                  <label class="u-fs-12 u-fw-700 u-c-475569">Company Code / Tax ID</label>
-                  <input type="text" name="company_code" value="{{ co.company_code if co and co.company_code else 'ORG-2026' }}" placeholder="e.g. TAX-99201" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
-                </div>
-              </div>
-
-              <div class="field u-m-0">
-                <label class="u-fs-12 u-fw-700 u-c-475569">Employee Email Domain</label>
-                <input type="text" name="email_domain" value="{{ co.email_domain if co and co.email_domain else '' }}" placeholder="e.g. acme.com (leave blank to not require one)" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
-                <div class="u-fs-11 u-c-64748b u-mt-4">When set, every new employee's email must end in @{{ co.email_domain if co and co.email_domain else 'yourdomain.com' }} — leave blank to allow any email.</div>
-              </div>
-
-
-              <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
-                <div class="field u-m-0">
-                  <label class="u-fs-12 u-fw-700 u-c-475569">Primary Contact Email</label>
-                  <input type="email" name="contact_email" value="{{ co.contact_email if co and co.contact_email else 'hr@company.com' }}" placeholder="hr@company.com" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
-                </div>
-                <div class="field u-m-0">
-                  <label class="u-fs-12 u-fw-700 u-c-475569">Contact Phone</label>
-                  <input type="text" name="contact_phone" value="{{ co.contact_phone if co and co.contact_phone else '+1 (555) 019-2831' }}" placeholder="+1 555-0192" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
-                </div>
-              </div>
-
-              <div class="field u-m-0">
-                <label class="u-fs-12 u-fw-700 u-c-475569">Headquarters Address</label>
-                <input type="text" name="address" value="{{ co.address if co and co.address else '100 Innovation Way, Suite 400, Tech City' }}" placeholder="Business Address" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px;" />
-              </div>
-
-              <div class="u-d-grid u-gtc-1fr-1fr u-gap-14">
-                <div class="field u-m-0">
-                  <label class="u-fs-12 u-fw-700 u-c-475569">Default Currency</label>
-                  <select name="currency" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; font-size:14px;">
-                    <option value="USD" selected>USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
-                    <option value="INR">INR (₹)</option>
-                    <option value="CAD">CAD ($)</option>
-                  </select>
-                </div>
-                <div class="field u-m-0">
-                  <label class="u-fs-12 u-fw-700 u-c-475569">System Timezone</label>
-                  <select name="timezone" style="width:100%; padding:10px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#fff; font-size:14px;">
-                    <option value="UTC" selected>UTC (Coordinated Universal Time)</option>
-                    <option value="America/New_York">EST (Eastern Standard Time)</option>
-                    <option value="America/Los_Angeles">PST (Pacific Standard Time)</option>
-                    <option value="Europe/London">GMT (Greenwich Mean Time)</option>
-                    <option value="Asia/Kolkata">IST (Indian Standard Time)</option>
-                  </select>
-                </div>
-              </div>
-
-              <button type="submit" class="btn-submit" style="width:auto; align-self:flex-start; margin-top:6px;">Save Organization Profile</button>
-            </form>
-          </div>
-
-          </div><!-- /ss-company -->
-
           <!-- ATTENDANCE -->
-          <div class="s3-section" id="ss-attendance">
+          <div class="s3-section active" id="ss-attendance">
             <div class="sec-header">
               <div class="sec-icon u-bg-f0fdf4"><i class="ti ti-fingerprint u-c-16a34a u-fs-20"></i></div>
               <div><div class="sec-title">Attendance Methods</div><div class="sec-sub">Enable or disable each punch-in method</div></div>
@@ -1332,10 +1254,9 @@
 
   <script>
     /* ── 3-TAB + DROPDOWN SUB-NAV ── */
-    var groupMap  = { company:'org',attendance:'org',payroll:'fin',salary:'fin',email:'sys',appearance:'sys' };
-    var firstSub  = { org:'company', fin:'payroll', sys:'email' };
+    var groupMap  = { attendance:'org',payroll:'fin',salary:'fin',email:'sys',appearance:'sys' };
+    var firstSub  = { org:'attendance', fin:'payroll', sys:'email' };
     var crumbData = {
-      company:    { icon:'<i class="ti ti-building u-c-1e3a8a"></i>',    bg:'#eff6ff', title:'Company',        sub:'Organisation details' },
       appearance: { icon:'<i class="ti ti-palette u-c-7c3aed"></i>',     bg:'#f5f3ff', title:'Appearance',     sub:'Theme and display' },
       attendance: { icon:'<i class="ti ti-fingerprint u-c-16a34a"></i>', bg:'#f0fdf4', title:'Attendance',     sub:'Punch-in methods' },
       payroll:    { icon:'<i class="ti ti-coin u-c-ca8a04"></i>',        bg:'#fefce8', title:'Payroll',        sub:'Salary rules' },
