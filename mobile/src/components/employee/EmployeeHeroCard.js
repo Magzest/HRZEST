@@ -43,8 +43,10 @@ export default function EmployeeHeroCard({
     }
   };
 
-  const checkedIn = attendance?.login_time && !attendance?.logout_time;
-  const completed = attendance?.login_time && attendance?.logout_time;
+  const loginTime = attendance?.login_time || attendance?.check_in || (attendance?.status === "Checked In" ? "Present" : null);
+  const logoutTime = attendance?.logout_time || attendance?.check_out;
+  const checkedIn = Boolean((loginTime || attendance?.status === "Checked In") && !logoutTime);
+  const completed = Boolean(loginTime && logoutTime);
 
   const greeting = () => {
     const hour = new Date().getHours();

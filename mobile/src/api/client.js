@@ -178,3 +178,40 @@ export const addHoliday = (holidayData) => client.post('/api/holidays/add', holi
 export const deleteHoliday = (hid) => client.post(`/api/holidays/${hid}/delete`);
 export const compoffAction = (cid, action) => client.post(`/api/compoff/${cid}/action`, { action });
 export const updateSettings = (settingsData) => client.post('/api/settings/update', settingsData);
+
+// ── Additional Parity APIs ──────────────────────────────────────────
+export const sendPayslipEmail = (empId, year, month) =>
+  client.post('/api/payroll/send_payslip', { employee_id: empId, year, month });
+
+export const lockPayroll = (year, month, status = true) =>
+  client.post('/api/payroll/lock', { year, month, status });
+
+export const submitPerformanceReview = (empId, rating, comments, hike_percentage = 0, bonus = 0) =>
+  client.post('/api/performance/review', { employee_id: empId, rating, comments, hike_percentage, bonus });
+
+export const createOnboardingTask = (title, description, role = 'All') =>
+  client.post('/api/onboarding/template/add', { title, description, role });
+
+export const updateOnboardingTaskStatus = (taskId, status) =>
+  client.post(`/api/onboarding/task/${taskId}/update`, { status });
+
+export const uploadDocument = (formData) =>
+  client.post('/api/employee/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+
+export const fetchEmployeeDocuments = () => client.get('/api/employee/documents');
+
+export const broadcastNotification = (title, message, audience = 'all') =>
+  client.post('/api/notifications/broadcast', { title, message, audience });
+
+export const submitAttendanceRegularization = (date, reason, punch_in = '', punch_out = '') =>
+  client.post('/api/employee/regularization', { date, reason, punch_in, punch_out });
+
+export const addDepartment = (name, code = '') =>
+  client.post('/api/departments/add', { name, code });
+
+export const deleteDepartment = (deptId) =>
+  client.post(`/api/departments/${deptId}/delete`);
+

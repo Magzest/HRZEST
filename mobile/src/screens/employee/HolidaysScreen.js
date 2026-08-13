@@ -1,15 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   SafeAreaView,
   ScrollView,
   View,
   Text,
+  ActivityIndicator,
+  RefreshControl,
+  StyleSheet,
 } from "react-native";
 
-import { StyleSheet } from "react-native";
-
 import ProfileHeader from "../../components/profile/ProfileHeader";
-
 import HolidayHeaderCard from "../../components/holidays/HolidayHeaderCard";
 import HolidaySummaryCard from "../../components/holidays/HolidaySummaryCard";
 import YearSelector from "../../components/holidays/YearSelector";
@@ -17,70 +17,36 @@ import HolidayLegend from "../../components/holidays/HolidayLegend";
 import HolidayCalendar from "../../components/holidays/HolidayCalendar";
 import HolidayList from "../../components/holidays/HolidayList";
 import EmptyHolidayCard from "../../components/holidays/EmptyHolidayCard";
+import { fetchEmployeeHolidays } from "../../api/client";
 
 export default function HolidaysScreen() {
   const [year, setYear] = useState(2026);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [holidays, setHolidays] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [selectedDate, setSelectedDate] =
-    useState(null);
+  const loadHolidays = async () => {
+    try {
+      const res = await fetchEmployeeHolidays();
+      if (res?.data?.holidays && Array.isArray(res.data.holidays)) {
+        setHolidays(res.data.holidays);
+      } else if (Array.isArray(res?.data)) {
+        setHolidays(res.data);
+      } else {
+        setHolidays([]);
+      }
+    } catch (_) {
+      setHolidays([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  const holidays = [
-    {
-      id: 1,
-      day: 1,
-      title: "New Year's Day",
-      date: "1 January 2026",
-      type: "Public",
-      description:
-        "Celebration of the New Year.",
-    },
-    {
-      id: 2,
-      day: 14,
-      title: "Makar Sankranti",
-      date: "14 January 2026",
-      type: "Optional",
-      description:
-        "Harvest festival celebrated across India.",
-    },
-    {
-      id: 3,
-      day: 26,
-      title: "Republic Day",
-      date: "26 January 2026",
-      type: "Public",
-      description:
-        "National holiday commemorating the Constitution.",
-    },
-    {
-      id: 4,
-      day: 15,
-      title: "Independence Day",
-      date: "15 August 2026",
-      type: "Public",
-      description:
-        "National Independence Day celebration.",
-    },
-    {
-      id: 5,
-      day: 2,
-      title: "Gandhi Jayanti",
-      date: "2 October 2026",
-      type: "Public",
-      description:
-        "Birth anniversary of Mahatma Gandhi.",
-    },
-    {
-      id: 6,
-      day: 25,
-      title: "Christmas",
-      date: "25 December 2026",
-      type: "Company",
-      description:
-        "Christmas Holiday.",
-    },
-  ];
-
+  useEffect(() => {
+    loadHolidays();
+  }, []);
   return (
     <SafeAreaView style={styles.container}>
       <ProfileHeader

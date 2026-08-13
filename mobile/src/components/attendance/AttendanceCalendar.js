@@ -18,6 +18,7 @@ export default function AttendanceCalendar({
       if (!item.date) return;
 
       const statusStr = (item.status || item.attendance_type || item.login_status || "").toLowerCase();
+      let color = "#CBD5E1";
 
       if (statusStr.includes("present") || statusStr.includes("full day")) {
         color = "#22C55E";

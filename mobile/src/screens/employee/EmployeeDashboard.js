@@ -127,6 +127,23 @@ export default function EmployeeDashboard({ navigation }) {
         performance: performanceGrade
       });
 
+      const pendingPunches = await getPendingPunches();
+      if (pendingPunches.length > 0) {
+        const latestPunch = pendingPunches[pendingPunches.length - 1];
+        const punchTime = latestPunch?.punched_at
+          ? new Date(latestPunch.punched_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        setData((prev) => ({
+          ...prev,
+          today_attendance: prev?.today_attendance?.login_time ? prev.today_attendance : {
+            status: "Checked In",
+            login_time: punchTime,
+            check_in: punchTime,
+          },
+        }));
+      }
+
     } catch (_) {
       // Silent fallback
     }
@@ -180,13 +197,21 @@ export default function EmployeeDashboard({ navigation }) {
     try {
       const res = await employeeCheckin(lat, lon);
       if (res.data.ok) {
+        const timeStr = res.data.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         Alert.alert(
-          res.data.action === "login" ? "Checked In" : "Checked Out",
-          `${res.data.status}\n${res.data.time}`
+          res.data.action === "login" ? "Checked In 📍" : "Checked Out ⏱",
+          `${res.data.msg || res.data.status || 'Attendance recorded'}\n${timeStr}`
         );
+        setData((prev) => ({
+          ...prev,
+          today_attendance: {
+            status: res.data.action === "login" ? "Checked In" : "Checked Out",
+            check_in: timeStr,
+          },
+        }));
         await loadDashboard();
       } else {
-        Alert.alert("Unable", res.data.msg);
+        Alert.alert("Notice", res.data.msg || "Check-in notice");
       }
     } catch (e) {
       if (e.response?.status === 401) {
@@ -195,16 +220,22 @@ export default function EmployeeDashboard({ navigation }) {
           "Your login session has expired. Please sign in again to continue.",
           [{ text: "Sign In", onPress: () => signOut() }]
         );
-      } else if (!e.response) {
+      } else {
         await queuePunch();
         const q = await getPendingPunches();
         setPendingCount(q.length);
+        const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        setData((prev) => ({
+          ...prev,
+          today_attendance: {
+            status: "Checked In",
+            check_in: timeNow,
+          },
+        }));
         Alert.alert(
-          "Saved Offline",
-          "No internet connection. Your punch has been saved and will sync automatically when you're back online."
+          "Check-In Recorded 📍",
+          `Punch recorded at ${timeNow}. Saved locally and will sync to server.`
         );
-      } else {
-        Alert.alert("Error", e.response?.data?.msg || "Something went wrong.");
       }
     }
     setChecking(false);
@@ -241,7 +272,20 @@ export default function EmployeeDashboard({ navigation }) {
       <AttendanceScannerModal
         visible={showScanner}
         onClose={() => setShowScanner(false)}
-        onSuccess={() => loadDashboard()}
+        onSuccess={(resData) => {
+          const timeNow = resData?.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const isLogin = resData?.action !== 'logout';
+          setData((prev) => ({
+            ...prev,
+            today_attendance: {
+              status: isLogin ? "Checked In" : "Checked Out",
+              login_time: isLogin ? (prev?.today_attendance?.login_time || timeNow) : prev?.today_attendance?.login_time,
+              logout_time: !isLogin ? timeNow : prev?.today_attendance?.logout_time,
+              check_in: timeNow,
+            },
+          }));
+          loadDashboard();
+        }}
       />
 
       {pendingCount > 0 && (
@@ -281,7 +325,7 @@ export default function EmployeeDashboard({ navigation }) {
           date={data?.today}
           attendance={attendance}
           checking={checking}
-          onCheckIn={handleCheckIn}
+          onCheckIn={() => setShowScanner(true)}
           onLogout={handleLogout}
           photoUrl={photoUrl}
           onScanQR={() => setShowScanner(true)}
@@ -292,7 +336,7 @@ export default function EmployeeDashboard({ navigation }) {
         <EmployeeAttendanceCard
           attendance={attendance}
           checking={checking}
-          onCheckIn={handleCheckIn}
+          onCheckIn={() => setShowScanner(true)}
         />
 
         <EmployeeSummaryCards

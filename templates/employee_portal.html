@@ -732,10 +732,6 @@
       </div>
 
       <div class="sb-scroll-nav">
-        <div class="sb-nav-label">Main</div>
-        <button type="button" class="sb-item" id="sbn-dashboard" onclick="showView('dashboard')">
-          <span class="sb-icon"><i class="ti ti-home"></i></span>Dashboard
-        </button>
         <button type="button" class="sb-item" id="sbn-attendance" onclick="showView('attendance')">
           <span class="sb-icon"><i class="ti ti-calendar-check"></i></span>Attendance
         </button>
@@ -3815,13 +3811,13 @@
 
       // On page load: restore last active view from hash → localStorage → dashboard
       (function() {
-        var validViews = ['dashboard','attendance','apply-leave','earnings','holidays','shift-swap','tickets','my-profile','resign','policies'];
+        var validViews = ['attendance','apply-leave','earnings','holidays','shift-swap','tickets','my-profile','resign','policies'];
         var hash    = window.location.hash.replace('#', '');
         var stored  = '';
         try { stored = localStorage.getItem('portalView') || ''; } catch(e) {}
         var view = (hash && validViews.indexOf(hash) !== -1)   ? hash
                  : (stored && validViews.indexOf(stored) !== -1) ? stored
-                 : 'dashboard';
+                 : 'attendance';
         showView(view);
       })();
 

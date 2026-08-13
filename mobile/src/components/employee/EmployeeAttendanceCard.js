@@ -18,97 +18,52 @@ export default function EmployeeAttendanceCard({
 
 }) {
 
-  const checkedIn =
-    attendance?.login_time &&
-    !attendance?.logout_time;
+  const loginTime = attendance?.login_time || attendance?.check_in || (attendance?.status === "Checked In" ? "Present" : null);
+  const logoutTime = attendance?.logout_time || attendance?.check_out;
 
-  const completed =
-    attendance?.login_time &&
-    attendance?.logout_time;
+  const checkedIn = Boolean((loginTime || attendance?.status === "Checked In") && !logoutTime);
+  const completed = Boolean(loginTime && logoutTime);
 
   const status =
     attendance?.attendance_type ||
     attendance?.login_status ||
-    (checkedIn ? "Working" : "Not Checked In");
+    attendance?.status ||
+    (checkedIn ? "Checked In" : "Not Checked In");
 
   return (
-
     <View style={styles.card}>
-
       {/* Header */}
-
       <View style={styles.header}>
-
         <View>
-
-          <Text style={styles.title}>
-            Today's Attendance
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Live attendance information
-          </Text>
-
+          <Text style={styles.title}>Today's Attendance</Text>
+          <Text style={styles.subtitle}>Live attendance information</Text>
         </View>
 
         <View style={styles.liveBadge}>
-
           <View style={styles.liveDot} />
-
-          <Text style={styles.liveText}>
-            LIVE
-          </Text>
-
+          <Text style={styles.liveText}>LIVE</Text>
         </View>
-
       </View>
 
       {/* Time */}
-
       <View style={styles.timeContainer}>
-
         <View style={styles.timeBox}>
-
-          <Ionicons
-            name="log-in-outline"
-            size={18}
-            color="#16A34A"
-          />
-
-          <Text style={styles.timeLabel}>
-            Check In
-          </Text>
-
+          <Ionicons name="log-in-outline" size={18} color="#16A34A" />
+          <Text style={styles.timeLabel}>Check In</Text>
           <Text style={styles.timeValue}>
-            {attendance?.login_time
-              ? attendance.login_time.slice(0,5)
-              : "--:--"}
+            {loginTime ? (loginTime.length > 5 ? loginTime.slice(0, 5) : loginTime) : "--:--"}
           </Text>
-
         </View>
 
-        <View style={styles.divider}/>
+        <View style={styles.divider} />
 
         <View style={styles.timeBox}>
-
-          <Ionicons
-            name="log-out-outline"
-            size={18}
-            color="#DC2626"
-          />
-
-          <Text style={styles.timeLabel}>
-            Check Out
-          </Text>
-
+          <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+          <Text style={styles.timeLabel}>Check Out</Text>
           <Text style={styles.timeValue}>
-            {attendance?.logout_time
-              ? attendance.logout_time.slice(0,5)
-              : "--:--"}
+            {logoutTime ? (logoutTime.length > 5 ? logoutTime.slice(0, 5) : logoutTime) : "--:--"}
           </Text>
-
         </View>
-
       </View>
 
       {/* Status */}

@@ -56,14 +56,15 @@ auth_bp = Blueprint("auth", __name__)
 _INJECTION_PATTERN_RE = re.compile(
     r"('|--|;|\bunion\b|\bor\b\s+['\"0-9]|<script\b)", re.IGNORECASE
 )
+
 _MFA_OTP_TTL_SEC = 300
 
 
 def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     """Common second step once a password has already checked out (called
-    from admin_login()'s admin/employee branches and hr_portal.hr_login()'s
-    hr branch): email a one-time code instead of completing the session
-    immediately, and redirect to /mfa_verify to finish."""
+    from admin_login()'s admin/employee branches): email a one-time code
+    instead of completing the session immediately, and redirect to
+    /mfa_verify to finish."""
     if not email:
         log_security_event(
             "auth.mfa_email_missing", "Account has no email on file for login MFA delivery",

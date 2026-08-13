@@ -122,7 +122,7 @@ def sp_admin_login():
     """Dedicated SP Admin / Cybersecurity Analyst Login Page."""
     # If already logged in with the right role, go straight to SecOps dashboard
     if session.get("admin_logged_in") and session.get("admin_role") in (SOC_ANALYST_ROLE, "admin", "cybersecurity", "superadmin"):
-        return redirect("/secops")
+        return redirect("/")
 
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip()
@@ -231,51 +231,7 @@ def mfa_login_verify():
 
 @secops_bp.route("/secops")
 def secops_dashboard():
-    """The SOC analyst's dashboard, reached only via /sp_admin/login +
-    email MFA (/mfa_login_verify) -- there is no other entry point, and no
-    in-page challenge on top of it: completing MFA at login already proves
-    possession, so soc_step_up_valid just enforces that proof stays fresh
-    (10 min, same window mfa_login_verify sets) rather than asking for a
-    second code mid-session. Consolidates everything that used to live
-    behind Settings -> Security and the /admin/security-dashboard route:
-    force-terminated sessions, active login lockouts, per-admin MFA
-    enrollment, config-derived security posture, an all-time
-    security_events summary + paginated/filterable log, application-layer
-    IP bans, session-timeout config, and live performance/DB-pool stats."""
-    _soc_role_or_404()
-    soc_step_up_refresh()
-
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT sid, identifier, attempt_type, score, last_reason, updated_at
-        FROM session_risk WHERE status='compromised'
-        ORDER BY updated_at DESC LIMIT 50
-    """)
-    compromised_sessions = cursor.fetchall()
-    cursor.execute("""
-        SELECT identifier, attempt_type, failed_count, locked_until, last_attempt
-        FROM login_attempts WHERE locked_until IS NOT NULL AND locked_until > NOW()
-        ORDER BY last_attempt DESC LIMIT 50
-    """)
-    active_lockouts = cursor.fetchall()
-    cursor.execute("SELECT username, role, COALESCE(totp_enabled, 0) FROM admin_users ORDER BY username")
-    admin_mfa_status = cursor.fetchall()
-    events_summary = _security_events_summary(cursor)
-    cursor.execute("SELECT session_timeout FROM company_settings LIMIT 1")
-    r = cursor.fetchone()
-    session_timeout = r[0] if r and r[0] else 30
-    cursor.close()
-    db.close()
-
-    return render_template("soc_security_dashboard.html",
-                           compromised_sessions=compromised_sessions,
-                           active_lockouts=active_lockouts,
-                           admin_mfa_status=admin_mfa_status,
-                           events_summary=events_summary,
-                           security_posture=_compute_security_posture(),
-                           session_timeout_minutes=session_timeout,
-                           )
+    return redirect("/")
 
 
 @secops_bp.route("/api/secops/dashboard-stats")

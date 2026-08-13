@@ -16,6 +16,7 @@ export default function ProfileImageCard({
   department = "General",
   onChangePhoto = () => {},
   onEditProfile = () => {},
+  onViewIdCard,
 }) {
   return (
     <View style={styles.card}>
@@ -76,23 +77,28 @@ export default function ProfileImageCard({
         Employee ID • {employeeId}
       </Text>
 
-      {/* Action */}
+      {/* Actions */}
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={[styles.editButton, { flex: 1 }]}
+          onPress={onEditProfile}
+        >
+          <Ionicons name="create-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.editText}>Edit Profile</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={styles.editButton}
-        onPress={onEditProfile}
-      >
-        <Ionicons
-          name="create-outline"
-          size={18}
-          color="#FFFFFF"
-        />
-
-        <Text style={styles.editText}>
-          Edit Profile
-        </Text>
-      </TouchableOpacity>
+        {onViewIdCard && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[styles.editButton, { flex: 1, backgroundColor: "#0F172A" }]}
+            onPress={onViewIdCard}
+          >
+            <Ionicons name="qr-code-outline" size={16} color="#38BDF8" />
+            <Text style={[styles.editText, { color: "#38BDF8" }]}>Digital ID Card</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 }
