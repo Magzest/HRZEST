@@ -456,13 +456,14 @@
         {% if leads %}
         <table>
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Company</th><th>Message</th><th>Status</th><th>Submitted</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Phone</th><th>Company</th><th>Message</th><th>Status</th><th>Submitted</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {% for lead in leads %}
             <tr>
               <td class="co-name">{{ lead.name }}</td>
               <td class="subdomain">{{ lead.email }}</td>
+              <td class="subdomain">{{ lead.phone or '—' }}</td>
               <td class="subdomain">{{ lead.company_name or '—' }}</td>
               <td class="lead-msg">{{ lead.message or '—' }}</td>
               <td><span class="badge badge-lead-{{ lead.status }}">{{ lead.status }}</span></td>

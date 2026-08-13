@@ -2221,6 +2221,9 @@ def init_master_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Pre-existing leads tables created before phone existed --
+        # CREATE TABLE IF NOT EXISTS above is a no-op against them.
+        cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone VARCHAR(30) DEFAULT NULL")
         # Singleton row (id=1) holding the platform operator's own monthly
         # running costs -- there's no API that can discover real AWS/
         # maintenance spend automatically, so these are admin-entered and

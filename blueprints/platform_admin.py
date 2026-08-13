@@ -253,7 +253,7 @@ def _recent_leads(limit=20):
         conn = get_master_db()
         cur = conn.cursor(buffered=True)
         cur.execute(
-            "SELECT id, name, email, company_name, message, status, created_at "
+            "SELECT id, name, email, phone, company_name, message, status, created_at "
             "FROM leads ORDER BY created_at DESC LIMIT %s",
             (limit,)
         )
@@ -262,8 +262,8 @@ def _recent_leads(limit=20):
         conn.close()
         return [
             {
-                "id": r[0], "name": r[1], "email": r[2], "company_name": r[3],
-                "message": r[4], "status": r[5], "created_at": r[6],
+                "id": r[0], "name": r[1], "email": r[2], "phone": r[3], "company_name": r[4],
+                "message": r[5], "status": r[6], "created_at": r[7],
             }
             for r in rows
         ]

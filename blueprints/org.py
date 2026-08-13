@@ -276,14 +276,15 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
 
 @org_bp.route("/get-started", methods=["GET"])
 def get_started_page():
-    """Public entry point for the SaaS product: 'login to your existing
-    company' (redirects to www.hrzest.com/<subdomain>/login) vs
-    'register a new company' (/create_org). The root "/" route
-    (blueprints/core.py's home()) is the marketing landing page for
-    anonymous apex-domain visitors, whose "Login" link points here."""
+    """Retired standalone chooser page -- the landing page ("/") now shows
+    its own "Create Your Company" / "Login" links directly instead of
+    sending visitors through this extra hop. Kept as a redirect (rather
+    than removed outright) so old bookmarks/links/emails pointing here
+    still land somewhere useful; "get-started" also stays in
+    RESERVED_PATH_SEGMENTS so no company can ever claim it as a slug."""
     from utils.analytics import track_page_view
     track_page_view("/get-started")
-    return render_template("get_started.html")
+    return redirect("/")
 
 
 @org_bp.route("/create_org", methods=["GET"])
@@ -455,6 +456,7 @@ def submit_lead():
     data = request.get_json(silent=True) or request.form
     name = (data.get("name") or "").strip()[:200]
     email = (data.get("email") or "").strip()[:200]
+    phone = (data.get("phone") or "").strip()[:30] or None
     company_name = (data.get("company_name") or "").strip()[:200] or None
     message = (data.get("message") or "").strip()[:2000] or None
 
@@ -468,8 +470,8 @@ def submit_lead():
         conn = get_master_db()
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO leads (name, email, company_name, message) VALUES (%s, %s, %s, %s)",
-            (name, email, company_name, message)
+            "INSERT INTO leads (name, email, phone, company_name, message) VALUES (%s, %s, %s, %s, %s)",
+            (name, email, phone, company_name, message)
         )
         conn.commit()
         cur.close()

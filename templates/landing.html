@@ -38,6 +38,7 @@
       </ul>
 
       <div class="nav-actions">
+        <a href="/login" class="nav-link" style="margin-right: 0.5rem;">Login</a>
         <button class="btn btn-primary open-lead-modal-btn">
           <i class="ti ti-calendar-check"></i> Request Demo
         </button>
@@ -64,13 +65,16 @@
         </p>
 
         <div class="hero-ctas">
-          <button class="btn btn-primary open-lead-modal-btn">
-            <i class="ti ti-rocket"></i> Get Started Free
-          </button>
+          <a href="/create_org" class="btn btn-primary">
+            <i class="ti ti-rocket"></i> Create Your Company
+          </a>
           <a href="#sandbox" class="btn btn-secondary">
             <i class="ti ti-player-play"></i> Explore <span class="hrzest-brand">HRzest</span> Sandbox
           </a>
         </div>
+        <p style="margin-top: 0.9rem; font-size: 0.9rem; color: var(--text-muted);">
+          Already have a company? <a href="/login" style="color: var(--accent-cyan); text-decoration: underline;">Log in here</a>.
+        </p>
 
         <div class="hero-trust">
           <div class="trust-item"><i class="ti ti-lock"></i> Bank-Grade AES-256</div>
@@ -739,6 +743,8 @@
             <input type="text" id="companyName" class="form-control" placeholder="e.g. Acme Corp" required>
           </div>
         </div>
+
+        <p id="leadFormError" style="display:none; color:var(--accent-rose); font-size:0.85rem; margin-top:0.75rem;"></p>
 
         <button type="submit" class="btn btn-primary form-submit-btn" style="margin-top: 0.5rem;">
           <i class="ti ti-calendar-check"></i> Request Consultation

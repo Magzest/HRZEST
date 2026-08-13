@@ -44,20 +44,55 @@ class TestSignupPage:
 
 
 class TestGetStartedPage:
-    """/get-started is the SaaS entry point (login-by-subdomain vs
-    register) -- distinct from "/" (blueprints/core.py's home()), which is
-    the platform operator's own login. The attendance kiosk moved to
-    /checkin (see tests/test_admin_views_coverage.py::TestHome)."""
+    """/get-started is retired -- the landing page ("/") now links directly
+    to /login and /create_org instead of routing through this extra hop.
+    /get-started is kept only as a redirect to "/" for old bookmarks/links.
+    See TestLandingPageLinks below for the replacement coverage."""
 
-    def test_get_page_renders(self, client):
-        resp = client.get("/get-started")
+    def test_get_page_redirects_to_landing(self, client):
+        resp = client.get("/get-started", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"].rstrip("/") in ("", "/")
+
+
+class TestLandingPageLinks:
+    """The apex landing page is now the SaaS entry point (login-by-subdomain
+    vs register) that /get-started used to be."""
+
+    def test_links_to_create_org_and_login(self, client):
+        resp = client.get("/")
         assert resp.status_code == 200
-        assert b"Register Your Company" in resp.data
-        assert b"Login to Your Company" in resp.data
-
-    def test_links_to_create_org(self, client):
-        resp = client.get("/get-started")
         assert b"/create_org" in resp.data
+        assert b"/login" in resp.data
+
+
+class TestLeadSubmission:
+    """/api/leads backs the landing page's "Request Demo" modal
+    (templates/landing.html, static/landing_v2.js) for visitors not ready
+    to self-register yet."""
+
+    def test_submit_lead_stores_all_fields(self, client, db_engine):
+        resp = client.post("/api/leads", json={
+            "name": "Jordan Lead", "email": "jordan.lead@test.local",
+            "phone": "+91 98765 43210", "company_name": "Lead Test Co",
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT name, email, phone, company_name FROM att_master.leads WHERE email=%s",
+            ("jordan.lead@test.local",),
+        )
+        row = cur.fetchone()
+        assert row == ("Jordan Lead", "jordan.lead@test.local", "+91 98765 43210", "Lead Test Co")
+        cur.execute("DELETE FROM att_master.leads WHERE email=%s", ("jordan.lead@test.local",))
+        db_engine.commit()
+
+    def test_missing_email_rejected(self, client):
+        resp = client.post("/api/leads", json={"name": "No Email"})
+        assert resp.status_code == 400
+        assert resp.get_json()["ok"] is False
 
 
 class TestSignupValidation:

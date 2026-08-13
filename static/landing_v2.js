@@ -102,20 +102,52 @@ function initModal() {
     if (e.target === leadModal) closeModal();
   });
 
-  leadForm?.addEventListener('submit', (e) => {
+  leadForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const fullName = document.getElementById('fullName')?.value;
-    const companyName = document.getElementById('companyName')?.value;
+    const fullName = document.getElementById('fullName')?.value?.trim();
+    const workEmail = document.getElementById('workEmail')?.value?.trim();
+    const phoneNumber = document.getElementById('phoneNumber')?.value?.trim();
+    const companyName = document.getElementById('companyName')?.value?.trim();
+    const errorEl = document.getElementById('leadFormError');
+    const submitBtn = leadForm.querySelector('.form-submit-btn');
 
-    const successUserName = document.getElementById('successUserName');
-    const successCompName = document.getElementById('successCompName');
+    if (errorEl) errorEl.style.display = 'none';
+    if (submitBtn) submitBtn.disabled = true;
 
-    if (successUserName) successUserName.textContent = fullName || 'Customer';
-    if (successCompName) successCompName.textContent = companyName || 'your organization';
+    try {
+      const resp = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fullName, email: workEmail, phone: phoneNumber, company_name: companyName,
+        }),
+      });
+      const result = await resp.json().catch(() => ({}));
 
-    leadForm.style.display = 'none';
-    if (modalSuccessMsg) modalSuccessMsg.style.display = 'block';
-    leadForm.reset();
+      if (!resp.ok || !result.ok) {
+        if (errorEl) {
+          errorEl.textContent = result.msg || 'Could not submit right now. Please try again.';
+          errorEl.style.display = 'block';
+        }
+        return;
+      }
+
+      const successUserName = document.getElementById('successUserName');
+      const successCompName = document.getElementById('successCompName');
+      if (successUserName) successUserName.textContent = fullName || 'Customer';
+      if (successCompName) successCompName.textContent = companyName || 'your organization';
+
+      leadForm.style.display = 'none';
+      if (modalSuccessMsg) modalSuccessMsg.style.display = 'block';
+      leadForm.reset();
+    } catch (err) {
+      if (errorEl) {
+        errorEl.textContent = 'Network error. Please check your connection and try again.';
+        errorEl.style.display = 'block';
+      }
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
   });
 }
 
