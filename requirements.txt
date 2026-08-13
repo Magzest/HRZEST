@@ -52,7 +52,7 @@ setuptools>=78.1.1,<81
 # 81 dropped pkg_resources' auto-provisioning, so import face_recognition_models
 # with setuptools>=81 raises ModuleNotFoundError: No module named 'pkg_resources'.
 # Keep this ceiling until face_recognition_models drops the pkg_resources call.
-typing-extensions>=4.7.0
+typing-extensions>=4.16.0
 # Used by blueprints/admin_views.py's save_company_info() to validate the
 # selected timezone against pytz.all_timezones_set -- not a transitive dep
 # of anything else here, so it 500s if missing from a clean install.
