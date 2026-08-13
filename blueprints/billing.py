@@ -15,29 +15,19 @@ see org.py's send_portal_ready_email docstring).
 The Platform Admin's own "Create a new company" form (blueprints/
 platform_admin.py) is untouched and stays free/unmetered -- this billing
 flow only gates the public self-service signup path.
-
-Also holds the "buy more employee seats" top-up flow (create_seat_order /
-verify_seat_payment, backing /buy_seats) -- an existing, already-logged-in
-tenant paying to raise company_settings.paid_employee_slots once they've
-used up what they paid for at signup. Same Razorpay order/verify shape as
-the signup flow above, but scoped to the current admin session's tenant
-instead of a brand-new one, and increments a column instead of
-provisioning a schema.
 """
 import secrets
 import hashlib
 import datetime
-from flask import Blueprint, request, jsonify, render_template, session
+from flask import Blueprint, request, jsonify
 from extensions import app_log, limiter, log_security_event
-from database import get_master_db, get_db_connection
-from utils.auth import admin_required
-from utils.plan_limits import PLAN_LABEL, calculate_price, format_price_inr, get_tenant_employee_count
+from database import get_master_db
+from utils.plan_limits import PLAN_LABEL, calculate_price, format_price_inr
 from utils.razorpay_utils import (
     create_order as razorpay_create_order, verify_payment_signature,
     key_id as razorpay_key_id, razorpay_configured,
 )
 from utils.auth import turnstile_enabled, verify_turnstile
-from utils.helpers import get_company_settings, invalidate_settings_cache
 
 billing_bp = Blueprint("billing", __name__)
 
@@ -198,7 +188,7 @@ def verify_payment():
     random_password = secrets.token_urlsafe(24)
     ok, error, portal_url = provision_tenant(
         company_name, subdomain, admin_username, random_password, admin_email,
-        email_domain=email_domain, paid_employee_slots=employee_count
+        email_domain=email_domain
     )
     if not ok:
         app_log.error("billing.verify_payment: provisioning failed for order %s: %s", razorpay_order_id, error)
@@ -269,191 +259,3 @@ def verify_payment():
         "ok": True, "portal_url": portal_url,
         "employee_count": employee_count, "amount_display": format_price_inr(amount_paise),
     })
-
-
-# ===========================================================================
-# Buy more employee seats — top-up flow for an already-provisioned tenant.
-# ===========================================================================
-
-def _current_tenant_row():
-    """(id, subdomain) for the tenant the logged-in admin's session is
-    bound to, or None. Looked up in att_master by db_name rather than
-    trusted blindly from the session, mirroring how every other
-    tenant-scoped master-DB lookup in this codebase re-derives identity
-    server-side instead of trusting client/session state for anything
-    that authorizes a DB write."""
-    db_name = session.get("tenant_db")
-    if not db_name:
-        return None
-    conn = get_master_db()
-    cur = conn.cursor(buffered=True)
-    cur.execute("SELECT id, subdomain FROM tenants WHERE db_name=%s", (db_name,))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    return row
-
-
-@billing_bp.route("/buy_seats", methods=["GET"])
-@admin_required
-def buy_seats_page():
-    """Reached either directly (a "Buy more seats" link in Settings) or
-    via a redirect from a blocked employee registration once
-    utils/helpers.py's validate_employee_seat_available() rejects one --
-    see blueprints/employees.py / core.py's registration handlers."""
-    settings = get_company_settings()
-    paid_slots = settings.get("paid_employee_slots")
-    current_count = get_tenant_employee_count(session.get("tenant_db", ""))
-    return render_template(
-        "buy_seats.html",
-        paid_slots=paid_slots, current_count=current_count,
-        per_employee_paise=calculate_price(1),
-        show_captcha=False,
-    )
-
-
-@billing_bp.route("/api/billing/create_seat_order", methods=["POST"])
-@admin_required
-@limiter.limit("10 per minute")
-def create_seat_order():
-    tenant_row = _current_tenant_row()
-    if not tenant_row:
-        return jsonify({"ok": False, "msg": "Could not identify your company. Please log in again."}), 400
-    tenant_id, subdomain = tenant_row
-
-    data = request.get_json(silent=True) or request.form
-    try:
-        seats = int(data.get("seats") or 0)
-    except (TypeError, ValueError):
-        return jsonify({"ok": False, "msg": "Seat count must be a number."}), 400
-    if seats < 1:
-        return jsonify({"ok": False, "msg": "Enter at least 1 seat to add."}), 400
-
-    amount_paise = calculate_price(seats)
-
-    is_demo = not razorpay_configured()
-    if is_demo:
-        order_id = _DEMO_ORDER_PREFIX + secrets.token_hex(12)
-    else:
-        receipt_id = f"seats_{subdomain}_{int(datetime.datetime.now().timestamp())}"
-        order_id, error = razorpay_create_order(amount_paise, receipt_id)
-        if not order_id:
-            app_log.error("billing.create_seat_order failed: %s", error)
-            return jsonify({"ok": False, "msg": error}), 502
-
-    try:
-        conn = get_master_db()
-        cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO seat_orders (razorpay_order_id, tenant_id, subdomain, seats, amount_paise, status) "
-            "VALUES (%s, %s, %s, %s, %s, 'created')",
-            (order_id, tenant_id, subdomain, seats, amount_paise)
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-    except Exception as exc:
-        app_log.error("billing.create_seat_order: failed to stage seat_orders row: %s", exc)
-        return jsonify({"ok": False, "msg": "Could not start checkout. Please try again."}), 500
-
-    return jsonify({
-        "ok": True,
-        "order_id": order_id,
-        "seats": seats,
-        "amount_paise": amount_paise,
-        "amount_display": format_price_inr(amount_paise),
-        "currency": "INR",
-        "key_id": razorpay_key_id(),
-        "demo": is_demo,
-    })
-
-
-@billing_bp.route("/api/billing/verify_seat_payment", methods=["POST"])
-@admin_required
-@limiter.limit("20 per minute")
-def verify_seat_payment():
-    tenant_row = _current_tenant_row()
-    if not tenant_row:
-        return jsonify({"ok": False, "msg": "Could not identify your company. Please log in again."}), 400
-    tenant_id, _subdomain = tenant_row
-
-    data = request.get_json(silent=True) or request.form
-    razorpay_order_id = (data.get("razorpay_order_id") or "").strip()
-    razorpay_payment_id = (data.get("razorpay_payment_id") or "").strip()
-    razorpay_signature = (data.get("razorpay_signature") or "").strip()
-
-    is_demo_order = razorpay_order_id.startswith(_DEMO_ORDER_PREFIX)
-    if is_demo_order:
-        if razorpay_configured():
-            return jsonify({"ok": False, "msg": "This was a demo order. Please start checkout again."}), 400
-        log_security_event(
-            "billing.demo_seat_checkout_completed", "Demo/test-mode seat top-up completed (no real payment)",
-            level="INFO", order_id=razorpay_order_id,
-        )
-    elif not verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
-        log_security_event(
-            "billing.seat_signature_invalid", "Razorpay seat top-up signature verification failed",
-            level="ERROR", order_id=razorpay_order_id,
-        )
-        return jsonify({"ok": False, "msg": "Payment verification failed."}), 400
-
-    conn = get_master_db()
-    cur = conn.cursor(buffered=True)
-    cur.execute(
-        "SELECT tenant_id, seats, status FROM seat_orders WHERE razorpay_order_id=%s",
-        (razorpay_order_id,)
-    )
-    row = cur.fetchone()
-    if not row:
-        cur.close()
-        conn.close()
-        return jsonify({"ok": False, "msg": "Unknown order."}), 404
-
-    order_tenant_id, seats, status = row
-    # The order must belong to the currently logged-in tenant -- never let
-    # one company's admin session pay off and apply seats to another
-    # tenant's order, even though order IDs are unguessable random tokens.
-    if order_tenant_id != tenant_id:
-        cur.close()
-        conn.close()
-        log_security_event(
-            "billing.seat_order_tenant_mismatch", "Seat top-up order paid under a different tenant session",
-            level="WARNING", order_id=razorpay_order_id,
-        )
-        return jsonify({"ok": False, "msg": "Unknown order."}), 404
-
-    if status == "paid":
-        cur.close()
-        conn.close()
-        return jsonify({"ok": True, "already_applied": True})
-
-    cur.execute(
-        "UPDATE seat_orders SET status='paid', razorpay_payment_id=%s, paid_at=NOW() WHERE razorpay_order_id=%s",
-        (razorpay_payment_id, razorpay_order_id)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
-
-    try:
-        tconn = get_db_connection()
-        tcur = tconn.cursor()
-        tcur.execute(
-            "UPDATE company_settings SET paid_employee_slots = COALESCE(paid_employee_slots, 0) + %s WHERE id=1",
-            (seats,)
-        )
-        tconn.commit()
-        tcur.close()
-        tconn.close()
-        invalidate_settings_cache()
-    except Exception as exc:
-        app_log.error("billing.verify_seat_payment: failed to apply seats for order %s: %s", razorpay_order_id, exc)
-        return jsonify({"ok": False, "msg": f"Payment received, but applying seats failed. Contact support with order ID {razorpay_order_id}."}), 500
-
-    new_slots = get_company_settings().get("paid_employee_slots")
-    log_security_event(
-        "billing.seats_added", f"{seats} employee seat(s) purchased",
-        level="INFO", order_id=razorpay_order_id, seats=seats, new_total=new_slots,
-    )
-
-    return jsonify({"ok": True, "seats_added": seats, "paid_employee_slots": new_slots})

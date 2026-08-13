@@ -75,7 +75,7 @@ _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
 def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                      payment_option="online", email_domain=None, paid_employee_slots=None):
+                      payment_option="online", email_domain=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
@@ -90,16 +90,6 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     email_domain (e.g. "acme.com") is stored on the new tenant's own
     company_settings row -- utils/helpers.py's validate_employee_email_domain()
     reads it from there to require/check new employees' emails going forward.
-
-    paid_employee_slots is how many employees this tenant paid for at
-    signup -- stored on company_settings so utils/plan_limits.py's
-    validate_employee_seat_available() can cap free registrations at that
-    count (more seats bought later via blueprints/billing.py's
-    create_seat_order/verify_seat_payment top the number up). None means
-    unlimited/unmetered -- the billing.py Razorpay flow always passes a
-    real number; the free dev-fallback /create_org POST and the Platform
-    Admin's own "create company" form intentionally leave this unset
-    (see their call sites' comments).
 
     Returns (ok, error_message_or_None, portal_url_or_None).
     """
@@ -149,8 +139,8 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         tconn = get_tenant_db(db_name)
         tcur = tconn.cursor()
         tcur.execute(
-            "UPDATE company_settings SET company_name=%s, email_domain=%s, paid_employee_slots=%s, setup_done=1 WHERE id=1",
-            (company_name, clean_email_domain(email_domain) or None, paid_employee_slots)
+            "UPDATE company_settings SET company_name=%s, email_domain=%s, setup_done=1 WHERE id=1",
+            (company_name, clean_email_domain(email_domain) or None)
         )
         # Plain INSERT, no ON CONFLICT: the schema-existence check above
         # guarantees this is a brand-new schema, so a conflict here means a

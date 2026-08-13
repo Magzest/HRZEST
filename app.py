@@ -2192,29 +2192,6 @@ def init_master_db():
         # the tenant's own company_settings row doesn't exist yet at
         # create_order() time.
         cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL")
-        # Seat top-up orders: an existing tenant paying for MORE employee
-        # slots after exhausting the count they paid for at signup (see
-        # utils/plan_limits.py's validate_employee_seat_available and
-        # blueprints/billing.py's create_seat_order/verify_seat_payment).
-        # Separate from payment_orders (that table's NOT NULL
-        # company_name/admin_username/subdomain fields describe a
-        # brand-new signup, not a top-up against an existing tenant) --
-        # tenant_id here always refers to an already-provisioned row in
-        # `tenants`.
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS seat_orders (
-                id SERIAL PRIMARY KEY,
-                razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
-                razorpay_payment_id VARCHAR(100) DEFAULT NULL,
-                tenant_id INT NOT NULL REFERENCES tenants(id),
-                subdomain VARCHAR(100) NOT NULL,
-                seats INT NOT NULL,
-                amount_paise INT NOT NULL,
-                status VARCHAR(20) NOT NULL DEFAULT 'created',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                paid_at TIMESTAMP DEFAULT NULL
-            )
-        """)
         # Lightweight traffic counter for the public marketing pages
         # (landing page, get-started, create_org) -- one row per
         # (path, day), incremented via ON CONFLICT below rather than one

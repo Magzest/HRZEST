@@ -437,7 +437,6 @@ def get_company_settings():
                 "logo_url": row_dict.get("logo_url") or "",
                 "plan": row_dict.get("plan") or "basic",
                 "email_domain": row_dict.get("email_domain") or "",
-                "paid_employee_slots": row_dict.get("paid_employee_slots"),
             }
             with _settings_lock:
                 _co_cache["data"] = result
@@ -448,7 +447,7 @@ def get_company_settings():
     return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
             "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
-            "email_domain": "", "paid_employee_slots": None}
+            "email_domain": ""}
 
 
 # ── Company email domain (employee-registration gate) ────────────────────────
@@ -497,33 +496,6 @@ def validate_employee_email_domain(email) -> str:
 
 
 # ── Paid employee-seat cap (employee-registration gate) ──────────────────────
-def validate_employee_seat_available() -> str:
-    """Enforces "can't register more employees than the company has paid
-    for" -- but only once a company actually went through the metered
-    signup/top-up flow (get_company_settings()["paid_employee_slots"] is
-    set); tenants that predate this feature, were created free by the
-    Platform Admin, or came through the local/dev fallback signup keep
-    unlimited registration, exactly like validate_employee_email_domain's
-    no-domain-configured case. Returns an error message, or None if a new
-    employee can be registered."""
-    slots = get_company_settings().get("paid_employee_slots")
-    if slots is None:
-        return None
-    try:
-        db = get_db_connection()
-        cur = db.cursor(buffered=True)
-        cur.execute("SELECT COUNT(*) FROM employees")
-        current = cur.fetchone()[0]
-        cur.close()
-        db.close()
-    except Exception:
-        return None
-    if current >= slots:
-        return (f"You've used all {slots} paid employee seats. "
-                f"Buy more seats to register additional employees.")
-    return None
-
-
 # ── Companies list + overdue-onboarding count caches (short TTL) ─────────────
 # Both back per-request context processors (app.py's inject_companies_context
 # / inject_overdue_onboardings) that previously ran on every single
