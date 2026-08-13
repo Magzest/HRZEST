@@ -507,6 +507,11 @@ def offer_letter(ob_id):
         WHERE eo.id = %s
     """, (ob_id,))
     ob = cursor.fetchone()
+    if not ob:
+        cursor.close()
+        db.close()
+        flash("Onboarding record not found.", "danger")
+        return redirect(tpath("/onboarding"))
     cursor.execute(
         "SELECT COALESCE(monthly_ctc,0), COALESCE(salary_per_day,0) FROM salary_config WHERE employee_id=%s", (ob[1],))
     sal = cursor.fetchone() or (0, 0)
