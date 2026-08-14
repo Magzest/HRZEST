@@ -940,7 +940,7 @@ textarea { resize: vertical; }
   --text-main: #F8FAFC;
   --text-muted: #C7CAF5;
   --border-color: rgba(255, 255, 255, 0.14);
-  background: var(--accent-blue);
+  background: #362FA0;
   padding: 70px 0 35px 0;
   font-size: 0.92rem;
   color: var(--text-muted);
