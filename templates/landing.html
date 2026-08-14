@@ -7,6 +7,33 @@
   <meta name="description" content="Unified enterprise HR platform featuring Face Recognition, WebAuthn Passkeys, GPS Geo-fencing, Automated Payroll Engine, and Employee Governance.">
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
 
+  <!-- Social sharing previews (Slack, WhatsApp, LinkedIn, etc.) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HRzest">
+  <meta property="og:title" content="HRzest.com - Enterprise HR & Biometric Platform">
+  <meta property="og:description" content="Face recognition and passkey check-ins, GPS geo-fencing, automated payroll, and multi-tenant security — built for teams that need it to just work.">
+  <meta property="og:url" content="https://www.hrzest.com/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="HRzest.com - Enterprise HR & Biometric Platform">
+  <meta name="twitter:description" content="Face recognition and passkey check-ins, GPS geo-fencing, automated payroll, and multi-tenant security — built for teams that need it to just work.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "HRzest",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Web",
+    "description": "Unified enterprise HR platform featuring face recognition attendance, WebAuthn passkeys, GPS geo-fencing, and automated payroll.",
+    "offers": {
+      "@type": "Offer",
+      "price": "{{ per_employee_paise // 100 }}",
+      "priceCurrency": "INR",
+      "unitText": "per employee per month"
+    }
+  }
+  </script>
+
   <!-- Icons: local Tabler set (no external CDN -- the app's CSP is style-src-elem 'self', which blocks cross-origin stylesheets) -->
   <link rel="stylesheet" href="{{ url_for('static', filename='tabler-icons.min.css') }}">
   <!-- Stylesheet -->
@@ -26,6 +53,7 @@
         <li><a href="#features" class="nav-link">Features</a></li>
         <li><a href="#sandbox" class="nav-link">Live Demo</a></li>
         <li><a href="#security" class="nav-link">Security</a></li>
+        <li><a href="#pricing" class="nav-link">Pricing</a></li>
         <li><a href="#contact" class="nav-link">Contact</a></li>
       </ul>
 
@@ -461,6 +489,73 @@
     </div>
   </section>
 
+  <!-- Pricing Section -->
+  <section class="chapter-section" id="pricing">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag"><i class="ti ti-receipt-2"></i> SIMPLE PRICING</span>
+        <h2 class="section-title">One plan. Every feature. No surprises.</h2>
+        <p class="section-subtitle">No tiers to compare, no features locked behind a paywall, no employee caps — just a flat rate per person.</p>
+      </div>
+
+      <div class="pricing-card">
+        <div class="pricing-amount">
+          <span class="pricing-currency">₹{{ per_employee_paise // 100 }}</span>
+          <span class="pricing-period">/ employee / month</span>
+        </div>
+        <p class="pricing-note">Billed monthly based on your active employee count. No setup fees, no minimums.</p>
+
+        <ul class="chapter-checklist" style="max-width: 480px; margin: 2rem auto;">
+          <li><i class="ti ti-circle-check"></i> All features included</li>
+          <li><i class="ti ti-circle-check"></i> No employee minimum</li>
+          <li><i class="ti ti-circle-check"></i> No setup fees</li>
+          <li><i class="ti ti-circle-check"></i> Cancel anytime</li>
+        </ul>
+
+        <a href="/create_org" class="btn btn-primary">
+          <i class="ti ti-building-bank"></i> Start Free Trial
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="chapter-section" id="faq" style="background: var(--bg-secondary); border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag"><i class="ti ti-help-circle"></i> QUESTIONS</span>
+        <h2 class="section-title">Frequently asked questions</h2>
+      </div>
+
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary>Is there a setup fee or long-term contract?</summary>
+          <p>No. It's a flat ₹{{ per_employee_paise // 100 }} per employee per month, billed monthly, with no setup fees and no contract lock-in.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Can I cancel anytime?</summary>
+          <p>Yes — there's no minimum commitment period. Cancel whenever you like.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is my company's data isolated from other organizations?</summary>
+          <p>Yes. Each organization gets its own isolated database schema — data is never shared or mixed between tenants.</p>
+        </details>
+        <details class="faq-item">
+          <summary>How is billing calculated?</summary>
+          <p>₹{{ per_employee_paise // 100 }} per active employee per month — no tiers, no feature paywalls, no hidden fees.</p>
+        </details>
+        <details class="faq-item">
+          <summary>Is my data encrypted?</summary>
+          <p>Yes. Employee PII, salary data, and biometric templates are encrypted with AES-256, both at rest and in transit.</p>
+        </details>
+        <details class="faq-item">
+          <summary>How do I get support if I have an issue?</summary>
+          <p>Email <a href="mailto:contact@hrzest.com" style="color:var(--accent-cyan); text-decoration:underline;">contact@hrzest.com</a> or use the contact form below — we usually reply within a few hours.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
   <!-- Contact Us Section -->
   <section class="contact-section" id="contact">
     <div class="container">
@@ -647,7 +742,7 @@
             <li><a href="#features">Biometrics</a></li>
             <li><a href="#sandbox">WebAuthn Passkeys</a></li>
             <li><a href="#sandbox">Payroll Engine</a></li>
-            <li><a href="#security">Mobile Suite</a></li>
+            <li><a href="#pricing">Pricing</a></li>
           </ul>
         </div>
 
