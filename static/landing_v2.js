@@ -273,6 +273,9 @@ function initSandboxTabs() {
       if (windowTitle && tabTitles[targetTab]) {
         windowTitle.textContent = tabTitles[targetTab];
       }
+
+      const sandboxWindow = document.querySelector('.sandbox-window');
+      if (sandboxWindow) sandboxWindow.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   });
 }

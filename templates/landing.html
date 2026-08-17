@@ -160,19 +160,32 @@
         <p class="section-subtitle">No sign-up required — explore attendance, payroll, leave, and ID badges with sample data.</p>
       </div>
 
-      <!-- Navigation Tabs -->
-      <div class="sandbox-tabs">
-        <button class="sandbox-tab active" data-tab="tab-attendance">
-          <i class="ti ti-clock-check"></i> Attendance
+      <!-- Module Cards -- double as the tab switcher (see .sandbox-tab in
+           landing_v2.js); the data-tab/active-class contract is unchanged. -->
+      <div class="module-cards">
+        <button class="sandbox-tab module-card active" data-tab="tab-attendance">
+          <div class="module-card-icon"><i class="ti ti-clock-check"></i></div>
+          <span class="module-card-title">Attendance</span>
+          <p class="module-card-desc">Face recognition, passkeys, and GPS check-ins — verified automatically.</p>
+          <span class="module-card-cta">Try it <i class="ti ti-arrow-right"></i></span>
         </button>
-        <button class="sandbox-tab" data-tab="tab-payroll">
-          <i class="ti ti-calculator"></i> Payroll
+        <button class="sandbox-tab module-card" data-tab="tab-payroll">
+          <div class="module-card-icon"><i class="ti ti-calculator"></i></div>
+          <span class="module-card-title">Payroll</span>
+          <p class="module-card-desc">Custom salary rules, tax deductions, and payslips generated in one click.</p>
+          <span class="module-card-cta">Try it <i class="ti ti-arrow-right"></i></span>
         </button>
-        <button class="sandbox-tab" data-tab="tab-leave">
-          <i class="ti ti-calendar-stats"></i> Leave &amp; Rosters
+        <button class="sandbox-tab module-card" data-tab="tab-leave">
+          <div class="module-card-icon"><i class="ti ti-calendar-stats"></i></div>
+          <span class="module-card-title">Leave &amp; Rosters</span>
+          <p class="module-card-desc">Approval workflows synced with shift schedules and holiday calendars.</p>
+          <span class="module-card-cta">Try it <i class="ti ti-arrow-right"></i></span>
         </button>
-        <button class="sandbox-tab" data-tab="tab-org">
-          <i class="ti ti-id-badge-2"></i> ID Badges
+        <button class="sandbox-tab module-card" data-tab="tab-org">
+          <div class="module-card-icon"><i class="ti ti-id-badge-2"></i></div>
+          <span class="module-card-title">ID Badges</span>
+          <p class="module-card-desc">Digital employee credentials with photo, role, and verification status.</p>
+          <span class="module-card-cta">Try it <i class="ti ti-arrow-right"></i></span>
         </button>
       </div>
 

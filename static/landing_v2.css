@@ -559,12 +559,11 @@ textarea { resize: vertical; }
 .section-title { font-size: 2.75rem; margin-bottom: 1rem; }
 .section-subtitle { font-size: 1.12rem; color: var(--text-muted); }
 
-.sandbox-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 0.85rem;
+.module-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
   margin-bottom: 2.5rem;
-  flex-wrap: wrap;
 }
 
 .sandbox-tab {
@@ -591,6 +590,74 @@ textarea { resize: vertical; }
   color: #fff;
   border-color: transparent;
   box-shadow: 0 4px 25px rgba(79, 70, 229, 0.35);
+}
+
+/* Module cards -- overrides .sandbox-tab's pill styling above with a card
+   layout, while keeping the .sandbox-tab class itself so the existing
+   click/active-state JS needs no changes. */
+.module-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.module-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-color-glow);
+  box-shadow: var(--shadow-md);
+  background: var(--bg-card);
+  color: inherit;
+}
+
+.module-card.active {
+  background: var(--bg-card);
+  color: inherit;
+  border-color: var(--accent-cyan);
+  box-shadow: var(--shadow-md);
+}
+
+.module-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: rgba(79, 70, 229, 0.08);
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.module-card-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-main);
+  margin-bottom: 0.5rem;
+}
+
+.module-card-desc {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  margin-bottom: 1rem;
+}
+
+.module-card-cta {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: auto;
 }
 
 /* Dashboard preview -- same dark-island technique as .hero-widget above. */
@@ -1133,4 +1200,9 @@ textarea { resize: vertical; }
   .nav-links { display: none; }
   .mobile-nav-toggle { display: block; }
   .form-grid { grid-template-columns: 1fr; }
+  .module-cards { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+  .module-cards { grid-template-columns: 1fr; }
 }
