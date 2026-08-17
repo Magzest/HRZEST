@@ -99,68 +99,40 @@ export default function EmployeeAttendanceCard({
       </View>
 
       {/* Button */}
-
-      {!completed ? (
-
-        <TouchableOpacity
-
-          activeOpacity={0.9}
-
-          disabled={checking}
-
-          onPress={onCheckIn}
-
-          style={[
-            styles.button,
-
+      <TouchableOpacity
+        activeOpacity={0.9}
+        disabled={checking}
+        onPress={onCheckIn}
+        style={[
+          styles.button,
+          checkedIn
+            ? styles.checkoutButton
+            : completed
+            ? styles.reloginButton
+            : styles.checkinButton,
+        ]}
+      >
+        <Ionicons
+          name={
             checkedIn
-              ? styles.checkoutButton
-              : styles.checkinButton,
-
-          ]}
-
-        >
-
-          <Ionicons
-            name={
-              checkedIn
-                ? "log-out-outline"
-                : "log-in-outline"
-            }
-            size={20}
-            color="#FFFFFF"
-          />
-
-          <Text style={styles.buttonText}>
-
-            {checking
-              ? "Processing..."
-              : checkedIn
-              ? "Check Out"
-              : "Check In"}
-
-          </Text>
-
-        </TouchableOpacity>
-
-      ) : (
-
-        <View style={styles.completedBox}>
-
-          <Ionicons
-            name="checkmark-circle"
-            size={22}
-            color="#16A34A"
-          />
-
-          <Text style={styles.completedText}>
-            Attendance completed successfully
-          </Text>
-
-        </View>
-
-      )}
-
+              ? "log-out-outline"
+              : completed
+              ? "refresh-outline"
+              : "log-in-outline"
+          }
+          size={20}
+          color="#FFFFFF"
+        />
+        <Text style={styles.buttonText}>
+          {checking
+            ? "Processing..."
+            : checkedIn
+            ? "Check Out"
+            : completed
+            ? "Re-Login / Punch In"
+            : "Check In"}
+        </Text>
+      </TouchableOpacity>
     </View>
 
   );
@@ -405,6 +377,10 @@ const styles = StyleSheet.create({
 
     fontSize: 15,
 
+  },
+
+  reloginButton: {
+    backgroundColor: "#6366F1",
   },
 
   completedBox: {

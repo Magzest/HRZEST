@@ -58,7 +58,7 @@ export default function AdminDashboard({ navigation }) {
     } catch (_) {}
   };
 
-  const totalEmps = totalEmpsCount || dashboardData?.total_employees ?? dashboardData?.total ?? dashboardData?.employees_count ?? 0;
+  const totalEmps = (totalEmpsCount || dashboardData?.total_employees) ?? dashboardData?.total ?? dashboardData?.employees_count ?? 0;
   const presentEmps = dashboardData?.present ?? dashboardData?.present_count ?? 0;
   const absentEmps = dashboardData?.absent ?? dashboardData?.absent_count ?? 0;
   const lateEmps = dashboardData?.late ?? dashboardData?.late_count ?? 0;
