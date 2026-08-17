@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Shared utility helpers used across multiple blueprints."""
 import os
 import re
@@ -75,13 +76,13 @@ _APP_URL = os.environ.get("APP_URL", "").rstrip("/")
 
 
 def _safe_app_url() -> str:
-    """Return a trusted base URL. In production APP_URL must be set — falling
+    """Return a trusted base URL. In production APP_URL must be set -- falling
     back to request.host_url is unsafe because the Host header is attacker-controlled."""
     if _APP_URL:
         return _APP_URL
     if os.environ.get("APP_ENV", "production") != "development":
         app_log.warning(
-            "APP_URL is not set in hashi/.env — password-reset links will use the "
+            "APP_URL is not set in hashi/.env -- password-reset links will use the "
             "request Host header, which is unsafe in production. "
             "Set APP_URL=https://yourdomain.com in hashi/.env to fix this."
         )
@@ -114,18 +115,18 @@ def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
     return tpath(fallback)
 
 
-# ── PII encryption (Fernet) — fail-secure bootstrap ────────────────────────────
+# ── PII encryption (Fernet) -- fail-secure bootstrap ────────────────────────────
 # Canonical location for this check. app.py used to carry a second,
 # stricter copy (hard-fail in production, silent plaintext fallback in
 # development) while this file's copy silently no-op'd in every
-# environment — a real gap: any future caller of THIS copy would have
+# environment -- a real gap: any future caller of THIS copy would have
 # stored PAN/UAN/bank-account numbers in plaintext with no warning
 # louder than a log line nobody was necessarily watching.
 #
 # Policy is now unconditional: missing or invalid ENCRYPTION_KEY is a hard
 # abort in every environment, including local dev and CI, no exception.
 # The previous "allow it in development" carve-out was itself the
-# mechanism that let this exact class of bug hide — a working-in-dev,
+# mechanism that let this exact class of bug hide -- a working-in-dev,
 # broken-in-prod bootstrap teaches nobody to notice until it's live.
 # Every environment that runs this code now needs a real key; generate
 # one with:
@@ -137,22 +138,22 @@ if not _ENCRYPTION_KEY:
     app_log.critical(
         "FATAL: ENCRYPTION_KEY is not set. PAN, UAN, and bank account numbers "
         "require encryption at rest in every environment this application runs "
-        "in — refusing to start rather than silently storing PII as plaintext. "
+        "in -- refusing to start rather than silently storing PII as plaintext. "
         "Generate a key: python -c \"from cryptography.fernet import Fernet; "
         "print(Fernet.generate_key().decode())\""
     )
-    raise RuntimeError("ENCRYPTION_KEY is not set — refusing to start (fail-secure).")
+    raise RuntimeError("ENCRYPTION_KEY is not set -- refusing to start (fail-secure).")
 try:
     _fernet = Fernet(_ENCRYPTION_KEY.encode())
 except Exception as _key_err:
     app_log.critical(
-        "FATAL: ENCRYPTION_KEY is set but malformed (%s) — refusing to start "
+        "FATAL: ENCRYPTION_KEY is set but malformed (%s) -- refusing to start "
         "rather than silently storing PII as plaintext. Regenerate with: "
         "python -c \"from cryptography.fernet import Fernet; "
         "print(Fernet.generate_key().decode())\"",
         type(_key_err).__name__,
     )
-    raise RuntimeError("ENCRYPTION_KEY is malformed — refusing to start (fail-secure).") from _key_err
+    raise RuntimeError("ENCRYPTION_KEY is malformed -- refusing to start (fail-secure).") from _key_err
 
 
 def encrypt_pii(value: str) -> str:
@@ -172,7 +173,7 @@ def decrypt_pii(value: str) -> str:
 
 def decrypt_pii_date(value):
     """decrypt_pii() for employees.dob: that column used to be a native DATE
-    and callers throughout the app call .strftime() on what it returns —
+    and callers throughout the app call .strftime() on what it returns --
     widening it to TEXT so Fernet ciphertext fits (see app.py's
     employee_pii_columns_to_text_v1 migration) would otherwise silently
     turn every one of those call sites into an AttributeError. Returns a
@@ -269,15 +270,15 @@ def _scan_for_malware(file_storage):
     local ClamAV instance doesn't block day-to-day dev work.
 
     Set MALWARE_SCAN_ENABLED=false to turn this off deliberately (e.g. a
-    memory-constrained deployment that can't run ClamAV) — that's a clean
+    memory-constrained deployment that can't run ClamAV) -- that's a clean
     skip, not a failure, so it doesn't trigger the fail-closed behavior
     below and permanently block uploads."""
     if not _MALWARE_SCAN_ENABLED:
         return True, None
     _dev = os.environ.get("APP_ENV", "production") == "development"
     if not _clamav_available:
-        app_log.error("clamd package not installed — malware scanning skipped")
-        return (True, None) if _dev else (False, "Malware scanning is unavailable — upload rejected.")
+        app_log.error("clamd package not installed -- malware scanning skipped")
+        return (True, None) if _dev else (False, "Malware scanning is unavailable -- upload rejected.")
     try:
         cd = _clamd_lib.ClamdNetworkSocket(host=_CLAMAV_HOST, port=_CLAMAV_PORT, timeout=15)
         pos = file_storage.stream.tell()
@@ -292,7 +293,7 @@ def _scan_for_malware(file_storage):
         return True, None
     except Exception as _e:
         app_log.error("ClamAV scan failed (%s): %s", type(_e).__name__, _e)
-        return (True, None) if _dev else (False, "File could not be scanned for malware — please try again shortly.")
+        return (True, None) if _dev else (False, "File could not be scanned for malware -- please try again shortly.")
 
 
 # ── File upload validation ─────────────────────────────────────────────────────
@@ -553,7 +554,7 @@ def validate_employee_email_domain(email) -> str:
 # / inject_overdue_onboardings) that previously ran on every single
 # admin-rendered page with no cache at all, stacking on top of the
 # always-fresh security checks (_enforce_ip_ban, _enforce_admin_mfa_enrollment)
-# that must stay uncached. These two are pure reference/reporting data — a
+# that must stay uncached. These two are pure reference/reporting data -- a
 # few seconds of staleness (a brand-new company not yet in the switcher, an
 # onboarding-overdue badge lagging slightly) is an acceptable trade for
 # cutting 2 of the ~4 DB round trips every admin page load previously paid.
@@ -736,7 +737,7 @@ def get_co_features(company_id=None):
 
 
 # shift_start/shift_half/shift_end/holiday_pay/leave_pay were missing from
-# this allowlist versus app.py's copy — not a security gap on their own
+# this allowlist versus app.py's copy -- not a security gap on their own
 # (both copies fail closed on anything not listed), but a functional one:
 # any caller trying to persist a per-company shift override through this
 # copy would have been silently rejected while app.py's identical-looking
@@ -801,7 +802,7 @@ def _upsert_co_features(company_id, fields_dict):
 
 
 # ── Company-scoping WHERE fragments ─────────────────────────────────────────
-# Was hand-repeated (6 near-identical copies) across admin_views.py/leave.py —
+# Was hand-repeated (6 near-identical copies) across admin_views.py/leave.py --
 # the fragment is always a hardcoded literal chosen by whether an active
 # company is selected, never user input; the actual value is always the
 # single %s-bound param returned alongside it.
@@ -825,12 +826,12 @@ def co_scope_column(active_cid, alias=""):
 
 
 # ── Error page renderer ───────────────────────────────────────────────────────
-# This used to render_template("error.html", ...) — that template doesn't
+# This used to render_template("error.html", ...) -- that template doesn't
 # exist anywhere in templates/. Every call would have raised
 # jinja2.exceptions.TemplateNotFound, turning a 404/403/500 handler into a
 # second, unhandled 500. Never triggered because nothing called this copy
 # (app.py's own separate, working implementation handled every real error
-# page) — found by checking whether the "weaker" duplicate was even
+# page) -- found by checking whether the "weaker" duplicate was even
 # functional, not just less-featured, before deciding which one to keep.
 # Replaced with app.py's version (session-aware back-navigation, inline
 # styling, no template dependency) rather than fixing the missing

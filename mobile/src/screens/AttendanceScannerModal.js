@@ -54,6 +54,7 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
   const [authMethod, setAuthMethod] = useState(COMBO_QR_FACE);
 
   const cameraRef = useRef(null);
+  const scannedEmpIdRef = useRef(null);
 
   useEffect(() => {
     if (visible) {
@@ -62,6 +63,7 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
       setScanned(false);
       setProcessing(false);
       setEmployeeId(null);
+      scannedEmpIdRef.current = null;
       setCoords(null);
       setLocError(null);
       setAuthConfig(DEFAULT_AUTH_CONFIG);
@@ -70,6 +72,33 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
       initModal();
     }
   }, [visible]);
+
+  const parseEmployeeIdFromQR = (data) => {
+    if (!data) return user?.employeeId || user?.employee_id || user?.emp_id || "EMP-1001";
+    let raw = String(data).trim();
+    const empMatch = raw.match(/EMP-?\d+/i);
+    if (empMatch) {
+      let matched = empMatch[0].toUpperCase();
+      if (!matched.includes('-') && matched.startsWith('EMP')) {
+        matched = matched.replace('EMP', 'EMP-');
+      }
+      return matched;
+    }
+    if (raw.includes('/')) {
+      const parts = raw.split('/');
+      raw = parts[parts.length - 1];
+    }
+    raw = raw.replace(/\.(png|jpg|jpeg|gif|svg)$/i, '').trim();
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.employee_id || parsed.employeeId || parsed.emp_id) {
+          return (parsed.employee_id || parsed.employeeId || parsed.emp_id).toUpperCase();
+        }
+      } catch (_) {}
+    }
+    return raw.toUpperCase() || user?.employeeId || user?.employee_id || user?.emp_id || "EMP-1001";
+  };
 
   const initModal = async () => {
     try {
@@ -112,7 +141,7 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
   // ── Submit ───────────────────────────────────────────────────────────────────
   const submitAttendance = async ({ face, combo, empId }) => {
     setProcessing(true);
-    const targetId = empId || employeeId || user?.employeeId || "EMP-1001";
+    const targetId = empId || scannedEmpIdRef.current || employeeId || user?.employeeId || user?.employee_id || user?.emp_id || "EMP-1001";
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     try {
       const formData = new FormData();
@@ -131,18 +160,24 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
         const action = res.data.action;
         const title =
           action === 'login'  ? '✅ Checked In 📍'  :
-          action === 'logout' ? '✅ Checked Out ⏱' : '✅ Attendance Recorded 📍';
-        Alert.alert(title, `${res.data.name || targetId}\n${res.data.status || 'Verified'}\nTime: ${res.data.time || timeNow}`, [
+          action === 'logout' ? '✅ Checked Out ⏱' :
+          action === 'relogin' ? '🔄 Re-Login Recorded 📍' : '✅ Attendance Recorded 📍';
+        const msg = `${res.data.name || targetId}\nStatus: ${res.data.status || 'Verified'}\nTime: ${res.data.time || timeNow}${res.data.shift ? '\nShift: ' + res.data.shift : ''}`;
+        Alert.alert(title, msg, [
           { text: 'OK', onPress: () => { onSuccess && onSuccess(res.data); onClose(); } },
         ]);
       } else {
-        Alert.alert('✅ Attendance Recorded 📍', `Check-in logged for ${targetId}\nTime: ${timeNow}`, [
-          { text: 'OK', onPress: () => { onSuccess && onSuccess(); onClose(); } },
+        const errMsg = res?.data?.msg || 'Could not verify attendance.';
+        Alert.alert('Verification Failed ❌', errMsg, [
+          { text: 'Retry', onPress: () => { setScanned(false); setProcessing(false); setStep('qr'); } },
+          { text: 'Cancel', onPress: onClose },
         ]);
       }
-    } catch (_) {
-      Alert.alert('✅ Attendance Recorded 📍', `Check-in logged for ${targetId}\nTime: ${timeNow}`, [
-        { text: 'OK', onPress: () => { onSuccess && onSuccess(); onClose(); } },
+    } catch (e) {
+      const errMsg = e.response?.data?.msg || e.message || 'Connection error. Please try again.';
+      Alert.alert('Verification Error ❌', errMsg, [
+        { text: 'Retry', onPress: () => { setScanned(false); setProcessing(false); setStep('qr'); } },
+        { text: 'Cancel', onPress: onClose },
       ]);
     }
     setProcessing(false);
@@ -151,15 +186,11 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
   // ── QR scan ──────────────────────────────────────────────────────────────────
   const handleQRScan = async ({ data }) => {
     if (scanned || processing) return;
-    let raw = data ? String(data).trim() : "";
-    if (!raw) return;
-    if (raw.includes("/")) {
-      const parts = raw.split("/");
-      raw = parts[parts.length - 1].replace(".png", "");
-    }
-    const targetEmpId = raw.toUpperCase() || user?.employeeId || "EMP-1001";
+    const targetEmpId = parseEmployeeIdFromQR(data);
+    if (!targetEmpId) return;
     setScanned(true);
     setEmployeeId(targetEmpId);
+    scannedEmpIdRef.current = targetEmpId;
 
     if (authMethod === COMBO_QR_FACE && authConfig.face_enabled) {
       setFacing('front');
@@ -194,12 +225,12 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
     }
 
     if (authMethod === COMBO_QR_FACE) {
-      await submitAttendance({ face: photo });
+      await submitAttendance({ face: photo, empId: scannedEmpIdRef.current || employeeId });
     } else {
       // Face + Fingerprint: fingerprint already attested, submit now
       await submitAttendance({
         face: photo,
-        empId: user?.employeeId,
+        empId: user?.employeeId || user?.employee_id || user?.emp_id,
         combo: COMBO_FACE_FP,
       });
     }

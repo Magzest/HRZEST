@@ -1,7 +1,8 @@
+# -*- coding: utf-8 -*-
 """TOTP (RFC 6238) two-factor auth for the admin Email Settings step-up gate.
 
 The secret is stored encrypted at rest via the same Fernet-based encrypt_pii/
-decrypt_pii used for PII fields (utils/helpers.py) — reusing the codebase's
+decrypt_pii used for PII fields (utils/helpers.py) -- reusing the codebase's
 one established encryption idiom rather than introducing a second scheme.
 """
 import html as _html
@@ -50,7 +51,7 @@ def mark_totp_enabled(admin_username: str):
 
 def reset_admin_totp_secret(admin_username: str):
     """Wipes the stored secret and disables 2FA so the next call to
-    get_or_create_admin_totp_secret issues a brand-new secret/QR — for an
+    get_or_create_admin_totp_secret issues a brand-new secret/QR -- for an
     admin who deleted the entry from their authenticator app and can no
     longer produce a code for the old secret."""
     db = get_db_connection()
@@ -114,7 +115,7 @@ def send_mfa_login_email(to_email: str, username: str, role_label: str, secret: 
     <div style="text-align:center;margin:22px 0;padding:16px;background:#090d16;border-radius:12px;">
       <span style="font-size:32px;font-weight:800;letter-spacing:6px;color:#60a5fa;">{_code}</span>
     </div>
-    <p style="font-size:12px;color:#64748b;">If you didn't request this, someone may have your password — change it and contact your administrator.</p>
+    <p style="font-size:12px;color:#64748b;">If you didn't request this, someone may have your password -- change it and contact your administrator.</p>
   </div>
 </div>"""
     config = get_email_config()

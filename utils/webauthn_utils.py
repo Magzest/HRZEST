@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """WebAuthn (passkey/fingerprint) + mobile-biometric infrastructure.
 
 Extracted from app.py so both the auth blueprint (enrollment/verification
@@ -29,7 +30,7 @@ try:
     import webauthn
     # Only COSEAlgorithmIdentifier is used in this file (below); the rest are
     # re-exported for blueprints/auth.py's `from utils.webauthn_utils import
-    # AuthenticatorSelectionCriteria, ...` — flake8 can't see that cross-file
+    # AuthenticatorSelectionCriteria, ...` -- flake8 can't see that cross-file
     # usage, so don't "clean up" this import as dead code without checking
     # blueprints/auth.py's registration-options construction first.
     from webauthn.helpers.structs import (  # noqa: F401
@@ -127,8 +128,8 @@ def _wa_fingerprint_recently_verified(emp_id):
 # meaningfully-bound proof: a server-issued, single-use nonce minted only to
 # the holder of a valid employee Bearer token, consumed by a second
 # Bearer-authenticated call right after the device's local biometric/PIN
-# check succeeds. This is NOT a cryptographic signature — it cannot detect a
-# cloned/replayed device biometric — but unlike the old flow it cannot be
+# check succeeds. This is NOT a cryptographic signature -- it cannot detect a
+# cloned/replayed device biometric -- but unlike the old flow it cannot be
 # satisfied without first proving possession of that exact employee's token.
 _MOBILE_BIO_NONCE_TTL_SEC = 60
 _MOBILE_BIO_VERIFY_WINDOW_SEC = 120
@@ -202,7 +203,7 @@ def _wa_verify_and_store_registration(emp_id, credential, challenge_b64, cursor,
     if not _webauthn_available:
         return False, "Fingerprint enrollment is not available on this server."
     if not credential or not challenge_b64:
-        return False, "Missing credential or challenge — please try enrolling again"
+        return False, "Missing credential or challenge -- please try enrolling again"
     # Rebuild the supported-alg list from session if available; fall back to the
     # same two algorithms we offer in generate_registration_options.
     _alg_ids = session.get("wa_reg_alg_ids") or [-7, -257]

@@ -1,6 +1,7 @@
-"""Core blueprint — home page, CSP reporting, session-risk stream, security
+# -*- coding: utf-8 -*-
+"""Core blueprint -- home page, CSP reporting, session-risk stream, security
 lockout, and the simpler token-based REST API layer (/api/login,
-/api/dashboard, /api/holidays and their /api/employee/* equivalents) — the
+/api/dashboard, /api/holidays and their /api/employee/* equivalents) -- the
 last routes drained out of app.py, which now holds only shared setup
 (init_db, error handlers, before/after_request hooks, template filters)."""
 import time
@@ -103,7 +104,7 @@ def session_risk_stream():
     moment its session is marked compromised, instead of it having to wait
     for its next click to find out.
 
-    This is enforcement's UX layer, not enforcement itself — the actual
+    This is enforcement's UX layer, not enforcement itself -- the actual
     kill switch is _reject_if_compromised() in utils/auth.py, checked on
     every authenticated request regardless of whether this stream is even
     connected. A client that never opens this connection, or ignores every
@@ -132,11 +133,11 @@ def session_risk_stream():
                     return
                 yield ": keepalive\n\n"
                 time.sleep(2)
-            # Bounded lifetime reached with nothing to report — close
+            # Bounded lifetime reached with nothing to report -- close
             # cleanly; EventSource reconnects on its own.
             yield "event: ping\ndata: {}\n\n"
         except GeneratorExit:
-            # Client disconnected (tab closed/navigated away) — nothing to
+            # Client disconnected (tab closed/navigated away) -- nothing to
             # clean up, session_risk rows aren't tied to connection state.
             pass
 
@@ -150,7 +151,7 @@ def session_risk_stream():
 @core_bp.route("/security_lockout")
 def security_lockout():
     """Hard-locked landing page for a force-terminated session. Not behind
-    any auth decorator on purpose — the session that lands here has
+    any auth decorator on purpose -- the session that lands here has
     already been session.clear()'d by _reject_if_compromised()."""
     return render_template("security_lockout.html"), 403
 
@@ -361,7 +362,7 @@ def api_employee_signup():
                          f"<p>Employee ID: <strong>{emp_id}</strong></p>"
                          f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
                 try:
-                    send_email_smtp(email, f"Welcome {name} — Your Account is Ready", _html, _ecfg)
+                    send_email_smtp(email, f"Welcome {name} -- Your Account is Ready", _html, _ecfg)
                 except Exception:
                     app_log.error("api_employee_signup: welcome email failed", exc_info=True)
         return jsonify({

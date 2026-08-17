@@ -1,4 +1,5 @@
-"""Onboarding blueprint — templates, tasks, offer letters, employee self-service."""
+# -*- coding: utf-8 -*-
+"""Onboarding blueprint -- templates, tasks, offer letters, employee self-service."""
 import datetime
 import hashlib
 import html as _html
@@ -189,7 +190,7 @@ def bulk_assign_onboarding():
                 if _ecfg:
                     _html = (f"<p>Hi <strong>{_er[0]}</strong>,</p>"
                              f"<p>A new onboarding checklist <strong>'{_tr[0]}'</strong> has been assigned to you. Please complete all tasks by <strong>{due_date}</strong>.</p>")
-                    send_email_async(_er[1], f"New Onboarding Checklist — {_tr[0]}", _html, _ecfg)
+                    send_email_async(_er[1], f"New Onboarding Checklist -- {_tr[0]}", _html, _ecfg)
         except Exception:
             pass
     db.commit()
@@ -415,7 +416,7 @@ def onboarding_assign():
                             f"<p>A new onboarding checklist <strong>'{_safe_tname}'</strong> has been assigned to you.</p>"
                             f"<p>Due date: <strong>{due_date or 'Not set'}</strong></p>"
                             f"<p>Please log in to your employee portal and complete all tasks on time.</p>")
-                send_email_async(emp_email, f"New Onboarding Checklist Assigned — {tname}", _ob_html, _ecfg)
+                send_email_async(emp_email, f"New Onboarding Checklist Assigned -- {tname}", _ob_html, _ecfg)
             except Exception:
                 pass
     cursor.close()
@@ -629,7 +630,7 @@ def _generate_offer_letter_pdf(letter, co):
     department = letter[4] or ""
     work_location = letter[5] or ""
     monthly_ctc = float(letter[6]) if letter[6] else 0
-    joining_date = letter[7].strftime("%d %B %Y") if letter[7] else "—"
+    joining_date = letter[7].strftime("%d %B %Y") if letter[7] else "--"
     valid_until = letter[8].strftime("%d %B %Y") if letter[8] else "7 days from date of issue"
     probation = letter[9] or 6
     reporting_to = letter[10] or "the Department Head"
@@ -687,7 +688,7 @@ def _generate_offer_letter_pdf(letter, co):
     story.append(Spacer(1, 8))
 
     # ── Subject ────────────────────────────────────────────────────────────
-    story.append(Paragraph(f"<u><b>Sub: Offer of Employment — {designation}</b></u>", sNormal))
+    story.append(Paragraph(f"<u><b>Sub: Offer of Employment -- {designation}</b></u>", sNormal))
     story.append(Spacer(1, 10))
 
     # ── Salutation ─────────────────────────────────────────────────────────
@@ -729,7 +730,7 @@ def _generate_offer_letter_pdf(letter, co):
             ["Basic Salary", fmt(basic), fmt(basic * 12)],
             ["House Rent Allowance", fmt(hra), fmt(hra * 12)],
             ["Special Allowance", fmt(sa), fmt(sa * 12)],
-            ["PF — Employer (12%)", fmt(pf), fmt(pf * 12)],
+            ["PF -- Employer (12%)", fmt(pf), fmt(pf * 12)],
             ["Gratuity (4.81%)", fmt(gr), fmt(gr * 12)],
             ["GROSS CTC", fmt(monthly_ctc), fmt(monthly_ctc * 12)],
         ]
@@ -822,7 +823,7 @@ def _generate_offer_letter_pdf(letter, co):
     if co_address:
         foot_txt += f"  ·  {co_address}"
     story.append(Paragraph(
-        f'<font size="8" color="#9ca3af">{foot_txt}&nbsp;&nbsp;&nbsp;Confidential — For addressee only</font>', sCenter))
+        f'<font size="8" color="#9ca3af">{foot_txt}&nbsp;&nbsp;&nbsp;Confidential -- For addressee only</font>', sCenter))
     story.append(HRFlowable(width="100%", thickness=4, color=DARK, spaceBefore=6))
 
     doc.build(story)
@@ -865,7 +866,7 @@ def offer_letter_send(letter_id):
         department = letter[4] or ""
         work_location = letter[5] or ""
         monthly_ctc = float(letter[6]) if letter[6] else 0
-        joining_date = letter[7].strftime("%d %B %Y") if letter[7] else "—"
+        joining_date = letter[7].strftime("%d %B %Y") if letter[7] else "--"
         valid_until = letter[8].strftime("%d %B %Y") if letter[8] else "7 days from date of issue"
         probation = letter[9] or 6
         reporting_to = letter[10] or "the Department Head"
@@ -907,7 +908,7 @@ def offer_letter_send(letter_id):
                 <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">Basic Salary</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(basic)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(basic*12)}</td></tr>
                 <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">House Rent Allowance (HRA)</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(hra)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(hra*12)}</td></tr>
                 <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">Special Allowance</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(sa)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(sa*12)}</td></tr>
-                <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">PF — Employer Contribution</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(pf)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(pf*12)}</td></tr>
+                <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">PF -- Employer Contribution</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(pf)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(pf*12)}</td></tr>
                 <tr><td style="padding:9px 12px;">Gratuity (4.81% of Basic)</td><td style="padding:9px 12px;text-align:right;font-weight:600;">{fmt(gr)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;">{fmt(gr*12)}</td></tr>
               </tbody>
               <tfoot><tr>
@@ -989,7 +990,7 @@ def offer_letter_send(letter_id):
     <div>Employee ID: {letter[2]}</div>
   </div>
   <div style="padding:12px 48px 0;font-size:13px;font-weight:700;color:#111827;text-decoration:underline;">
-    Sub: Offer of Employment — {designation}
+    Sub: Offer of Employment -- {designation}
   </div>
 
   <!-- Letter body -->
@@ -1067,7 +1068,7 @@ def offer_letter_send(letter_id):
         <div style="display:table-cell;vertical-align:middle;">
           <div style="font-size:32px;display:inline-block;vertical-align:middle;margin-right:12px;">&#128196;</div>
           <div style="display:inline-block;vertical-align:middle;">
-            <div style="font-size:13px;font-weight:700;color:#111827;">Offer Letter — {emp_name}.pdf</div>
+            <div style="font-size:13px;font-weight:700;color:#111827;">Offer Letter -- {emp_name}.pdf</div>
             <div style="font-size:11px;color:#9ca3af;margin-top:2px;">Complete offer letter with salary breakdown &amp; terms</div>
           </div>
         </div>
@@ -1106,7 +1107,7 @@ def offer_letter_send(letter_id):
   <!-- Footer -->
   <div style="border-top:1px solid #e5e7eb;padding:10px 48px;font-size:10px;color:#9ca3af;display:table;width:100%;box-sizing:border-box;">
     <span style="display:table-cell;">{company}{(' · ' + co_address) if co_address else ''}</span>
-    <span style="display:table-cell;text-align:right;">Confidential — For addressee only</span>
+    <span style="display:table-cell;text-align:right;">Confidential -- For addressee only</span>
   </div>
   <div style="height:4px;background:#111827;"></div>
 </div>
@@ -1117,7 +1118,7 @@ def offer_letter_send(letter_id):
         safe_name = emp_name.replace(" ", "_")
         send_email_smtp(
             emp_email,
-            f"Offer Letter — {company}",
+            f"Offer Letter -- {company}",
             html_body,
             cfg,
             attachment_bytes=pdf_bytes,
@@ -1263,7 +1264,7 @@ def my_onboarding():
     db.close()
     if not emp:
         # Session outlived the employee row (e.g. deleted by an admin while
-        # still logged in elsewhere) — the template assumes emp is never
+        # still logged in elsewhere) -- the template assumes emp is never
         # None, so send them back to login instead of a 500.
         session.clear()
         return redirect(tpath("/login"))
@@ -1331,10 +1332,10 @@ def my_onboarding_task_done():
             _msg = (f"<p><strong>{emp_name_ob}</strong> has completed the onboarding task:</p>"
                     f"<p style='background:#f0fdf4;padding:10px;border-radius:8px;'><strong>{task_title}</strong></p>")
             if remaining == 0:
-                _msg += "<p style='color:#16a34a;font-weight:700;'>🎉 All tasks completed — onboarding marked as Complete!</p>"
+                _msg += "<p style='color:#16a34a;font-weight:700;'>🎉 All tasks completed -- onboarding marked as Complete!</p>"
             else:
                 _msg += f"<p>{remaining} task(s) remaining.</p>"
-            send_email_async(admin_email, f"Onboarding Task Done — {emp_name_ob}", _msg, _ecfg)
+            send_email_async(admin_email, f"Onboarding Task Done -- {emp_name_ob}", _msg, _ecfg)
     except Exception:
         pass
 

@@ -48,9 +48,36 @@ export default function QRScannerModal({ visible, onClose }) {
     }
   };
 
+  const parseEmployeeIdFromQR = (data) => {
+    if (!data) return "EMP-1001";
+    let raw = String(data).trim();
+    const empMatch = raw.match(/EMP-?\d+/i);
+    if (empMatch) {
+      let matched = empMatch[0].toUpperCase();
+      if (!matched.includes('-') && matched.startsWith('EMP')) {
+        matched = matched.replace('EMP', 'EMP-');
+      }
+      return matched;
+    }
+    if (raw.includes('/')) {
+      const parts = raw.split('/');
+      raw = parts[parts.length - 1];
+    }
+    raw = raw.replace(/\.(png|jpg|jpeg|gif|svg)$/i, '').trim();
+    if (raw.startsWith('{') && raw.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.employee_id || parsed.employeeId || parsed.emp_id) {
+          return (parsed.employee_id || parsed.employeeId || parsed.emp_id).toUpperCase();
+        }
+      } catch (_) {}
+    }
+    return raw.toUpperCase() || "EMP-1001";
+  };
+
   const handleQRScan = ({ data }) => {
     if (scanned || processing) return;
-    const empId = data.trim().toUpperCase();
+    const empId = parseEmployeeIdFromQR(data);
     if (!empId) return;
     setScanned(true);
     setEmployeeId(empId);

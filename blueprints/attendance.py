@@ -1,8 +1,9 @@
-"""Attendance blueprint — check-in/out, shifts, breaks, reports.
+# -*- coding: utf-8 -*-
+"""Attendance blueprint -- check-in/out, shifts, breaks, reports.
 
 Bandit B608 audit note: the nosec-marked queries below interpolate `_co`/
 `_args`, a company-scoping fragment that's always a hardcoded literal chosen
-by a bool (`"AND e.company_id=%s" if active_cid else ""`) — never user
+by a bool (`"AND e.company_id=%s" if active_cid else ""`) -- never user
 input. Actual values are always %s-bound params.
 """
 import os
@@ -231,7 +232,7 @@ def bulk_assign_shift():
 @attendance_bp.route("/update_default_shift", methods=["POST"])
 @admin_required
 def update_default_shift():
-    # No `global` needed — cfg.SHIFT_START/HALF/END live in utils.config now;
+    # No `global` needed -- cfg.SHIFT_START/HALF/END live in utils.config now;
     # cfg.load_default_shift() below mutates that module's own globals via
     # its own correctly-scoped `global` statement, not this function's.
     start = request.form.get("shift_start", "").strip()
@@ -659,8 +660,8 @@ def employee_attendance_detail(emp_id, year, month):
         if row:
             _, login_t, logout_t, status, logout_status, att_type = row
             final = att_type if att_type else infer_type_legacy(status, login_t, logout_t)
-            login_str = _td_to_time(login_t).strftime("%I:%M %p") if login_t else "—"
-            logout_str = _td_to_time(logout_t).strftime("%I:%M %p") if logout_t else "—"
+            login_str = _td_to_time(login_t).strftime("%I:%M %p") if login_t else "--"
+            logout_str = _td_to_time(logout_t).strftime("%I:%M %p") if logout_t else "--"
             if not is_future:
                 if final == "Full Day":
                     full_days += 1
@@ -671,9 +672,9 @@ def employee_attendance_detail(emp_id, year, month):
                 else:
                     absent += 1
         else:
-            final = "—"
-            login_str = "—"
-            logout_str = "—"
+            final = "--"
+            login_str = "--"
+            logout_str = "--"
             if not is_sunday and not is_holiday and not is_future:
                 absent += 1
 
@@ -794,7 +795,7 @@ def bulk_mark_attendance():
             rows.append((eid, date_obj, login_t, logout_t, att_type))
 
         # Single multi-row upsert instead of one INSERT round trip per
-        # employee — placeholders are a fixed repeated pattern sized off
+        # employee -- placeholders are a fixed repeated pattern sized off
         # len(rows), never user input, so this stays parameterized (%s).
         saved = len(rows)
         if rows:
@@ -844,7 +845,7 @@ def bulk_mark_attendance():
         cursor.execute(base_select + "WHERE e.is_active=1 AND e.company_id=%s ORDER BY e.name", (active_cid,))
     else:
         cursor.execute(base_select + "WHERE e.is_active=1 ORDER BY e.name")
-    # [11]=gender is Fernet-encrypted at rest — decrypt before display.
+    # [11]=gender is Fernet-encrypted at rest -- decrypt before display.
     employees = [row[:11] + (decrypt_pii(row[11]),) + row[12:] for row in cursor.fetchall()]
 
     cursor.execute(
@@ -1071,7 +1072,7 @@ def monthly_report_export():
 
     # ── title row ──
     ws.merge_cells("A1:H1")
-    ws["A1"] = f"Monthly Attendance Report — {month_name}"
+    ws["A1"] = f"Monthly Attendance Report -- {month_name}"
     ws["A1"].font = title_font
     ws["A1"].alignment = center
     ws.row_dimensions[1].height = 28
@@ -1190,7 +1191,7 @@ def send_absentee_report():
 
     try:
         send_email_smtp(cfg.get("from_email", cfg["user"]),
-                        f"Daily Absentee Report — {today.strftime('%d %b %Y')}", html, cfg)
+                        f"Daily Absentee Report -- {today.strftime('%d %b %Y')}", html, cfg)
         return jsonify({"ok": True, "msg": f"Report sent! {absent} absent out of {total} employees."})
     except Exception:
         app_log.error("Failed to send absentee report email", exc_info=True)
@@ -1246,7 +1247,7 @@ def attendance():
         if not auth_cfg["fingerprint_enabled"]:
             return jsonify({"ok": False, "msg": "Fingerprint not enabled. Ask your admin to enable it in Settings."}), 403
         # Real, server-verified, one-time, employee-bound proof from
-        # /api/employee/webauthn-verify-challenge — not a client-supplied flag.
+        # /api/employee/webauthn-verify-challenge -- not a client-supplied flag.
         if not _wa_fingerprint_recently_verified(emp_id):
             record_attendance_failure(emp_id, _today, "Fingerprint verification failed")
             return jsonify({"ok": False, "msg": "Fingerprint verification failed. Please try again."}), 401
@@ -1411,7 +1412,7 @@ def attendance():
         return jsonify(resp)
 
     else:
-        # Re-login after a break — re-open the session
+        # Re-login after a break -- re-open the session
         # worked_minutes was already saved on the previous logout, so just set last_relogin
         cursor.execute(
             "UPDATE attendance SET logout_time=NULL, last_relogin=%s "

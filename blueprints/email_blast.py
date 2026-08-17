@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Blueprint for Admin Targeted Email Dispatcher Module.
 
 Provides routes for broadcasting emails to:

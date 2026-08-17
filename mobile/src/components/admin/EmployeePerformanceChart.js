@@ -178,8 +178,6 @@ export default function EmployeePerformanceChart({
 
         </View>
 
-      </View>
-
       {/* ================= LEGEND ================= */}
 
       <View style={styles.legendContainer}>

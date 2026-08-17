@@ -1,4 +1,5 @@
-"""Notifications blueprint — in-app notification feeds.
+# -*- coding: utf-8 -*-
+"""Notifications blueprint -- in-app notification feeds.
 
 Migrated from app.py (lines 13255–13354). Routes:
   GET  /api/notifications                    → api_get_notifications         (admin, Bearer)

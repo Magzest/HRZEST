@@ -1,11 +1,12 @@
-"""Admin views blueprint — dashboard, settings, companies, analytics, audit.
+# -*- coding: utf-8 -*-
+"""Admin views blueprint -- dashboard, settings, companies, analytics, audit.
 
 Bandit B608 audit note (applies to every nosec-marked line in this file):
 Bandit flags f-string-built SQL as possible injection. Verified false
-positive in every case here — the interpolated fragment is always one of:
+positive in every case here -- the interpolated fragment is always one of:
   (a) a hardcoded literal string chosen by a bool (the `_co_sub`/`_co_join`/
       `_co_filter`/`where` pattern, e.g. `"AND company_id=%s" if active_cid
-      else ""`) — never user input;
+      else ""`) -- never user input;
   (b) a column name from a fixed allowlist dict (`column`/`cs_col`, checked
       against `_TOGGLE_COLUMN_MAP`/`_CS_COL_MAP` before use); or
   (c) a table name iterating a hardcoded Python list literal (`tbl` in
@@ -153,8 +154,12 @@ def admin():
         bt = b[2]
         if hasattr(bt, 'seconds'):
             h, m = divmod(bt.seconds // 60, 60)
-        else:
+        elif hasattr(bt, 'hour'):
             h, m = bt.hour, bt.minute
+        else:
+            # SQLite fallback has no native TIME type -- break_time comes
+            # back as a plain "HH:MM:SS" string instead of a time/timedelta.
+            h, m = (int(x) for x in str(bt).split(':')[:2])
         ampm = "AM" if h < 12 else "PM"
         h12 = h % 12 or 12
         breaks_display.append({
@@ -197,7 +202,7 @@ def admin():
 def api_admin_search():
     """Omnisearch across employees, tickets and leave requests for the
     admin dashboard's search bar. Static admin-page matches (Settings,
-    Analytics, ...) are matched client-side — no DB query needed for those."""
+    Analytics, ...) are matched client-side -- no DB query needed for those."""
     q = (request.args.get("q") or "").strip()
     if len(q) < 2:
         return jsonify({"ok": True, "results": []})
@@ -247,7 +252,7 @@ def api_admin_search():
     for lid, leave_date, status, emp_name in cursor.fetchall():
         results.append({
             "type": "leave", "icon": "calendar-event",
-            "label": f"{emp_name} — {leave_date}", "sub": status,
+            "label": f"{emp_name} -- {leave_date}", "sub": status,
             "url": "/leave_holidays",
         })
 
@@ -423,7 +428,7 @@ def settings_page():
 
     # Email config: intentionally NOT fetched here. The Email Settings tab
     # sits behind a 2FA step-up gate (utils/auth.py:require_email_2fa) and is
-    # loaded client-side via /api/settings/email only after verification —
+    # loaded client-side via /api/settings/email only after verification --
     # never server-rendered, so the password (and the rest of the SMTP
     # config) can't leak into the page's initial HTML before the admin
     # proves identity. See templates/settings.html's #email-2fa-gate.
@@ -485,7 +490,7 @@ def settings_page():
         company_breaks.setdefault(_cbcid, {}).setdefault(_cbsid, []).append(
             (_cbid, _cbname, _cbt_str, _cbdur, _cbactive))
 
-    # Breaks (with shift_id) — pre-format break_time as HH:MM
+    # Breaks (with shift_id) -- pre-format break_time as HH:MM
     cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active, COALESCE(shift_id,0) FROM break_config WHERE company_id IS NULL ORDER BY shift_id, break_time")
     breaks = []
     for _bid, _bname, _bt, _bdur, _bactive, _bshift in cursor.fetchall():
@@ -571,7 +576,7 @@ def settings_page():
     """)
     companies = cursor.fetchall()
 
-    # Feature flags — per-company when active, global otherwise
+    # Feature flags -- per-company when active, global otherwise
     _active_cid_settings = session.get("active_company_id")
     fr = get_co_features(_active_cid_settings)
     cursor.execute(
@@ -681,7 +686,7 @@ def settings_page():
 @admin_views_bp.route("/api/settings/2fa/setup")
 @admin_required
 def api_email_2fa_setup():
-    """Called when the admin has no TOTP enrolled yet — returns a QR code to
+    """Called when the admin has no TOTP enrolled yet -- returns a QR code to
     scan with an authenticator app. Idempotent: re-generates the same secret
     (doesn't rotate it) until enrollment is confirmed via /2fa/enable."""
     username = session.get("admin_username")
@@ -707,11 +712,11 @@ def api_email_2fa_enable():
                            level="WARNING", identifier=username)
         return jsonify({"ok": False, "msg": "Invalid code"}), 400
     mark_totp_enabled(username)
-    # Confirming enrollment with a live code IS proof of possession — as good
+    # Confirming enrollment with a live code IS proof of possession -- as good
     # as verify-2fa. Without this, the frontend's "unlock immediately after
     # enabling" step would hit the require_email_2fa gate with no session
     # flag set yet, get a 403, and fall back to re-showing the enrollment
-    # screen — which looks exactly like "my code keeps getting rejected"
+    # screen -- which looks exactly like "my code keeps getting rejected"
     # even though every code was valid the whole time.
     email_settings_step_up_refresh()
     log_security_event("auth.2fa_enrolled", "Admin enabled TOTP 2FA for Email Settings",
@@ -727,12 +732,12 @@ def api_email_2fa_reset():
     authenticator app: without this they can never produce a valid code
     again for any TOTP-gated area (Security hub, SOC, Email Settings), since
     the old secret is gone from their device but still enabled server-side.
-    Requires the account password again — an active session alone isn't
+    Requires the account password again -- an active session alone isn't
     enough proof to strip an existing MFA factor.
 
     Logged at ERROR (not WARNING) specifically so it fires the real-time
     security webhook alert alongside a best-effort email to the admin's own
-    registered address — stripping an MFA factor is exactly the kind of rare,
+    registered address -- stripping an MFA factor is exactly the kind of rare,
     high-consequence action that deserves an out-of-band notice, so the
     legitimate owner finds out even if a stolen session + phished password
     did this, not them."""
@@ -764,7 +769,7 @@ def api_email_2fa_reset():
                     f"(<b>{username}</b>) was just reset, and the old authenticator "
                     "entry no longer works.</p>"
                     "<p>If you just did this yourself to re-enroll, no action is needed.</p>"
-                    "<p><b>If you did not do this</b>, someone may have your password — "
+                    "<p><b>If you did not do this</b>, someone may have your password -- "
                     "change it immediately and review the security event log.</p>",
                     config,
                 )
@@ -778,7 +783,7 @@ def api_email_2fa_reset():
 def api_settings_verify_2fa():
     """The step-up gate itself. On a correct code, opens a rolling 15-minute
     window (utils/auth.py:email_settings_step_up_refresh) that /api/settings/
-    email and friends require. Session-based, not a separate cookie — the
+    email and friends require. Session-based, not a separate cookie -- the
     admin session is already HTTP-only/secure per extensions.py's cookie
     config, so a second cookie would add no isolation, just complexity."""
     username = session.get("admin_username")
@@ -796,7 +801,7 @@ def api_settings_verify_2fa():
 @admin_views_bp.route("/api/settings/2fa/lock", methods=["POST"])
 @admin_required
 def api_settings_lock():
-    """Explicit re-lock — called by the frontend's inactivity timer, and
+    """Explicit re-lock -- called by the frontend's inactivity timer, and
     available for a manual 'Lock' button. Idempotent."""
     email_settings_step_up_clear()
     return jsonify({"ok": True})
@@ -808,7 +813,7 @@ def api_settings_lock():
 def api_get_email_settings():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    # smtp_pass is deliberately never selected here — the password can only
+    # smtp_pass is deliberately never selected here -- the password can only
     # reach the client via the separate, individually-logged reveal endpoint.
     cursor.execute(
         "SELECT smtp_host, smtp_port, smtp_user, from_name, from_email, "
@@ -851,7 +856,7 @@ def api_save_email_settings():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    # A masked or blank password means "leave it unchanged" — only a genuine
+    # A masked or blank password means "leave it unchanged" -- only a genuine
     # new value gets (re-)encrypted. This is the fix for the bug where the
     # server-rendered form used to re-save its own displayed ciphertext as
     # the "new" password on every unrelated edit, corrupting it.
@@ -1396,7 +1401,7 @@ def edit_company(cid):
 
                 # One UPDATE per related table for the whole renamed batch (via a
                 # Postgres UNNEST mapping table), instead of one UPDATE per table
-                # PER renamed employee — a rename of N employees previously issued
+                # PER renamed employee -- a rename of N employees previously issued
                 # N*16 round trips here; this issues a flat 16 regardless of N.
                 old_ids = [p[0] for p in to_rename]
                 new_ids = [p[1] for p in to_rename]
@@ -1909,7 +1914,7 @@ def analytics():
     """, (datetime.date(today.year, today.month, 1), today, datetime.date(today.year, today.month, 1), today.month, today.year))
     top_present = [{'name': r[1], 'employee_id': r[0], 'pct': float(r[2] or 0)} for r in cursor.fetchall()]
 
-    # gender is Fernet-encrypted (non-deterministic ciphertext — the same
+    # gender is Fernet-encrypted (non-deterministic ciphertext -- the same
     # plaintext never produces the same bytes twice), so GROUP BY gender at
     # the SQL level would group by ciphertext and put every employee in
     # their own bucket. Aggregate in Python instead, after decrypting.
@@ -1922,7 +1927,7 @@ def analytics():
     gender_data = [{'gender': g, 'count': c} for g, c in
                    sorted(_gender_counts.items(), key=lambda kv: -kv[1])]
 
-    # Attendance heatmap — last 35 days (5 weeks) present count per day
+    # Attendance heatmap -- last 35 days (5 weeks) present count per day
     heatmap_start = today - datetime.timedelta(days=34)
     cursor.execute("""
         SELECT date, COUNT(DISTINCT employee_id) as cnt
@@ -1953,7 +1958,7 @@ def analytics():
         pct = round(present / total * 100, 1) if total else 0
         dept_attendance.append({'dept': dept, 'total': total, 'present': present, 'pct': pct})
 
-    # Late arrival trend — last 14 days
+    # Late arrival trend -- last 14 days
     late_start = today - datetime.timedelta(days=13)
     cursor.execute("""
         SELECT date, COUNT(DISTINCT employee_id) as late_cnt
@@ -1967,7 +1972,7 @@ def analytics():
         d = late_start + datetime.timedelta(days=i)
         late_trend.append({'date': d.strftime('%d %b'), 'count': late_raw.get(d, 0)})
 
-    # Employee retention — tenure bands
+    # Employee retention -- tenure bands
     cursor.execute("SELECT date_of_joining FROM employees WHERE date_of_joining IS NOT NULL")
     retention = {'0-6m': 0, '6-12m': 0, '1-3y': 0, '3y+': 0}
     for (doj,) in cursor.fetchall():
@@ -2081,7 +2086,7 @@ def analytics():
             'level': 'warning',
             'icon': 'ti-clock-pause',
             'title': f'{pending_leaves} leave requests pending approval',
-            'detail': 'Employees may be waiting — review and approve',
+            'detail': 'Employees may be waiting -- review and approve',
             'link': '/leave_requests'
         })
 
@@ -2127,7 +2132,7 @@ def analytics():
         smart_alerts.append({
             'level': 'success',
             'icon': 'ti-circle-check',
-            'title': 'All systems healthy — no anomalies detected',
+            'title': 'All systems healthy -- no anomalies detected',
             'detail': 'Attendance, leaves and approvals are all on track',
             'link': ''
         })
@@ -2304,7 +2309,7 @@ def api_test_email():
     if not cfg or not cfg.get("host"):
         return jsonify({"ok": False, "msg": "No SMTP configuration found in system. Please configure SMTP first."}), 400
 
-    subject = "⚡ SMTP Connection Test — HRzest.com"
+    subject = "⚡ SMTP Connection Test -- HRzest.com"
     now_str = datetime.datetime.now().strftime("%d %b %Y, %I:%M %p")
     html_body = f"""
     <div style="font-family: Arial, sans-serif; padding: 24px; background: #f8fafc; border-radius: 12px;">

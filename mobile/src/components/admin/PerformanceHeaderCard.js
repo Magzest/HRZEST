@@ -181,8 +181,6 @@ export default function PerformanceHeaderCard({
 
         </View>
 
-      </View>
-
       {/* ================= KPI CARDS ================= */}
 
       <View style={styles.statsRow}>

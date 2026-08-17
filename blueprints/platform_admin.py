@@ -1,4 +1,5 @@
-"""Platform admin blueprint — cross-tenant SaaS operator panel.
+# -*- coding: utf-8 -*-
+"""Platform admin blueprint -- cross-tenant SaaS operator panel.
 
 /super_admin/* is deliberately in app.py's _resolve_tenant() skip list, so
 g.tenant_db is never set here: every DB access below must go through

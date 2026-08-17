@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 """Native, signature-based Web Application Firewall.
 
 Complements the structural defenses already in place elsewhere (parameterized
 SQL everywhere a query is built, CSP + html.escape for XSS, secure_filename +
-magic-byte checks for uploads — see utils/helpers.py) with an interception
+magic-byte checks for uploads -- see utils/helpers.py) with an interception
 layer that inspects every incoming request for known attack *shapes* and
 rejects them before a route handler ever runs. Registered as an
 app.before_request hook in app.py, right after _enforce_ip_ban.
@@ -10,7 +11,7 @@ app.before_request hook in app.py, right after _enforce_ip_ban.
 Patterns are deliberately multi-token / structural rather than single
 characters or words, so a legitimate apostrophe in a name ("O'Brien"), a
 hyphenated address, or the word "select" in a dropdown label never trips a
-false positive — each pattern requires the *shape* of an actual injection
+false positive -- each pattern requires the *shape* of an actual injection
 attempt (a keyword next to the syntax that would make it executable).
 """
 import re
@@ -110,7 +111,7 @@ def _inspect_value(field, value):
 
 def _flatten_json(obj, prefix=""):
     """Yields (field_path, string_value) pairs from an arbitrarily nested
-    JSON body — attack payloads can hide in any nested string field, not
+    JSON body -- attack payloads can hide in any nested string field, not
     just top-level ones."""
     if isinstance(obj, dict):
         for k, v in obj.items():
@@ -162,7 +163,7 @@ def inspect_request(request):
 
 
 # ── Progressive auto-ban on repeated breaches ──────────────────────────────
-# Per-worker in-memory counter — same documented limitation as extensions.py's
+# Per-worker in-memory counter -- same documented limitation as extensions.py's
 # Flask-Limiter storage (no Redis in this stack). Under multiple gunicorn
 # workers the effective threshold is BREACH_THRESHOLD * worker_count, which
 # is an acceptable trade for a mechanism that needs zero extra infrastructure
@@ -181,14 +182,14 @@ _breach_log = defaultdict(deque)  # ip -> deque[timestamp]
 def record_breach_and_maybe_ban(ip, reason):
     """Call on every WAF block or rate-limit breach. Once an IP crosses
     _BREACH_THRESHOLD breaches inside _BREACH_WINDOW_SECONDS, inserts a
-    temporary ban into banned_ips — the same table and INSERT shape the SOC
+    temporary ban into banned_ips -- the same table and INSERT shape the SOC
     dashboard's manual ban-ip endpoint uses (blueprints/admin_views.py), so
     the existing _enforce_ip_ban before_request hook (app.py) blocks the IP
     on its very next request with no new blocking mechanism needed.
 
     Uses Redis (shared across gunicorn workers) when extensions.redis_client
     is configured, falling back to the in-memory per-worker counter
-    otherwise — including if a configured Redis becomes unreachable
+    otherwise -- including if a configured Redis becomes unreachable
     mid-request, so a transient Redis blip degrades the counter rather than
     breaking request handling.
     """
@@ -209,7 +210,7 @@ def record_breach_and_maybe_ban(ip, reason):
 
 def _record_breach_redis(ip, reason):
     """Fixed-window counter (INCR + EXPIRE-if-new) rather than the
-    in-memory version's exact rolling window — a reasonable approximation
+    in-memory version's exact rolling window -- a reasonable approximation
     for an anti-abuse threshold, and the same fixed-window approach
     Flask-Limiter's own Redis storage uses."""
     key = f"waf:breach:{ip}"

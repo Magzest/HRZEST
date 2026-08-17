@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Step-Up MFA & Session IP Binding Middleware.
 
 Enforces:
@@ -48,7 +49,7 @@ def require_step_up_mfa(f):
             session["_step_up_target_url"] = request.url
             log_security_event(
                 "mfa.step_up_required",
-                "High-privilege operation requested — Step-Up MFA re-challenge required",
+                "High-privilege operation requested -- Step-Up MFA re-challenge required",
                 level="INFO",
                 identifier=session.get("admin_username"),
                 path=request.path

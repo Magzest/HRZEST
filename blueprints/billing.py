@@ -1,4 +1,5 @@
-"""Billing blueprint — Razorpay-backed paid signup for the public
+# -*- coding: utf-8 -*-
+"""Billing blueprint -- Razorpay-backed paid signup for the public
 /create_org flow (templates/create_org.html).
 
 Flow: create_order() creates a Razorpay order + a staging `payment_orders`

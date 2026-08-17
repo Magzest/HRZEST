@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Razorpay Orders API + payment-signature verification for the paid
 self-service signup flow (blueprints/billing.py).
 

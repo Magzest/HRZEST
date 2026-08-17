@@ -133,18 +133,28 @@ export default function AttendanceStatusCard({
       </View>
 
       {/* Action Button */}
-      {onCheckIn && !completed && (
+      {onCheckIn && (
         <TouchableOpacity
           activeOpacity={0.88}
           disabled={checking}
           onPress={onCheckIn}
           style={[
             styles.actionBtn,
-            checkedIn ? styles.checkoutBtn : styles.checkinBtn,
+            checkedIn
+              ? styles.checkoutBtn
+              : completed
+              ? styles.reloginBtn
+              : styles.checkinBtn,
           ]}
         >
           <Ionicons
-            name={checkedIn ? "log-out-outline" : "log-in-outline"}
+            name={
+              checkedIn
+                ? "log-out-outline"
+                : completed
+                ? "refresh-outline"
+                : "log-in-outline"
+            }
             size={20}
             color="#FFFFFF"
             style={{ marginRight: 8 }}
@@ -154,16 +164,11 @@ export default function AttendanceStatusCard({
               ? "Processing..."
               : checkedIn
               ? "Check Out Shift"
+              : completed
+              ? "Re-Login / Start Session"
               : "Mark Attendance / Check In"}
           </Text>
         </TouchableOpacity>
-      )}
-
-      {completed && (
-        <View style={styles.completedBadge}>
-          <Ionicons name="checkmark-circle" size={18} color="#16A34A" style={{ marginRight: 6 }} />
-          <Text style={styles.completedText}>Today's Shift Completed</Text>
-        </View>
       )}
 
       {/* Status */}
@@ -392,6 +397,10 @@ const styles = StyleSheet.create({
 
   checkoutBtn: {
     backgroundColor: "#DC2626",
+  },
+
+  reloginBtn: {
+    backgroundColor: "#6366F1",
   },
 
   actionBtnText: {

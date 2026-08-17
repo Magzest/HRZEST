@@ -608,23 +608,10 @@
           </div>
 
           <div class="action-card">
-            <div class="ac-icon u-bg-dbeafe" style="color:#2563eb"><i class="ti ti-camera"></i></div>
-            <h4>Update Face Photo</h4>
-            <div class="sub">Replace employee's face image</div>
-            <form id="updForm" action="{{ tpath('/admin_action') }}" method="POST" enctype="multipart/form-data" onsubmit="return validateUpdForm()">
-              <input type="hidden" name="action" value="update_face" />
-              <input type="text" name="emp_id" placeholder="Employee ID" required />
-              <input class="u-d-none" type="file" name="face" id="updFaceFile" accept="image/*" onchange="onFileChosen(this,'upd')" />
-              <div class="u-w-100pct u-h-72 u-br-8 u-bg-f1f5f9 u-bd-2-dashed-93c5fd u-d-flex u-ai-center u-jc-center u-mb-7 u-ov-hidden" id="updPreview">
-                <span class="u-fs-12 u-c-94a3b8" id="updPreviewText">No photo</span>
-                <img class="u-d-none u-w-100pct u-h-100pct u-objf-cover" id="updPreviewImg" src="" alt="" />
-              </div>
-              <div class="u-d-grid u-gtc-1fr-1fr u-gap-5 u-mb-7">
-                <button class="u-p-7 u-bd-none u-br-7 u-bg-1e3a8a u-c-fff u-fs-11 u-fw-700 u-cur-pointer" type="button" onclick="openCameraModal('upd')"><i class="ti ti-camera"></i> Camera</button>
-                <button class="u-p-7 u-bd-1-solid-dbeafe u-br-7 u-bg-fff u-c-1e3a8a u-fs-11 u-fw-700 u-cur-pointer" type="button" onclick="document.getElementById('updFaceFile').click()"><i class="ti ti-upload"></i> Upload</button>
-              </div>
-              <button type="submit" class="btn btn-blue">Update Photo</button>
-            </form>
+            <div class="ac-icon u-bg-dbeafe" style="color:#2563eb"><i class="ti ti-user-plus"></i></div>
+            <h4>Register Employee</h4>
+            <div class="sub">Add a new employee to the system</div>
+            <a href="{{ tpath('/employees?open=add') }}" class="btn btn-blue u-d-flex u-ai-center u-jc-center" style="text-decoration:none;">Register Employee</a>
           </div>
 
         </div>
@@ -703,32 +690,6 @@
       </div>
 
     </div><!-- /main -->
-
-    <!-- ═══ CAMERA MODAL ═══ -->
-    <div class="u-d-none u-pos-fixed u-ins-0 u-bg-rgba0_0_0_0d75 u-zi-2000 u-ai-center u-jc-center" id="cameraModal">
-      <div class="u-bg-1e1b3a u-br-20 u-p-28 u-w-100pct u-maxw-420 u-c-white u-ta-center u-shad-0-24-60-rgba0_0_0_0d6">
-        <h3 class="u-mb-6"><i class="ti ti-camera"></i> Take Face Photo</h3>
-        <p class="u-fs-12 u-op-0d55 u-mb-14">Position the employee's face in the frame, then click Capture.</p>
-        <div class="u-d-flex u-gap-8 u-mb-12 u-fs-11 u-ta-left">
-          <div class="u-fx-1 u-p-7 u-bg-rgba255_255_255_0d07 u-br-7"><i class="ti ti-circle-check"></i> Front-facing</div>
-          <div class="u-fx-1 u-p-7 u-bg-rgba255_255_255_0d07 u-br-7"><i class="ti ti-circle-check"></i> Good lighting</div>
-          <div class="u-fx-1 u-p-7 u-bg-rgba255_255_255_0d07 u-br-7"><i class="ti ti-circle-x"></i> No sunglasses</div>
-        </div>
-        <div class="u-pos-relative u-w-100pct u-br-12 u-ov-hidden u-bg-000 u-mb-12">
-          <video class="u-w-100pct u-d-block u-maxh-280 u-objf-cover" id="camVideo" autoplay playsinline muted></video>
-          <div class="u-pos-absolute u-ins-0 u-d-flex u-ai-center u-jc-center u-pe-none">
-            <div class="u-w-160 u-h-200 u-bd-2-dashed-rgba047da6b u-br-50pct"></div>
-          </div>
-        </div>
-        <canvas class="u-d-none u-w-100pct u-br-12 u-mb-12" id="camCanvas"></canvas>
-        <div class="u-d-flex u-gap-10">
-          <button class="u-fx-1 u-p-12 u-bd-none u-br-10 u-bg-linear-gradiene4b3b9 u-c-white u-fs-14 u-fw-700 u-cur-pointer" id="captureBtn" onclick="capturePhoto()"><i class="ti ti-camera"></i> Capture</button>
-          <button class="u-d-none u-fx-1 u-p-12 u-bd-none u-br-10 u-bg-rgba255_255_255_0d15 u-c-white u-fs-14 u-fw-700 u-cur-pointer" id="retakeBtn"  onclick="retakePhoto()"><i class="ti ti-refresh"></i> Retake</button>
-          <button class="u-d-none u-fx-1 u-p-12 u-bd-none u-br-10 u-bg-linear-gradien161636 u-c-white u-fs-14 u-fw-700 u-cur-pointer" id="useBtn"     onclick="usePhoto()"><i class="ti ti-circle-check"></i> Use Photo</button>
-          <button class="u-p-12-16 u-bd-1-solid-rgba2525554c u-br-10 u-bg-transparent u-c-white u-fs-14 u-cur-pointer" onclick="closeCameraModal()">Cancel</button>
-        </div>
-      </div>
-    </div>
 
     <!-- ═══ EDIT EMPLOYEE MODAL ═══ -->
     <div class="u-d-none u-pos-fixed u-ins-0 u-bg-rgba0_0_0_0d55 u-zi-1000 u-ai-center u-jc-center" id="editModal">
@@ -830,62 +791,6 @@
           showToast(data.ok ? data.msg : "Error: " + data.msg, data.ok ? "success" : "error");
         } catch(e) { showToast("Failed to reach server. Check your connection.", "error"); }
         btn.disabled = false; btn.innerHTML = '<i class="ti ti-mail"></i> Email Absentees';
-      }
-
-      /* ── FACE PHOTO ── */
-      let _camStream = null, _camTarget = null, _capturedBlob = null;
-
-      function onFileChosen(input, target) {
-        const file = input.files[0]; if (!file) return;
-        showPreview(target, URL.createObjectURL(file));
-      }
-      function showPreview(target, url) {
-        document.getElementById(target+"PreviewImg").src = url;
-        document.getElementById(target+"PreviewImg").style.display = "block";
-        const txt = document.getElementById(target+"PreviewText");
-        if (txt && txt.parentElement) txt.parentElement.style.display = "none";
-      }
-      async function openCameraModal(target) {
-        _camTarget = target; _capturedBlob = null;
-        document.getElementById("cameraModal").style.display   = "flex";
-        document.getElementById("camCanvas").style.display     = "none";
-        document.getElementById("camVideo").style.display      = "block";
-        document.getElementById("captureBtn").style.display    = "inline-block";
-        document.getElementById("retakeBtn").style.display     = "none";
-        document.getElementById("useBtn").style.display        = "none";
-        try {
-          _camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:480}},audio:false});
-          document.getElementById("camVideo").srcObject = _camStream;
-        } catch(e) { showToast("Camera not accessible: "+e.message+". Use Upload Photo instead.", "error"); closeCameraModal(); }
-      }
-      function capturePhoto() {
-        const video = document.getElementById("camVideo"), canvas = document.getElementById("camCanvas");
-        canvas.width = video.videoWidth||640; canvas.height = video.videoHeight||480;
-        canvas.getContext("2d").drawImage(video,0,0);
-        if (_camStream) { _camStream.getTracks().forEach(t=>t.stop()); _camStream = null; }
-        video.style.display = "none"; canvas.style.display = "block";
-        document.getElementById("captureBtn").style.display = "none";
-        document.getElementById("retakeBtn").style.display  = "inline-block";
-        document.getElementById("useBtn").style.display     = "inline-block";
-        canvas.toBlob(blob => { _capturedBlob = blob; }, "image/jpeg", 0.92);
-      }
-      function retakePhoto() { _capturedBlob = null; openCameraModal(_camTarget); }
-      function usePhoto() {
-        if (!_capturedBlob) return;
-        const file = new File([_capturedBlob], "face_capture.jpg", {type:"image/jpeg"});
-        const dt   = new DataTransfer(); dt.items.add(file);
-        document.getElementById(_camTarget+"FaceFile").files = dt.files;
-        showPreview(_camTarget, URL.createObjectURL(_capturedBlob));
-        closeCameraModal();
-      }
-      function closeCameraModal() {
-        if (_camStream) { _camStream.getTracks().forEach(t=>t.stop()); _camStream = null; }
-        document.getElementById("cameraModal").style.display = "none";
-      }
-      document.getElementById("cameraModal").addEventListener("click", e => { if (e.target===e.currentTarget) closeCameraModal(); });
-
-      function validateUpdForm() {
-        if (!document.getElementById("updFaceFile").files.length) { showToast("Please take or upload a face photo.", "error"); return false; } return true;
       }
 
       /* ── WORK MODE TOGGLE (Edit modal) ── */
