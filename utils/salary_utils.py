@@ -1,7 +1,8 @@
-"""Salary calculation and payslip rendering — pure functions, no DB access.
+# -*- coding: utf-8 -*-
+"""Salary calculation and payslip rendering -- pure functions, no DB access.
 
 Extracted from app.py as part of migrating the payroll routes into
-blueprints/payroll.py — payroll.py's manifest comment already flagged this
+blueprints/payroll.py -- payroll.py's manifest comment already flagged this
 as the eventual plan ("stays in app.py until extracted to
 utils/salary_utils.py"). Doing it now rather than having the blueprint
 import back from app.py, which would create a real circular-import
@@ -141,7 +142,7 @@ def build_salary_slip_html(emp_name, emp_id, emp_email, month_name, year, month,
   <div class="hdr">
     <div class="hdr-left">
       <h1>{_html.escape(str(company_name)) if company_name else "Payslip"}</h1>
-      <p>Salary Slip — {month_name}</p>
+      <p>Salary Slip -- {month_name}</p>
     </div>
     <div class="hdr-right">
       <div class="slip-num">Slip ID: {_html.escape(str(emp_id))}-{year}{month:02d}</div>
@@ -187,17 +188,17 @@ def build_salary_slip_html(emp_name, emp_id, emp_email, month_name, year, month,
           <tr class="tot"><td>Gross Salary</td><td>Rs. {gross_salary:,.2f}</td></tr>
         </table>
         <div style="margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;font-size:12px;color:#15803d;">
-          <b>PF — Employer Contribution ({pf_er_pct:.0f}%)</b>: Rs. {pf_er_ded:,.2f}
-          <div style="color:#64748b;margin-top:2px;font-size:11px;">Company's share — not deducted from your pay</div>
+          <b>PF -- Employer Contribution ({pf_er_pct:.0f}%)</b>: Rs. {pf_er_ded:,.2f}
+          <div style="color:#64748b;margin-top:2px;font-size:11px;">Company's share -- not deducted from your pay</div>
         </div>
       </div>
       <div>
         <div class="sec-title">Deductions</div>
         <table class="pay-tbl">
-          <tr><td>Loss of Pay — LOP ({int(lop_days)} days × Rs.{gross_salary/26:,.2f})</td><td class="red">Rs. {lop_ded:,.2f}</td></tr>
-          <tr><td>PF — Employee Contribution ({pf_pct:.0f}% of Basic)</td><td class="red">Rs. {pf_ded:,.2f}</td></tr>
+          <tr><td>Loss of Pay -- LOP ({int(lop_days)} days × Rs.{gross_salary/26:,.2f})</td><td class="red">Rs. {lop_ded:,.2f}</td></tr>
+          <tr><td>PF -- Employee Contribution ({pf_pct:.0f}% of Basic)</td><td class="red">Rs. {pf_ded:,.2f}</td></tr>
           <tr><td>Professional Tax</td><td class="red">Rs. {pt_monthly:,.2f}</td></tr>
-          {"<tr><td>TDS — Income Tax (annual " + f"{tds_ann_pct:.1f}%" + ")</td><td class='red'>Rs. " + f"{tds_ded:,.2f}</td></tr>" if tds_ded > 0 else ""}
+          {"<tr><td>TDS -- Income Tax (annual " + f"{tds_ann_pct:.1f}%" + ")</td><td class='red'>Rs. " + f"{tds_ded:,.2f}</td></tr>" if tds_ded > 0 else ""}
           <tr class="tot"><td>Total Deductions</td><td>Rs. {total_ded:,.2f}</td></tr>
         </table>
         <div style="margin-top:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;">

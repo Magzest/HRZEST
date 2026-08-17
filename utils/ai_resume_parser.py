@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """AI Resume Parser & Job Description Matcher Service Module.
 
 Parses resume text/documents to extract candidate skills, experience, and education,

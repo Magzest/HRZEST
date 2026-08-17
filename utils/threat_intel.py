@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """SOC Threat Intelligence Feed & Automated Boundary IP Auto-blocking Service.
 
 Periodically polls threat feeds (CISA KEV and malicious IP blocklists),

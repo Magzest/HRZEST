@@ -1,8 +1,9 @@
-"""Performance blueprint — reviews, KPIs. Hike/bonus live in blueprints/payroll.py.
+# -*- coding: utf-8 -*-
+"""Performance blueprint -- reviews, KPIs. Hike/bonus live in blueprints/payroll.py.
 
 Bandit B608 audit note: the nosec-marked queries below interpolate
 `dept_filter`/`co_filter`/`_hike_co`, fragments that are always a hardcoded
-literal chosen by a bool (`dept`/`active_cid`) — never user input. Actual
+literal chosen by a bool (`dept`/`active_cid`) -- never user input. Actual
 values are always %s-bound params.
 """
 import datetime
@@ -109,7 +110,7 @@ def performance():
     params = [yr, q] + ([dept] if dept else []) + list(_co_params)
     cursor.execute(f"""
         SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
-               pr.id, COALESCE(pr.overall_rating,0), COALESCE(pr.status,'—'),
+               pr.id, COALESCE(pr.overall_rating,0), COALESCE(pr.status,'--'),
                (SELECT COUNT(*) FROM performance_kpis pk WHERE pk.review_id=pr.id) AS kpi_count
         FROM employees e
         LEFT JOIN performance_reviews pr
@@ -163,7 +164,7 @@ def performance():
         _hike_params = (yr, q) + _hike_co_args
         cursor.execute(f"""
             SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
-                   COALESCE(pr.overall_rating,0), COALESCE(pr.status,'—'),
+                   COALESCE(pr.overall_rating,0), COALESCE(pr.status,'--'),
                    COALESCE(sc.monthly_ctc,0)
             FROM employees e
             LEFT JOIN performance_reviews pr ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
@@ -564,7 +565,7 @@ def performance_export():
     ws1.append([])
     ws1.merge_cells("A1:H1")
     title_cell = ws1["A1"]
-    title_cell.value = f"Performance Summary — Q{q} ({q_labels.get(q,'')}) {yr}"
+    title_cell.value = f"Performance Summary -- Q{q} ({q_labels.get(q,'')}) {yr}"
     title_cell.font = Font(bold=True, size=14, color="1E3A8A")
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws1.row_dimensions[1].height = 36
@@ -588,7 +589,7 @@ def performance_export():
 
     for r_idx, (emp_id, name, role, dept, rating, status, feedback, _, _rev_id) in enumerate(employees, 3):
         row_data = [emp_id, name, role, dept, kpi_counts.get(emp_id, 0),
-                    rating if rating else "—", status, feedback]
+                    rating if rating else "--", status, feedback]
         for c_idx, val in enumerate(row_data, 1):
             cell = ws1.cell(row=r_idx, column=c_idx, value=val)
             style_data_cell(cell, r_idx)
@@ -619,7 +620,7 @@ def performance_export():
     ws2.row_dimensions[1].height = 28
 
     for r_idx, (emp_id, name, title, desc, target, achievement, weight, rating, comments) in enumerate(kpis, 2):
-        for c_idx, val in enumerate([emp_id, name, title, desc, target, achievement, weight, rating or "—", comments], 1):
+        for c_idx, val in enumerate([emp_id, name, title, desc, target, achievement, weight, rating or "--", comments], 1):
             cell = ws2.cell(row=r_idx, column=c_idx, value=val)
             style_data_cell(cell, r_idx)
         ws2.row_dimensions[r_idx].height = 20
@@ -705,7 +706,7 @@ def performance_import():
         flash("Could not read the Excel file. Make sure it is a valid .xlsx file.", "error")
         return redirect(tpath(f"/performance?tab=performance&quarter={q}&year={yr}"))
 
-    # Find the data sheet — use first sheet that isn't "Import Template"
+    # Find the data sheet -- use first sheet that isn't "Import Template"
     sheet = None
     for ws in wb.worksheets:
         if ws.title != "Import Template":

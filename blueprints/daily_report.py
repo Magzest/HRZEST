@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 """
-daily_report.py — Nightly attendance summary email, available to every tenant.
+daily_report.py -- Nightly attendance summary email, available to every tenant.
 
 Scheduled by APScheduler (registered in wsgi.py) to run at 23:59 every day.
 Generates a per-company attendance summary and emails it to all admin addresses.
@@ -123,7 +124,7 @@ def _build_email_html(date_str: str, stats: dict) -> str:
 
 def generate_and_send_daily_report():
     """
-    Main job function — called by APScheduler nightly. APScheduler invokes
+    Main job function -- called by APScheduler nightly. APScheduler invokes
     this with no Flask request (and no app context) at all, so it needs its
     own app_context() -- without one, get_db_connection() silently falls
     back to the "public" schema (see database.py), which has none of these
@@ -219,11 +220,11 @@ def _run_report():
         app_log.warning("daily_report: no email config found, skipping send")
         return
 
-    subject = f"📊 Daily Attendance Report — {date_str}"
+    subject = f"📊 Daily Attendance Report -- {date_str}"
     html    = _build_email_html(date_str, stats)
     for email in admin_emails:
         send_email_async(email, subject, html, cfg)
-    app_log.info(f"daily_report: done — sent to {len(admin_emails)} admins")
+    app_log.info(f"daily_report: done -- sent to {len(admin_emails)} admins")
 
 
 def send_weekly_employee_digests():
@@ -245,7 +246,7 @@ def send_weekly_employee_digests():
 
             for emp in employees:
                 emp_id, emp_name, emp_email = emp
-                subject = f"✨ Your Weekly Attendance Summary — {emp_name}"
+                subject = f"✨ Your Weekly Attendance Summary -- {emp_name}"
                 html = f"""
                 <div style="font-family:sans-serif;max-width:550px;margin:20px auto;background:#fff;padding:24px;border-radius:12px;border:1px solid #e2e8f0;">
                   <h2 style="color:#1e3a8a;margin-top:0;">Weekly Digest for {emp_name}</h2>

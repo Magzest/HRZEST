@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 """Pure helper functions for the leave/holiday/overtime blueprint.
 
-Extracted from app.py rather than imported back from it — wsgi.py registers
+Extracted from app.py rather than imported back from it -- wsgi.py registers
 blueprints before `import app as _app_module`, so a blueprint importing from
 app.py would trigger app.py's full module body (route registration, DB
 bootstrap) out of order. Neither function here touches the DB directly

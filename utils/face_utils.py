@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 """Face-recognition bootstrap + known-encoding cache.
 
-Extracted from app.py — used by both the employees blueprint (photo
+Extracted from app.py -- used by both the employees blueprint (photo
 registration/update, which validates a face is detectable in the uploaded
 photo) and the attendance blueprint (check-in face-match verification), so
 neither can own it exclusively without the other importing across a
@@ -41,7 +42,7 @@ def verify_uploaded_face(emp_id: str, registered_face_path: str, face_photo_stor
     """Compare an uploaded photo (werkzeug FileStorage) against an employee's
     on-file registered face. Returns (ok, error_msg). The one place in this
     app that turns a claimed employee_id into a real, server-verified proof
-    that the person in front of the camera is actually that employee —
+    that the person in front of the camera is actually that employee --
     used both by attendance check-in and by the WebAuthn kiosk-enrollment
     identity gate, since a client-supplied employee_id string alone (QR scan
     content, typed input) proves nothing on its own."""

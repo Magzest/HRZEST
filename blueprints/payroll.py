@@ -1,8 +1,9 @@
-"""Payroll blueprint — salary, payslips, payroll settings, reports.
+# -*- coding: utf-8 -*-
+"""Payroll blueprint -- salary, payslips, payroll settings, reports.
 
 Migrated from app.py (25 routes: the 23 the manifest listed, plus two
 companion POST handlers the original manifest comment collapsed into their
-GET counterparts — /api/salary_config POST and /api/email_config POST are
+GET counterparts -- /api/salary_config POST and /api/email_config POST are
 separate functions, not the same one handling both methods). Extracted
 build_salary_slip_html/compute_salary_entry into utils/salary_utils.py as
 part of this move rather than importing them back from app.py, which would
@@ -324,7 +325,7 @@ def salary_report_export():
 @limiter.limit("10 per minute")
 def email_config():
     # GET used to render this standalone page with the SMTP password
-    # decrypted straight into the form's HTML and no step-up gate at all —
+    # decrypted straight into the form's HTML and no step-up gate at all --
     # worse than the ciphertext-leak bug on the /settings copy of this form,
     # since here it was the real plaintext. Retired in favor of the
     # 2FA-gated Email tab; redirecting (rather than deleting the route)
@@ -341,7 +342,7 @@ def email_config():
     from_name = request.form.get("from_name", "HRzest.com").strip()
     from_email = request.form.get("from_email", "").strip() or user
 
-    # A blank or masked password means "leave the stored one unchanged" —
+    # A blank or masked password means "leave the stored one unchanged" --
     # previously any save re-encrypted whatever was in the field, and since
     # GET used to prefill that field with ciphertext, an untouched save
     # would silently corrupt the real password into unusable garbage.
@@ -730,7 +731,7 @@ def my_attendance_pdf():
     total_h = f"{total_sec//3600}h {(total_sec%3600)//60}m"
 
     html = f"""<!doctype html><html><head><meta charset="UTF-8">
-<title>Attendance Report — {emp[1]} — {month_name}</title>
+<title>Attendance Report -- {emp[1]} -- {month_name}</title>
 <style>
   body {{ font-family: "Segoe UI", sans-serif; margin: 0; padding: 32px; color: #1e293b; background: white; }}
   .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; border-bottom: 2px solid #1e3a8a; padding-bottom: 18px; }}
@@ -788,7 +789,7 @@ def apply_hike():
     cursor.execute("SELECT min_rating, max_rating, hike_pct FROM hike_config ORDER BY min_rating DESC")
     bands = cursor.fetchall()
 
-    # Batch-fetch instead of 2 SELECTs per employee — this is frequently a
+    # Batch-fetch instead of 2 SELECTs per employee -- this is frequently a
     # whole-company action (dozens to hundreds of employees selected at
     # once), so the per-employee round-trips were the dominant cost here.
     cursor.execute(
@@ -829,7 +830,7 @@ def apply_hike():
         new_spd = round(new_ctc / 26, 2)
         # The idempotency guard is repeated in this UPDATE's WHERE clause
         # (not just the Python-level skip above) so it's checked-and-set
-        # atomically in one statement — closes the race where two concurrent
+        # atomically in one statement -- closes the race where two concurrent
         # apply_hike submissions both read last_hike_quarter != q before
         # either had committed, which would otherwise double-apply the hike.
         cursor.execute(
@@ -879,7 +880,7 @@ def award_performance_bonus():
 
     bonus_month = {1: 3, 2: 6, 3: 9, 4: 12}.get(q, q * 3)
 
-    # Same batching approach as apply_hike above — 3 SELECTs per employee
+    # Same batching approach as apply_hike above -- 3 SELECTs per employee
     # collapsed into 3 SELECTs total, regardless of how many are selected.
     cursor.execute(
         "SELECT employee_id, COALESCE(overall_rating,0) FROM performance_reviews "
@@ -922,7 +923,7 @@ def award_performance_bonus():
         # Skip if this bonus was already awarded for this employee/quarter/year
         # (Python-level fast path). ON CONFLICT DO NOTHING below is the real
         # guard against the race where two concurrent award requests both
-        # read "not yet awarded" before either had committed — it relies on
+        # read "not yet awarded" before either had committed -- it relies on
         # the unique index on (employee_id, goal_id, month, year) created by
         # the incentives_unique_v1 migration in app.py's init_db().
         if emp_id in already_awarded:
@@ -931,7 +932,7 @@ def award_performance_bonus():
             "INSERT INTO employee_incentives (employee_id, goal_id, month, year, amount, notes) "
             "VALUES (%s,%s,%s,%s,%s,%s) "
             "ON CONFLICT (employee_id, goal_id, month, year) DO NOTHING",
-            (emp_id, goal_id, bonus_month, yr, bonus_amount, f"Performance bonus Q{q} {yr} — Rating: {rating}/5")
+            (emp_id, goal_id, bonus_month, yr, bonus_amount, f"Performance bonus Q{q} {yr} -- Rating: {rating}/5")
         )
         if cursor.rowcount:
             awarded += 1
@@ -1160,14 +1161,14 @@ def api_send_salary_email():
 
 @payroll_bp.route("/view_payslip/<emp_id>/<int:year>/<int:month>")
 def view_payslip(emp_id, year, month):
-    # emp_id is a raw URL parameter — this is exactly the BOLA/IDOR shape
+    # emp_id is a raw URL parameter -- this is exactly the BOLA/IDOR shape
     # (a valid session trying to view a DIFFERENT employee's salary data by
     # editing the URL). enforce_ownership() logs any denial at ERROR, which
     # feeds the alerting webhook (utils/alerts.py), not just the log stream.
     if not enforce_ownership(emp_id, "payslip", f"{year}-{month:02d}"):
         return redirect(tpath("/login"))
     # enforce_ownership() grants any admin-side session a bypass regardless
-    # of role — too broad for this route specifically, since it renders
+    # of role -- too broad for this route specifically, since it renders
     # plaintext PAN/UAN/bank account details. Restrict the non-owner
     # (i.e. admin) path to the "admin" role; the employee's own session
     # viewing their own payslip already passed the ownership check above
@@ -1354,7 +1355,7 @@ def payroll_settings():
         """, (pf_emp, pf_er, pt, tds, pf_cap))
         db.commit()
 
-        # Update per-employee monthly CTC / basic_pct if submitted — batched
+        # Update per-employee monthly CTC / basic_pct if submitted -- batched
         # into a single multi-row upsert instead of one INSERT round trip
         # per employee; EXCLUDED.* lets Postgres reference each row's own
         # proposed values instead of repeating each param twice.

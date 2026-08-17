@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 """Authentication decorators, login lockout, and password hashing."""
 import os
 import json
 import time
 import datetime
 import hashlib
-import urllib.request  # noqa: F401 — module-level so tests can monkeypatch auth_module.urllib.request.urlopen
+import urllib.request  # noqa: F401 -- module-level so tests can monkeypatch auth_module.urllib.request.urlopen
 import bcrypt as _bcrypt
 from functools import wraps
 from flask import session, request, jsonify, redirect, url_for, g as _flask_g
@@ -41,7 +42,7 @@ from utils.helpers import _db
 
 # ── Account lockout ───────────────────────────────────────────────────────────
 # 5 matches what app.py's now-removed duplicate decorators actually enforced
-# in production — adopted as canonical here rather than the 10 this module
+# in production -- adopted as canonical here rather than the 10 this module
 # used before consolidation, to avoid silently loosening lockout as a side
 # effect of removing the duplicate.
 _LOGIN_MAX_ATTEMPTS = 4
@@ -49,7 +50,7 @@ _LOGIN_LOCKOUT_MINUTES = 15
 
 # ── CAPTCHA gate (Cloudflare Turnstile) ────────────────────────────────────────
 # Unconfigured (no TURNSTILE_SECRET_KEY) means the gate is simply never
-# triggered — deliberately fail-open on missing config, not fail-closed.
+# triggered -- deliberately fail-open on missing config, not fail-closed.
 # Failing closed here would mean "every login past attempt 2 is permanently
 # rejected until an admin sets the key," a self-inflicted denial of service
 # on the login system itself, unlike e.g. the malware-scan fail-closed
@@ -66,10 +67,10 @@ def turnstile_enabled() -> bool:
 
 def _mask_identifier(identifier: str) -> str:
     """Obscure a username/employee-ID/email before it ever reaches a log
-    line — logs get shipped to less-trusted places (CloudWatch, a Slack
+    line -- logs get shipped to less-trusted places (CloudWatch, a Slack
     webhook channel) than the DB itself, and there's no operational need
     for the full identifier to appear in either. The DB-side lockout logic
-    (_check_login_lockout etc.) always uses the real, unmasked identifier —
+    (_check_login_lockout etc.) always uses the real, unmasked identifier --
     only what gets logged is obscured."""
     if not identifier:
         return "(empty)"
@@ -82,7 +83,7 @@ def _mask_identifier(identifier: str) -> str:
 
 
 def _get_failed_count(identifier: str, attempt_type: str = "admin") -> int:
-    """Synchronous read of the current failed-attempt count — used only to
+    """Synchronous read of the current failed-attempt count -- used only to
     decide whether to render the CAPTCHA widget for the *next* attempt.
     Deliberately NOT read-after-write against _record_login_failure, which
     enqueues its DB write onto the background writer thread (see its own
@@ -101,11 +102,11 @@ def _get_failed_count(identifier: str, attempt_type: str = "admin") -> int:
 
 
 def verify_turnstile(token: str, remote_ip: str) -> bool:
-    """Server-side verification against Cloudflare's siteverify endpoint —
+    """Server-side verification against Cloudflare's siteverify endpoint --
     the client-submitted token proves nothing on its own without this
     round trip. Same urllib.request pattern already used for webhook
     delivery (utils/alerts.py) and the AI assistant's API call
-    (utils/ai_assistant.py) — no new dependency."""
+    (utils/ai_assistant.py) -- no new dependency."""
     if not _TURNSTILE_SECRET_KEY or not token:
         return False
     try:
@@ -140,7 +141,7 @@ def _check_login_lockout(identifier: str, attempt_type: str = "admin"):
 
 
 def _record_login_failure(identifier: str, attempt_type: str = "admin"):
-    """Called from the request-handling thread on every failed login — must
+    """Called from the request-handling thread on every failed login -- must
     stay fast unconditionally, including under a brute-force flood, which is
     exactly when this gets called the most. The actual DB write (measured:
     3s median / 5.8s max latency under 60 concurrent attempts against one
@@ -149,7 +150,7 @@ def _record_login_failure(identifier: str, attempt_type: str = "admin"):
     utils/async_writer.py for why this is an in-process queue, not Celery.
 
     Trade-off, stated plainly: lockout becomes eventually consistent rather
-    than exact-on-the-5th-request — the counter increment and lockout check
+    than exact-on-the-5th-request -- the counter increment and lockout check
     happen slightly after the response for attempt N has already been sent.
     Bounded by queue throughput (a single writer processing sequentially,
     typically sub-millisecond per write once decoupled from contention), not
@@ -164,7 +165,7 @@ def _record_login_failure(identifier: str, attempt_type: str = "admin"):
 
 
 def _record_login_failure_db(identifier: str, attempt_type: str = "admin"):
-    """The actual DB write — runs only on the background writer thread,
+    """The actual DB write -- runs only on the background writer thread,
     never on a request thread. Do not call this directly from a route."""
     try:
         with _db() as (cur, conn):
@@ -199,11 +200,11 @@ def _record_login_failure_db(identifier: str, attempt_type: str = "admin"):
 
 def _clear_login_failures(identifier: str, attempt_type: str = "admin"):
     """Enqueued onto the SAME writer queue as _record_login_failure_db, not
-    written synchronously — critical for correctness, not just speed. If
+    written synchronously -- critical for correctness, not just speed. If
     this ran immediately while a burst of recent failures was still queued
     (e.g. a user's 5th failed attempt followed instantly by a correct 6th),
     a synchronous clear could run BEFORE those queued failure-writes land,
-    and the failures would then land AFTER the clear — undoing it, leaving
+    and the failures would then land AFTER the clear -- undoing it, leaving
     a phantom failed_count despite the successful login. Routing both
     through one FIFO queue with a single consumer thread guarantees this
     clear always executes after every failure recorded before it, with no
@@ -227,7 +228,7 @@ def _clear_login_failures_db(identifier: str, attempt_type: str = "admin"):
 # ── Session kill-switch enforcement ───────────────────────────────────────────
 def _reject_if_compromised(login_endpoint: str):
     """The actual kill switch. Checked on every authenticated request, not
-    just at login — a session flagged 'compromised' mid-lifetime (see
+    just at login -- a session flagged 'compromised' mid-lifetime (see
     utils/session_risk.py) is dead on its very next request regardless of
     whether the browser tab that owns it ever sees the SSE push telling it
     to log itself out. Returns a redirect Response if the session should be
@@ -253,7 +254,7 @@ def admin_required(f):
         if not session.get("admin_logged_in"):
             # employee_id present but no admin session = an authenticated
             # employee reaching for an admin-only route, not just an
-            # anonymous visitor — that's the signal worth a WARNING; a
+            # anonymous visitor -- that's the signal worth a WARNING; a
             # plain anonymous hit is routine enough to log at INFO only.
             _level = "WARNING" if session.get("employee_id") else "INFO"
             log_security_event("access.denied", "Unauthenticated request to admin-only route",
@@ -306,7 +307,7 @@ def employee_required(f):
 def role_required(*allowed_roles):
     """Like admin_required, but also requires session['admin_role'] to be one
     of allowed_roles. admin_required alone only checks admin_logged_in, so it
-    grants every admin-side role (admin/manager/soc_analyst) equally — use
+    grants every admin-side role (admin/manager/soc_analyst) equally -- use
     this instead for routes that must stay admin-only (payroll mutation,
     employee deletion, credential resets, PII-bearing payslip views)."""
     def decorator(f):
@@ -374,7 +375,7 @@ def api_required(f):
             log_security_event("access.denied", "API request missing Bearer token",
                                level="INFO", required="admin_api")
             return jsonify({"ok": False, "msg": "Unauthorized"}), 401
-        # Never log the token or its hash — it's the literal credential /
+        # Never log the token or its hash -- it's the literal credential /
         # DB lookup key, and logging it would hand anyone with log access
         # something they could use to fingerprint or replay-correlate it.
         token_hash = _hash_token(auth[7:])
@@ -398,7 +399,7 @@ def api_required(f):
 def api_role_required(*allowed_roles):
     """Session-based role_required's counterpart for Bearer-token API routes.
 
-    api_required alone only proves the token is valid — every admin API
+    api_required alone only proves the token is valid -- every admin API
     token is treated as equally privileged regardless of the issuing
     admin's actual role, so a manager's or soc_analyst's token gets the
     same bulk salary/PII data an admin's token would. Must sit UNDER
@@ -454,7 +455,7 @@ def employee_api_required(f):
 # ── Email Settings 2FA step-up gate ───────────────────────────────────────────
 # Same time.time()-in-session idiom as the WebAuthn fingerprint window
 # (utils/webauthn_utils.py:_WA_FP_VERIFY_WINDOW_SEC), but NOT single-use/popped
-# — this gate needs to stay valid across several requests (view, edit, reveal
+# -- this gate needs to stay valid across several requests (view, edit, reveal
 # password) within the window, and the window is refreshed on every authorized
 # request so it reads as "15 minutes of inactivity", matching the requirement,
 # rather than a fixed 15 minutes from the moment the code was entered.
@@ -476,16 +477,16 @@ def email_settings_step_up_clear():
 
 # ── SOC Analyst security dashboard step-up gate ───────────────────────────────
 # Deliberately a SEPARATE step-up flag from the Email Settings one above, even
-# though both ultimately check the same enrolled TOTP secret (utils/totp.py —
+# though both ultimately check the same enrolled TOTP secret (utils/totp.py --
 # one MFA seed per admin account, reused across every step-up gate, matching
 # how a real authenticator app works: one enrollment, many uses). Passing the
 # Email Settings gate must not silently also unlock the SOC dashboard, and
-# vice versa — each sensitive area gets its own proof-of-recent-verification,
+# vice versa -- each sensitive area gets its own proof-of-recent-verification,
 # not one that leaks scope to the others.
 #
 # Shorter window than Email Settings (10 min vs 15) because this gate sits in
 # front of security telemetry (who's compromised, who's locked out) rather
-# than a config form — a smaller blast radius if a SOC analyst's unlocked tab
+# than a config form -- a smaller blast radius if a SOC analyst's unlocked tab
 # is left unattended, but still short enough not to force re-entering a code
 # on every click while actively triaging.
 SOC_ANALYST_ROLE = "soc_analyst"
@@ -515,10 +516,10 @@ def soc_step_up_clear():
 # ── Security Settings hub step-up gate ────────────────────────────────────────
 # Same time.time()-in-session step-up pattern as Email Settings, guarding the
 # consolidated "Security" tab in Settings (session timeout, audit log, MFA
-# status, SOC entry point, security posture — all in one place, per the
+# status, SOC entry point, security posture -- all in one place, per the
 # row-wise hub requirement).
 #
-# This one has NO role restriction — every admin can open this hub with just
+# This one has NO role restriction -- every admin can open this hub with just
 # their own TOTP code. The SOC dashboard linked *from* this hub still
 # enforces its own separate, role-gated step-up (soc_step_up_valid above)
 # when its row is followed.
@@ -581,16 +582,16 @@ def enforce_ownership(resource_owner_id, resource_type, resource_id=None):
     payroll.py (view_payslip) and documents.py (download_document): admin
     bypass, else the session's own employee_id must equal the resource's
     owning employee_id. Call this AFTER fetching the row (you need to know
-    who owns it), not as a pre-request decorator — most resources here are
+    who owns it), not as a pre-request decorator -- most resources here are
     looked up by an opaque row id (document id, payslip period), not by an
     id that itself encodes the owner.
 
     Every denial logs at ERROR, which utils/alerts.py turns into a real-time
-    webhook alert (extensions.py:log_security_event) — a BOLA probe is never
+    webhook alert (extensions.py:log_security_event) -- a BOLA probe is never
     silently swallowed, regardless of which route calls this.
 
     Returns True if access is allowed, False if it should be denied (caller
-    decides the response — redirect, flash, 403 JSON, etc., to match its
+    decides the response -- redirect, flash, 403 JSON, etc., to match its
     existing route style).
     """
     if session.get("admin_logged_in"):

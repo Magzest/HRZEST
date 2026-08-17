@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Application factory entry point for the refactored blueprint structure.
 
@@ -12,14 +13,14 @@ The blueprint split is in progress. Routes are being moved from app.py
 exactly which routes belong there and the imports each route needs.
 
 Current state:
-  ✅ extensions.py    — Flask app + limiter (shared by all blueprints)
-  ✅ utils/config.py  — shift/salary runtime constants
-  ✅ utils/helpers.py — audit, cache, encryption, validation, notifications
-  ✅ utils/auth.py    — decorators, lockout, password hashing
-  ✅ utils/email_utils.py     — SMTP + DB-backed queue worker
-  ✅ utils/attendance_utils.py— attendance calculations
-  🔄 blueprints/*.py  — route stubs with full migration instructions
-  🔄 app.py           — still contains all routes (being drained into blueprints)
+  ✅ extensions.py    -- Flask app + limiter (shared by all blueprints)
+  ✅ utils/config.py  -- shift/salary runtime constants
+  ✅ utils/helpers.py -- audit, cache, encryption, validation, notifications
+  ✅ utils/auth.py    -- decorators, lockout, password hashing
+  ✅ utils/email_utils.py     -- SMTP + DB-backed queue worker
+  ✅ utils/attendance_utils.py-- attendance calculations
+  🔄 blueprints/*.py  -- route stubs with full migration instructions
+  🔄 app.py           -- still contains all routes (being drained into blueprints)
 
 To migrate a route from app.py into its blueprint:
   1. Copy the route function from app.py to the blueprint file
@@ -42,7 +43,7 @@ import os as _os
 from dotenv import load_dotenv
 from utils.secrets_loader import load_aws_secrets
 # In production, AWS_SECRET_ID must be set as a plain instance env var
-# (not a secret itself — just its name/ARN). Runs before load_dotenv() so
+# (not a secret itself -- just its name/ARN). Runs before load_dotenv() so
 # Secrets Manager values win in prod; local dev with no AWS_SECRET_ID falls
 # straight through to .env unaffected.
 load_aws_secrets()
@@ -80,24 +81,24 @@ threading.Thread(target=_email_queue_worker, daemon=True, name="email-queue-work
 # ── Register blueprints (uncomment as routes are migrated from app.py) ────────
 #
 # Migration status:
-#   ✅ health.py          — /healthz, /favicon.ico
-#   ✅ notifications.py   — /api/notifications/*, /web/notifications/*
-#   ✅ payroll.py         — salary, payslips, reports, export (25 routes)
-#   ✅ leave.py           — leave, holidays, resignation, overtime, comp-off (35 routes)
-#   ✅ admin_views.py     — admin dashboard, settings, companies, analytics, audit (28 routes)
-#   ✅ auth.py            — login, logout, password reset, WebAuthn (24 routes)
-#   ✅ employees.py       — employee CRUD, photos, QR, ID cards (24 routes)
-#   ✅ attendance.py      — check-in/out, shifts, breaks, reports (34 routes)
-#   ✅ tickets.py         — support tickets (7 routes)
-#   ✅ performance.py     — KPIs, reviews (10 routes; hike/bonus in payroll.py)
-#   ✅ onboarding.py      — templates, tasks, offer letters (22 routes)
-#   ✅ documents.py       — employee document management (7 routes)
-#   ✅ org.py             — multi-tenant org self-registration (2 routes)
-#   ✅ employee_portal.py — employee self-service, check-in APIs (20 routes)
-#   ✅ core.py            — home, CSP reporting, session-risk stream,
+#   ✅ health.py          -- /healthz, /favicon.ico
+#   ✅ notifications.py   -- /api/notifications/*, /web/notifications/*
+#   ✅ payroll.py         -- salary, payslips, reports, export (25 routes)
+#   ✅ leave.py           -- leave, holidays, resignation, overtime, comp-off (35 routes)
+#   ✅ admin_views.py     -- admin dashboard, settings, companies, analytics, audit (28 routes)
+#   ✅ auth.py            -- login, logout, password reset, WebAuthn (24 routes)
+#   ✅ employees.py       -- employee CRUD, photos, QR, ID cards (24 routes)
+#   ✅ attendance.py      -- check-in/out, shifts, breaks, reports (34 routes)
+#   ✅ tickets.py         -- support tickets (7 routes)
+#   ✅ performance.py     -- KPIs, reviews (10 routes; hike/bonus in payroll.py)
+#   ✅ onboarding.py      -- templates, tasks, offer letters (22 routes)
+#   ✅ documents.py       -- employee document management (7 routes)
+#   ✅ org.py             -- multi-tenant org self-registration (2 routes)
+#   ✅ employee_portal.py -- employee self-service, check-in APIs (20 routes)
+#   ✅ core.py            -- home, CSP reporting, session-risk stream,
 #                            security lockout, token-based REST API (10 routes)
 #
-# All 15 blueprints migrated. app.py now holds zero route handlers — only
+# All 15 blueprints migrated. app.py now holds zero route handlers -- only
 # shared setup (init_db, error handlers, before/after_request hooks,
 # template filters).
 
@@ -117,9 +118,9 @@ try:
         replace_existing=True,
     )
     _scheduler.start()
-    app_log.info("Daily report scheduler started — fires at 23:59 every night")
+    app_log.info("Daily report scheduler started -- fires at 23:59 every night")
 except ImportError:
-    app_log.warning("APScheduler not installed — daily email reports disabled. Run: pip install apscheduler")
+    app_log.warning("APScheduler not installed -- daily email reports disabled. Run: pip install apscheduler")
 except Exception as _sch_err:
     app_log.warning("Scheduler failed to start: %s", _sch_err)
 
@@ -134,9 +135,9 @@ if __name__ == "__main__":
     # threaded by default -- without this, one open stream blocks every
     # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
-        print("SSL cert found — starting on https://0.0.0.0:5000")
+        print("SSL cert found -- starting on https://0.0.0.0:5000")
         app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 ssl_context=(_cert, _key))
     else:
-        print("No cert.pem / key.pem — starting on http://0.0.0.0:5000")
+        print("No cert.pem / key.pem -- starting on http://0.0.0.0:5000")
         app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False, threaded=True)  # nosec B104

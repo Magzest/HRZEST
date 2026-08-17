@@ -1,4 +1,5 @@
-"""Global runtime configuration — shift times, deduction rates.
+# -*- coding: utf-8 -*-
+"""Global runtime configuration -- shift times, deduction rates.
 
 These are loaded from the DB at startup via load_default_shift() and
 load_salary_rules(). Blueprints should always access them through
@@ -14,12 +15,12 @@ OFFICE_LAT = float(os.environ.get("OFFICE_LAT", "17.494664737165042"))
 OFFICE_LON = float(os.environ.get("OFFICE_LON", "78.40496618113566"))
 OFFICE_RADIUS_M = 300
 
-# Shift timings — updated by load_default_shift() at startup
+# Shift timings -- updated by load_default_shift() at startup
 SHIFT_START = datetime.time(9, 0)
 SHIFT_HALF = datetime.time(13, 0)
 SHIFT_END = datetime.time(18, 0)
 
-# Deduction rates — updated by load_salary_rules() at startup
+# Deduction rates -- updated by load_salary_rules() at startup
 LATE_DEDUCTION_RATE = 0.10
 HALF_DAY_RATE = 0.50
 GRACE_MINUTES = 15

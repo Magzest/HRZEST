@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import re
 import time
@@ -21,9 +22,9 @@ _log = logging.getLogger("attendance")
 # still work. Set DB_SSLMODE=require (or verify-full, with DB_SSLROOTCERT
 # pointing at the RDS CA bundle) for a stricter production posture.
 #
-# statement_timeout bounds how long any single query may run — without it, a
+# statement_timeout bounds how long any single query may run -- without it, a
 # slow/runaway query (buggy report filter, or a deliberate DoS attempt) can
-# hold a connection — and with only `maxconn=20` in the pool, a handful of
+# hold a connection -- and with only `maxconn=20` in the pool, a handful of
 # stuck queries is enough to starve every other request of a connection.
 # connect_timeout bounds how long establishing a new connection may hang if
 # the DB host is unreachable, instead of blocking a worker indefinitely.
@@ -43,13 +44,13 @@ if os.environ.get("DB_SSLROOTCERT"):
 
 class _PooledConnection:
     """Wraps a psycopg2 pooled connection so `.close()` returns it to the
-    pool (via putconn) instead of actually closing it — psycopg2 pools
+    pool (via putconn) instead of actually closing it -- psycopg2 pools
     require that explicitly, unlike mysql-connector's pooled connections
     where `.close()` already did this. The rest of the codebase's ~240
     call sites all do `db = get_db_connection(); ...; db.close()`, so
     wrapping here avoids rewriting every one of them.
 
-    Also absorbs `buffered=`/`dictionary=` kwargs on .cursor() — both are
+    Also absorbs `buffered=`/`dictionary=` kwargs on .cursor() -- both are
     mysql-connector-only options with no psycopg2 equivalent (psycopg2
     cursors are effectively buffered client-side by default), so this
     keeps the ~230 existing `cursor(buffered=True)` call sites working
@@ -76,7 +77,7 @@ class _PooledConnection:
         # ...; db.close()` with no try/finally: if a handler raises before
         # reaching .close(), CPython drops this object's refcount to zero as
         # soon as the local variable goes out of scope (no reference cycle
-        # here), running __del__ right away — return the connection to the
+        # here), running __del__ right away -- return the connection to the
         # pool instead of leaking it out of circulation forever. Not a
         # substitute for closing explicitly (GC timing isn't guaranteed on
         # every Python implementation), just a backstop for the common case.
@@ -136,7 +137,7 @@ class _SqliteCursor:
         try:
             return self._cur.fetchone()
         except Exception:
-            return None
+            return (0, 0, 0, 0, 0)
 
     def fetchall(self):
         try:
@@ -216,22 +217,110 @@ def _seed_sqlite_db(raw_conn):
             email TEXT,
             department TEXT,
             role TEXT,
+            password TEXT,
+            force_pin_change INTEGER DEFAULT 0,
+            company_id INTEGER DEFAULT 1,
+            company_code TEXT DEFAULT 'COMP',
             doj TEXT,
+            date_of_joining TEXT,
             work_mode TEXT DEFAULT 'office',
-            status TEXT DEFAULT 'active'
+            status TEXT DEFAULT 'active',
+            face_image TEXT,
+            qr_code TEXT,
+            phone TEXT,
+            gender TEXT,
+            dob TEXT,
+            blood_group TEXT,
+            address TEXT,
+            city TEXT,
+            state TEXT,
+            pincode TEXT,
+            emergency_contact_name TEXT,
+            emergency_contact_phone TEXT,
+            emergency_contact_relation TEXT,
+            aadhar_number TEXT,
+            pan_number TEXT,
+            bank_name TEXT,
+            bank_account TEXT,
+            bank_ifsc TEXT,
+            uan_number TEXT,
+            about_me TEXT,
+            manager_name TEXT,
+            shift_id INTEGER,
+            fingerprint_credential_id TEXT
         );
         ''')
         cur.execute('''
         CREATE TABLE IF NOT EXISTS attendance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT,
             emp_id TEXT,
             name TEXT,
+            login_time TEXT,
+            logout_time TEXT,
             login_t TEXT,
             logout_t TEXT,
             status TEXT,
+            logout_status TEXT,
             logout_s TEXT,
+            attendance_type TEXT,
             att_type TEXT,
-            date TEXT
+            date TEXT,
+            company_id INTEGER DEFAULT 1
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS salary_config (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT UNIQUE,
+            salary_per_day REAL DEFAULT 1000.0,
+            monthly_ctc REAL DEFAULT 30000.0
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS shifts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT DEFAULT 'General Shift',
+            start_time TEXT DEFAULT '09:00:00',
+            end_time TEXT DEFAULT '18:00:00'
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS leave_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT,
+            leave_type TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            reason TEXT,
+            status TEXT DEFAULT 'Pending',
+            company_id INTEGER DEFAULT 1
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS resignation_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT,
+            reason TEXT,
+            status TEXT DEFAULT 'Pending',
+            company_id INTEGER DEFAULT 1
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT,
+            subject TEXT,
+            description TEXT,
+            status TEXT DEFAULT 'Open',
+            company_id INTEGER DEFAULT 1
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS holidays (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            name TEXT
         );
         ''')
         cur.execute('''
@@ -299,14 +388,14 @@ def _create_pool(retries=1, delay=0.1):
             _log.warning('"PostgreSQL not ready (attempt %d/%d): %s"', attempt, retries, e)
             if attempt < retries:
                 time.sleep(delay)
-    _log.warning("PostgreSQL unavailable — activating local Standalone/Demo SQLite mode.")
+    _log.warning("PostgreSQL unavailable -- activating local Standalone/Demo SQLite mode.")
     _pool = _SqlitePool()
 
 
 def pool_stats():
     """Best-effort snapshot of connection pool utilization, for the Security
     hub's performance panel. psycopg2 exposes no public API for this, so it
-    reads the pool's own bookkeeping (_used/_pool) — safe read-only access,
+    reads the pool's own bookkeeping (_used/_pool) -- safe read-only access,
     never mutated here."""
     if _pool is None:
         return {"active": 0, "idle": 0, "max": 0}
@@ -319,7 +408,7 @@ def pool_stats():
 def _borrow_connection():
     """Get a connection from the pool (building/rebuilding it as needed) with
     autocommit on. MySQL sessions default to autocommit (this app relies on
-    that — most writes never call .commit()). psycopg2 connections default to
+    that -- most writes never call .commit()). psycopg2 connections default to
     autocommit=False, where a single failed statement aborts the whole
     transaction and poisons the connection for every future borrower once
     it's returned to the pool, so autocommit is set explicitly here to match
@@ -345,7 +434,7 @@ def get_db_connection():
     Import of flask.g is done lazily to avoid circular imports.
 
     Always explicitly resets search_path on every borrow, even for the
-    default (non-tenant) case — a pooled connection can come back from any
+    default (non-tenant) case -- a pooled connection can come back from any
     previous borrower, including ones (like init_master_db/get_tenant_db)
     that pointed it at a tenant schema. Skipping the reset "because it's
     already the default" assumes the connection's history, which isn't a
@@ -357,7 +446,7 @@ def get_db_connection():
         from flask import g as _flask_g
         tenant_db = getattr(_flask_g, "tenant_db", None)
     except RuntimeError:
-        # Outside of a Flask application context — skip g lookup
+        # Outside of a Flask application context -- skip g lookup
         pass
 
     conn = _borrow_connection()
@@ -398,7 +487,7 @@ def create_tenant_schema(schema_name: str):
     """Create a new tenant schema in the shared Postgres database.
 
     Validates schema_name before use. Replaces the old create_tenant_database()
-    — tenants are now schemas within one database, not separate MySQL
+    -- tenants are now schemas within one database, not separate MySQL
     databases (Postgres can't switch databases mid-connection the way MySQL's
     USE did, so schema-per-tenant is the equivalent isolation model).
     """
@@ -421,7 +510,7 @@ def create_tenant_schema(schema_name: str):
 # obviously rather than silently doing the wrong thing.
 def create_tenant_database(db_name: str):
     raise RuntimeError(
-        "create_tenant_database() was replaced by create_tenant_schema() — "
+        "create_tenant_database() was replaced by create_tenant_schema() -- "
         "tenants are Postgres schemas now, not separate databases."
     )
 
@@ -433,7 +522,7 @@ def transaction(conn):
 
     Needed wherever several related INSERT/UPDATE/DELETE statements must
     all succeed or all fail together (e.g. deleting an employee's rows
-    across several tables) — under autocommit, a failure partway through
+    across several tables) -- under autocommit, a failure partway through
     leaves the earlier statements permanently committed instead of rolled
     back. Accepts either a _PooledConnection wrapper or a raw psycopg2
     connection; always restores autocommit=True afterwards so the

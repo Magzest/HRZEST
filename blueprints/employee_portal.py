@@ -1,4 +1,5 @@
-"""Employee portal blueprint — self-service profile, photos, QR/ID card, check-in APIs."""
+# -*- coding: utf-8 -*-
+"""Employee portal blueprint -- self-service profile, photos, QR/ID card, check-in APIs."""
 import os
 import calendar
 import datetime
@@ -293,7 +294,13 @@ def employee_portal():
         LEFT JOIN shifts sh ON e.shift_id = sh.id
         WHERE e.employee_id = %s
     """, (emp_id,))
-    emp = list(cursor.fetchone())
+    _emp_raw = cursor.fetchone()
+    if not _emp_raw:
+        cursor.close()
+        db.close()
+        session.clear()
+        return redirect(tpath("/login"))
+    emp = list(_emp_raw)
     # emp indices:
     # [0]=id [1]=name [2]=role [3]=email [4]=face_image [5]=date_of_joining
     # [6]=salary_per_day [7]=shift_name [8]=shift_start [9]=shift_end
@@ -1097,7 +1104,7 @@ def api_employee_sync_punches():
     for punch in punches:
         punched_at_str = punch.get("punched_at", "")
         # Same geo-fence check as the live check-in route (is_within_range
-        # against work_lat/work_lon for wfh, else is_within_office_range) —
+        # against work_lat/work_lon for wfh, else is_within_office_range) --
         # previously captured but never enforced here, unlike the live
         # route. Only checked when the client actually sent coordinates,
         # matching the live route's "if lat and lon:" gate.
@@ -1185,7 +1192,7 @@ def api_employee_sync_punches():
             db2.commit()
             results.append({"id": punch.get("id"), "ok": True, "action": "logout", "status": out_status})
         else:
-            results.append({"id": punch.get("id"), "ok": False, "msg": "Duplicate — day already complete"})
+            results.append({"id": punch.get("id"), "ok": False, "msg": "Duplicate -- day already complete"})
 
     cur2.close()
     db2.close()
@@ -1202,7 +1209,7 @@ def api_employee_auth_config():
 @employee_portal_bp.route("/api/employee/qr-face-checkin", methods=["POST"])
 @limiter.limit("20 per minute")
 def api_employee_qr_face_checkin():
-    """Public kiosk endpoint — supports auth_combo: qr_face | qr_fingerprint | face_fingerprint."""
+    """Public kiosk endpoint -- supports auth_combo: qr_face | qr_fingerprint | face_fingerprint."""
     employee_id = request.form.get("employee_id", "").strip().upper()
     lat = request.form.get("lat")
     lon = request.form.get("lon")
@@ -1227,7 +1234,7 @@ def api_employee_qr_face_checkin():
         # Real, server-verified, one-time, employee-bound proof from either
         # /api/employee/webauthn-verify-challenge (web kiosk, session-based)
         # or /api/employee/mobile-biometric-attest (mobile app, Bearer-token-
-        # bound) — never a raw client-supplied flag.
+        # bound) -- never a raw client-supplied flag.
         if not (_wa_fingerprint_recently_verified(employee_id)
                 or _mobile_biometric_recently_verified(employee_id)):
             return jsonify({"ok": False, "msg": "Fingerprint verification failed. Please try again."}), 401
@@ -1413,7 +1420,7 @@ def api_employee_salary():
     _, days_in_month = cal.monthrange(year, month)
     billable = sum(
         1 for d in range(1, days_in_month + 1)
-        # weekday() != 6 excludes only Sunday, matching get_working_days() —
+        # weekday() != 6 excludes only Sunday, matching get_working_days() --
         # the real payroll engine treats Saturday as a billable working day.
         if datetime.date(year, month, d).weekday() != 6
         and datetime.date(year, month, d) not in holiday_set
@@ -1577,7 +1584,7 @@ def api_employee_upload_photo():
 @limiter.limit("6 per minute")
 @limiter.limit("40 per hour")
 def api_employee_chat():
-    """AI chat assistant for employee self-service queries — see
+    """AI chat assistant for employee self-service queries -- see
     utils/ai_assistant.py for the scoping/security model. The client only
     ever sends free text; the employee's own data is always re-fetched
     server-side from the authenticated session's employee_id, never
@@ -1600,10 +1607,10 @@ def api_employee_chat():
 
 
 # A locally-running device-posture agent is the only thing that can actually
-# see Wi-Fi encryption type / ARP state / DNS config — no web page or web
+# see Wi-Fi encryption type / ARP state / DNS config -- no web page or web
 # server can (see utils/session_risk.py's module docstring). This endpoint
 # receives whatever score that agent already computed, relayed by the
-# browser over the user's own authenticated session — it never computes a
+# browser over the user's own authenticated session -- it never computes a
 # risk score itself, and there is no code path in this app for one.
 _DEVICE_RISK_KILL_WEIGHT = 100  # comfortably exceeds SESSION_RISK_THRESHOLD (default 50)
 # regardless of how that env var is configured, so one
@@ -1619,9 +1626,9 @@ def api_employee_device_risk():
     60 feeds the existing session-risk kill switch (utils/session_risk.py)
     instead of a new mechanism: evaluate_session_risk() marks this session
     compromised, employee_required's _reject_if_compromised() then rejects
-    this session's very next request on ANY route and clears it — that's
+    this session's very next request on ANY route and clears it -- that's
     the "block the UI / terminate the session" requirement.
-    log_security_event() below is "ship to Admin Security Logs" — the same
+    log_security_event() below is "ship to Admin Security Logs" -- the same
     structured-log + webhook-alert pipeline every other security event in
     this app already uses, not a separate logging path."""
     payload = request.get_json(silent=True) or {}
@@ -1656,6 +1663,6 @@ def api_employee_device_risk():
             f"Wi-Fi risk score {risk_score} exceeded 60 ({', '.join(threat_vectors) or 'unspecified threat'})",
         )
         return jsonify({"ok": True, "blocked": True,
-                        "msg": "Device risk too high — this session is being terminated."})
+                        "msg": "Device risk too high -- this session is being terminated."})
 
     return jsonify({"ok": True, "blocked": False})

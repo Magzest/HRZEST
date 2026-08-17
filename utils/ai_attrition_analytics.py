@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Smart Attrition & Productivity Analytics Module (Admin Panel Helper).
 
 Parses employee attendance logs, overtime metrics, and performance scores

@@ -1,4 +1,5 @@
-"""Health blueprint — /healthz and /favicon.ico.
+# -*- coding: utf-8 -*-
+"""Health blueprint -- /healthz and /favicon.ico.
 
 Migrated from app.py (lines 132–151). These routes carry no business logic
 and no auth requirements, so they're the cleanest starting point for the
