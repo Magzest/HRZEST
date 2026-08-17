@@ -1,11 +1,9 @@
 """Tickets blueprint — support ticket lifecycle."""
-import datetime
-from flask import Blueprint, request, session, redirect, jsonify, render_template, flash
+from flask import Blueprint, request, session, redirect, jsonify, flash
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
 from utils.email_utils import get_email_config, send_email_async
 from utils.helpers import tpath, _create_notification
-import utils.config as cfg
 
 tickets_bp = Blueprint("tickets", __name__)
 
@@ -38,34 +36,13 @@ def raise_ticket():
 @tickets_bp.route("/tickets")
 @admin_required
 def tickets_view():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT t.id, t.employee_id, e.name, t.category, t.subject, t.description,
-               t.priority, t.status, t.admin_response, t.created_at, t.updated_at
-        FROM tickets t
-        JOIN employees e ON t.employee_id = e.employee_id
-        ORDER BY CASE WHEN t.status='Open' THEN 0 WHEN t.status='In Progress' THEN 1 WHEN t.status='Resolved' THEN 2 WHEN t.status='Closed' THEN 3 ELSE 4 END,
-                 CASE WHEN t.priority='High' THEN 0 WHEN t.priority='Medium' THEN 1 WHEN t.priority='Low' THEN 2 ELSE 3 END, t.created_at DESC
-    """)
-    all_tickets = cursor.fetchall()
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.close()
-    db.close()
-    return render_template("tickets.html",
-                           all_tickets=all_tickets,
-                           pending_tickets=pending_tickets,
-                           pending_leaves=pending_leaves,
-                           pending_resignations=pending_resignations,
-                           today=datetime.date.today().strftime("%d %b %Y"),
-                           shift_start=cfg.SHIFT_START.strftime("%I:%M %p"),
-                           shift_end=cfg.SHIFT_END.strftime("%I:%M %p"),
-                           )
+    """Ticket management now lives solely on the Leaves & Holidays page's
+    Tickets tab (templates/leave_holidays.html) -- both pages used to
+    render their own full copy of the same list, posting to the same
+    /ticket_action/<tid> handler below, which meant two separately-
+    maintained UIs for one feature. This route stays as a redirect (not
+    deleted) so old bookmarks/links to /tickets keep working."""
+    return redirect(tpath("/leave_holidays?tab=leaves#tickets"))
 
 
 @tickets_bp.route("/ticket_action/<int:tid>", methods=["POST"])

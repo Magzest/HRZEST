@@ -33,13 +33,16 @@ attendance_bp = Blueprint("attendance", __name__)
 
 
 def _today_pending_counts(cursor):
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pl = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pr = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pt = cursor.fetchone()[0]
-    return pl, pr, pt
+    """Sidebar badge counts, shared by today_present/today_absent/today_late.
+    One query via scalar subqueries instead of three sequential round-trips
+    -- each of those three routes was paying this cost on every load."""
+    cursor.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM leave_requests WHERE status='Pending'),
+            (SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'),
+            (SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress'))
+    """)
+    return cursor.fetchone()
 
 
 @attendance_bp.route("/today_present")

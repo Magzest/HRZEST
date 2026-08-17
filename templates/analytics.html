@@ -3,7 +3,6 @@
 {% block title %}Analytics{% endblock %}
 
 {% block page_css %}
-  <script src="/static/chart.umd.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
     html,body{height:100%}
@@ -356,6 +355,14 @@
 {% endblock %}
 
 {% block scripts %}
+
+<!-- Moved here from <head> -- this 205KB library was previously loaded via
+     a blocking <script src> in <head>, which held up parsing of the ENTIRE
+     page (including everything above the charts) until it finished
+     downloading and executing. The chart-init code below needs it loaded
+     synchronously first, but nothing above this point does, so loading it
+     here instead lets the rest of the page render immediately. -->
+<script src="/static/chart.umd.min.js"></script>
 
 <script>
 // Heatmap tooltip

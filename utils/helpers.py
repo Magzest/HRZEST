@@ -409,6 +409,54 @@ def invalidate_settings_cache():
         _auth_cache["data"] = None
 
 
+_pending_counts_cache = {"data": None, "expires": None}
+_PENDING_COUNTS_CACHE_TTL = 30  # shorter than company_settings' 60s -- these
+# counts (leave/resignation/ticket approvals) change far more often, so a
+# tighter window keeps sidebar badges from looking stale for too long.
+
+
+def invalidate_pending_counts_cache():
+    with _settings_lock:
+        _pending_counts_cache["data"] = None
+
+
+def get_pending_counts():
+    """(pending_leaves, pending_resignations, pending_tickets) for sidebar
+    badges -- the single-tenant/unscoped count, cached for
+    _PENDING_COUNTS_CACHE_TTL seconds. This used to be copy-pasted as three
+    separate sequential cursor.execute() calls across a dozen route
+    handlers (admin dashboard, employees, documents, attendance, tickets,
+    leave, payroll, performance...), each paying that cost freshly on every
+    single page load -- collapsing it to one shared cache is what actually
+    fixes "clicking between sidebar modules feels slow," since almost every
+    module page was re-running the identical query trio on every click.
+
+    NOT for routes that scope these counts by active_company_id (multi-
+    tenant) -- those need a live per-request query via co_scope_subquery,
+    not this shared unscoped cache."""
+    with _settings_lock:
+        if not _co_expired(_pending_counts_cache):
+            return tuple(_pending_counts_cache["data"])
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM leave_requests WHERE status='Pending'),
+                (SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'),
+                (SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress'))
+        """)
+        result = tuple(cursor.fetchone())
+        cursor.close()
+        db.close()
+        with _settings_lock:
+            _pending_counts_cache["data"] = result
+            _pending_counts_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_PENDING_COUNTS_CACHE_TTL)
+        return result
+    except Exception:
+        return (0, 0, 0)
+
+
 def get_company_settings():
     with _settings_lock:
         if not _co_expired(_co_cache):

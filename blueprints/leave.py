@@ -17,7 +17,7 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
 import utils.config as cfg
@@ -262,15 +262,8 @@ def leave_balance():
     cursor = db.cursor(buffered=True)
     year = int(request.args.get("year", datetime.date.today().year))
 
-    cursor.execute("SELECT company_name FROM company_settings LIMIT 1")
-    row = cursor.fetchone()
-    co = type('Co', (), {'company_name': row[0] if row else 'My Company'})()
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    co = get_company_settings()
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
 
     cursor.execute("SELECT id, name, annual_quota FROM leave_types WHERE is_active=1 ORDER BY id")
     leave_types = cursor.fetchall()
@@ -595,12 +588,7 @@ def leave_calendar():
                               "is_half": bool(half), "leave_type": ltype,
                               "session": sess or "Morning"})
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     cursor.close()
     db.close()
 
@@ -1321,16 +1309,8 @@ def overtime():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
-    cursor.execute("SELECT company_name FROM company_settings LIMIT 1")
-    row = cursor.fetchone()
-    co = type('Co', (), {'company_name': row[0] if row else 'My Company'})()
-
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    co = get_company_settings()
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
 
     today = datetime.date.today()
     month = int(request.args.get('month', today.month))
@@ -1508,12 +1488,7 @@ def compoff_old():
     """)
     ot_records = cursor.fetchall()
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     cursor.close()
     db.close()
 

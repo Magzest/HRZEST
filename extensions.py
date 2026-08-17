@@ -144,6 +144,18 @@ def _persist_security_event(event_type, level, message, identifier, ip, path, me
 # ── Flask app ─────────────────────────────────────────────────────────────────
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
+# Without this, Werkzeug's send_file() defaults max_age to None, which makes
+# it emit "Cache-Control: no-cache" on every static asset -- forcing the
+# browser to round-trip a revalidation request to the server for every CSS/
+# JS/font file (tabler-icons.min.css alone is ~200KB) on every single page
+# navigation, even though nothing changed. This was the actual cause behind
+# "clicking between sidebar modules feels slow": each full-page nav was
+# re-fetching ~5-8 static assets from the server instead of the browser's
+# own cache. 1 hour balances that against static/*.min.* having no
+# cache-busting (hashed filenames or ?v= query params) -- a deploy that
+# changes them takes up to this long to reach an already-open browser tab.
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
+
 # Secret key: env var → persisted local file → generated once
 _env_key = os.environ.get("SECRET_KEY", "").strip()
 if _env_key:

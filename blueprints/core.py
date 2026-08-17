@@ -15,7 +15,7 @@ from utils.auth import (
 )
 from utils.helpers import (
     tpath, _db, get_auth_config, get_company_settings, validate_employee_email_domain,
-    employee_login_url,
+    employee_login_url, get_pending_counts,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.session_risk import is_session_compromised
@@ -225,12 +225,7 @@ def api_dashboard():
         }
         for r in rows
     ]
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_type='admin' AND is_read=FALSE")
     unread_notifications = cursor.fetchone()[0]
     cursor.execute("SELECT COALESCE(company_name, '') FROM company_settings LIMIT 1")

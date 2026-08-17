@@ -8,7 +8,6 @@
     <title>Admin Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <link rel="stylesheet" href="/static/tabler-icons.min.css" />
-    <script src="/static/chart.umd.min.js"></script>
     <script src="/static/toast.js"></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
@@ -69,6 +68,11 @@
       .nav-item.active .nav-icon { background: rgba(96,165,250,0.2); }
       .nav-item:hover .nav-icon  { background: rgba(255,255,255,0.12); }
       .nav-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
+      /* Matches admin_base.html/employees.html etc. -- without this the
+         live-clock footer falls back to the sidebar's full-opacity white
+         text and default size instead of the dimmed, smaller style every
+         other module page gives it. */
+      .sidebar-footer { margin-top: auto; font-size: 11px; color: rgba(255,255,255,0.4); padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 7px; }
       .badge-count {
         margin-left: auto; background: #ef4444; color: white;
         border-radius: 20px; padding: 1px 7px; font-size: 10px; font-weight: 700;
@@ -363,7 +367,6 @@
       <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}"><span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off</a>
       <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
       <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
-      <a class="nav-item {{ 'active' if active_nav == 'tickets' }}" href="{{ tpath('/tickets') }}"><span class="nav-icon"><i class="ti ti-ticket"></i></span>Tickets</a>
       <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}"><span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents</a>
       <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
   {% if session.get('admin_role') == 'superadmin' %}
@@ -512,7 +515,7 @@
             </div>
           </a>
 
-          <a class="u-tdec-none" href="/settings?tab=attendance">
+          <a class="u-tdec-none" href="{{ tpath('/employees?tab=schedule') }}">
             <div class="u-bg-faf5ff u-bd-1d5-solid-d8b4fe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(124,58,237,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div class="u-w-46 u-h-46 u-bg-ede9fe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-clock-hour-4" style="color:#7c3aed"></i></div>
               <div>
@@ -532,7 +535,7 @@
             </div>
           </a>
 
-          <a class="u-tdec-none" href="{{ tpath('/leave_requests') }}">
+          <a class="u-tdec-none" href="{{ tpath('/leave_holidays?tab=leaves') }}">
             <div class="u-bg-fff7ed u-bd-1d5-solid-fed7aa u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(194,65,12,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div class="u-w-46 u-h-46 u-bg-ffedd5 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-clipboard-list" style="color:#c2410c"></i></div>
               <div>
@@ -546,12 +549,12 @@
             </div>
           </a>
 
-          <a class="u-tdec-none" href="{{ tpath('/announcements') }}">
+          <a class="u-tdec-none" href="{{ tpath('/performance?tab=announcements') }}">
             <div class="u-bg-fff1f2 u-bd-1d5-solid-fda4af u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(190,18,60,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div class="u-w-46 u-h-46 u-bg-ffe4e6 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-speakerphone" style="color:#be123c"></i></div>
               <div>
-                <div class="u-fs-13 u-fw-800 u-c-be123c">Announcements &amp; Holidays</div>
-                <div class="u-fs-11 u-c-64748b u-mt-2">Notices · Import Indian Holidays</div>
+                <div class="u-fs-13 u-fw-800 u-c-be123c">Announcements</div>
+                <div class="u-fs-11 u-c-64748b u-mt-2">Post company-wide notices</div>
               </div>
             </div>
           </a>
@@ -801,6 +804,13 @@
       </div>
     </div>
 
+    <!-- Moved here from <head> -- this 205KB library was blocking parsing
+         of the entire page (including everything above the charts) until
+         it finished downloading. loadCharts() below only runs after
+         scheduleChartRefresh() executes near the end of this same script
+         block, so loading it here instead lets the rest of the dashboard
+         render immediately. -->
+    <script src="/static/chart.umd.min.js"></script>
     <script>
       /* ── CLOCK ── */
       function updateClock() {
@@ -1110,7 +1120,7 @@
       {label: 'Admin Tools', sub: 'System tools', url: '/admin_tools', icon: 'tool'},
       {label: 'Settings', sub: 'Company settings', url: '/settings', icon: 'settings'},
       {label: 'Companies', sub: 'Manage companies', url: '/companies', icon: 'building'},
-      {label: 'Tickets', sub: 'Support tickets', url: '/tickets', icon: 'ticket'},
+      {label: 'Tickets', sub: 'Support tickets', url: '/leave_holidays?tab=leaves#tickets', icon: 'ticket'},
     ];
     var GROUP_LABELS = {employee: 'Employees', ticket: 'Tickets', leave: 'Leave Requests', page: 'Pages'};
     var GROUP_ICONS  = {employee: 'user', ticket: 'ticket', leave: 'calendar-event', page: 'apps'};

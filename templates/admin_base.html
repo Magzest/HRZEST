@@ -33,6 +33,13 @@
     .brand-icon { width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, #3b82f6, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
     .brand     { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.2; }
     .brand-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+    /* Base definition so every page gets this for free -- several child
+       templates used to copy-paste this rule individually into their own
+       page_css block, and the ones that didn't (admin_tools, onboarding,
+       performance, org_chart, compoff, etc.) rendered the sidebar-footer
+       clock at full-opacity/default size instead of dimmed and small,
+       inconsistent with pages that did copy it. */
+    .sidebar-footer { margin-top: auto; font-size: 11px; color: rgba(255,255,255,0.4); padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 7px; }
     .nav-item  { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin: 1px 0; color: rgba(255,255,255,0.75); text-decoration: none; border-radius: 10px; font-size: 13px; font-weight: 500; transition: 0.18s; position: relative; }
     .nav-item:hover  { background: rgba(255,255,255,0.1); color: #fff; }
     .nav-item.active { background: rgba(255,255,255,0.15); color: #fff; font-weight: 700; }
@@ -77,11 +84,17 @@
 <div class="sidebar">
   {% set _is_hr = session.admin_role == 'hr' %}
   <div class="brand-wrap">
-    <div class="brand-icon"><i class="ti ti-layout-dashboard u-fs-18"></i></div>
+    <div class="brand-icon" style="overflow:hidden;background:#fff;">
+      {% if co.logo_url %}
+        <img src="{{ co.logo_url }}" alt="{{ co.company_name }}" style="width:100%;height:100%;object-fit:contain;" onerror="this.outerHTML='<i class=\'ti ti-building u-fs-18\' style=\'color:#6366f1;\'></i>'" />
+      {% else %}
+        <i class="ti ti-building u-fs-18" style="color:#6366f1;"></i>
+      {% endif %}
+    </div>
     <div>
-      <div class="brand">{{ 'HR Panel' if _is_hr else 'Admin Panel' }}</div>
+      <div class="brand">{{ co.company_name }}</div>
       <div class="brand-sub">
-        {{ co.company_name }}
+        {{ co.company_code|default('HQ') }} &middot; {{ 'HR Panel' if _is_hr else 'Admin Panel' }}
         <span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:9px;font-weight:800;background:rgba(255,255,255,0.18);color:#60a5fa;margin-left:4px;letter-spacing:0.5px;">
           {{ monthly_bill_display|default('₹0') }}/MO
         </span>
@@ -119,9 +132,6 @@
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}">
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
-  </a>
-  <a class="nav-item {{ 'active' if active_nav == 'tickets' }}" href="{{ tpath('/tickets') }}">
-    <span class="nav-icon"><i class="ti ti-ticket"></i></span>Tickets
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}">
     <span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents

@@ -16,7 +16,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Portal — {{ emp[1] }}</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <script src="/static/jsQR.min.js"></script>
+    <!-- defer: jsQR() is only ever called from inside the camera-scan loop,
+         well after user interaction starts a scan -- nothing needs this
+         130KB library synchronously during initial parse, so deferring it
+         lets the rest of the page render without waiting on it. -->
+    <script src="/static/jsQR.min.js" defer></script>
     <script src="/static/toast.js"></script>
     <link rel="stylesheet" href="/static/toast.css" />
     <style>
