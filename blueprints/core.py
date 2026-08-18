@@ -68,7 +68,12 @@ def home():
         prefix = f"/{slug}" if slug else ""
         co = get_company_settings()
         if not co.get("setup_done"):
-            return redirect(prefix + "/setup")
+            # /setup (the old first-run wizard) was removed when the app
+            # moved to self-serve signup via /create_org -- this redirect
+            # target was never updated to match, so it pointed at a page
+            # that no longer exists. /create_org is apex-level (no tenant
+            # slug prefix), unlike the other redirects in this block.
+            return redirect("/create_org")
         if session.get("admin_logged_in"):
             return redirect(prefix + "/admin")
         if session.get("employee_id"):

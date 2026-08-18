@@ -7,18 +7,19 @@ from utils.auth import generate_password_hash, turnstile_enabled, verify_turnsti
 from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 from utils.tenant_routing import RESERVED_PATH_SEGMENTS
-from utils.helpers import clean_email_domain, validate_email_domain_format
+from utils.helpers import clean_email_domain, validate_email_domain_format, _safe_app_url
 
 org_bp = Blueprint("org", __name__)
 
 _SUBDOMAIN_RE = re.compile(r'^[a-z0-9\-]+$')
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
-# Tenants are addressed by URL path now (www.hrzest.com/<subdomain>/...),
-# not subdomain -- this constant is the apex domain the path lives under.
-# The DB column and every internal variable are still named "subdomain"
-# (no migration needed, it's just a slug string either way).
-_TENANT_APEX_DOMAIN = "www.hrzest.com"
+# Tenants are addressed by URL path now (<apex-domain>/<subdomain>/...),
+# not subdomain -- portal_url below builds that apex from _safe_app_url()
+# (the current request's own host in dev, APP_URL in production) rather
+# than a hardcoded domain. The DB column and every internal variable are
+# still named "subdomain" (no migration needed, it's just a slug string
+# either way).
 
 # Slugs that must never be self-registered -- shared with
 # utils/tenant_routing.py's WSGI middleware, which uses the exact same set
@@ -76,7 +77,7 @@ _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
 def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                      payment_option="online", email_domain=None):
+                      payment_option="online", email_domain=None, employee_count=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
@@ -91,6 +92,15 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     email_domain (e.g. "acme.com") is stored on the new tenant's own
     company_settings row -- utils/helpers.py's validate_employee_email_domain()
     reads it from there to require/check new employees' emails going forward.
+
+    employee_count is the number of seats actually paid for -- written to
+    company_settings.paid_employee_slots (a column that already existed in
+    the schema migrations but was never populated or enforced anywhere;
+    see utils/helpers.py's add_employee_seat_cap_check() for where it's
+    checked). None means unlimited -- used by the free/unmetered callers
+    (the local-dev fallback POST /create_org, the mobile app's own
+    /api/create_org registration flow, and Platform Admin's own tenant
+    creation), which intentionally don't gate on payment.
 
     Returns (ok, error_message_or_None, portal_url_or_None).
     """
@@ -140,8 +150,8 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         tconn = get_tenant_db(db_name)
         tcur = tconn.cursor()
         tcur.execute(
-            "UPDATE company_settings SET company_name=%s, email_domain=%s, setup_done=1 WHERE id=1",
-            (company_name, clean_email_domain(email_domain) or None)
+            "UPDATE company_settings SET company_name=%s, email_domain=%s, paid_employee_slots=%s, setup_done=1 WHERE id=1",
+            (company_name, clean_email_domain(email_domain) or None, employee_count)
         )
         # Plain INSERT, no ON CONFLICT: the schema-existence check above
         # guarantees this is a brand-new schema, so a conflict here means a
@@ -176,7 +186,14 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     # an earlier rename and 404s. Fixed here since this exact line already
     # needed touching for the path-based URL migration; not otherwise
     # in scope for this change.
-    portal_url = f"https://{_TENANT_APEX_DOMAIN}/{subdomain}/login"
+    #
+    # _safe_app_url() instead of a hardcoded apex domain: the old
+    # "https://www.hrzest.com/..." constant meant every successful signup
+    # (once /api/create_org actually returns portal_url -- see that route)
+    # would redirect the browser to a real external domain instead of
+    # wherever this app is actually running (localhost in dev, a staging
+    # host, etc).
+    portal_url = f"{_safe_app_url()}/{subdomain}/login"
     return True, None, portal_url
 
 
@@ -415,8 +432,8 @@ def api_create_org():
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        ok, error, _portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                                                    email_domain=email_domain)
+        ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+                                                   email_domain=email_domain)
         if not ok:
             # "Already taken" is client-correctable (400); anything else is
             # a provisioning-side failure (schema creation, seeding, master
@@ -428,7 +445,13 @@ def api_create_org():
             "ok": True,
             "msg": f"Organisation '{company_name}' created successfully! You can now sign in as {admin_username}.",
             "subdomain": subdomain,
-            "username": admin_username
+            "username": admin_username,
+            # The signup form's submit handler redirects here on success
+            # (json.portal_url || '/login') -- this was previously discarded
+            # as _portal_url and never included, so every successful signup
+            # silently fell through to the bare /login page instead of the
+            # new tenant's own portal.
+            "portal_url": portal_url,
         })
     except Exception as global_exc:
         app_log.error("api_create_org global exception: %s", global_exc)
