@@ -7,7 +7,7 @@ from extensions import app
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, enforce_ownership
-from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect
+from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect, get_pending_action_counts
 
 documents_bp = Blueprint("documents", __name__)
 
@@ -18,12 +18,7 @@ def _doc_admin_ctx(cursor):
     cursor.execute("SELECT company_name FROM company_settings LIMIT 1")
     row = cursor.fetchone()
     co = type('Co', (), {'company_name': row[0] if row else 'My Company'})()
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
     return co, pending_leaves, pending_resignations, pending_tickets
 
 

@@ -16,8 +16,8 @@ from utils.ai_assistant import build_employee_context, ask_assistant
 from utils.session_risk import ensure_session_id, evaluate_session_risk
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, infer_type_legacy,
-    fetch_holidays_set, get_billable_past_days, _td_to_time, is_within_range,
-    is_within_office_range,
+    fetch_holidays_set, get_billable_past_days, is_within_range,
+    is_within_office_range, geofence_check_error, compute_session_worked_minutes,
 )
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
@@ -1033,13 +1033,7 @@ def api_employee_checkin():
         return jsonify({"ok": True, "action": "login", "name": employee_name,
                         "status": status, "time": current_time.strftime("%H:%M:%S")})
     elif not logout_time:
-        session_start = last_relogin_stored if last_relogin_stored else login_time
-        if not isinstance(session_start, datetime.time):
-            session_start = _td_to_time(session_start)
-        cur_dt = datetime.datetime.combine(today, current_time)
-        start_dt = datetime.datetime.combine(today, session_start)
-        session_m = max(0, int((cur_dt - start_dt).total_seconds() / 60))
-        total_m = worked_mins_stored + session_m
+        total_m = compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored)
         if current_time < cfg.SHIFT_HALF:
             out_status = "Half Day Logout"
         elif current_time < cfg.SHIFT_END:
@@ -1163,13 +1157,7 @@ def api_employee_sync_punches():
             db2.commit()
             results.append({"id": punch.get("id"), "ok": True, "action": "login", "status": status})
         elif not logout_time:
-            session_start = last_relogin if last_relogin else login_time
-            if not isinstance(session_start, datetime.time):
-                session_start = _td_to_time(session_start)
-            cur_dt = datetime.datetime.combine(punch_date, punch_time)
-            start_dt = datetime.datetime.combine(punch_date, session_start)
-            session_m = max(0, int((cur_dt - start_dt).total_seconds() / 60))
-            total_m = worked_mins + session_m
+            total_m = compute_session_worked_minutes(punch_time, punch_date, login_time, last_relogin, worked_mins)
             if punch_time < cfg.SHIFT_HALF:
                 out_status = "Half Day Logout"
             elif punch_time < cfg.SHIFT_END:
@@ -1247,19 +1235,13 @@ def api_employee_qr_face_checkin():
 
     if lat and lon:
         try:
-            if work_mode == 'wfh':
-                if work_lat and work_lon:
-                    if not is_within_range(float(lat), float(lon), float(work_lat), float(work_lon)):
-                        cursor.close()
-                        db.close()
-                        return jsonify({"ok": False, "msg": "You are outside your registered home location."})
-            else:
-                if not is_within_office_range(float(lat), float(lon)):
-                    cursor.close()
-                    db.close()
-                    return jsonify({"ok": False, "msg": "You are outside the office premises."})
+            geofence_err = geofence_check_error(work_mode, work_lat, work_lon, lat, lon)
         except (ValueError, TypeError):
-            pass
+            geofence_err = None
+        if geofence_err:
+            cursor.close()
+            db.close()
+            return jsonify({"ok": False, "msg": geofence_err})
 
     needs_face = auth_combo in ("qr_face", "face_fingerprint")
     if needs_face:
@@ -1347,13 +1329,7 @@ def api_employee_qr_face_checkin():
         return jsonify({"ok": True, "action": "login", "name": employee_name,
                         "status": status, "time": current_time.strftime("%H:%M:%S")})
     elif not logout_time:
-        session_start = last_relogin_stored if last_relogin_stored else login_time
-        if not isinstance(session_start, datetime.time):
-            session_start = _td_to_time(session_start)
-        cur_dt = datetime.datetime.combine(today, current_time)
-        start_dt = datetime.datetime.combine(today, session_start)
-        session_m = max(0, int((cur_dt - start_dt).total_seconds() / 60))
-        total_m = worked_mins_stored + session_m
+        total_m = compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored)
         if current_time < cfg.SHIFT_HALF:
             out_status = "Half Day Logout"
         elif current_time < cfg.SHIFT_END:

@@ -692,7 +692,6 @@ class TestKioskLoginStatus:
 class TestKioskLogoutStatus:
 
     def _logout(self, client, seed_employee, db_engine, mocker, s_half, s_end):
-        import blueprints.attendance as att
         today = datetime.date.today()
         cur = db_engine.cursor()
         cur.execute("DELETE FROM attendance WHERE employee_id=%s AND date=%s",

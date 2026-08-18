@@ -5,7 +5,7 @@ import datetime
 import secrets
 import psycopg2
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash, g,
+    Blueprint, request, session, redirect, jsonify, render_template, flash,
 )
 
 from extensions import app, app_log, limiter, log_security_event
@@ -14,7 +14,7 @@ from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
 from utils.helpers import (
     tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
-    validate_employee_email_domain, get_company_settings, employee_login_url,
+    validate_employee_email_domain, get_company_settings, employee_login_url, get_pending_action_counts,
 )
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
@@ -699,12 +699,7 @@ def view_employees():
     )
     departments = [r[0] for r in cursor.fetchall()]
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
     cursor.execute("SELECT id, name FROM companies ORDER BY name")
     companies = cursor.fetchall()
     cursor.execute("SELECT id, name FROM onboarding_templates WHERE is_active=1 ORDER BY name")
@@ -885,12 +880,7 @@ def employee_detail(emp_id):
     """, (emp_id,))
     education = cursor.fetchall()
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
 
     # Documents for this employee
     cursor.execute(

@@ -4,11 +4,6 @@ Targets uncovered routes: setup_wizard, admin_login branches, employee_login,
 employee_logout, change_password, force_change_pin, password reset flows,
 admin_forgot_password, admin_reset_password, webauthn_status.
 """
-import datetime
-import hashlib
-import pytest
-
-
 def _admin_session(client, seed_admin):
     client.post("/login", data={
         "identifier": seed_admin["username"],

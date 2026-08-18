@@ -1,9 +1,6 @@
 """Coverage tests for blueprints/org.py.
 Targets: create_org_page, org_chart_page, api_org_chart_data.
 """
-import pytest
-
-
 def _admin_session(client, seed_admin):
     client.post("/login", data={
         "identifier": seed_admin["username"],

@@ -10,7 +10,6 @@ class TestSetSearchPath:
 
     def test_invalid_schema_name_raises_value_error(self):
         from database import _set_search_path
-        import psycopg2
         from database import _borrow_connection
         conn = _borrow_connection()
         try:
@@ -124,7 +123,7 @@ class TestPooledConnection:
 
     def test_close_returns_connection_to_pool(self):
         """Line 67: close() calls putconn, not actual close."""
-        from database import get_db_connection, _pool
+        from database import get_db_connection
         conn = get_db_connection()
         conn.close()
         # Pool should be non-empty — borrow again immediately

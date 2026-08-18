@@ -19,11 +19,11 @@ import secrets
 import functools
 from flask import Blueprint, request, session, redirect, render_template, flash
 
-from database import get_master_db, get_tenant_db, get_db_connection
+from database import get_master_db, get_db_connection
 from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
-from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
+from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
 from utils.analytics import get_traffic_stats
 
 platform_admin_bp = Blueprint("platform_admin", __name__)
@@ -150,15 +150,7 @@ def _tenant_employee_count(schema_name: str) -> int:
     cached = _employee_count_cache.get(schema_name)
     if cached and (now - cached[1]) < _COUNT_CACHE_TTL_SEC:
         return cached[0]
-    try:
-        conn = get_tenant_db(schema_name)
-        cur = conn.cursor(buffered=True)
-        cur.execute("SELECT COUNT(*) FROM employees")
-        count = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-    except Exception:
-        count = 0
+    count = get_tenant_employee_count(schema_name)
     _employee_count_cache[schema_name] = (count, now)
     return count
 

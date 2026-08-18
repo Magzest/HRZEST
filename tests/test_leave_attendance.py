@@ -6,7 +6,6 @@ Targets:
   leave.py      33% → ~65%
   attendance.py 23% → ~55%
 """
-import datetime
 import pytest
 
 

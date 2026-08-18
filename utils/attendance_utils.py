@@ -43,6 +43,37 @@ def is_within_office_range(user_lat, user_lon):
     )
 
 
+def geofence_check_error(work_mode, work_lat, work_lon, lat, lon):
+    """Validate a check-in's reported lat/lon against the employee's work
+    mode. Returns an error message string to send back to the client, or
+    None when the location is fine (or wasn't provided -- callers only
+    call this when lat/lon are present).
+
+    Shared by the admin-triggered kiosk check-in (blueprints/attendance.py)
+    and the employee self-checkin (blueprints/employee_portal.py), which
+    otherwise hand-repeated this exact WFH-vs-office branch."""
+    if work_mode == 'wfh':
+        if work_lat and work_lon and not is_within_range(float(lat), float(lon), float(work_lat), float(work_lon)):
+            return "You are outside your registered home location."
+    elif not is_within_office_range(float(lat), float(lon)):
+        return "You are outside the office premises."
+    return None
+
+
+def compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored):
+    """Minutes worked in the current login/relogin session, added to
+    worked_mins_stored from any prior session(s) earlier the same day.
+    Shared by the same two check-in call sites as geofence_check_error --
+    both compute "total minutes worked today" identically at logout time."""
+    session_start = last_relogin_stored if last_relogin_stored else login_time
+    if not isinstance(session_start, datetime.time):
+        session_start = _td_to_time(session_start)
+    cur_dt = datetime.datetime.combine(today, current_time)
+    start_dt = datetime.datetime.combine(today, session_start)
+    session_m = max(0, int((cur_dt - start_dt).total_seconds() / 60))
+    return worked_mins_stored + session_m
+
+
 def _td_to_time(val):
     if val is None:
         return None

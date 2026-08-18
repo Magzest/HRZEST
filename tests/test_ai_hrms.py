@@ -1,6 +1,5 @@
 """Automated Pytest Suite for AI HRMS Portal Services & Endpoints."""
 
-import pytest
 from utils.ai_resume_parser import parse_resume, match_candidate_job
 from utils.ai_helpdesk import process_helpdesk_query
 from utils.ai_interview_evaluator import evaluate_interview_notes

@@ -9,7 +9,7 @@ import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required
-from utils.helpers import tpath, co_scope_column, _db
+from utils.helpers import tpath, co_scope_column, _db, get_pending_action_counts
 from extensions import limiter
 
 performance_bp = Blueprint("performance", __name__)
@@ -141,12 +141,7 @@ def performance():
     cursor.execute("SELECT employee_id, name FROM employees WHERE is_active=1 ORDER BY name")
     ann_emp_list = cursor.fetchall()
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
     cursor.execute("SELECT COALESCE(company_name,'') FROM company_settings LIMIT 1")
     co = cursor.fetchone()
 
@@ -281,12 +276,7 @@ def performance_review(emp_id):
     """, (emp_id,))
     history = cursor.fetchall()
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
     cursor.execute("SELECT COALESCE(company_name,'') FROM company_settings LIMIT 1")
     co = cursor.fetchone()
     cursor.close()

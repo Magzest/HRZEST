@@ -6,7 +6,6 @@ generate_emp_id, api_employees, delete_employee.
 import hashlib
 import datetime
 import secrets
-import pytest
 
 
 def _admin_session(client, seed_admin):

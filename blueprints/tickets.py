@@ -4,7 +4,7 @@ from flask import Blueprint, request, session, redirect, jsonify, render_templat
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
 from utils.email_utils import get_email_config, send_email_async
-from utils.helpers import tpath, _create_notification
+from utils.helpers import tpath, _create_notification, get_pending_action_counts
 import utils.config as cfg
 
 tickets_bp = Blueprint("tickets", __name__)
@@ -49,12 +49,7 @@ def tickets_view():
                  CASE WHEN t.priority='High' THEN 0 WHEN t.priority='Medium' THEN 1 WHEN t.priority='Low' THEN 2 ELSE 3 END, t.created_at DESC
     """)
     all_tickets = cursor.fetchall()
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')")
-    pending_tickets = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
     cursor.close()
     db.close()
     return render_template("tickets.html",

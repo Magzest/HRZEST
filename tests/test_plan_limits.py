@@ -7,7 +7,6 @@ live employee-count lookup; there's no more tier/feature-gating behavior
 to exercise here.
 """
 import os
-import pytest
 import utils.plan_limits as plan_limits
 
 

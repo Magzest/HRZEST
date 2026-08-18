@@ -4,7 +4,6 @@ Targets: raise_ticket, tickets_view, ticket_action, api routes.
 import hashlib
 import datetime
 import secrets
-import pytest
 
 
 def _admin_session(client, seed_admin):
