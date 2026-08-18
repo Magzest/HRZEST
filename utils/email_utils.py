@@ -1,4 +1,5 @@
-"""Email sending — SMTP + DB-backed queue with retry worker."""
+# -*- coding: utf-8 -*-
+"""Email sending -- SMTP + DB-backed queue with retry worker."""
 import os
 import ssl
 import html as _html
@@ -23,18 +24,18 @@ def get_email_config():
     same function before either went live in a blueprint:
 
     1. Wrong column names. email_config's real schema (app.py's init_db())
-       is smtp_host/smtp_port/smtp_user/smtp_pass/from_name/from_email —
+       is smtp_host/smtp_port/smtp_user/smtp_pass/from_name/from_email --
        this queried host/port/username/password/from_name/from_email,
        none of which exist. Every call would raise "column does not
        exist", get swallowed by the bare except below, and silently fall
-       back to .env config — meaning a DB-configured SMTP setup would
+       back to .env config -- meaning a DB-configured SMTP setup would
        never actually be honored, with no error surfaced anywhere.
     2. Missing decryption. smtp_pass is stored encrypted at rest
-       (encrypt_pii on save) — this returned the raw ciphertext as the
+       (encrypt_pii on save) -- this returned the raw ciphertext as the
        password, which would have failed SMTP auth on every send.
 
     Also added ORDER BY id DESC: LIMIT 1 with no ORDER BY doesn't
-    guarantee which row Postgres returns if more than one exists —
+    guarantee which row Postgres returns if more than one exists --
     matches app.py's behavior of always using the most recently saved
     config.
     """
@@ -186,7 +187,7 @@ def _email_queue_worker():
 def build_new_ip_login_email(display_name, identifier, ip_address, login_time_str):
     """Account-owner-facing notification: 'a sign-in happened from an IP we
     haven't seen before for this account.' All interpolated values are
-    escaped — this reaches the same HTML-email sink that needed retrofitting
+    escaped -- this reaches the same HTML-email sink that needed retrofitting
     for missing escaping elsewhere in this codebase, so it's done correctly
     here from the start rather than as a later fix."""
     _name = _html.escape(str(display_name))
@@ -208,7 +209,7 @@ def build_new_ip_login_email(display_name, identifier, ip_address, login_time_st
     </table>
     <div style="background:#fef3c7;border-left:4px solid #d97706;border-radius:8px;padding:16px 18px;margin:20px 0;">
       <p style="margin:0;font-size:13px;color:#92400e;font-weight:700;">Was this you?</p>
-      <p style="margin:8px 0 0;font-size:13px;color:#78350f;">If yes — no action needed, you can ignore this email.</p>
+      <p style="margin:8px 0 0;font-size:13px;color:#78350f;">If yes -- no action needed, you can ignore this email.</p>
       <p style="margin:10px 0 0;font-size:13px;color:#78350f;font-weight:700;">If this wasn't you, please do the following now:</p>
       <ol style="margin:6px 0 0;padding-left:18px;font-size:13px;color:#78350f;">
         <li>Change your password immediately.</li>
@@ -216,7 +217,7 @@ def build_new_ip_login_email(display_name, identifier, ip_address, login_time_st
         <li>Check your recent attendance/activity for anything unfamiliar.</li>
       </ol>
     </div>
-    <p style="font-size:12px;color:#94a3b8;margin-top:20px;">This is an automated security notification — replies aren't monitored.</p>
+    <p style="font-size:12px;color:#94a3b8;margin-top:20px;">This is an automated security notification -- replies aren't monitored.</p>
   </div>
 </div>"""
 
@@ -227,11 +228,11 @@ def notify_if_new_login_ip(identifier, attempt_type, ip_address, display_name, t
     already-established history.
 
     Deliberately does NOT alert on an account's very first-ever recorded
-    login — there's no baseline yet to compare against, so treating IP #1
+    login -- there's no baseline yet to compare against, so treating IP #1
     as "new" would email every user on every fresh account's first login.
     Only IP #2-and-onward, the first time each is seen, triggers a mail.
 
-    Best-effort: any failure here is logged and swallowed, never raised —
+    Best-effort: any failure here is logged and swallowed, never raised --
     this must not be able to block a login that already succeeded.
     """
     if not ip_address or not to_email:

@@ -514,7 +514,7 @@ class TestApiAdminCheckin:
                     (seed_employee["employee_id"], today))
         cur.close()
 
-        mocker.patch("blueprints.attendance.is_within_office_range", return_value=False)
+        mocker.patch("utils.attendance_utils.is_within_office_range", return_value=False)
         token = _admin_token(client, seed_admin)
         rv = client.post("/api/attendance/checkin",
                          json={"employee_id": seed_employee["employee_id"],

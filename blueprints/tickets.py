@@ -1,4 +1,5 @@
-"""Tickets blueprint — support ticket lifecycle."""
+# -*- coding: utf-8 -*-
+"""Tickets blueprint -- support ticket lifecycle."""
 import datetime
 from flask import Blueprint, request, session, redirect, jsonify, render_template, flash
 from database import get_db_connection
@@ -95,7 +96,7 @@ def ticket_action(tid):
     if row:
         _create_notification(
             'employee', f"🎫 Ticket Update: {row[0]}",
-            f"Your ticket status is now {new_status}." + (f" — {admin_response}" if admin_response else ""),
+            f"Your ticket status is now {new_status}." + (f" -- {admin_response}" if admin_response else ""),
             row[6]
         )
 
@@ -129,13 +130,13 @@ def ticket_action(tid):
       <div style="font-size:12px;color:#15803d;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Admin Response</div>
       <div style="font-size:14px;color:#1e293b;white-space:pre-line;">{admin_response}</div>
     </div>
-    <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;">This is an automated message — please do not reply.</p>
+    <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;">This is an automated message -- please do not reply.</p>
   </div>
 </div>"""
                 send_email_async(emp_email, f"Ticket Update: {subject_text}", _html, _ecfg)
-                msg = f"✅ Ticket updated — notification queued for {emp_email}"
+                msg = f"✅ Ticket updated -- notification queued for {emp_email}"
             else:
-                msg = "Ticket updated. SMTP not configured — email not sent."
+                msg = "Ticket updated. SMTP not configured -- email not sent."
                 msg_type = "warning"
         else:
             msg = "Ticket updated. Employee has no email on record."
@@ -245,7 +246,7 @@ def api_ticket_action(tid):
     if row:
         _create_notification(
             'employee', f"🎫 Ticket Update: {row[0]}",
-            f"Your ticket status is now {new_status}." + (f" — {admin_response}" if admin_response else ""),
+            f"Your ticket status is now {new_status}." + (f" -- {admin_response}" if admin_response else ""),
             row[1]
         )
     return jsonify({"ok": True, "status": new_status})

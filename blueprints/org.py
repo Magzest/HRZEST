@@ -1,4 +1,5 @@
-"""Org blueprint — multi-tenant org self-registration."""
+# -*- coding: utf-8 -*-
+"""Org blueprint -- multi-tenant org self-registration."""
 import re
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log, limiter
@@ -222,7 +223,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
     <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser: <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Your HRzest.com Portal is Ready — {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Your HRzest.com Portal is Ready -- {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_portal_ready_email failed: %s", exc)
@@ -248,7 +249,7 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
-    <div style="font-size:20px;font-weight:700;">Payment received — your HRzest.com portal is ready</div>
+    <div style="font-size:20px;font-weight:700;">Payment received -- your HRzest.com portal is ready</div>
     <div style="font-size:13px;opacity:0.75;margin-top:4px;">{company_name}</div>
   </div>
   <div style="padding:28px;">
@@ -267,7 +268,7 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
     <p style="font-size:12px;color:#94a3b8;">Your portal: {portal_url}</p>
   </div>
 </div>"""
-        send_email_async(admin_email, f"Payment confirmed — set up your HRzest.com portal for {company_name}", html_body, email_cfg)
+        send_email_async(admin_email, f"Payment confirmed -- set up your HRzest.com portal for {company_name}", html_body, email_cfg)
         return True
     except Exception as exc:
         app_log.error("send_payment_confirmation_email failed: %s", exc)
@@ -434,7 +435,7 @@ def api_create_org():
         return jsonify({"ok": False, "msg": f"Server error: {global_exc}"}), 500
 
 
-# /superadmin is superseded by /super_admin — redirect for backwards compat
+# /superadmin is superseded by /super_admin -- redirect for backwards compat
 @org_bp.route("/superadmin")
 def superadmin_redirect():
     return redirect("/super_admin/login")

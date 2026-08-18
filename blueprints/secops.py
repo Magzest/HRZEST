@@ -24,7 +24,7 @@ from utils.security_logs import (
 )
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
-    SOC_ANALYST_ROLE, soc_step_up_refresh,
+    SOC_ANALYST_ROLE, SOC_2FA_WINDOW_SEC, soc_step_up_refresh,
     turnstile_enabled,
 )
 from utils.perf_metrics import snapshot as get_perf_snapshot
@@ -66,6 +66,14 @@ def _soc_session_and_stepup_or_404():
             "access.escalation_attempt",
             "Unauthorized access attempt to SecOps API without platform admin credentials",
             level="ERROR", identifier=username or "anonymous", attempted_role=role or "none",
+        )
+        abort(404)
+    ts = session.get("soc_2fa_verified_at", 0)
+    if (time.time() - ts) > SOC_2FA_WINDOW_SEC:
+        log_security_event(
+            "access.denied",
+            "SecOps API accessed without a valid 2FA step-up",
+            level="WARNING", identifier=username or "anonymous",
         )
         abort(404)
     return username or "admin", role or "admin"

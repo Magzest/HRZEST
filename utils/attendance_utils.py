@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Attendance calculation helpers."""
 import datetime
 import calendar

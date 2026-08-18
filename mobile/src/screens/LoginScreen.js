@@ -91,24 +91,7 @@ export default function LoginScreen() {
       const errorMsg = res?.data?.msg || "Invalid admin credentials.";
       Alert.alert("Authentication Failed", errorMsg);
     } catch (err) {
-      // Fallback: check if an employee entered credentials in the Admin tab
-      try {
-        const empRes = await employeeLogin(trimmedUser, trimmedPass);
-        if (empRes?.data?.ok && empRes?.data?.token) {
-          await signIn(empRes.data.token, {
-            role: "employee",
-            name: empRes.data.name || empRes.data.employee?.name || trimmedUser,
-            employeeId: empRes.data.employee_id || trimmedUser,
-            email: empRes.data.email || `${trimmedUser}@company.com`,
-            company: empRes.data.company_name || empRes.data.company || "Enterprise HRMS",
-            logo: empRes.data.company_logo || null,
-          });
-          setLoading(false);
-          return;
-        }
-      } catch (_) {}
-
-      const errorMsg = err?.response?.data?.msg || err?.message || "Invalid credentials. Please check your username and password.";
+      const errorMsg = err?.response?.data?.msg || err?.message || "Invalid admin credentials. Please check username and password.";
       Alert.alert("Authentication Failed", errorMsg);
     }
     setLoading(false);
@@ -139,20 +122,7 @@ export default function LoginScreen() {
       const errorMsg = res?.data?.msg || "Invalid employee credentials.";
       Alert.alert("Authentication Failed", errorMsg);
     } catch (err) {
-      // Fallback: check if an admin entered credentials in the Employee tab
-      try {
-        const adminRes = await adminLogin(typedId, trimmedPass);
-        if (adminRes?.data?.ok && adminRes?.data?.token) {
-          await signIn(adminRes.data.token, {
-            role: "admin",
-            name: adminRes.data.username || typedId,
-          });
-          setLoading(false);
-          return;
-        }
-      } catch (_) {}
-
-      const errorMsg = err?.response?.data?.msg || err?.message || "Invalid credentials. Please check your Employee ID and password.";
+      const errorMsg = err?.response?.data?.msg || err?.message || "Invalid employee credentials. Please check Employee ID and password.";
       Alert.alert("Authentication Failed", errorMsg);
     }
     setLoading(false);

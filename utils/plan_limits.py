@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Per-employee flat-rate billing for the multi-tenant SaaS.
 
 Tiered plans (Basic/Medium/Prime) were retired in favor of a single flat

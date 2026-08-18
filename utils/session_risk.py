@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Per-session risk scoring and forced-session-kill enforcement.
 
 Real telemetry only: this accumulates a score from signals the backend can
@@ -5,13 +6,13 @@ actually observe (failed logins, injection-shaped input, privilege-escalation
 attempts, rate-limit trips) against a specific *already-authenticated*
 session. It does not and cannot observe anything about a user's local
 network, Wi-Fi, or hardware (MAC addresses aren't exposed to a web server or
-a browser page — there's no legitimate way for a website to see either).
+a browser page -- there's no legitimate way for a website to see either).
 
 Enforcement is server-side and is the actual kill switch: once a session's
 score crosses the threshold, every subsequent authenticated request using
 that session is rejected (see auth.py's admin_required/employee_required).
 The SSE stream in app.py exists only so an *already-open* browser tab finds
-out immediately instead of waiting for its next click — it is a UX nicety
+out immediately instead of waiting for its next click -- it is a UX nicety
 on top of server-side enforcement, never a substitute for it. A client that
 ignores the SSE message entirely still gets locked out on its very next
 request.
@@ -30,7 +31,7 @@ def ensure_session_id(session) -> str:
     cookie. Flask's default session is a signed client-side cookie with no
     server-side session-ID concept of its own, so this is generated once at
     login and used purely as the join key between "this browser's session"
-    and its row in session_risk — it is not a secret and grants no access
+    and its row in session_risk -- it is not a secret and grants no access
     on its own (the signed session cookie itself is still what's checked
     for auth on every request)."""
     if "_sid" not in session:
@@ -42,10 +43,10 @@ def evaluate_session_risk(sid: str, identifier: str, attempt_type: str,
                           weight: int, event_type: str, reason: str) -> None:
     """Called from the request-handling thread. Hands the actual scoring
     off to the background writer thread (utils/async_writer.py) instead of
-    touching the DB here — same reasoning as _record_login_failure in
+    touching the DB here -- same reasoning as _record_login_failure in
     utils/auth.py: this must stay fast even when it's being called
     repeatedly during an attack, which is exactly when it matters most.
-    No return value on purpose — no caller makes a same-request decision
+    No return value on purpose -- no caller makes a same-request decision
     based on the resulting score; enforcement reads session_risk.status
     fresh on the *next* request via is_session_compromised(), independent
     of whether this specific write has landed yet.
@@ -55,11 +56,11 @@ def evaluate_session_risk(sid: str, identifier: str, attempt_type: str,
 
 def _evaluate_session_risk_db(sid: str, identifier: str, attempt_type: str,
                               weight: int, reason: str) -> int:
-    """The actual DB write and threshold check — runs only on the
+    """The actual DB write and threshold check -- runs only on the
     background writer thread. Do not call this directly from a route.
 
     Race-condition note: the increment is a single `UPDATE ... SET score =
-    score + %s` statement, not a read-modify-write — Postgres executes that
+    score + %s` statement, not a read-modify-write -- Postgres executes that
     atomically per row. Combined with this only ever running on one
     dedicated writer thread, two events for the same session can never
     race each other at all, let alone lose an increment.
@@ -96,12 +97,12 @@ def _evaluate_session_risk_db(sid: str, identifier: str, attempt_type: str,
     if crossed:
         # ERROR severity here does double duty via log_security_event:
         # structured log line + the admin webhook alert built earlier this
-        # session (utils/alerts.py) — the "compile an incident report and
+        # session (utils/alerts.py) -- the "compile an incident report and
         # notify admin" requirement, reusing the existing pipeline rather
         # than a second bespoke alert path.
         log_security_event(
             "session.compromised",
-            "Session risk score crossed the kill threshold — session force-terminated",
+            "Session risk score crossed the kill threshold -- session force-terminated",
             level="ERROR",
             identifier=identifier, attempt_type=attempt_type,
             score=str(new_score), threshold=str(_RISK_THRESHOLD), reason=reason,
@@ -110,7 +111,7 @@ def _evaluate_session_risk_db(sid: str, identifier: str, attempt_type: str,
 
 
 def is_session_compromised(sid: str) -> bool:
-    """Server-side check — the actual enforcement point. Called from the
+    """Server-side check -- the actual enforcement point. Called from the
     auth decorators on every request, not just at login."""
     if not sid:
         return False
@@ -124,7 +125,7 @@ def is_session_compromised(sid: str) -> bool:
         return bool(row and row[0] == "compromised")
     except Exception as e:
         app_log.error("is_session_compromised check failed for sid=%s: %s", sid, e)
-        # Fail open on a DB error here, not closed — an outage in this
+        # Fail open on a DB error here, not closed -- an outage in this
         # specific check must not lock every legitimate session out of the
         # whole app. The primary auth check (password/session cookie) is
         # unaffected either way.

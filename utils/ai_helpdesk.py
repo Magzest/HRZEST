@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """AI HR Helpdesk Assistant Module with Fallback Ticket System.
 
 Answers employee inquiries regarding leave policies, health benefits, and payroll timelines,

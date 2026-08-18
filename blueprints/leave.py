@@ -1,8 +1,9 @@
-"""Leave blueprint — requests, types, holidays, resignation, overtime, comp-off.
+# -*- coding: utf-8 -*-
+"""Leave blueprint -- requests, types, holidays, resignation, overtime, comp-off.
 
 Bandit B608 audit note: the nosec-marked queries below interpolate
 `_co_sub`/`_co_join`, a company-scoping fragment that's always a hardcoded
-literal chosen by a bool (`active_cid`) — never user input. Actual values
+literal chosen by a bool (`active_cid`) -- never user input. Actual values
 are always %s-bound params.
 """
 import datetime
@@ -79,7 +80,7 @@ def add_holiday():
         cursor.execute("INSERT INTO holidays (date, name) VALUES (%s,%s)", (date, holiday_name))
         db.commit()
     except psycopg2.IntegrityError:
-        pass  # duplicate date — silently ignore
+        pass  # duplicate date -- silently ignore
     cursor.close()
     db.close()
     return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
@@ -216,7 +217,7 @@ def request_leave():
 
     config = get_email_config()
     if config:
-        # reason is free text straight from the employee's own request form —
+        # reason is free text straight from the employee's own request form --
         # escape everything user-supplied before it lands in an HTML email an
         # admin will open, or it's a stored-XSS/content-injection vector.
         _safe_name = _html.escape(str(emp_name))
@@ -246,7 +247,7 @@ def request_leave():
             for admin_email in admin_emails:
                 send_email_async(
                     admin_email,
-                    f"Leave Request — {emp_name} ({date_label})",
+                    f"Leave Request -- {emp_name} ({date_label})",
                     html_body, config
                 )
         except Exception as e:
@@ -294,7 +295,7 @@ def leave_balance():
     emp_balances = OrderedDict()
     for emp_id, emp_name, dept, lt_id, lt_name, total, used in rows:
         if emp_id not in emp_balances:
-            emp_balances[emp_id] = {'name': emp_name, 'dept': dept or '—', 'leaves': []}
+            emp_balances[emp_id] = {'name': emp_name, 'dept': dept or '--', 'leaves': []}
         used = float(used or 0)
         total = int(total or 0)
         remaining = max(0, total - used)
@@ -497,7 +498,7 @@ def leave_action(lid):
     db.close()
     if leave_row:
         _audit(f"leave_{action.lower()}", "leave_requests", lid,
-               f"Employee {leave_row[0]} leave on {leave_row[1]} — {action}")
+               f"Employee {leave_row[0]} leave on {leave_row[1]} -- {action}")
 
     # Send email + in-app notification to employee
     if leave_row:
@@ -510,17 +511,17 @@ def leave_action(lid):
             emp_id
         )
         if not emp_email:
-            flash(f"Leave {action} but no email on record for {emp_name} — notification not sent.", "warning")
+            flash(f"Leave {action} but no email on record for {emp_name} -- notification not sent.", "warning")
         else:
             cfg_row = get_email_config()
             if not cfg_row:
-                flash("Leave updated but SMTP not configured — email not sent.", "warning")
+                flash("Leave updated but SMTP not configured -- email not sent.", "warning")
             else:
                 color = "#16a34a" if action == "Approved" else "#dc2626"
                 icon = "✅" if action == "Approved" else "❌"
                 date_str = leave_date.strftime('%d %b %Y') if hasattr(leave_date, 'strftime') else str(leave_date)
                 _safe_name = _html.escape(str(emp_name))
-                _safe_reason = _html.escape(str(reason)) if reason else '—'
+                _safe_reason = _html.escape(str(reason)) if reason else '--'
                 html_body = f"""
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
@@ -544,8 +545,8 @@ def leave_action(lid):
     HRzest.com &bull; Automated Notification
   </div>
 </div>"""
-                send_email_async(emp_email, f"Leave {action} — {date_str}", html_body, cfg_row)
-                flash(f"{icon} Leave {action} — notification queued for {emp_email}", "success")
+                send_email_async(emp_email, f"Leave {action} -- {date_str}", html_body, cfg_row)
+                flash(f"{icon} Leave {action} -- notification queued for {emp_email}", "success")
 
     return redirect(tpath("/leave_holidays?tab=leaves"))
 
@@ -675,7 +676,7 @@ def request_resignation():
         for admin_email in get_admin_emails():
             send_email_async(
                 admin_email,
-                f"Resignation Notice — {emp_name} (Last day: {last_working_day})",
+                f"Resignation Notice -- {emp_name} (Last day: {last_working_day})",
                 html_body, config
             )
 
@@ -742,7 +743,7 @@ def resignation_action(rid):
                 icon = "✅" if action == "Accepted" else "❌"
                 lwd_str = lwd.strftime('%d %b %Y') if hasattr(lwd, 'strftime') else str(lwd)
                 _safe_name = _html.escape(str(emp_name))
-                _safe_reason = _html.escape(str(reason)) if reason else '—'
+                _safe_reason = _html.escape(str(reason)) if reason else '--'
                 html_body = f"""
 <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
@@ -765,7 +766,7 @@ def resignation_action(rid):
     HRzest.com &bull; Automated Notification
   </div>
 </div>"""
-                send_email_async(emp_email, f"Resignation {action} — {emp_name}", html_body, cfg_row)
+                send_email_async(emp_email, f"Resignation {action} -- {emp_name}", html_body, cfg_row)
 
     return redirect(tpath("/resignation_requests"))
 
@@ -822,7 +823,7 @@ def bulk_leave_action():
     <p style="font-size:12px;color:#94a3b8;margin-top:16px;">HRzest.com &bull; Automated Notification</p>
   </div>
 </div>"""
-            send_email_async(emp_email, f"Leave {action} — {date_str}", html_body, cfg_row)
+            send_email_async(emp_email, f"Leave {action} -- {date_str}", html_body, cfg_row)
 
     db.commit()
     cursor.close()
@@ -1045,7 +1046,7 @@ def api_employee_resign():
         for admin_email in get_admin_emails():
             send_email_async(
                 admin_email,
-                f"Resignation Notice — {emp_name} (Last day: {last_working_day})",
+                f"Resignation Notice -- {emp_name} (Last day: {last_working_day})",
                 html_body, config
             )
     cursor.close()
@@ -1086,7 +1087,7 @@ def api_employee_cancel_leave(lid):
     emp_id = g.api_emp_id
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    # Ownership enforced in SQL itself (id + employee_id), not just in Python —
+    # Ownership enforced in SQL itself (id + employee_id), not just in Python --
     # a mismatched id/employee_id pair simply doesn't match any row, so this
     # can't be bypassed by refactoring the check out from under the query.
     cursor.execute("SELECT status, leave_date FROM leave_requests WHERE id=%s AND employee_id=%s", (lid, emp_id))
@@ -1437,7 +1438,7 @@ def overtime_action(oid):
             db.commit()
             flash(f"Overtime approved. {ot_minutes} OT minutes credited to comp-off balance.", "success")
         else:
-            flash(f"Overtime approved. OT below threshold ({min_ot} min) — no comp-off credited.", "success")
+            flash(f"Overtime approved. OT below threshold ({min_ot} min) -- no comp-off credited.", "success")
     elif status == 'Rejected' and ot_row and ot_row[2] == 'Approved':
         # Reverse comp-off if previously approved
         emp_id = ot_row[0]

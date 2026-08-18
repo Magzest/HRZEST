@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """AI Automated Interview Evaluation & Sentiment Analysis Module.
 
 Synthesizes structured interviewer notes into candidate evaluation scorecards,

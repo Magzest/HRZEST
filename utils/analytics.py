@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Lightweight traffic tracking for the public marketing pages (landing
 page, get-started, create_org) -- one counter row per (path, day), no
 cookies/fingerprinting/IP storage. Feeds the Platform Admin dashboard's

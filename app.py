@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys
 try:
     sys.stdout.reconfigure(encoding='utf-8')
@@ -53,22 +54,22 @@ if _missing_env:
         stacklevel=2
     )
 
-from extensions import app, app_log, limiter, log_security_event  # noqa: F401 — app/limiter re-exported: tests/conftest.py does app.limiter.enabled = False
-# Single source of truth for email — app.py used to carry its own complete
+from extensions import app, app_log, limiter, log_security_event  # noqa: F401 -- app/limiter re-exported: tests/conftest.py does app.limiter.enabled = False
+# Single source of truth for email -- app.py used to carry its own complete
 # duplicate of every one of these, including _email_queue_worker. wsgi.py
 # (the production entrypoint) already starts utils.email_utils's worker
 # thread, then imports app.py as a side effect, which used to
-# unconditionally start ITS OWN second worker thread on top — two threads
+# unconditionally start ITS OWN second worker thread on top -- two threads
 # racing on the same email_queue table with no row locking, a live
 # duplicate-delivery risk in production (every payslip, every security
 # alert, sent up to twice). The worker is started exactly once now, see
-# the __name__ == "__main__" guard near the bottom of this file — it only
+# the __name__ == "__main__" guard near the bottom of this file -- it only
 # fires for a bare `python app.py`, never when wsgi.py imports this module.
 from utils.email_utils import (
     get_email_config, get_admin_emails, send_email_async,
     _email_queue_worker,
 )
-# Single source of truth for auth — app.py used to carry its own duplicate
+# Single source of truth for auth -- app.py used to carry its own duplicate
 # copies of every one of these (password hashing, lockout, session/API
 # guards), which had drifted from utils/auth.py's versions and meant three
 # rounds of security work (structured event logging, BOLA risk-scoring,
@@ -79,11 +80,11 @@ from utils.helpers import (
     _error_page, invalidate_settings_cache, get_company_settings,
     get_companies_list, get_overdue_onboarding_count,
 )
-# Shift timings / deduction rates / office geo-fence — app.py used to carry
+# Shift timings / deduction rates / office geo-fence -- app.py used to carry
 # its own separate SHIFT_START / LATE_DEDUCTION_RATE / OFFICE_LAT etc.
 # globals, mutated by its own separate load_default_shift()/
 # load_salary_rules(). utils/config.py's docstring already stated the
-# intent ("blueprints should always access them through this module") —
+# intent ("blueprints should always access them through this module") --
 # app.py just never migrated. Now the single source both use, referenced
 # throughout this file as cfg.SHIFT_START etc.
 import utils.config as cfg
@@ -93,9 +94,9 @@ import utils.waf as waf
 # Set APP_URL=https://yourdomain.com in .env for production.
 # Falls back to request.host_url only when the env var is absent (local dev).
 # _APP_URL / _safe_app_url / _safe_redirect / _safe_referrer_redirect moved
-# to utils/helpers.py — used across multiple routes still in app.py, not
+# to utils/helpers.py -- used across multiple routes still in app.py, not
 # just the auth/admin_views blueprints.
-# _INJECTION_PATTERN_RE moved to blueprints/auth.py — its only caller
+# _INJECTION_PATTERN_RE moved to blueprints/auth.py -- its only caller
 # (admin_login) migrated there.
 
 
@@ -109,7 +110,7 @@ def inject_common_vars():
 
 @app.template_filter('qr_url')
 def _qr_url_filter(p):
-    """Normalize QR code paths — old code stored absolute OS paths; extract just static/qrcodes/<file>."""
+    """Normalize QR code paths -- old code stored absolute OS paths; extract just static/qrcodes/<file>."""
     import re
     if not p:
         return ''
@@ -131,13 +132,13 @@ def fmt_time_filter(value):
         return value
     if hasattr(value, "strftime"):
         return value.strftime("%H:%M:%S")
-    # timedelta fallback — see comment above
+    # timedelta fallback -- see comment above
     total = int(value.total_seconds())
     return "{:02d}:{:02d}:{:02d}".format(total // 3600, (total % 3600) // 60, total % 60)
 
 # Templates that need arithmetic on a TIME value (elapsed-time math, HH/MM/SS
 # breakdowns) used to rely on mysql-connector's timedelta.seconds. psycopg2
-# returns datetime.time instead, which has no .seconds — this filter gives
+# returns datetime.time instead, which has no .seconds -- this filter gives
 # templates a type-agnostic "total seconds" so that math still works.
 
 
@@ -220,7 +221,7 @@ def inject_overdue_onboardings():
         return {"overdue_onboardings": 0}
 
 
-_SESSION_MAX_AGE = 8 * 3600  # 8 hours absolute — stolen cookie cannot be used indefinitely
+_SESSION_MAX_AGE = 8 * 3600  # 8 hours absolute -- stolen cookie cannot be used indefinitely
 # How often _resolve_tenant() re-checks tenants.status for an
 # already-session-cached tenant. Bounds how long a platform-admin
 # suspension (blueprints/platform_admin.py) takes to actually lock out an
@@ -239,13 +240,13 @@ def _perf_start_timer():
 @app.before_request
 def _resolve_tenant():
     """Determine the tenant database for this request and store it in
-    g.tenant_db. Registered second — right after the perf timer, before
-    every other hook — because get_db_connection() (database.py) reads
+    g.tenant_db. Registered second -- right after the perf timer, before
+    every other hook -- because get_db_connection() (database.py) reads
     g.tenant_db and silently falls back to the "public" schema if it isn't
     set yet. _enforce_ip_ban and _enforce_admin_mfa_enrollment both call
     get_db_connection() directly; running this hook after either of them
     would make both checks query the wrong tenant's data on every single
-    request in a multi-tenant deployment — a full bypass of both controls,
+    request in a multi-tenant deployment -- a full bypass of both controls,
     not a rare edge case.
 
     Tenants are identified by URL path (www.hrzest.com/<company-slug>/...),
@@ -279,7 +280,7 @@ def _resolve_tenant():
             log_security_event(
                 "tenant.session_mismatch",
                 f"Session bound to tenant slug '{session_slug}' saw a request "
-                f"for '{url_slug}' — session cleared.",
+                f"for '{url_slug}' -- session cleared.",
                 level="WARNING",
                 identifier=session.get("admin_username") or session.get("employee_id"),
             )
@@ -367,7 +368,7 @@ def _enforce_ip_ban():
     hook (registered second, right after the perf timer) so a banned source
     never reaches session/auth logic, let alone a route handler. Backs the
     SOC dashboard's one-click ban action (blueprints/admin_views.py). Static
-    assets stay reachable — banning is about stopping active app usage
+    assets stay reachable -- banning is about stopping active app usage
     (login attempts, API calls), not making the banned party's browser look
     broken in a way that itself signals "you got blocked, try harder.\""""
     if request.path.startswith("/static/") or request.path == "/healthz":
@@ -393,16 +394,16 @@ def _enforce_ip_ban():
 # Credential-check endpoints are deliberately exempt from the blanket WAF
 # block below. blueprints/auth.py's admin_login already detects
 # injection-shaped identifiers itself (_INJECTION_PATTERN_RE) and responds
-# with the same generic "Invalid credentials" any wrong password gets — a
+# with the same generic "Invalid credentials" any wrong password gets -- a
 # real, tested design choice (tests/test_auth_routes.py,
 # tests/test_comprehensive.py's TestInputValidation) so a probing attacker
 # can't use a distinguishing WAF-block response to tell "malicious-shaped
 # input" apart from "wrong password" on the one surface where that
 # distinction would be most valuable to them. A hard 403 here would both
 # leak that signal and short-circuit the existing detection before it runs.
-# Not a real exposure either way — every one of these routes only ever
+# Not a real exposure either way -- every one of these routes only ever
 # uses the identifier in a parameterized query, never executes or reflects
-# it — so exempting them costs no actual protection.
+# it -- so exempting them costs no actual protection.
 _WAF_EXEMPT_PATHS = {"/login", "/admin_login", "/employee_login", "/api/login", "/api/employee/login"}
 
 
@@ -445,13 +446,13 @@ def _enforce_session_lifetime():
 
 @app.before_request
 def _enforce_idle_timeout():
-    """Expire sessions after N minutes of *inactivity* — distinct from the
+    """Expire sessions after N minutes of *inactivity* -- distinct from the
     absolute max-age check above, which only catches a session once it's
     lived 8 hours regardless of how recently it was used. The threshold
     itself (company_settings.session_timeout, admin-configurable 5-1440 min
     via the SOC dashboard's /api/secops/session-timeout)
     used to be stored and displayed in the UI but was never actually
-    enforced anywhere — this closes that gap. Reads through
+    enforced anywhere -- this closes that gap. Reads through
     get_company_settings()'s existing 60s cache rather than querying the DB
     on every request.
     """
@@ -473,11 +474,11 @@ def _enforce_idle_timeout():
 
 
 # Roles that count as "administrative/HR" for the mandatory-MFA requirement
-# below — every role that can reach admin-side data or actions.
+# below -- every role that can reach admin-side data or actions.
 _MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
 
 # Routes reachable by an admin/manager/soc_analyst/hr session that has NOT
-# yet enrolled TOTP — must stay small and deliberate. Anything not on this
+# yet enrolled TOTP -- must stay small and deliberate. Anything not on this
 # list is unreachable until enrollment is complete, which is the point (a
 # genuine "mandatory," not a step-up an admin can defer indefinitely).
 _MANDATORY_MFA_EXEMPT_PATHS = {
@@ -493,7 +494,7 @@ app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False
 def _enforce_admin_mfa_enrollment():
     """Hard requirement: an admin/manager/soc_analyst session with TOTP not
     yet enrolled can reach nothing except the enrollment flow itself (and
-    login/logout) — no grace period, no dismissible nag. This is distinct
+    login/logout) -- no grace period, no dismissible nag. This is distinct
     from the existing TOTP *step-up* gates (Email Settings, Security hub,
     SOC), which only apply once already enrolled; this is what forces
     enrollment to happen in the first place.
@@ -536,7 +537,7 @@ def _enforce_csrf():
     if current_app.testing:
         return  # CSRF disabled in test mode; Bearer-token tests handle auth separately
     if request.path.startswith("/api/"):
-        return  # API routes use Bearer-token auth — no session/CSRF needed
+        return  # API routes use Bearer-token auth -- no session/CSRF needed
     if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
@@ -565,7 +566,7 @@ def _enforce_csrf():
 
 _CSRF_HEAD_RE = re.compile(rb'</head>', re.IGNORECASE)
 _CSRF_BODY_RE = re.compile(rb'</body>', re.IGNORECASE)
-# Matches <script>/<style> tags without a nonce — used to inject CSP nonces
+# Matches <script>/<style> tags without a nonce -- used to inject CSP nonces
 _SCRIPT_TAG_RE = re.compile(rb'<script(?!\s[^>]*\bnonce\b)(?=[\s>])', re.IGNORECASE)
 _STYLE_TAG_RE = re.compile(rb'<style(?!\s[^>]*\bnonce\b)(?=[\s>])', re.IGNORECASE)
 # Capture inline event-handler values for dynamic CSP sha256 hash generation.
@@ -608,7 +609,7 @@ _CSRF_SCRIPT = (
     b'i.type="hidden";i.name="_csrf_token";i.value=m.content;'
     b'f.prepend(i);}});});})();</script>'
 )
-# Session kill-switch listener — only injected on pages rendered for an
+# Session kill-switch listener -- only injected on pages rendered for an
 # authenticated session (see _inject_csrf_meta below), since the SSE
 # endpoint itself requires auth and there's nothing to listen for on public
 # pages. EventSource auto-reconnects on its own when a bounded-duration
@@ -618,14 +619,14 @@ _CSRF_SCRIPT = (
 # IMPORTANT, and worth being explicit about: this client-side wipe/redirect
 # is a UX nicety, not the security boundary. The session cookie is
 # HttpOnly by design (extensions.py), so this script cannot read or clear
-# it — that's what HttpOnly means, and weakening it to let JS touch the
+# it -- that's what HttpOnly means, and weakening it to let JS touch the
 # session cookie would be a strictly worse trade for a cosmetic gain. The
 # real kill switch is server-side: utils/auth.py's _reject_if_compromised()
 # rejects every request on a compromised session regardless of whether
 # this script ever runs, and the server's own redirect response is what
 # actually clears the session cookie via Set-Cookie. The cookie-wipe loop
 # below only ever affects non-HttpOnly cookies (e.g. anything analytics-
-# related some future page might add) — harmless to include, not load-
+# related some future page might add) -- harmless to include, not load-
 # bearing for security.
 _KILLSWITCH_SCRIPT = (
     b'<script>(function(){'
@@ -671,7 +672,7 @@ def _security_headers(response):
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
     response.headers["Server"] = "HRzest"
-    # ── HSTS — always set so dev tools and scanners see the policy ──────────
+    # ── HSTS -- always set so dev tools and scanners see the policy ──────────
     # Short max-age in dev (5 min) avoids bricking non-HTTPS local access if
     # the cert is later removed; 2 years in prod meets HSTS preload requirements.
     is_prod = os.environ.get("APP_ENV", "production") != "development"
@@ -680,7 +681,7 @@ def _security_headers(response):
     if is_prod:
         hsts_directives += "; preload"
     response.headers["Strict-Transport-Security"] = hsts_directives
-    # ── CSP — set on ALL response types, not just text/html ─────────────────
+    # ── CSP -- set on ALL response types, not just text/html ─────────────────
     # API/JSON responses also need CSP (prevents MIME-sniffing abuse) and
     # provides a consistent security surface for scanners.
     ct = response.content_type or ""
@@ -726,7 +727,7 @@ def _security_headers(response):
             "report-uri /csp-report;"
         )
     else:
-        # Non-HTML responses: minimal restrictive CSP — blocks MIME sniffing
+        # Non-HTML responses: minimal restrictive CSP -- blocks MIME sniffing
         # and any attempt to embed API responses as documents or frames.
         response.headers["Content-Security-Policy"] = (
             "default-src 'none'; frame-ancestors 'none'; object-src 'none';"
@@ -749,11 +750,11 @@ def _inject_csrf_meta(response):
     """Inject CSRF meta tag and auto-inject script into every HTML page.
 
     CSP nonce injection (the second half below) must run for EVERY
-    text/html response regardless of status code — _security_headers sets
+    text/html response regardless of status code -- _security_headers sets
     a nonce-requiring CSP header unconditionally, including on error pages
     (404/403/500). This function used to skip everything for status>=300,
     which meant every error page shipped a <style> tag with no nonce while
-    the CSP header demanded one — the browser correctly blocked it, which
+    the CSP header demanded one -- the browser correctly blocked it, which
     is the "Applying inline style violates CSP" error seen on any page that
     hit an error handler. CSRF meta-tag/script injection still only makes
     sense on normal (status<300) pages, so that part stays gated.
@@ -785,7 +786,7 @@ def _inject_csrf_meta(response):
 @app.after_request
 def _perf_record(response):
     """Record real request timing/error-rate for the Security hub's
-    Performance & Quality panel. Skips static assets — they're served
+    Performance & Quality panel. Skips static assets -- they're served
     differently (cached, no app logic) and would skew the average down."""
     from flask import g
     start = getattr(g, "_perf_start", None)
@@ -795,10 +796,10 @@ def _perf_record(response):
     return response
 
 # ---------------- AUDIT LOGGING ----------------
-# (Consolidated onto utils/helpers.py — see import block above.)
+# (Consolidated onto utils/helpers.py -- see import block above.)
 
 # ---------------- FILE UPLOAD VALIDATION ----------------
-# (Consolidated onto utils/helpers.py — see the import block above. app.py
+# (Consolidated onto utils/helpers.py -- see the import block above. app.py
 # used to carry its own duplicate of _scan_for_malware/_validate_upload/
 # _validate_image_file, which meant the security-event logging added to
 # the utils/helpers.py versions never reached any of app.py's 10 real
@@ -807,17 +808,17 @@ def _perf_record(response):
 # edited function's call sites actually resolved to the edited copy.)
 
 # ---------------- COMPANY SETTINGS (with 60-second TTL cache) ----------------
-# Consolidated onto utils/helpers.py — app.py used to carry its own
+# Consolidated onto utils/helpers.py -- app.py used to carry its own
 # separate _co_cache/_auth_cache dicts. Both copies were logically
 # identical, but being separate meant a settings change saved through
 # app.py's real routes (which call app.py's own invalidate_settings_cache())
 # would never clear a cache a future blueprint read through
-# utils.helpers.get_company_settings() — up to 60 seconds of serving a
+# utils.helpers.get_company_settings() -- up to 60 seconds of serving a
 # stale company name/logo/setup_done flag to any code path using the
 # other copy. One cache now, so one invalidation reaches everyone.
 
 # _VALID_CFS_COLS / _upsert_co_feature / _upsert_co_features consolidated
-# onto utils/helpers.py (see import block near the top of this file) — that
+# onto utils/helpers.py (see import block near the top of this file) -- that
 # copy double-gates column names (frozenset membership + identifier regex)
 # where this one only checked the frozenset. Not independently exploitable
 # on its own (the frozenset is an exact-match allowlist, not a pattern, so
@@ -834,7 +835,7 @@ def inject_company():
 
 
 # Office location, shift timings, and deduction rates now live solely in
-# utils/config.py — see the `import utils.config as cfg` note above.
+# utils/config.py -- see the `import utils.config as cfg` note above.
 # Startup load still happens here (same timing as before: once, at import,
 # inside an app context) since nothing else in this file's import order
 # guarantees the DB is reachable earlier than this point.
@@ -847,7 +848,7 @@ with app.app_context():
 
 # ── PII Encryption ────────────────────────────────────────────────
 # Consolidated onto utils/helpers.py (see import block near the top of this
-# file) — that was the weaker of the two copies (silent no-op on a missing
+# file) -- that was the weaker of the two copies (silent no-op on a missing
 # key, in every environment); it's now the strict, fail-secure canonical
 # version instead of being deleted, since app.py importing at module load
 # time means its bootstrap check already runs before this file finishes
@@ -855,16 +856,16 @@ with app.app_context():
 
 
 # ---------------- DB CONTEXT MANAGER ----------------
-# (Consolidated onto utils/helpers.py — see import block above. Note:
+# (Consolidated onto utils/helpers.py -- see import block above. Note:
 # utils/auth.py also carries its own small, identical copy of this same
-# contextmanager — out of scope for this pass, which covers app.py +
+# contextmanager -- out of scope for this pass, which covers app.py +
 # utils/helpers.py + email_utils.py + attendance_utils.py + config.py;
 # low priority since it's self-contained within the utils package and
 # behaviorally identical.)
 
 # ---------------- DB MIGRATION ----------------
 # Trigger function backing every `... ON UPDATE CURRENT_TIMESTAMP`-style
-# column from the old MySQL schema — Postgres has no column-level
+# column from the old MySQL schema -- Postgres has no column-level
 # equivalent, so each such table gets a BEFORE UPDATE trigger calling this.
 _UPDATED_AT_TRIGGER_FN = """
     CREATE OR REPLACE FUNCTION _set_updated_at() RETURNS TRIGGER AS $$
@@ -886,8 +887,8 @@ def _attach_updated_at_trigger(cursor, table):
 
 def init_db():
     """Create/upgrade the schema, then seed defaults. Split into three
-    ordered phases — table creation, ALTER-TABLE migrations for existing
-    installs, and one-time seeding — so each phase is independently
+    ordered phases -- table creation, ALTER-TABLE migrations for existing
+    installs, and one-time seeding -- so each phase is independently
     readable/testable instead of one 1000+ line function; the phases must
     still run in exactly this order (migrations assume their tables
     already exist, seeding assumes its columns already exist)."""
@@ -902,7 +903,7 @@ def init_db():
 
 def _init_core_tables(cursor, db):
     """Create every base table (and its triggers/seed rows) this app
-     needs, in dependency order — e.g. company_settings before the
+     needs, in dependency order -- e.g. company_settings before the
      migrations below that ALTER it. Idempotent: every statement is
      CREATE TABLE IF NOT EXISTS, safe to re-run on every startup."""
     cursor.execute(_UPDATED_AT_TRIGGER_FN)
@@ -1358,7 +1359,7 @@ def _init_core_tables(cursor, db):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_security_events_type ON security_events (event_type)")
 
     # Immutable audit trail: audit_logs (data/config changes) and
-    # security_events (auth/access events) must be append-only — a plain
+    # security_events (auth/access events) must be append-only -- a plain
     # table is only as tamper-resistant as every future line of code that
     # touches it, which isn't a guarantee. This trigger makes tampering
     # (or an attacker who reaches DB access) unable to alter or erase
@@ -1370,7 +1371,7 @@ def _init_core_tables(cursor, db):
         BEGIN
             -- Deliberate, narrow escape hatch for test-fixture cleanup only:
             -- the app itself never issues `SET audit.bypass`, so this
-            -- doesn't weaken production immutability — a session has to
+            -- doesn't weaken production immutability -- a session has to
             -- explicitly opt in via raw SQL the app never sends.
             IF current_setting('audit.bypass', true) = 'on' THEN
                 RETURN COALESCE(NEW, OLD);
@@ -1388,11 +1389,11 @@ def _init_core_tables(cursor, db):
         """)
     db.commit()
 
-    # Application-layer IP ban list — the SOC dashboard's "one-click ban"
+    # Application-layer IP ban list -- the SOC dashboard's "one-click ban"
     # tactical mitigation. Not a substitute for a real edge/WAF ban (Cloudflare
     # or AWS Network Firewall, provisioned separately via terraform/), since a
     # request still costs a TLS handshake + one Python request cycle before
-    # _enforce_ip_ban rejects it — but it needs no cloud API credentials and
+    # _enforce_ip_ban rejects it -- but it needs no cloud API credentials and
     # takes effect immediately app-wide, which the Terraform-managed edge
     # rules don't do without a redeploy.
     cursor.execute("""
@@ -1577,7 +1578,7 @@ def _init_core_tables(cursor, db):
     db.commit()
 
     # Create company_settings table (must precede the migration loop below,
-    # which ALTERs this table — on a fresh install with nothing to migrate
+    # which ALTERs this table -- on a fresh install with nothing to migrate
     # from, an ALTER before the table exists silently no-ops instead of
     # erroring, so column order here isn't just cosmetic).
     cursor.execute("""
@@ -1616,7 +1617,7 @@ def _run_schema_migrations(cursor, db):
 
 
 def _run_column_migrations(cursor, db):
-    """Add every column an existing install might be missing —
+    """Add every column an existing install might be missing --
     idempotent (IF NOT EXISTS) and independently try/except-guarded per
     statement so one unsupported ALTER on an older Postgres can't block
     the rest."""
@@ -1798,7 +1799,7 @@ def _run_password_migrations(cursor, db):
 
 def _run_index_migrations(cursor, db):
     """Three rounds of performance indexes added as real query-usage
-    audits found missing ones — each in its own function since they're
+    audits found missing ones -- each in its own function since they're
     independent, one-time, _applied_migrations-tracked units."""
     _run_index_migrations_v1(cursor, db)
     _run_index_migrations_v2(cursor, db)
@@ -1836,7 +1837,7 @@ def _run_index_migrations_v1(cursor, db):
 
 def _run_index_migrations_v2(cursor, db):
     """High-traffic columns missing from v1."""
-    # Performance indexes v2 — high-traffic columns missing from v1
+    # Performance indexes v2 -- high-traffic columns missing from v1
     try:
         cursor.execute("SELECT 1 FROM _applied_migrations WHERE name='perf_indexes_v2'")
         if not cursor.fetchone():
@@ -1863,14 +1864,14 @@ def _run_index_migrations_v3(cursor, db):
     against these columns before adding, not guessed):
     offer_letters.response_token is looked up on EVERY candidate-facing
     request (/offer_letter_pdf, /offer_letter_respond) with no index at
-    all — the highest-value one here. The rest cover employee-scoped
+    all -- the highest-value one here. The rest cover employee-scoped
     tables that were missing from v1/v2 despite the same WHERE
     employee_id=%s pattern as the tables v1 already covers."""
-    # Performance indexes v3 — found via a real query-usage audit (grepped
+    # Performance indexes v3 -- found via a real query-usage audit (grepped
     # every WHERE/JOIN against these columns before adding, not guessed):
     # offer_letters.response_token is looked up on EVERY candidate-facing
     # request (/offer_letter_pdf, /offer_letter_respond) with no index at
-    # all — the highest-value one here. The rest cover employee-scoped
+    # all -- the highest-value one here. The rest cover employee-scoped
     # tables that were missing from v1/v2 despite the same WHERE
     # employee_id=%s pattern as the tables v1 already covers.
     try:
@@ -1899,7 +1900,7 @@ def _run_index_migrations_v3(cursor, db):
 
 
 def _run_data_integrity_migrations(cursor, db):
-    """One-time migrations that harden data integrity — each in its own
+    """One-time migrations that harden data integrity -- each in its own
     function since they are independent, _applied_migrations-tracked
     units: a unique constraint backing the bonus-award idempotency
     check, widening Fernet-encrypted employee PII columns to TEXT so
@@ -1914,7 +1915,7 @@ def _run_data_integrity_migrations(cursor, db):
 
 def _run_incentives_unique_constraint_migration(cursor, db):
     # Unique constraint backing award_performance_bonus's ON CONFLICT DO
-    # NOTHING guard (blueprints/payroll.py) — without it, two concurrent
+    # NOTHING guard (blueprints/payroll.py) -- without it, two concurrent
     # bonus-award requests for the same employee/goal/quarter could both
     # pass the app-level "already awarded?" check and double-pay a bonus.
     # Wrapped like the index migration above: if any deployment already has
@@ -1938,11 +1939,11 @@ def _run_incentives_unique_constraint_migration(cursor, db):
 
 def _run_pii_widen_migration_v1(cursor, db):
     # Widen employee PII columns to TEXT so they can hold Fernet-encrypted
-    # values (utils/helpers.py's encrypt_pii) — a base64 Fernet token has
+    # values (utils/helpers.py's encrypt_pii) -- a base64 Fernet token has
     # ~100+ chars of fixed IV/HMAC/timestamp overhead even for a 2-character
     # plaintext like a blood group, which overflows every VARCHAR(N) column
     # below (and dob's native DATE type can't hold text/ciphertext at all).
-    # Existing plaintext rows keep working unchanged — decrypt_pii() already
+    # Existing plaintext rows keep working unchanged -- decrypt_pii() already
     # falls back to returning its input as-is when it isn't a valid Fernet
     # token, so nothing needs to be migrated, only re-saved to pick up
     # encryption going forward, same pattern already used for aadhar/pan/
@@ -1976,20 +1977,20 @@ def _run_pii_widen_migration_v1(cursor, db):
 
 def _run_pii_widen_migration_v2(cursor, db):
     """v1 above widened 10 of the 15 Fernet-encrypted employee columns
-    to TEXT. These 5 were missed — encrypt_pii() output runs 100+
+    to TEXT. These 5 were missed -- encrypt_pii() output runs 100+
     chars for any input, but aadhar_number/bank_ifsc stayed
     VARCHAR(20) and bank_account/uan_number VARCHAR(30), so
     registering an employee with any of these fields filled in
     raised psycopg2.StringDataRightTruncation ('value too long for
-    type character varying(20)') — a real 500 on a standard field
+    type character varying(20)') -- a real 500 on a standard field
     for an Indian payroll system, found while verifying the
     registration flow end-to-end rather than just reading the code."""
     # v1 above widened 10 of the 15 Fernet-encrypted employee columns to TEXT.
-    # These 5 were missed — encrypt_pii() output runs 100+ chars for any
+    # These 5 were missed -- encrypt_pii() output runs 100+ chars for any
     # input, but aadhar_number/bank_ifsc stayed VARCHAR(20) and
     # bank_account/uan_number VARCHAR(30), so registering an employee with
     # any of these fields filled in raised psycopg2.StringDataRightTruncation
-    # ("value too long for type character varying(20)") — a real 500 on a
+    # ("value too long for type character varying(20)") -- a real 500 on a
     # standard field for an Indian payroll system, found while verifying the
     # registration flow end-to-end rather than just reading the code.
     try:
@@ -2020,7 +2021,7 @@ def _run_fk_backstop_migration(cursor, db):
     cleaning up related tables) with no FK constraint backing it, so a
     bug or a crash mid-delete could silently orphan rows instead of
     being caught or cascaded. Added NOT VALID so existing orphans (if
-    any) from before this migration don't block it — only rows
+    any) from before this migration don't block it -- only rows
     inserted/updated from now on are checked, closing the gap going
     forward without a risky retroactive cleanup of historical data."""
     # Referential-integrity backstop. Every employee_id/company_id column
@@ -2028,7 +2029,7 @@ def _run_fk_backstop_migration(cursor, db):
     # path manually cleaning up related tables) with no FK constraint
     # backing it, so a bug or a crash mid-delete could silently orphan rows
     # instead of being caught or cascaded. Added NOT VALID so existing
-    # orphans (if any) from before this migration don't block it — only
+    # orphans (if any) from before this migration don't block it -- only
     # rows inserted/updated from now on are checked, closing the gap going
     # forward without a risky retroactive cleanup of historical data.
     try:
@@ -2081,7 +2082,7 @@ def _seed_defaults_and_admin(cursor, db):
         cursor.execute("INSERT INTO company_settings (setup_done) VALUES (0)")
         db.commit()
 
-    # Seed admin from env — only if no admin exists yet
+    # Seed admin from env -- only if no admin exists yet
     _admin_user = os.environ.get("ADMIN_USERNAME", "admin").strip()
     _admin_pass = os.environ.get("ADMIN_PASSWORD", "").strip()
     cursor.execute("SELECT COUNT(*) FROM admin_users")
@@ -2095,7 +2096,7 @@ def _seed_defaults_and_admin(cursor, db):
         app_log.info("Admin created: username=%s", _admin_user)
         admin_count = 1
     elif admin_count == 0 and not _admin_pass:
-        app_log.warning("ADMIN_PASSWORD not set in .env — complete setup via /setup")
+        app_log.warning("ADMIN_PASSWORD not set in .env -- complete setup via /setup")
 
     # Auto-mark setup done for existing installs that already have an admin
     if admin_count > 0:
@@ -2113,7 +2114,7 @@ def init_master_db():
     database the way MySQL's att_master was."""
     try:
         # Schema must exist before get_master_db() can SET search_path to it,
-        # so this first connection stays on the default (public) schema —
+        # so this first connection stays on the default (public) schema --
         # get_db_connection() now always resets search_path explicitly on
         # every borrow, so it's safe to use here without leaking att_master
         # onto whichever connection the pool hands out next.
@@ -2255,19 +2256,19 @@ def init_tenant_db(schema_name: str):
 
 
 # ---------------- NOTIFICATION HELPER ----------------
-# (Consolidated onto utils/helpers.py — see import block above.)
+# (Consolidated onto utils/helpers.py -- see import block above.)
 
 # ---------------- ATTENDANCE HELPERS ----------------
-# (Consolidated onto utils/attendance_utils.py — see import block above.
+# (Consolidated onto utils/attendance_utils.py -- see import block above.
 # Became a safe mechanical merge only after the cfg.SHIFT_START migration
 # above: before that, this file's copies used bare SHIFT_START/etc. globals
-# while utils/attendance_utils.py's copies already used cfg.SHIFT_START —
+# while utils/attendance_utils.py's copies already used cfg.SHIFT_START --
 # genuinely different behavior under a stale-cache scenario, not just
 # duplicated source. Now both reference the same cfg module state, so
 # there's nothing left to diverge.)
 
 # ---------------- EMAIL HELPERS ----------------
-# (Consolidated onto utils/email_utils.py — see the import block above.)
+# (Consolidated onto utils/email_utils.py -- see the import block above.)
 
 # build_salary_slip_html consolidated onto utils/salary_utils.py
 # compute_salary_entry consolidated onto utils/salary_utils.py
@@ -2276,7 +2277,7 @@ def init_tenant_db(schema_name: str):
 # ---------------- ERROR HANDLERS ----------------
 import traceback as _traceback
 
-# _error_page consolidated onto utils/helpers.py — that copy rendered a
+# _error_page consolidated onto utils/helpers.py -- that copy rendered a
 # template (templates/error.html) that doesn't exist anywhere in this
 # project; every call would have raised TemplateNotFound. Replaced with
 # this file's working implementation instead of fixing the missing
@@ -2284,12 +2285,12 @@ import traceback as _traceback
 
 # ---------------- ERROR ALERTING (malfunction detection) ----------------
 # The catch-all exception handler below tells users "the team has been
-# notified" — this is what actually makes that true. Emails admins on
+# notified" -- this is what actually makes that true. Emails admins on
 # unhandled errors, deduped by error signature so one hot failing endpoint
 # can't flood inboxes or the email_queue table.
 _error_alert_cache = {}
 _error_alert_lock = threading.Lock()
-_ERROR_ALERT_COOLDOWN = 900  # 15 min — same error signature won't re-alert sooner
+_ERROR_ALERT_COOLDOWN = 900  # 15 min -- same error signature won't re-alert sooner
 
 
 def _alert_on_error(tb_text, context=""):
@@ -2297,7 +2298,7 @@ def _alert_on_error(tb_text, context=""):
     mask or crash on top of the original error being reported."""
     try:
         # Dedup key = exception type + the line that actually raised it, not
-        # the full traceback (which varies request-to-request — different
+        # the full traceback (which varies request-to-request -- different
         # IDs, line numbers in called code, etc. would defeat deduping).
         last_line = tb_text.strip().splitlines()[-1] if tb_text.strip() else "unknown"
         sig = hashlib.sha256(last_line.encode()).hexdigest()[:16]
@@ -2325,7 +2326,7 @@ def _alert_on_error(tb_text, context=""):
             f"Remote IP: {_html.escape(request.remote_addr or '') if request else 'n/a'}\n\n"
             f"{_html.escape(tb_text)}</pre>"
         )
-        subject = f"⚠️ Application error — {context or 'unknown route'}"
+        subject = f"⚠️ Application error -- {context or 'unknown route'}"
         for admin_email in admins:
             send_email_async(admin_email, subject, body, cfg)
     except Exception as _alert_err:
@@ -2336,9 +2337,9 @@ def _alert_on_error(tb_text, context=""):
 def rate_limit_exceeded(e):
     """Flask-Limiter raises this (a werkzeug HTTPException) whenever any
     @limiter.limit(...) threshold is crossed. Distinct from _check_login_lockout's
-    DB-backed account lockout (utils/auth.py) — this is the generic per-route
+    DB-backed account lockout (utils/auth.py) -- this is the generic per-route
     rate ceiling. Logs every breach (feeds the same auto-ban counter WAF
-    blocks use — see utils/waf.py) instead of letting it pass through as a
+    blocks use -- see utils/waf.py) instead of letting it pass through as a
     silent, unlogged 429."""
     waf.record_breach_and_maybe_ban(request.remote_addr, "Repeated rate-limit breaches")
     log_security_event("ratelimit.exceeded", f"Rate limit exceeded: {getattr(e, 'description', '')}",
@@ -2760,7 +2761,7 @@ def unhandled_exception(e):
 # award_performance_bonus migrated to blueprints/payroll.py
 # save_hike_config migrated to blueprints/payroll.py
 # leave_requests_redirect migrated to blueprints/leave.py
-# view_holidays_redirect removed — was a dead, unreferenced duplicate of
+# view_holidays_redirect removed -- was a dead, unreferenced duplicate of
 # /view_holidays that had been silently shadowed by the real view_holidays()
 # (now blueprints/leave.py) since before this migration; moving the real
 # route into a blueprint flipped Werkzeug's rule tie-break order and made
@@ -2882,7 +2883,7 @@ def unhandled_exception(e):
 
 
 # WebAuthn/mobile-biometric helper functions moved to utils/webauthn_utils.py
-# _enroll_fingerprint_from_form moved to utils/webauthn_utils.py — its only
+# _enroll_fingerprint_from_form moved to utils/webauthn_utils.py -- its only
 # two callers (admin_action, add_employee_page) migrated to blueprints/employees.py.
 # webauthn_status migrated to blueprints/auth.py
 
@@ -2901,7 +2902,7 @@ def unhandled_exception(e):
 
 # webauthn_unenroll migrated to blueprints/auth.py
 # webauthn_register_kiosk migrated to blueprints/auth.py (was missing from
-# the original auth.py migration manifest — found via a pyflakes undefined-
+# the original auth.py migration manifest -- found via a pyflakes undefined-
 # name sweep after the fact; it referenced _webauthn_available and
 # _wa_verify_and_store_registration, which app.py no longer imports).
 # admin_reset_employee_fingerprint migrated to blueprints/auth.py
@@ -2934,27 +2935,27 @@ def unhandled_exception(e):
 # api_employee_salary migrated to blueprints/employee_portal.py
 
 
-# ---------------- API: EMPLOYEE — ATTENDANCE HISTORY ----------------
+# ---------------- API: EMPLOYEE -- ATTENDANCE HISTORY ----------------
 
 # api_employee_attendance migrated to blueprints/employee_portal.py
 
 
-# ---------------- API: EMPLOYEE — LEAVE HISTORY + BALANCE ----------------
+# ---------------- API: EMPLOYEE -- LEAVE HISTORY + BALANCE ----------------
 
 # api_employee_leaves migrated to blueprints/leave.py
 
 
-# ---------------- API: EMPLOYEE — CANCEL LEAVE ----------------
+# ---------------- API: EMPLOYEE -- CANCEL LEAVE ----------------
 
 # api_employee_cancel_leave migrated to blueprints/leave.py
 
 
-# ---------------- WEB: EMPLOYEE — CANCEL LEAVE ----------------
+# ---------------- WEB: EMPLOYEE -- CANCEL LEAVE ----------------
 
 # cancel_leave_web migrated to blueprints/leave.py
 
 
-# ---------------- API: EMPLOYEE — REQUEST OVERTIME ----------------
+# ---------------- API: EMPLOYEE -- REQUEST OVERTIME ----------------
 
 # api_employee_request_overtime migrated to blueprints/leave.py
 
@@ -2962,17 +2963,17 @@ def unhandled_exception(e):
 # api_employee_my_overtime migrated to blueprints/leave.py
 
 
-# ---------------- API: ADMIN — DOCUMENT EXPIRY ALERTS ----------------
+# ---------------- API: ADMIN -- DOCUMENT EXPIRY ALERTS ----------------
 
 # api_expiring_documents migrated to blueprints/admin_views.py
 
 
-# ---------------- API: EMPLOYEE — HOLIDAYS ----------------
+# ---------------- API: EMPLOYEE -- HOLIDAYS ----------------
 
 # api_employee_holidays migrated to blueprints/leave.py
 
 
-# ---------------- API: EMPLOYEE — PROFILE ----------------
+# ---------------- API: EMPLOYEE -- PROFILE ----------------
 
 # api_employee_profile migrated to blueprints/employee_portal.py
 
@@ -3176,7 +3177,7 @@ def _register_api_v1_aliases():
 
 # ── Self-register blueprints when app.py is the entrypoint ────────────────────
 # wsgi.py and tests/conftest.py both register every blueprint on the shared
-# `app` instance BEFORE importing this module (documented in conftest.py) —
+# `app` instance BEFORE importing this module (documented in conftest.py) --
 # in that case core.home is already present and this is a no-op. Only a bare
 # `python app.py` reaches this branch, so it's the one path where app.py must
 # register the blueprints itself before _register_api_v1_aliases() runs,
@@ -3238,12 +3239,12 @@ if __name__ == "__main__":
     init_db()
     cfg.load_default_shift()
     cfg.load_salary_rules()
-    # Only started here — when app.py is run directly (`python app.py`,
+    # Only started here -- when app.py is run directly (`python app.py`,
     # local dev). wsgi.py (the real production entrypoint) already starts
     # this exact worker itself before importing app.py; starting it again
     # unconditionally at module level (the old behavior) meant production
     # ran two of these per process, racing on the same email_queue table
-    # with no row locking — a live duplicate-delivery bug, not a
+    # with no row locking -- a live duplicate-delivery bug, not a
     # hypothetical one.
     threading.Thread(target=_email_queue_worker, daemon=True, name="email-queue-worker").start()
     import os as _os
@@ -3252,7 +3253,7 @@ if __name__ == "__main__":
     class _QuietRequestHandler(WSGIRequestHandler):
         """Werkzeug's dev server writes its own 'Server: Werkzeug/x.x Python/x.x'
         header straight onto the socket (via BaseHTTPRequestHandler.send_response)
-        regardless of what _security_headers already set on the response object —
+        regardless of what _security_headers already set on the response object --
         so the real fix has to happen here, not by adding another header.
         Overriding version_string() replaces that raw value instead of leaking
         the exact Werkzeug/Python versions (only relevant to `python app.py` dev/
@@ -3268,11 +3269,11 @@ if __name__ == "__main__":
     # threaded by default -- without this, one open stream blocks every
     # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
-        print("🔒  SSL cert found — starting on https://0.0.0.0:5000")
+        print("🔒  SSL cert found -- starting on https://0.0.0.0:5000")
         app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 ssl_context=(_cert, _key), request_handler=_QuietRequestHandler)
     else:
-        print("⚠   No cert.pem / key.pem — starting on http://0.0.0.0:5000")
+        print("⚠   No cert.pem / key.pem -- starting on http://0.0.0.0:5000")
         print("    Fingerprint / WebAuthn requires HTTPS. Run: python generate_cert.py")
         app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 request_handler=_QuietRequestHandler)

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """GeoIP Anomaly & Impossible Travel Threat Detection Engine."""
 
 import math

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #!/usr/bin/env python3
 import os
 
@@ -23,7 +24,7 @@ if __name__ == "__main__":
     _scheme = "https" if _https else "http"
 
     print("\n" + "="*60)
-    print("🚀 HRzest.com — Development Server")
+    print("🚀 HRzest.com -- Development Server")
     print("="*60)
     print(f"📍 Local URLs to open in your web browser (Port {port}):")
     print(f"   • Login Page:      {_scheme}://127.0.0.1:{port}/login")
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     print(f"   • Employee Portal: {_scheme}://127.0.0.1:{port}/employee_portal")
     print(f"   • Health Check:    {_scheme}://127.0.0.1:{port}/healthz")
     if not _https:
-        print("\n⚠   No cert.pem / key.pem found — run `python generate_cert.py` for HTTPS.")
+        print("\n⚠   No cert.pem / key.pem found -- run `python generate_cert.py` for HTTPS.")
     print("="*60 + "\n")
 
     # threaded=True matters here: /api/session/risk-stream (blueprints/

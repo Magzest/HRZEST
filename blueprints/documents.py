@@ -1,4 +1,5 @@
-"""Documents blueprint — admin and employee document management."""
+# -*- coding: utf-8 -*-
+"""Documents blueprint -- admin and employee document management."""
 import os
 import uuid
 import datetime
@@ -147,7 +148,7 @@ def download_document(did):
         flash("Document not found.", "danger")
         return redirect(tpath("/documents"))
     doc_emp_id, original_name, stored_name = row
-    # This check existed before but never logged a denial — a real IDOR
+    # This check existed before but never logged a denial -- a real IDOR
     # probe against someone else's payslip/ID-document upload would have
     # been invisible. enforce_ownership() logs it at ERROR, which feeds the
     # same alerting webhook the payslip endpoint already uses.

@@ -1,4 +1,5 @@
-"""Auth blueprint — login, logout, password reset, WebAuthn."""
+# -*- coding: utf-8 -*-
+"""Auth blueprint -- login, logout, password reset, WebAuthn."""
 import os
 import re
 import time
@@ -35,7 +36,7 @@ UPLOAD_FOLDER = app.config["UPLOAD_FOLDER"]
 
 # How long a successful kiosk face-match (see api_kiosk_enroll_face_verify)
 # stays valid as proof of identity before it must be redone. Mirrors the
-# window pattern used for wa_fp_verified_at/soc_2fa_verified_at elsewhere —
+# window pattern used for wa_fp_verified_at/soc_2fa_verified_at elsewhere --
 # short enough that a stolen session cookie right after enrollment can't
 # reuse a stale face-match to enroll a second, different employee_id.
 KIOSK_FACE_VERIFY_WINDOW_SEC = 5 * 60
@@ -49,7 +50,7 @@ if _webauthn_available:
 
 auth_bp = Blueprint("auth", __name__)
 
-# Detection only — never a security control. Every query in this codebase
+# Detection only -- never a security control. Every query in this codebase
 # is already parameterized (verified separately), so a payload matching
 # this can't actually inject anything; it just tells us someone is
 # probing rather than mistyping a username. Deliberately narrow (classic
@@ -85,6 +86,8 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
+@auth_bp.route("/admin_login", methods=["GET", "POST"])
+@auth_bp.route("/admin-login", methods=["GET", "POST"])
 @limiter.limit("60 per 15 minutes")
 @limiter.limit("20 per minute")
 @limiter.limit("150 per hour")
@@ -97,7 +100,7 @@ def admin_login():
     if request.method == "POST":
         identifier = request.form.get("identifier", "").strip()
         password = request.form.get("password", "").strip()
-        # Password is intentionally never inspected or logged here — only
+        # Password is intentionally never inspected or logged here -- only
         # the identifier field is checked, and only its shape (matched
         # pattern name), never the raw value, goes into the alert.
         _inj_match = _INJECTION_PATTERN_RE.search(identifier)
@@ -117,7 +120,7 @@ def admin_login():
         # failures already on record, every further attempt must carry a
         # verified Turnstile token before the password is even checked.
         # No-op entirely when Turnstile isn't configured (turnstile_enabled()
-        # is False) — see utils/auth.py's fail-open rationale.
+        # is False) -- see utils/auth.py's fail-open rationale.
         current_failed_count = _get_failed_count(identifier)
         needs_captcha = turnstile_enabled() and current_failed_count >= CAPTCHA_AFTER_ATTEMPTS
         if needs_captcha:
@@ -128,7 +131,7 @@ def admin_login():
                                        show_captcha=True, turnstile_site_key=_TURNSTILE_SITE_KEY)
 
         # Whether the failure paths below should show the widget on the
-        # NEXT attempt — computed from current_failed_count rather than a
+        # NEXT attempt -- computed from current_failed_count rather than a
         # fresh DB read, since _record_login_failure's write is async and
         # may not have landed by the time this response is built.
         will_need_captcha = turnstile_enabled() and (current_failed_count + 1) >= CAPTCHA_AFTER_ATTEMPTS
@@ -219,7 +222,7 @@ def admin_login():
 
 
 @auth_bp.route("/mfa_verify", methods=["GET", "POST"])
-# Raised from 8/15min for the same reason as admin_login above — all
+# Raised from 8/15min for the same reason as admin_login above -- all
 # visitors share one apparent IP under rootless Podman's port-forwarding.
 # The OTP itself is still the real defense (short TTL, compare_digest).
 @limiter.limit("40 per 15 minutes")
@@ -314,7 +317,7 @@ def change_admin_password():
     confirm_pw = request.form.get("confirm_password", "")
     # Use the logged-in admin's username, not a hardcoded 'admin' string.
     # A hardcoded value lets any admin account change the 'admin' password
-    # if they know its current value — a cross-account privilege escalation.
+    # if they know its current value -- a cross-account privilege escalation.
     logged_in_as = session.get("admin_username", "admin")
     if not new_pw or new_pw != confirm_pw:
         return redirect(tpath("/admin?pwd_error=mismatch"))
@@ -399,7 +402,7 @@ def admin_forgot_password():
   </div>
 </div>"""
     try:
-        send_email_smtp(admin_email, "Admin Password Reset — HRzest.com", html_body, cfg)
+        send_email_smtp(admin_email, "Admin Password Reset -- HRzest.com", html_body, cfg)
     except Exception:
         app_log.error("Failed to send admin password reset email", exc_info=True)
         return render_template("admin_forgot_password.html", sent=False,
@@ -496,7 +499,7 @@ def employee_forgot_password():
     <p style="font-size:12px;color:#94a3b8;margin-top:12px;">Or copy this link: {reset_url}</p>
   </div>
 </div>"""
-    send_email_async(db_email, "Password Reset — Employee Portal", html_body, cfg)
+    send_email_async(db_email, "Password Reset -- Employee Portal", html_body, cfg)
     return render_template("employee_forgot_password.html", sent=True, error=None)
 
 
@@ -610,7 +613,7 @@ def force_change_pin():
 
 @auth_bp.route("/webauthn/status", methods=["GET"])
 def webauthn_status():
-    """Diagnostic endpoint — shows WebAuthn config without exposing sensitive data."""
+    """Diagnostic endpoint -- shows WebAuthn config without exposing sensitive data."""
     return jsonify({
         "webauthn_available": _webauthn_available,
         "rp_id": _wa_rp_id() if _webauthn_available else None,
@@ -651,7 +654,7 @@ def api_kiosk_enroll_face_verify():
     """Public kiosk endpoint: proves the person at the kiosk is the employee
     they claim before /webauthn/registration-options will hand out enrollment
     options for that employee_id. This is the real identity check that was
-    previously missing entirely — a QR scan or typed employee_id alone proves
+    previously missing entirely -- a QR scan or typed employee_id alone proves
     nothing about who is physically present."""
     employee_id = (request.form.get("employee_id") or "").strip().upper()
     face_photo = request.files.get("face_photo")
@@ -771,7 +774,7 @@ def webauthn_verify_challenge():
     just the clientDataJSON fields, which are trivially forgeable on their
     own). On success, sets a short-lived, one-time, employee-bound session
     flag that /attendance and /api/employee/qr-face-checkin consume to allow
-    the actual check-in — this stops a verified fingerprint for employee A
+    the actual check-in -- this stops a verified fingerprint for employee A
     from being reused to check in as employee B.
     """
     if not _webauthn_available:
@@ -844,7 +847,7 @@ def webauthn_verify_challenge():
     session.pop("wa_auth_emp_id", None)
 
     # Persisting the new sign count is best-effort bookkeeping (anti-clone
-    # detection) — a failure here doesn't invalidate a verification that
+    # detection) -- a failure here doesn't invalidate a verification that
     # already succeeded above, so it's swallowed rather than failing the
     # whole request. Reuses the connection from the SELECT above instead of
     # opening a second one.
@@ -873,12 +876,12 @@ def webauthn_register():
     # Both values live in the same signed session cookie, so this is equivalent security.
     emp_id = session.get("employee_id") or session.get("wa_reg_emp_id")
     if not emp_id:
-        return jsonify({"ok": False, "msg": "Session expired — please log in again"}), 401
+        return jsonify({"ok": False, "msg": "Session expired -- please log in again"}), 401
     data = request.get_json(force=True, silent=True) or {}
     credential = data.get("credential")
     challenge_b64 = session.get("wa_reg_challenge")
     if not challenge_b64:
-        return jsonify({"ok": False, "msg": "Enrollment session expired — please start again"}), 401
+        return jsonify({"ok": False, "msg": "Enrollment session expired -- please start again"}), 401
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -923,7 +926,7 @@ def webauthn_unenroll():
 @auth_bp.route("/api/employee/<emp_id>/webauthn-credential", methods=["GET"])
 @limiter.limit("30 per minute")
 def get_employee_webauthn_credential(emp_id):
-    """Return the stored WebAuthn credential_id — requires an active admin or employee session."""
+    """Return the stored WebAuthn credential_id -- requires an active admin or employee session."""
     is_admin = session.get("admin_logged_in")
     session_emp = session.get("employee_id")
     if not (is_admin or session_emp):
@@ -972,9 +975,9 @@ def webauthn_register_kiosk():
         return jsonify({"ok": False, "msg": "Employee ID required"}), 400
     if not challenge_b64:
         app_log.warning("WebAuthn kiosk enrolment: no challenge in session for emp=%s", emp_id)
-        return jsonify({"ok": False, "msg": "Session expired — please refresh the page and try again"}), 400
+        return jsonify({"ok": False, "msg": "Session expired -- please refresh the page and try again"}), 400
     if session.get("wa_reg_emp_id", "").upper() != emp_id:
-        app_log.warning("WebAuthn kiosk: emp_id mismatch — session=%s post=%s",
+        app_log.warning("WebAuthn kiosk: emp_id mismatch -- session=%s post=%s",
                         session.get("wa_reg_emp_id"), emp_id)
         return jsonify({"ok": False, "msg": "Employee ID mismatch. Please restart enrollment."}), 403
     try:

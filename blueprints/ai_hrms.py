@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Blueprint for AI-powered HRMS features (Recruitment, Helpdesk, Interview Evaluation, Attrition Analytics)."""
 
 from flask import Blueprint, request, jsonify, render_template, session

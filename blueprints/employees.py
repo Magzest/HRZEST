@@ -1,4 +1,5 @@
-"""Employees blueprint — CRUD, photos, QR codes, ID cards."""
+# -*- coding: utf-8 -*-
+"""Employees blueprint -- CRUD, photos, QR codes, ID cards."""
 import os
 import json
 import datetime
@@ -53,7 +54,7 @@ def admin_action():
             # Extended fields
             department = request.form.get("department", "").strip() or None
             # phone (like name/email) is deliberately left plaintext, unlike
-            # every other PII field below — it backs admin search (ILIKE),
+            # every other PII field below -- it backs admin search (ILIKE),
             # alphabetical employee listings, and ticket/leave search joins;
             # encrypting it would break those with no equivalent replacement
             # (Fernet ciphertext isn't ILIKE-able or sortable).
@@ -98,7 +99,7 @@ def admin_action():
             return redirect(tpath("/admin"))
         # Plaintext fields still bounded by a VARCHAR column width (the PII
         # fields below this point are Fernet-encrypted into TEXT columns, so
-        # they can't overflow) — checked here with a clear message instead of
+        # they can't overflow) -- checked here with a clear message instead of
         # letting an oversized value hit psycopg2.errors.StringDataRightTruncation,
         # an unhandled DataError that would otherwise fall through to the
         # generic 500 page without cleaning up the already-uploaded photo.
@@ -199,11 +200,11 @@ def admin_action():
             flash(f"✅ Employee '{name}' registered! ID: {emp_id} | Password: {auto_pass}", "success")
             # Send welcome email with credentials
             if not email:
-                flash("⚠️ No email address provided — credentials email not sent. Share them manually.", "error")
+                flash("⚠️ No email address provided -- credentials email not sent. Share them manually.", "error")
             else:
                 _ecfg = get_email_config()
                 if not _ecfg:
-                    flash("⚠️ SMTP not configured — credentials email not sent. Go to Email Settings to set it up.", "error")
+                    flash("⚠️ SMTP not configured -- credentials email not sent. Go to Email Settings to set it up.", "error")
                 else:
                     _login_url = employee_login_url()
                     _welcome_html = f"""
@@ -231,10 +232,10 @@ def admin_action():
   <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400e;margin-bottom:20px;">
     🔒 Please change your password after your first login for security.
   </div>
-  <p style="color:#64748b;font-size:12px;text-align:center;margin:0;">This is an automated message — please do not reply.</p>
+  <p style="color:#64748b;font-size:12px;text-align:center;margin:0;">This is an automated message -- please do not reply.</p>
 </div>"""
                     try:
-                        send_email_smtp(email, f"Welcome {name} — Your Login Credentials", _welcome_html, _ecfg)
+                        send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _welcome_html, _ecfg)
                         flash(f"📧 Credentials email sent to {email}", "success")
                     except Exception as _mail_err:
                         flash(f"⚠️ Email delivery failed: {_mail_err}. Share credentials manually.", "error")
@@ -399,7 +400,7 @@ def employee_profile(emp_id):
         emp[6] = decrypt_pii_date(emp[6])
 
         # DLP: aadhar/pan/bank_account/uan are only shown unmasked to the
-        # finance/HR-clearance tier (admin_role=="admin") — mirrors the
+        # finance/HR-clearance tier (admin_role=="admin") -- mirrors the
         # restriction payroll.py's view_payslip already enforces for
         # payslips. manager/soc_analyst still get the rest of the profile.
         if not has_pii_clearance():
@@ -499,7 +500,7 @@ def edit_employee():
     department = request.form.get("department", "").strip() or None
     manager_name = request.form.get("manager_name", "").strip() or None
     manager_id = request.form.get("manager_id", "").strip() or None
-    # phone deliberately plaintext — see the matching comment in add_employee().
+    # phone deliberately plaintext -- see the matching comment in add_employee().
     phone = request.form.get("phone", "").strip() or None
     gender = encrypt_pii(request.form.get("gender", "").strip() or None)
     dob = encrypt_pii(request.form.get("dob", "").strip() or None)
@@ -809,7 +810,7 @@ def employee_detail(emp_id):
 
     # DLP: aadhar/pan/bank_account/uan (indices 24,25,27,29) and salary
     # (index 36) are only shown unmasked to the finance/HR-clearance tier
-    # (admin_role=="admin") — mirrors the restriction payroll.py's
+    # (admin_role=="admin") -- mirrors the restriction payroll.py's
     # view_payslip already enforces for payslips. manager/soc_analyst still
     # get the rest of the record.
     salary_hidden = False
@@ -1128,7 +1129,7 @@ def add_employee_page():
                          f"Password: <strong>{auto_pass}</strong></p>"
                          f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
                 try:
-                    send_email_smtp(email, f"Welcome {name} — Your Login Credentials", _html, _ecfg)
+                    send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
                     flash(f"Credentials email sent to {email}", "success")
                 except Exception:
                     pass
@@ -1321,7 +1322,7 @@ _IDC_RED = (220, 38, 38)
 
 
 def _idc_blood_drop(draw, x, y, w, h, color):
-    """Draw a small blood-drop (teardrop) icon inside box (x, y, w, h) —
+    """Draw a small blood-drop (teardrop) icon inside box (x, y, w, h) --
     vector-drawn rather than an emoji glyph, since the PIL fonts available
     in this environment can't render color emoji (they'd just show as a
     missing-glyph box)."""
@@ -1393,7 +1394,7 @@ def _idc_center_text(draw, text, font, card_w, y, color):
 
 def _idc_wrap_text(draw, text, font, max_width, max_lines=2):
     """Greedy word-wrap `text` to fit within `max_width` px, capped at
-    `max_lines` lines — used for the default card's company address, which
+    `max_lines` lines -- used for the default card's company address, which
     is free-form text unlike the other fixed single-line fields. Anything
     past `max_lines` is dropped, with the last line ellipsized."""
     words = _idc_safe_text(text).split()
@@ -1422,7 +1423,7 @@ def _idc_wrap_text(draw, text, font, max_width, max_lines=2):
 def _idc_header_logo_and_name(draw, img, bar_h, company_name, logo_path, fallback_title, fallback_subtitle):
     """Draw the default card's header as a logo+company-name lockup when the
     employee's company has branding on file, or the generic fixed title
-    otherwise — shared by both the front and back default layouts so they
+    otherwise -- shared by both the front and back default layouts so they
     stay visually identical instead of drifting apart."""
     from PIL import Image
 
@@ -1466,8 +1467,8 @@ def _idc_header_logo_and_name(draw, img, bar_h, company_name, logo_path, fallbac
 
 def _idc_footer_contact(draw, cw, ch, company_name, company_website, company_phone):
     """Draw the company's identity (name, then website/toll-free) as up to
-    two compact lines centered in the card's bottom footer bar — the same
-    spot where a generic disclaimer used to sit — shared by front and back
+    two compact lines centered in the card's bottom footer bar -- the same
+    spot where a generic disclaimer used to sit -- shared by front and back
     so they stay in sync. Draws nothing when the company has none of these
     on file, preserving today's look for uncustomized companies."""
     contact_parts = [p for p in (
@@ -1497,7 +1498,7 @@ def _idc_footer_contact(draw, cw, ch, company_name, company_website, company_pho
 
 
 def _idc_box_text(draw, text, box, color, font_size=14, bold=False, align="center"):
-    """Draw text truncated to fit inside a pixel box (x, y, w, h) — used by
+    """Draw text truncated to fit inside a pixel box (x, y, w, h) -- used by
     custom-template rendering, where fields sit at admin-chosen positions
     rather than the fixed default layout's hardcoded coordinates."""
     font = _idc_font(font_size, bold=bold)
@@ -1519,7 +1520,7 @@ def _idc_box_bg_color(img, box):
     """Best-guess background fill color for a text field's box, sampled from
     the (unmodified) template image at each edge's midpoint. Custom templates
     often have their own placeholder wording baked into the pixels ("YOUR
-    NAME", "JOB POSITION") on a pill/rounded-rect background — the box's
+    NAME", "JOB POSITION") on a pill/rounded-rect background -- the box's
     actual corners usually land outside a *rounded* pill (in whatever
     surrounds it), while edge midpoints reliably land on the pill's fill and
     rarely on a glyph stroke (text is centered with padding from the edges).
@@ -1551,7 +1552,7 @@ def _idc_contrast_color(bg_rgb):
     """Pick white or dark-navy text, whichever reads better against `bg_rgb`,
     using perceptual (WCAG-style) relative luminance. This is the fallback
     used whenever a custom-template field doesn't pin an explicit text
-    color — so a field placed over a dark pill (navy header, photo overlay)
+    color -- so a field placed over a dark pill (navy header, photo overlay)
     or a light one (white card body) is legible by default instead of always
     rendering the same fixed gray regardless of what's underneath."""
     def _chan(c):
@@ -1564,7 +1565,7 @@ def _idc_contrast_color(bg_rgb):
 
 def _idc_parse_color(hex_str, default):
     """Parse a '#rrggbb' string (from a custom template field's saved color)
-    into an (r,g,b) tuple, falling back to `default` for anything invalid —
+    into an (r,g,b) tuple, falling back to `default` for anything invalid --
     an admin-placed field over a dark pill background needs light text, so
     this can't be a single hardcoded color for every template."""
     if not hex_str or not isinstance(hex_str, str):
@@ -1597,7 +1598,7 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
                           company_website=None, company_phone=None):
     """Today's fixed ID-card front layout, now showing the employee's company
     name/logo in the header when set (falls back to the generic subtitle for
-    companies with no branding on file — no visual change for those)."""
+    companies with no branding on file -- no visual change for those)."""
     from PIL import Image, ImageDraw
 
     CW, CH = 500, 820
@@ -2063,7 +2064,7 @@ def api_register_employee():
                      f"Password: <strong>{init_pass}</strong></p>"
                      f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
             try:
-                send_email_smtp(email, f"Welcome {name} — Your Login Credentials", _html, _ecfg)
+                send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
             except Exception:
                 app_log.error("api_register_employee: welcome email failed", exc_info=True)
     return jsonify({"ok": True, "msg": f"Employee {name} registered."})
