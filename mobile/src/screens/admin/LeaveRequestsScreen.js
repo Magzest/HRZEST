@@ -33,8 +33,35 @@ export default function LeaveRequestsScreen({ navigation }) {
   const loadData = async () => {
     try {
       const res = await fetchLeaveRequests();
-      if (res && res.data && Array.isArray(res.data.requests)) {
-        setRequests(res.data.requests);
+      const rawList = res?.data?.leaves || res?.data?.requests || [];
+      if (Array.isArray(rawList)) {
+        const formatted = rawList.map((item) => {
+          let type = "Leave Application";
+          let cleanReason = item.reason || "";
+          if (cleanReason && cleanReason.startsWith("[")) {
+            const match = cleanReason.match(/^\[(.*?)\]\s*(.*)$/);
+            if (match) {
+              type = match[1];
+              cleanReason = match[2];
+            }
+          }
+          const formattedStatus =
+            item.status === "Declined" ? "Rejected" : item.status || "Pending";
+
+          return {
+            id: item.id,
+            employee_id: item.employee_id,
+            employee_name: item.name || item.employee_name || `Employee #${item.employee_id}`,
+            leave_type: type,
+            leave_date: item.leave_date || item.start_date || "Date Not Specified",
+            start_date: item.leave_date || item.start_date || "N/A",
+            end_date: item.leave_date || item.end_date || "N/A",
+            reason: cleanReason || "Leave request submitted",
+            status: formattedStatus,
+            requested_at: item.requested_at,
+          };
+        });
+        setRequests(formatted);
       } else {
         setRequests([]);
       }
@@ -56,16 +83,21 @@ export default function LeaveRequestsScreen({ navigation }) {
   };
 
   const handleAction = async (id, actionType) => {
-    const apiAction = actionType === "Approved" || actionType === "approve" ? "Approved" : "Declined";
-    try {
-      await leaveAction(id, apiAction);
-      Alert.alert("Success", `Request ${actionType}d successfully`);
-    } catch (e) {
-      // Local state update fallback
-    }
+    const apiAction = actionType === "Approved" ? "Approved" : "Declined";
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: actionType } : r))
     );
+
+    try {
+      const res = await leaveAction(id, apiAction);
+      if (res?.data?.ok) {
+        Alert.alert("Success 🎉", `Leave request ${actionType.toLowerCase()} successfully.`);
+      } else {
+        Alert.alert("Notice", `Leave request marked as ${actionType}.`);
+      }
+    } catch (e) {
+      Alert.alert("Notice", `Leave request marked as ${actionType}.`);
+    }
   };
 
   const hasActiveFilter = activeTab !== "Pending" || selectedLeaveType !== "All" || selectedSort !== "Newest First";
@@ -195,7 +227,9 @@ export default function LeaveRequestsScreen({ navigation }) {
                   <View style={styles.detailRow}>
                     <Ionicons name="calendar-outline" size={16} color="#64748B" />
                     <Text style={styles.detailText}>
-                      {item.start_date} → {item.end_date}
+                      {item.start_date === item.end_date || !item.end_date || item.end_date === "N/A"
+                        ? `Leave Date: ${item.leave_date}`
+                        : `${item.start_date} → ${item.end_date}`}
                     </Text>
                   </View>
                   {item.reason && (
