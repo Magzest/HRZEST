@@ -14,16 +14,23 @@ export default function ProfileHeader({
   title = "My Profile",
   subtitle = "EMPLOYEE PORTAL",
   showBack = false,
+  onBack,
   rightAction,
 }) {
   const navigation = useNavigation();
 
   const handleMenuOrBack = () => {
     if (showBack) {
-      if (navigation.canGoBack()) {
-        navigation.goBack();
+      if (onBack) {
+        onBack();
       } else {
-        navigation.dispatch(DrawerActions.openDrawer());
+        try {
+          navigation.navigate("Profile");
+        } catch (_) {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          }
+        }
       }
     } else {
       navigation.dispatch(DrawerActions.openDrawer());

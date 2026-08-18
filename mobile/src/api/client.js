@@ -13,9 +13,6 @@ client.interceptors.request.use(async (config) => {
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response && error.response.status === 401) {
-      await AsyncStorage.multiRemove(['token', 'user_role', 'user_id']);
-    }
     return Promise.reject(error);
   }
 );

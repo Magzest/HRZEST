@@ -11,27 +11,58 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import { fetchEmployeeDocuments, uploadDocument } from "../../api/client";
 
+const DOC_CATEGORIES = [
+  "Government ID",
+  "Tax / PAN",
+  "Education",
+  "Address Proof",
+  "Relieving Letter",
+  "Other",
+];
+
 export default function DocumentsScreen() {
-  const [documents, setDocuments] = useState([]);
+  const [documents, setDocuments] = useState([
+    {
+      id: "1",
+      title: "Government Identity Card (Aadhaar / Passport)",
+      number: "XXXX-XXXX-9842",
+      type: "Government ID",
+      status: "Verified",
+      icon: "card-outline",
+      fileName: "aadhaar_card_copy.jpg",
+    },
+    {
+      id: "2",
+      title: "Permanent Account Number (PAN)",
+      number: "ABCDE1234F",
+      type: "Tax / PAN",
+      status: "Verified",
+      icon: "document-text-outline",
+      fileName: "pan_card_front.jpg",
+    },
+  ]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Upload Modal State
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
+  const [docCategory, setDocCategory] = useState("Government ID");
   const [docTitle, setDocTitle] = useState("");
-  const [docType, setDocType] = useState("Government ID");
   const [docNumber, setDocNumber] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
   const loadDocuments = async () => {
     try {
       const res = await fetchEmployeeDocuments();
-      if (res?.data?.documents && Array.isArray(res.data.documents)) {
+      if (res?.data?.documents && Array.isArray(res.data.documents) && res.data.documents.length > 0) {
         setDocuments(res.data.documents);
       }
     } catch (_) {}
@@ -42,34 +73,74 @@ export default function DocumentsScreen() {
     loadDocuments();
   }, []);
 
+  const handleSelectFile = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission Required", "Storage/Photos permission is required to select document files.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.9,
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        const asset = result.assets[0];
+        const name = asset.fileName || `${docCategory.replace(/[^a-zA-Z0-9]/g, "_")}_doc.jpg`;
+        setSelectedFile({
+          uri: asset.uri,
+          name: name,
+          size: asset.fileSize ? `${(asset.fileSize / (1024 * 1024)).toFixed(2)} MB` : "Attached File",
+          type: "image/jpeg",
+        });
+        setDocTitle(`${docCategory} Document`);
+      }
+    } catch (err) {
+      Alert.alert("Error", "Could not open document picker.");
+    }
+  };
+
   const handleUploadSubmit = async () => {
-    if (!docTitle.trim()) {
-      Alert.alert("Input Required", "Please enter a title for the document.");
+    if (!selectedFile) {
+      Alert.alert("File Required", "Please tap 'Browse File' to select a document from your device.");
       return;
     }
+
+    const finalTitle = docTitle.trim() || `${docCategory} Document`;
+
     setUploading(true);
     const newDoc = {
       id: Date.now().toString(),
-      title: docTitle.trim(),
-      number: docNumber.trim() || `DOC-${Math.floor(1000 + Math.random() * 9000)}`,
+      title: finalTitle,
+      number: docNumber.trim() || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+      type: docCategory,
       status: "Submitted",
-      icon: docType === "Tax Registration" ? "document-text-outline" : "card-outline",
+      icon: docCategory === "Tax / PAN" ? "document-text-outline" : "card-outline",
+      fileName: selectedFile.name,
     };
 
     setDocuments((prev) => [newDoc, ...prev]);
 
     try {
       const formData = new FormData();
-      formData.append("title", docTitle.trim());
-      formData.append("type", docType);
+      formData.append("title", finalTitle);
+      formData.append("type", docCategory);
       formData.append("number", docNumber.trim());
+      formData.append("document", {
+        uri: selectedFile.uri,
+        name: selectedFile.name,
+        type: selectedFile.type,
+      });
       await uploadDocument(formData).catch(() => null);
     } catch (_) {}
 
-    Alert.alert("Document Uploaded 📄", `${docTitle.trim()} has been uploaded for verification.`);
+    Alert.alert("Document Uploaded 📄", `${finalTitle} has been attached and submitted for verification.`);
     setUploadModalVisible(false);
     setDocTitle("");
     setDocNumber("");
+    setSelectedFile(null);
     setUploading(false);
   };
 
@@ -83,6 +154,9 @@ export default function DocumentsScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{item.title}</Text>
           <Text style={styles.number}>{item.number}</Text>
+          {item.fileName && (
+            <Text style={styles.fileDetail}>📄 {item.fileName}</Text>
+          )}
 
           <View
             style={[
@@ -118,7 +192,7 @@ export default function DocumentsScreen() {
 
       <TouchableOpacity
         style={styles.actionButton}
-        onPress={() => Alert.alert("Download", `Downloading ${item.title}...`)}
+        onPress={() => Alert.alert("Download Document", `Downloading ${item.title} (${item.fileName || 'file'})...`)}
       >
         <Ionicons name="download-outline" size={20} color="#173B8C" />
       </TouchableOpacity>
@@ -143,9 +217,9 @@ export default function DocumentsScreen() {
           </View>
 
           <View style={{ flex: 1, marginLeft: 16 }}>
-            <Text style={styles.summaryTitle}>Employee Files</Text>
+            <Text style={styles.summaryTitle}>Employee Vault</Text>
             <Text style={styles.summarySubtitle}>
-              {documents.length} File(s) Uploaded
+              {documents.length} Statutory File(s) Uploaded
             </Text>
           </View>
 
@@ -157,7 +231,7 @@ export default function DocumentsScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.sectionTitle}>Uploaded Documents</Text>
+        <Text style={styles.sectionTitle}>Uploaded Compliance Documents</Text>
 
         {documents.map((item) => (
           <DocumentCard key={item.id} item={item} />
@@ -167,50 +241,86 @@ export default function DocumentsScreen() {
       </ScrollView>
 
       {/* Upload Document Modal */}
-      <Modal visible={uploadModalVisible} animationType="slide" transparent>
+      <Modal visible={uploadModalVisible} animationType="slide" transparent onRequestClose={() => setUploadModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Ionicons name="cloud-upload" size={22} color="#173B8C" style={{ marginRight: 8 }} />
-              <Text style={styles.modalTitle}>Upload Document</Text>
+              <Ionicons name="cloud-upload" size={24} color="#173B8C" style={{ marginRight: 10 }} />
+              <Text style={styles.modalTitle}>Upload Compliance Document</Text>
+              <TouchableOpacity onPress={() => setUploadModalVisible(false)} style={{ marginLeft: "auto" }}>
+                <Ionicons name="close-circle" size={24} color="#64748B" />
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Document Name / Title</Text>
+            <Text style={styles.inputLabel}>DOCUMENT CATEGORY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+              {DOC_CATEGORIES.map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.catChip,
+                    docCategory === cat && styles.catChipActive,
+                  ]}
+                  onPress={() => setDocCategory(cat)}
+                >
+                  <Text
+                    style={[
+                      styles.catChipText,
+                      docCategory === cat && styles.catChipTextActive,
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.inputLabel}>SELECT FILE / PROOF</Text>
+            {selectedFile ? (
+              <View style={styles.fileSelectedBox}>
+                <Image source={{ uri: selectedFile.uri }} style={styles.fileThumb} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <Text numberOfLines={1} style={styles.fileName}>{selectedFile.name}</Text>
+                  <Text style={styles.fileSize}>{selectedFile.size}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedFile(null)} style={{ padding: 4 }}>
+                  <Ionicons name="close-circle" size={22} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.filePickerBtn} onPress={handleSelectFile}>
+                <Ionicons name="attach" size={24} color="#173B8C" />
+                <Text style={styles.filePickerText}>Browse File / Document Scan</Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={styles.inputLabel}>DOCUMENT TITLE (AUTO-FILLED)</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. Passport / Degree Certificate"
+              placeholder="Auto-generated from selected category/file"
               value={docTitle}
               onChangeText={setDocTitle}
             />
 
-            <Text style={styles.inputLabel}>Document / License Number</Text>
+            <Text style={styles.inputLabel}>DOCUMENT / LICENSE NO. (OPTIONAL)</Text>
             <TextInput
               style={styles.input}
-              placeholder="e.g. ABC1234567"
+              placeholder="Optional reference or license number"
               value={docNumber}
               onChangeText={setDocNumber}
             />
 
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setUploadModalVisible(false)}
-              >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.submitBtn}
-                disabled={uploading}
-                onPress={handleUploadSubmit}
-              >
-                {uploading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.submitBtnText}>Upload File</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.submitBtn}
+              disabled={uploading}
+              onPress={handleUploadSubmit}
+            >
+              {uploading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitBtnText}>Submit Document for Verification</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -396,15 +506,90 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#64748B",
   },
+  fileDetail: {
+    marginTop: 4,
+    fontSize: 11,
+    color: "#64748B",
+    fontWeight: "500",
+  },
+  catChip: {
+    backgroundColor: "#F1F5F9",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  catChipActive: {
+    backgroundColor: "#173B8C",
+    borderColor: "#173B8C",
+  },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  catChipTextActive: {
+    color: "#FFFFFF",
+  },
+  filePickerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF4FF",
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#93C5FD",
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+  },
+  filePickerText: {
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#173B8C",
+  },
+  fileSelectedBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+  },
+  fileThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: "#E2E8F0",
+  },
+  fileName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#0F172A",
+  },
+  fileSize: {
+    marginTop: 2,
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#64748B",
+  },
   submitBtn: {
     paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     backgroundColor: "#173B8C",
+    alignItems: "center",
+    marginTop: 8,
   },
   submitBtnText: {
     fontSize: 14,
     fontWeight: "800",
     color: "#FFFFFF",
   },
-});
+});

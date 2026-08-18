@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../store/AuthContext";
 import * as ImagePicker from "expo-image-picker";
-import { fetchEmployeeProfile, uploadEmployeePhoto } from "../../api/client";
+import { fetchEmployeeProfile, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import ProfileImageCard from "../../components/profile/ProfileImageCard";
@@ -33,6 +33,49 @@ export default function ProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [showIdCard, setShowIdCard] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const calculateCompletion = (p) => {
+    if (!p) return { completionPct: 0, completedCount: 0, totalCount: 22 };
+    const fields = [
+      p.name || p.fullName,
+      p.email || p.workEmail,
+      p.employee_id || p.employeeId,
+      p.role || p.designation,
+      p.department,
+      p.phone,
+      p.gender,
+      p.dob,
+      p.blood_group || p.bloodGroup,
+      p.address,
+      p.city,
+      p.state,
+      p.pincode,
+      p.emergency_contact_name || p.emergencyContact,
+      p.emergency_contact_phone || p.emergencyPhone || p.emergency_contact,
+      p.bank_name || p.bankName,
+      p.bank_account || p.bankAccount || p.accountNumber,
+      p.bank_ifsc || p.ifscCode,
+      p.pan_number || p.panNumber,
+      p.aadhar_number || p.aadharNumber,
+      p.about_me || p.aboutMe,
+      p.photo_url || p.photo,
+    ];
+    const completedCount = fields.filter((f) => {
+      if (!f) return false;
+      const str = String(f).trim();
+      return (
+        str !== "" &&
+        str !== "Not Provided" &&
+        str !== "Not Specified" &&
+        str !== "null" &&
+        str !== "undefined"
+      );
+    }).length;
+    const totalCount = fields.length;
+    const completionPct = Math.round((completedCount / totalCount) * 100);
+    return { completionPct, completedCount, totalCount };
+  };
+
+  const initialStats = calculateCompletion(user);
 
   // Profile Form States
   const [profileData, setProfileData] = useState({
@@ -44,7 +87,10 @@ export default function ProfileScreen() {
     phone: user?.phone || "Not Provided",
     address: user?.address || "Not Provided",
     emergencyContact: user?.emergency_contact || "Not Provided",
-    completion: 95,
+    completion: initialStats.completionPct,
+    completedSections: initialStats.completedCount,
+    totalSections: initialStats.totalCount,
+    photo: user?.photo || null,
   });
 
   const [editName, setEditName] = useState(profileData.name);
@@ -58,7 +104,11 @@ export default function ProfileScreen() {
       const res = await fetchEmployeeProfile();
       if (res?.data?.ok && res?.data?.profile) {
         const p = res.data.profile;
+
+        const stats = calculateCompletion(p);
+
         const updated = {
+          ...p,
           name: p.name || user?.name || user?.employeeId || "",
           employeeId: p.employee_id || user?.employeeId || "",
           designation: p.role || user?.role || "",
@@ -68,7 +118,10 @@ export default function ProfileScreen() {
           address: p.address || user?.address || "Not Provided",
           emergencyContact: p.emergency_contact_phone || user?.emergency_contact || "Not Provided",
           company: p.company_name || user?.company || "",
-          completion: 95,
+          completion: stats.completionPct,
+          completedSections: stats.completedCount,
+          totalSections: stats.totalCount,
+          photo: p.employee_id ? getPhotoUrl(p.employee_id) : null,
         };
         setProfileData(updated);
         setEditName(updated.name);
@@ -104,6 +157,11 @@ export default function ProfileScreen() {
       address: editAddress.trim(),
       emergencyContact: editEmergency.trim(),
     };
+
+    const stats = calculateCompletion(updatedProfile);
+    updatedProfile.completion = stats.completionPct;
+    updatedProfile.completedSections = stats.completedCount;
+    updatedProfile.totalSections = stats.totalCount;
 
     setProfileData(updatedProfile);
 
@@ -243,6 +301,7 @@ export default function ProfileScreen() {
         />
 
         <ProfileImageCard
+          image={profileData.photo}
           employeeName={profileData.name}
           employeeId={profileData.employeeId}
           designation={profileData.designation}
@@ -252,7 +311,11 @@ export default function ProfileScreen() {
           onChangePhoto={handleChangePhoto}
         />
 
-        <ProfileCompletionCard percentage={profileData.completion} />
+        <ProfileCompletionCard
+          percentage={profileData.completion}
+          completed={profileData.completedSections}
+          total={profileData.totalSections}
+        />
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Employee Contact Details</Text>
