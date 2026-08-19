@@ -7,13 +7,8 @@ and generate structured executive rationale summaries.
 """
 import re
 import json
-import os
-import urllib.request
-import urllib.error
 from extensions import app_log
-
-_API_URL = "https://api.anthropic.com/v1/messages"
-_MODEL = "claude-sonnet-5"
+from utils.ai_client import call_claude
 
 
 def _extract_text_from_bytes(file_bytes, filename=""):
@@ -73,31 +68,14 @@ def parse_resume(file_bytes, filename=""):
     if first_lines and not re.search(r"resume|curriculum|cv", first_lines[0], re.IGNORECASE):
         candidate_name = first_lines[0].title()
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key and len(raw_text) > 50:
+    if len(raw_text) > 50:
         try:
             prompt = f"Parse the following resume into JSON with keys: candidate_name, email, phone, skills (list), education, years_experience (number), summary.\n\nResume Text:\n{raw_text[:3000]}"
-            payload = {
-                "model": _MODEL,
-                "max_tokens": 500,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-            req = urllib.request.Request(
-                _API_URL,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
-                data = json.loads(resp.read().decode("utf-8"))
-                text_out = data["content"][0]["text"]
-                json_match = re.search(r"\{.*\}", text_out, re.DOTALL)
-                if json_match:
-                    ai_parsed = json.loads(json_match.group(0))
-                    return ai_parsed
+            text_out = call_claude(prompt, max_tokens=500)
+            json_match = re.search(r"\{.*\}", text_out, re.DOTALL)
+            if json_match:
+                ai_parsed = json.loads(json_match.group(0))
+                return ai_parsed
         except Exception as exc:
             app_log.warning("AI resume parsing fallback to heuristic rules: %s", exc)
 

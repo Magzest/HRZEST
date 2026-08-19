@@ -4,15 +4,9 @@
 Answers employee inquiries regarding leave policies, health benefits, and payroll timelines,
 and provides automatic escalation to HR support tickets when queries are unresolved.
 """
-import os
-import json
-import urllib.request
-import urllib.error
 from database import get_db_connection
 from extensions import app_log
-
-_API_URL = "https://api.anthropic.com/v1/messages"
-_MODEL = "claude-sonnet-5"
+from utils.ai_client import call_claude
 
 # RAG Policy Context Base
 _POLICY_KNOWLEDGE_BASE = [
@@ -90,36 +84,18 @@ def process_helpdesk_query(employee_id, query):
     relevant_docs = _retrieve_relevant_policies(query)
     needs_escalation = _should_trigger_fallback(query)
     
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
     ai_answer = ""
-    
-    if api_key:
-        try:
-            prompt = (
-                f"You are the AI HR Helpdesk Assistant. Answer the employee's question strictly based on the company policy document provided below.\n\n"
-                f"Company Policy Documents:\n{relevant_docs}\n\n"
-                f"Employee Question:\n{query}\n\n"
-                f"Instructions: Give a clear, helpful, 2-3 sentence answer. If uncertain or if the question involves a dispute/unresolved claim, recommend raising an HR ticket."
-            )
-            payload = {
-                "model": _MODEL,
-                "max_tokens": 400,
-                "messages": [{"role": "user", "content": prompt}]
-            }
-            req = urllib.request.Request(
-                _API_URL,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
-                data = json.loads(resp.read().decode("utf-8"))
-                ai_answer = data["content"][0]["text"]
-        except Exception as exc:
-            app_log.warning("AI Helpdesk API fallback: %s", exc)
+
+    try:
+        prompt = (
+            f"You are the AI HR Helpdesk Assistant. Answer the employee's question strictly based on the company policy document provided below.\n\n"
+            f"Company Policy Documents:\n{relevant_docs}\n\n"
+            f"Employee Question:\n{query}\n\n"
+            f"Instructions: Give a clear, helpful, 2-3 sentence answer. If uncertain or if the question involves a dispute/unresolved claim, recommend raising an HR ticket."
+        )
+        ai_answer = call_claude(prompt, max_tokens=400)
+    except Exception as exc:
+        app_log.warning("AI Helpdesk API fallback: %s", exc)
 
     if not ai_answer:
         # Structured fallback response

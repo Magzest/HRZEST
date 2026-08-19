@@ -20,7 +20,7 @@ import secrets
 import datetime
 import calendar
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash, abort, g,
+    Blueprint, request, session, redirect, jsonify, render_template, flash, abort,
 )
 
 from database import get_db_connection, transaction
@@ -36,7 +36,7 @@ from utils.helpers import (
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
-    _validate_image_file,
+    _validate_image_file, get_pending_action_counts,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
@@ -320,14 +320,7 @@ def dashboard_live():
             "att_type": att_type or "",
         })
 
-    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_leaves = cursor.fetchone()[0]
-
-    cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_resignations = cursor.fetchone()[0]
-
-    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress') {_co_sub}", _co_args)  # nosec B608
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, active_cid)
 
     cursor.close()
     db.close()
@@ -526,12 +519,7 @@ def settings_page():
     ann_list = cursor.fetchall()
 
     # Pending counts
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE status='Open'")
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, tickets_open_only=True)
 
     cursor.execute("SELECT COALESCE(company_code,''), COALESCE(default_onboarding_template_id,0) FROM company_settings LIMIT 1")
     _cr = cursor.fetchone()
@@ -2170,13 +2158,7 @@ def org_chart_page():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     active_cid = session.get("active_company_id")
-    _co_sub, _co_args = co_scope_subquery(active_cid)
-    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status='Open' {_co_sub}", _co_args)  # nosec B608
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, active_cid, tickets_open_only=True)
     if active_cid:
         cursor.execute(
             "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL AND department != '' AND company_id=%s ORDER BY department", (active_cid,))
@@ -2203,14 +2185,7 @@ def admin_tools():
     cursor = db.cursor(buffered=True)
 
     active_cid = session.get("active_company_id")
-    _co_sub, _co_args = co_scope_subquery(active_cid)
-
-    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_leaves = cursor.fetchone()[0]
-    cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
-    pending_resignations = cursor.fetchone()[0]
-    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status='Open' {_co_sub}", _co_args)  # nosec B608
-    pending_tickets = cursor.fetchone()[0]
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, active_cid, tickets_open_only=True)
 
     if active_cid:
         cursor.execute(

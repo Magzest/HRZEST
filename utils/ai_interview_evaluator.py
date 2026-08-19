@@ -4,15 +4,10 @@
 Synthesizes structured interviewer notes into candidate evaluation scorecards,
 sentiment analysis metrics, and objective hiring recommendations.
 """
-import os
 import re
 import json
-import urllib.request
-import urllib.error
 from extensions import app_log
-
-_API_URL = "https://api.anthropic.com/v1/messages"
-_MODEL = "claude-sonnet-5"
+from utils.ai_client import call_claude
 
 
 def evaluate_interview_notes(candidate_name, position, interviewer_notes):
@@ -43,49 +38,31 @@ def evaluate_interview_notes(candidate_name, position, interviewer_notes):
     overall_score = round((tech_score + comm_score + problem_score + fit_score) / 4, 1)
     recommendation = "Hire" if overall_score >= 8.0 else ("Strong Hire" if overall_score >= 9.0 else "Hold / Further Review")
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key:
-        try:
-            prompt = (
-                f"Act as an AI HR Evaluation Assistant. Review the structured interviewer notes for candidate '{candidate_name}' applying for '{position}'.\n\n"
-                f"Interviewer Notes:\n{interviewer_notes}\n\n"
-                f"Provide a JSON evaluation report with keys: executive_summary, key_strengths (list), areas_of_concern (list), overall_recommendation."
-            )
-            payload = {
-                "model": _MODEL,
-                "max_tokens": 450,
-                "messages": [{"role": "user", "content": prompt}]
+    try:
+        prompt = (
+            f"Act as an AI HR Evaluation Assistant. Review the structured interviewer notes for candidate '{candidate_name}' applying for '{position}'.\n\n"
+            f"Interviewer Notes:\n{interviewer_notes}\n\n"
+            f"Provide a JSON evaluation report with keys: executive_summary, key_strengths (list), areas_of_concern (list), overall_recommendation."
+        )
+        text_out = call_claude(prompt, max_tokens=450)
+        json_match = re.search(r"\{.*\}", text_out, re.DOTALL)
+        if json_match:
+            ai_report = json.loads(json_match.group(0))
+            ai_report["sentiment_analysis"] = {
+                "positive": f"{pos_pct}%",
+                "neutral": f"{neutral_pct}%",
+                "concerned": f"{neg_pct}%"
             }
-            req = urllib.request.Request(
-                _API_URL,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310
-                data = json.loads(resp.read().decode("utf-8"))
-                text_out = data["content"][0]["text"]
-                json_match = re.search(r"\{.*\}", text_out, re.DOTALL)
-                if json_match:
-                    ai_report = json.loads(json_match.group(0))
-                    ai_report["sentiment_analysis"] = {
-                        "positive": f"{pos_pct}%",
-                        "neutral": f"{neutral_pct}%",
-                        "concerned": f"{neg_pct}%"
-                    }
-                    ai_report["competencies"] = {
-                        "technical_skills": tech_score,
-                        "communication": comm_score,
-                        "problem_solving": problem_score,
-                        "culture_fit": fit_score,
-                    }
-                    ai_report["overall_rating"] = overall_score
-                    return ai_report
-        except Exception as exc:
-            app_log.warning("AI Interview Evaluation notice: %s", exc)
+            ai_report["competencies"] = {
+                "technical_skills": tech_score,
+                "communication": comm_score,
+                "problem_solving": problem_score,
+                "culture_fit": fit_score,
+            }
+            ai_report["overall_rating"] = overall_score
+            return ai_report
+    except Exception as exc:
+        app_log.warning("AI Interview Evaluation notice: %s", exc)
 
     return {
         "candidate_name": candidate_name or "Candidate",

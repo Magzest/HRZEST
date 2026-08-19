@@ -858,6 +858,30 @@ def co_scope_column(active_cid, alias=""):
     return f"AND {col}=%s", (active_cid,)
 
 
+# ── Pending-action header counters ──────────────────────────────────────────
+# Was hand-repeated (15+ near-identical copies, some drifted to a narrower
+# tickets filter) across admin_views.py/attendance.py/documents.py/
+# employees.py/leave.py/payroll.py/performance.py/tickets.py/core.py — the
+# small badge counts most admin pages show in their header/sidebar.
+def get_pending_action_counts(cursor, active_cid=None, tickets_open_only=False):
+    """Returns (pending_leaves, pending_resignations, pending_tickets).
+
+    `active_cid` scopes all three counts to one company (via
+    co_scope_subquery) when given, else counts across all companies.
+    `tickets_open_only` narrows the ticket count to status='Open' instead of
+    the default 'Open'+'In Progress' -- a handful of pages intentionally
+    show the narrower count."""
+    co_sub, co_args = co_scope_subquery(active_cid)
+    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {co_sub}", co_args)  # nosec B608
+    pending_leaves = cursor.fetchone()[0]
+    cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {co_sub}", co_args)  # nosec B608
+    pending_resignations = cursor.fetchone()[0]
+    ticket_filter = "status='Open'" if tickets_open_only else "status IN ('Open','In Progress')"
+    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE {ticket_filter} {co_sub}", co_args)  # nosec B608
+    pending_tickets = cursor.fetchone()[0]
+    return pending_leaves, pending_resignations, pending_tickets
+
+
 # ── Error page renderer ───────────────────────────────────────────────────────
 # This used to render_template("error.html", ...) -- that template doesn't
 # exist anywhere in templates/. Every call would have raised

@@ -4,7 +4,7 @@ import re
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log, limiter
 from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
-from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, calculate_price, format_price_inr
+from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 from utils.tenant_routing import RESERVED_PATH_SEGMENTS
 from utils.helpers import clean_email_domain, validate_email_domain_format, _safe_app_url

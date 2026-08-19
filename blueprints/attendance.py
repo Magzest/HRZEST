@@ -13,18 +13,19 @@ import io as _io
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash, g,
+    Blueprint, request, session, redirect, jsonify, render_template, flash,
 )
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required
-from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii
+from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii, get_pending_action_counts
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
     fetch_holidays_set, get_employee_shift, _td_to_time, infer_type_legacy,
     is_within_range, is_within_office_range,
     check_attendance_lockout, record_attendance_failure, clear_attendance_lockout,
+    geofence_check_error, compute_session_worked_minutes,
 )
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified
@@ -34,16 +35,8 @@ attendance_bp = Blueprint("attendance", __name__)
 
 
 def _today_pending_counts(cursor):
-    """Sidebar badge counts, shared by today_present/today_absent/today_late.
-    One query via scalar subqueries instead of three sequential round-trips
-    -- each of those three routes was paying this cost on every load."""
-    cursor.execute("""
-        SELECT
-            (SELECT COUNT(*) FROM leave_requests WHERE status='Pending'),
-            (SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'),
-            (SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress'))
-    """)
-    return cursor.fetchone()
+    """Sidebar badge counts, shared by today_present/today_absent/today_late."""
+    return get_pending_action_counts(cursor)
 
 
 @attendance_bp.route("/today_present")
@@ -887,12 +880,7 @@ def bulk_mark_attendance():
     pending_resignations = 0
     pending_tickets = 0
     try:
-        cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-        pending_leaves = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'")
-        pending_resignations = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM tickets WHERE status='Open'")
-        pending_tickets = cursor.fetchone()[0]
+        pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, tickets_open_only=True)
     except Exception:
         pass
     cursor.close()
@@ -1451,17 +1439,11 @@ def api_checkin():
         return jsonify({"ok": False, "msg": "Employee not found."})
     employee_name, emp_work_mode, emp_work_lat, emp_work_lon = result
     if lat and lon:
-        if emp_work_mode == 'wfh':
-            if emp_work_lat and emp_work_lon:
-                if not is_within_range(float(lat), float(lon), float(emp_work_lat), float(emp_work_lon)):
-                    cursor.close()
-                    db.close()
-                    return jsonify({"ok": False, "msg": "You are outside your registered home location."})
-        else:
-            if not is_within_office_range(float(lat), float(lon)):
-                cursor.close()
-                db.close()
-                return jsonify({"ok": False, "msg": "You are outside the office premises."})
+        geofence_err = geofence_check_error(emp_work_mode, emp_work_lat, emp_work_lon, lat, lon)
+        if geofence_err:
+            cursor.close()
+            db.close()
+            return jsonify({"ok": False, "msg": geofence_err})
     now = datetime.datetime.now()
     today = now.date()
     current_time = now.time()
@@ -1495,13 +1477,7 @@ def api_checkin():
         return jsonify({"ok": True, "type": "login", "name": employee_name,
                         "status": login_status, "time": current_time.strftime("%H:%M:%S")})
     elif not logout_time:
-        session_start = last_relogin_stored if last_relogin_stored else login_time
-        if not isinstance(session_start, datetime.time):
-            session_start = _td_to_time(session_start)
-        cur_dt = datetime.datetime.combine(today, current_time)
-        start_dt = datetime.datetime.combine(today, session_start)
-        session_m = max(0, int((cur_dt - start_dt).total_seconds() / 60))
-        total_m = worked_mins_stored + session_m
+        total_m = compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored)
         if current_time < cfg.SHIFT_HALF:
             logout_status = "Half Day Logout"
         elif current_time < cfg.SHIFT_END:

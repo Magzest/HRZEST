@@ -21,17 +21,15 @@ from utils.security_logs import (
     simulate_security_attack,
     investigate_incident_ai,
     get_honeypot_stats,
-    get_malware_analysis_telemetry,
-    get_server_error_logs,
 )
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
-    SOC_ANALYST_ROLE, soc_step_up_valid, soc_step_up_refresh,
+    SOC_ANALYST_ROLE, SOC_2FA_WINDOW_SEC, soc_step_up_refresh,
     turnstile_enabled,
 )
 from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
-from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_mfa_login_email, send_secops_mfa_qr_email
+from utils.totp import get_or_create_admin_totp_secret, mark_totp_enabled, send_secops_mfa_qr_email
 from extensions import app_log, log_security_event, limiter
 
 secops_bp = Blueprint("secops", __name__)
@@ -68,6 +66,14 @@ def _soc_session_and_stepup_or_404():
             "access.escalation_attempt",
             "Unauthorized access attempt to SecOps API without platform admin credentials",
             level="ERROR", identifier=username or "anonymous", attempted_role=role or "none",
+        )
+        abort(404)
+    ts = session.get("soc_2fa_verified_at", 0)
+    if (time.time() - ts) > SOC_2FA_WINDOW_SEC:
+        log_security_event(
+            "access.denied",
+            "SecOps API accessed without a valid 2FA step-up",
+            level="WARNING", identifier=username or "anonymous",
         )
         abort(404)
     return username or "admin", role or "admin"
@@ -221,7 +227,7 @@ def mfa_login_verify():
             # Guaranteed SOC_ANALYST_ROLE already, since sp_admin_login only
             # ever sets mfa_pending for a row whose DB role matched.
             session["admin_role"] = SOC_ANALYST_ROLE
-            soc_step_up_refresh()  # sets session["soc_2fa_verified_at"] -- same key/window utils/auth.py's soc_step_up_valid() checks
+            soc_step_up_refresh()  # sets session["soc_2fa_verified_at"]
             session["_session_created"] = time.time()
             session.permanent = True
             ensure_session_id(session)
@@ -240,9 +246,8 @@ def secops_dashboard():
     """The SOC analyst's dashboard, reached only via /sp_admin/login +
     email MFA (/mfa_login_verify) -- there is no other entry point, and no
     in-page challenge on top of it: completing MFA at login already proves
-    possession, so soc_step_up_valid just enforces that proof stays fresh
-    (10 min, same window mfa_login_verify sets) rather than asking for a
-    second code mid-session. Consolidates everything that used to live
+    possession, so _is_secops_authorized() doesn't ask for a second code
+    mid-session. Consolidates everything that used to live
     behind Settings -> Security and the /admin/security-dashboard route:
     force-terminated sessions, active login lockouts, per-admin MFA
     enrollment, config-derived security posture, an all-time

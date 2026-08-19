@@ -1,10 +1,9 @@
 """
 Coverage tests for utils/auth.py.
 Targets uncovered lines: lockout paths, session-conflict branches,
-manager_or_admin_required decorator, AJAX 401 response.
+admin_required decorator, AJAX 401 response.
 """
 import datetime
-import pytest
 
 
 def _admin_session(client, seed_admin):
@@ -172,16 +171,10 @@ class TestEmployeeRequired:
         assert "force_change_pin" in rv.headers["Location"]
 
 
-# ── manager_or_admin_required ─────────────────────────────────────────────────
+# ── admin_required (via /monthly_report) ──────────────────────────────────────
 
-class TestManagerOrAdminRequired:
-    """Lines 142-157 in utils/auth.py."""
-
-    def _use_route(self, client, headers=None):
-        """Use any route decorated with @manager_or_admin_required.
-        /api/leave_status is decorated with it."""
-        token_headers = headers or {}
-        return client.get("/monthly_report", headers=token_headers)
+class TestMonthlyReportAdminRequired:
+    """Exercises admin_required through the /monthly_report route."""
 
     def test_unauthenticated_redirects(self, client):
         rv = client.get("/monthly_report")

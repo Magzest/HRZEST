@@ -6,7 +6,7 @@ import datetime
 import secrets
 import psycopg2
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash, g,
+    Blueprint, request, session, redirect, jsonify, render_template, flash,
 )
 
 from extensions import app, app_log, limiter, log_security_event

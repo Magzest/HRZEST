@@ -21,7 +21,7 @@ from utils.auth import (
     _get_failed_count, verify_turnstile, turnstile_enabled,
     CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE, HR_ROLE,
 )
-from utils.helpers import tpath, get_company_settings, invalidate_settings_cache, _audit, _db, _safe_app_url
+from utils.helpers import tpath, get_company_settings, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
 from utils.session_risk import ensure_session_id
 from utils.totp import verify_totp_code, send_mfa_login_email, mark_totp_enabled
@@ -1057,9 +1057,9 @@ def api_mobile_biometric_attest():
 
 @auth_bp.route("/admin/step-up-mfa", methods=["GET", "POST"])
 def step_up_mfa():
-    """Step-Up MFA challenge for utils/step_up_mfa.py's require_step_up_mfa
-    decorator: a fresh TOTP re-check before a high-privilege action, on top
-    of (not instead of) the admin session already established at login."""
+    """Step-Up MFA challenge: a fresh TOTP re-check before a high-privilege
+    action, on top of (not instead of) the admin session already
+    established at login."""
     username = session.get("admin_username")
     if not username:
         return redirect(tpath("/login"))

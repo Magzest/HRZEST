@@ -8,7 +8,6 @@ save_hike_config, api_salary_config GET/POST, api_salary_report.
 import datetime
 import hashlib
 import secrets
-import pytest
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

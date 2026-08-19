@@ -6,7 +6,6 @@ api_employee_auth_config, api_employee_logout.
 import hashlib
 import datetime
 import secrets
-import pytest
 
 
 def _emp_session(client, seed_employee):

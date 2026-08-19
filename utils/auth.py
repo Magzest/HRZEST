@@ -347,25 +347,6 @@ def role_required(*allowed_roles):
     return decorator
 
 
-def manager_or_admin_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if not session.get("admin_logged_in"):
-            is_ajax = (
-                request.headers.get("X-Requested-With") == "XMLHttpRequest"
-                or request.headers.get("Accept", "").startswith("application/json")
-                or request.is_json
-            )
-            if is_ajax:
-                return jsonify({"ok": False, "msg": "Session expired. Please log in again.",
-                                "redirect": url_for("auth.admin_login")}), 401
-            return redirect(url_for("auth.admin_login"))
-        if session.get("admin_role", "admin") not in ("admin", "manager"):
-            return jsonify({"ok": False, "msg": "Insufficient permissions."}), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-
 # ── API Bearer token guards ───────────────────────────────────────────────────
 def api_required(f):
     @wraps(f)
@@ -500,17 +481,8 @@ SOC_2FA_WINDOW_SEC = 10 * 60
 HR_ROLE = "hr"
 
 
-def soc_step_up_valid() -> bool:
-    ts = session.get("soc_2fa_verified_at", 0)
-    return bool(ts) and (time.time() - ts) <= SOC_2FA_WINDOW_SEC
-
-
 def soc_step_up_refresh():
     session["soc_2fa_verified_at"] = time.time()
-
-
-def soc_step_up_clear():
-    session.pop("soc_2fa_verified_at", None)
 
 
 # ── Security Settings hub step-up gate ────────────────────────────────────────
@@ -520,48 +492,17 @@ def soc_step_up_clear():
 # row-wise hub requirement).
 #
 # This one has NO role restriction -- every admin can open this hub with just
-# their own TOTP code. The SOC dashboard linked *from* this hub still
-# enforces its own separate, role-gated step-up (soc_step_up_valid above)
-# when its row is followed.
-SECURITY_SETTINGS_2FA_WINDOW_SEC = 10 * 60
-
-
-def security_settings_step_up_valid() -> bool:
-    ts = session.get("security_settings_2fa_verified_at", 0)
-    return bool(ts) and (time.time() - ts) <= SECURITY_SETTINGS_2FA_WINDOW_SEC
-
-
-def security_settings_step_up_refresh():
-    session["security_settings_2fa_verified_at"] = time.time()
+# their own TOTP code.
 
 
 def security_settings_step_up_clear():
     session.pop("security_settings_2fa_verified_at", None)
 
 
-def require_security_settings_2fa(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        if not security_settings_step_up_valid():
-            log_security_event(
-                "access.denied", "Security Settings hub accessed without a valid 2FA step-up",
-                level="WARNING", identifier=session.get("admin_username"),
-            )
-            return jsonify({"ok": False, "msg": "2FA verification required"}), 403
-        security_settings_step_up_refresh()
-        return f(*args, **kwargs)
-    return wrapper
-
-
 def require_email_2fa(f):
     """Gate for Email Settings routes (SMTP config, including a
     reveal-plaintext-password action) behind a recent TOTP step-up --
-    see email_settings_step_up_valid() above. Mirrors
-    require_security_settings_2fa's shape exactly, without its own
-    refresh-on-every-request: the step-up window here is only renewed at
-    the explicit /api/settings/verify-2fa and /2fa/enable call sites, so
-    it's a fixed re-auth window rather than one that silently extends for
-    as long as the tab stays open."""
+    see email_settings_step_up_valid() above."""
     @wraps(f)
     def wrapper(*args, **kwargs):
         if not email_settings_step_up_valid():

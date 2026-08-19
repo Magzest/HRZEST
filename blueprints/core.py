@@ -7,7 +7,7 @@ last routes drained out of app.py, which now holds only shared setup
 import time
 import secrets
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, Response, g, redirect
+from flask import Blueprint, request, session, jsonify, render_template, Response, redirect
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import (
