@@ -995,6 +995,9 @@
             📍 Mark Attendance
           </button>
           {% endif %}
+          <button class="u-mt-8 u-w-100pct u-p-11 u-bd-1-solid-dbeafe u-br-10 u-bg-fff u-c-1e3a8a u-fs-13 u-fw-700 u-cur-pointer u-d-flex u-ai-center u-jc-center u-gap-8" onclick="dmOpen()">
+            💻 My Devices
+          </button>
         </div>
         <script>
           (function(){
@@ -4693,5 +4696,7 @@
       }
     });
   </script>
+  <script>var DEVICE_API_BASE = '/api/employee/devices';</script>
+  {% include '_device_manager.html' %}
 </body>
 </html>

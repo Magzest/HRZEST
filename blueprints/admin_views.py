@@ -20,7 +20,7 @@ import secrets
 import datetime
 import calendar
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, flash, abort,
+    Blueprint, request, session, redirect, jsonify, render_template, flash, abort, g,
 )
 
 from database import get_db_connection, transaction
@@ -31,6 +31,11 @@ from utils.auth import (
     security_settings_step_up_clear,
     check_password_hash, generate_password_hash, HR_ROLE,
 )
+from utils.device_utils import (
+    get_or_create_device_token, list_devices, rename_device,
+    add_asset_device, delete_asset_device, revoke_device,
+)
+from utils import chat_utils
 from utils.helpers import (
     tpath,
     get_company_settings, get_co_features, _upsert_co_feature,
@@ -2429,4 +2434,85 @@ def api_hr_accounts_history(username):
     cursor.close()
     db.close()
     return jsonify({"ok": True, "events": events})
+
+
+# ── Self-service device management (utils/device_utils.py) ─────────────────
+# Shared by both admin and hr roles -- admin_required covers either (only
+# role_required("admin") elsewhere is HR-exclusive), and each account only
+# ever sees/manages its own rows (owner_id=admin_username).
+
+def _device_owner_kind():
+    return HR_ROLE if session.get("admin_role") == HR_ROLE else "admin"
+
+
+@admin_views_bp.route("/api/admin/devices", methods=["GET"])
+@admin_required
+def api_admin_devices():
+    username = session["admin_username"]
+    token, _ = get_or_create_device_token(request)
+    devices = list_devices(get_db_connection, _device_owner_kind(), username, token)
+    return jsonify({"ok": True, "devices": devices})
+
+
+@admin_views_bp.route("/api/admin/devices/<int:device_id>/rename", methods=["POST"])
+@admin_required
+def api_admin_device_rename(device_id):
+    username = session["admin_username"]
+    data = request.get_json(silent=True) or {}
+    ok = rename_device(get_db_connection, _device_owner_kind(), username, device_id, data.get("name"))
+    return jsonify({"ok": ok})
+
+
+@admin_views_bp.route("/api/admin/devices/<int:device_id>/revoke", methods=["POST"])
+@admin_required
+def api_admin_device_revoke(device_id):
+    username = session["admin_username"]
+    ok = revoke_device(get_db_connection, _device_owner_kind(), username, device_id, username)
+    if ok:
+        log_security_event(
+            "admin.device_revoked", f"Device {device_id} revoked by '{username}'",
+            level="INFO", identifier=username,
+        )
+    return jsonify({"ok": ok})
+
+
+@admin_views_bp.route("/api/admin/devices/asset", methods=["POST"])
+@admin_required
+def api_admin_device_add_asset():
+    username = session["admin_username"]
+    data = request.get_json(silent=True) or {}
+    new_id = add_asset_device(get_db_connection, _device_owner_kind(), username,
+                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
+    return jsonify({"ok": new_id is not None, "id": new_id})
+
+
+@admin_views_bp.route("/api/admin/devices/asset/<int:device_id>/delete", methods=["POST"])
+@admin_required
+def api_admin_device_delete_asset(device_id):
+    username = session["admin_username"]
+    ok = delete_asset_device(get_db_connection, _device_owner_kind(), username, device_id)
+    return jsonify({"ok": ok})
+
+
+# ── Internal chat with the platform operator (utils/chat_utils.py) ─────────
+# One shared thread per company -- admin and hr both read/write it, keyed by
+# g.tenant_db (this schema's own name), the same join key platform_admin.py
+# resolves from its tenants.db_name column.
+
+@admin_views_bp.route("/api/admin/chat/messages", methods=["GET"])
+@admin_required
+def api_admin_chat_messages():
+    chat_utils.mark_read(g.tenant_db, "company")
+    return jsonify({"ok": True, "messages": chat_utils.list_messages(g.tenant_db)})
+
+
+@admin_views_bp.route("/api/admin/chat/send", methods=["POST"])
+@admin_required
+def api_admin_chat_send():
+    data = request.get_json(silent=True) or {}
+    sender_kind = _device_owner_kind()  # 'admin' or HR_ROLE, matches chat_messages.sender_kind
+    sent = chat_utils.send_message(g.tenant_db, sender_kind, session["admin_username"], data.get("message"))
+    if not sent:
+        return jsonify({"ok": False, "msg": "Message cannot be empty."}), 400
+    return jsonify({"ok": True})
 

@@ -1,0 +1,148 @@
+<!-- ═══ DEVICE MANAGEMENT (shared partial) ═══
+     Included by employee_portal.html, admin_base.html, and
+     super_admin_dashboard.html. Each including page must define a JS
+     constant DEVICE_API_BASE (e.g. "/api/employee/devices",
+     "/api/admin/devices", "/super_admin/devices") before this include --
+     every fetch below is relative to that one prefix, so the same markup
+     and logic works for all four owner roles without duplication. -->
+<div id="dmOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99998;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:18px;padding:26px;width:100%;max-width:560px;max-height:82vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,0.3);font-family:'Segoe UI',sans-serif;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div style="font-size:17px;font-weight:800;color:#1e293b;">&#128241; My Devices</div>
+      <button onclick="dmClose()" style="border:none;background:#f1f5f9;color:#64748b;width:30px;height:30px;border-radius:9px;cursor:pointer;font-size:14px;">&#10005;</button>
+    </div>
+
+    <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Login Devices</div>
+    <div id="dmLoginList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;"></div>
+    <div id="dmLoginEmpty" style="display:none;font-size:12px;color:#94a3b8;margin-bottom:18px;">No login devices recorded yet.</div>
+
+    <div style="font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Company Assets</div>
+    <div id="dmAssetList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+
+    <form id="dmAssetForm" style="display:flex;gap:8px;flex-wrap:wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;" onsubmit="return dmAddAsset(event)">
+      <input id="dmAssetName" placeholder="Device name (e.g. Work Laptop)" required
+             style="flex:2;min-width:140px;padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;font-size:13px;">
+      <input id="dmAssetModel" placeholder="Model"
+             style="flex:1;min-width:100px;padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;font-size:13px;">
+      <input id="dmAssetSerial" placeholder="Serial no."
+             style="flex:1;min-width:100px;padding:8px 10px;border:1px solid #dbeafe;border-radius:8px;font-size:13px;">
+      <button type="submit" style="border:none;background:#1e3a8a;color:#fff;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">+ Add</button>
+    </form>
+    <div id="dmError" style="display:none;margin-top:10px;background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:600;"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var base = (typeof DEVICE_API_BASE !== 'undefined') ? DEVICE_API_BASE : '/api/employee/devices';
+
+  window.dmOpen = function() {
+    document.getElementById('dmOverlay').style.display = 'flex';
+    dmLoad();
+  };
+  window.dmClose = function() {
+    document.getElementById('dmOverlay').style.display = 'none';
+  };
+
+  function dmShowError(msg) {
+    var el = document.getElementById('dmError');
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(function() { el.style.display = 'none'; }, 4000);
+  }
+
+  function deviceIcon(type) {
+    if (type === 'mobile') return '&#128241;';
+    if (type === 'tablet') return '&#128203;';
+    return '&#128187;';
+  }
+
+  function dmRowHtml(d) {
+    var isAsset = d.kind === 'asset';
+    var title = d.device_name || (d.browser ? (d.browser + ' on ' + d.os) : 'Unknown device');
+    var sub = isAsset
+      ? [d.asset_model, d.asset_serial ? ('SN: ' + d.asset_serial) : null].filter(Boolean).join(' &middot; ')
+      : [d.ip_address, d.last_active_at ? ('last active ' + new Date(d.last_active_at).toLocaleString()) : null].filter(Boolean).join(' &middot; ');
+    var badge = d.is_current ? '<span style="background:#dcfce7;color:#16a34a;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-left:8px;">THIS DEVICE</span>' : '';
+    var actionBtn = isAsset
+      ? '<button onclick="dmDeleteAsset(' + d.id + ')" style="border:1px solid #fecaca;background:#fef2f2;color:#ef4444;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">Remove</button>'
+      : '<button onclick="dmRevoke(' + d.id + ')" style="border:1px solid #fecaca;background:#fef2f2;color:#ef4444;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;" ' + (d.is_current ? 'title="Revoking will sign this device out immediately"' : '') + '>Revoke</button>';
+    var renameBtn = '<button onclick="dmRename(' + d.id + ', ' + JSON.stringify(title).replace(/"/g, '&quot;') + ')" style="border:1px solid #dbeafe;background:#eff6ff;color:#3b82f6;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;">Rename</button>';
+    return (
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #e8edf3;border-radius:11px;padding:10px 12px;">' +
+        '<div style="display:flex;align-items:center;gap:10px;min-width:0;">' +
+          '<div style="font-size:20px;">' + (isAsset ? '&#128188;' : deviceIcon(d.device_type)) + '</div>' +
+          '<div style="min-width:0;">' +
+            '<div style="font-size:13px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + badge + '</div>' +
+            '<div style="font-size:11px;color:#64748b;">' + (sub || '&mdash;') + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;flex-shrink:0;">' + renameBtn + actionBtn + '</div>' +
+      '</div>'
+    );
+  }
+
+  function dmLoad() {
+    fetch(base).then(function(r) { return r.json(); }).then(function(data) {
+      if (!data.ok) return;
+      var loginList = document.getElementById('dmLoginList');
+      var assetList = document.getElementById('dmAssetList');
+      var logins = data.devices.filter(function(d) { return d.kind === 'login'; });
+      var assets = data.devices.filter(function(d) { return d.kind === 'asset'; });
+      loginList.innerHTML = logins.map(dmRowHtml).join('');
+      document.getElementById('dmLoginEmpty').style.display = logins.length ? 'none' : 'block';
+      assetList.innerHTML = assets.length ? assets.map(dmRowHtml).join('') :
+        '<div style="font-size:12px;color:#94a3b8;">No company assets added yet.</div>';
+    }).catch(function() { dmShowError('Could not load devices.'); });
+  }
+
+  window.dmRename = function(id, current) {
+    var name = prompt('Rename this device:', current || '');
+    if (name === null) return;
+    fetch(base + '/' + id + '/rename', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name}),
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) dmLoad(); else dmShowError('Could not rename device.');
+    }).catch(function() { dmShowError('Could not rename device.'); });
+  };
+
+  window.dmRevoke = function(id) {
+    if (!confirm('Revoke this device? If it is currently signed in, it will be signed out immediately.')) return;
+    fetch(base + '/' + id + '/revoke', {method: 'POST'})
+      .then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) dmLoad(); else dmShowError('Could not revoke device.');
+      }).catch(function() { dmShowError('Could not revoke device.'); });
+  };
+
+  window.dmDeleteAsset = function(id) {
+    if (!confirm('Remove this device from your assets?')) return;
+    fetch(base + '/asset/' + id + '/delete', {method: 'POST'})
+      .then(function(r) { return r.json(); }).then(function(data) {
+        if (data.ok) dmLoad(); else dmShowError('Could not remove device.');
+      }).catch(function() { dmShowError('Could not remove device.'); });
+  };
+
+  window.dmAddAsset = function(ev) {
+    ev.preventDefault();
+    var name = document.getElementById('dmAssetName').value.trim();
+    if (!name) return false;
+    fetch(base + '/asset', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        device_name: name,
+        asset_model: document.getElementById('dmAssetModel').value.trim(),
+        asset_serial: document.getElementById('dmAssetSerial').value.trim(),
+      }),
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      if (data.ok) {
+        document.getElementById('dmAssetForm').reset();
+        dmLoad();
+      } else {
+        dmShowError('Could not add device.');
+      }
+    }).catch(function() { dmShowError('Could not add device.'); });
+    return false;
+  };
+})();
+</script>

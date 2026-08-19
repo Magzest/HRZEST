@@ -18,7 +18,7 @@ enforces its own (lighter) idle timeout below.
 import time
 import secrets
 import functools
-from flask import Blueprint, request, session, redirect, render_template, flash
+from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 
 from database import get_master_db, get_db_connection
 from extensions import app_log, log_security_event, limiter
@@ -26,6 +26,11 @@ from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
 from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
 from utils.analytics import get_traffic_stats
+from utils.device_utils import (
+    get_or_create_device_token, set_device_cookie, record_login_device,
+    list_devices, rename_device, add_asset_device, delete_asset_device, revoke_device,
+)
+from utils import chat_utils
 
 platform_admin_bp = Blueprint("platform_admin", __name__)
 
@@ -129,7 +134,19 @@ def platform_admin_mfa_verify():
                 f"Platform admin session established for '{username}'",
                 level="INFO", identifier=username,
             )
-            return redirect("/super_admin")
+            dest = redirect("/super_admin")
+            try:
+                token, is_new = get_or_create_device_token(request)
+                # No session_risk participation here (see this module's
+                # docstring on why platform admin keeps its own lighter
+                # session model), so last_sid stays unset -- revoke on this
+                # owner_kind is row-only, not a live session kill.
+                record_login_device(get_master_db, "platform_admin", username, token, None, request)
+                if is_new:
+                    set_device_cookie(dest, token)
+            except Exception as exc:
+                app_log.warning("device capture failed for platform_admin '%s': %s", username, exc)
+            return dest
 
         log_security_event(
             "auth.platform_admin_mfa_failure", "Invalid platform admin login MFA code",
@@ -505,3 +522,97 @@ def platform_admin_set_status(tenant_id):
     )
     flash("Status updated.", "success")
     return redirect("/super_admin")
+
+
+# ── Self-service device management (utils/device_utils.py) ─────────────────
+# Platform admin's own rows live in att_master's user_devices, not any
+# tenant schema -- get_master_db throughout, never get_db_connection.
+
+@platform_admin_bp.route("/super_admin/devices", methods=["GET"])
+@_platform_admin_required
+def platform_admin_devices():
+    username = session["platform_admin_username"]
+    token, _ = get_or_create_device_token(request)
+    return jsonify({"ok": True, "devices": list_devices(get_master_db, "platform_admin", username, token)})
+
+
+@platform_admin_bp.route("/super_admin/devices/<int:device_id>/rename", methods=["POST"])
+@_platform_admin_required
+def platform_admin_device_rename(device_id):
+    username = session["platform_admin_username"]
+    data = request.get_json(silent=True) or {}
+    ok = rename_device(get_master_db, "platform_admin", username, device_id, data.get("name"))
+    return jsonify({"ok": ok})
+
+
+@platform_admin_bp.route("/super_admin/devices/<int:device_id>/revoke", methods=["POST"])
+@_platform_admin_required
+def platform_admin_device_revoke(device_id):
+    username = session["platform_admin_username"]
+    ok = revoke_device(get_master_db, "platform_admin", username, device_id, username)
+    if ok:
+        log_security_event(
+            "platform_admin.device_revoked", f"Device {device_id} revoked by '{username}'",
+            level="INFO", identifier=username,
+        )
+    return jsonify({"ok": ok})
+
+
+@platform_admin_bp.route("/super_admin/devices/asset", methods=["POST"])
+@_platform_admin_required
+def platform_admin_device_add_asset():
+    username = session["platform_admin_username"]
+    data = request.get_json(silent=True) or {}
+    new_id = add_asset_device(get_master_db, "platform_admin", username,
+                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
+    return jsonify({"ok": new_id is not None, "id": new_id})
+
+
+@platform_admin_bp.route("/super_admin/devices/asset/<int:device_id>/delete", methods=["POST"])
+@_platform_admin_required
+def platform_admin_device_delete_asset(device_id):
+    username = session["platform_admin_username"]
+    ok = delete_asset_device(get_master_db, "platform_admin", username, device_id)
+    return jsonify({"ok": ok})
+
+
+# ── Internal chat with a company's admin/HR (utils/chat_utils.py) ──────────
+# One shared thread per tenant, keyed by that tenant's db_name -- resolved
+# fresh from tenant_id on every call rather than trusted from the client, so
+# a platform admin can never read/write a thread for a tenant_id that
+# doesn't actually exist.
+
+def _tenant_schema_for_id(tenant_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT db_name, company_name FROM tenants WHERE id=%s", (tenant_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return row
+
+
+@platform_admin_bp.route("/super_admin/chat/<int:tenant_id>/messages", methods=["GET"])
+@_platform_admin_required
+def platform_admin_chat_messages(tenant_id):
+    row = _tenant_schema_for_id(tenant_id)
+    if not row:
+        return jsonify({"ok": False, "msg": "Unknown company."}), 404
+    schema_name, company_name = row
+    chat_utils.mark_read(schema_name, "platform")
+    return jsonify({"ok": True, "company_name": company_name, "messages": chat_utils.list_messages(schema_name)})
+
+
+@platform_admin_bp.route("/super_admin/chat/<int:tenant_id>/send", methods=["POST"])
+@_platform_admin_required
+def platform_admin_chat_send(tenant_id):
+    row = _tenant_schema_for_id(tenant_id)
+    if not row:
+        return jsonify({"ok": False, "msg": "Unknown company."}), 404
+    schema_name, _company_name = row
+    data = request.get_json(silent=True) or {}
+    username = session["platform_admin_username"]
+    sent = chat_utils.send_message(schema_name, "platform_admin", username, data.get("message"))
+    if not sent:
+        return jsonify({"ok": False, "msg": "Message cannot be empty."}), 400
+    return jsonify({"ok": True})

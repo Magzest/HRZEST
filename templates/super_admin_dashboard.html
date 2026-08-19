@@ -234,6 +234,10 @@
           <a href="/sp_admin/login" class="secops-btn" title="Opens the Security Dashboard (SecOps console) — separate login">
             <i class="ti ti-shield-lock"></i> Security Dashboard
           </a>
+          <button type="button" onclick="dmOpen()" title="Manage your own login devices and assets"
+             style="display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);color:#93c5fd;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
+            <i class="ti ti-device-laptop"></i> My Devices
+          </button>
           <form action="/super_admin/logout" method="POST" style="margin:0;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="logout-btn"><i class="ti ti-logout"></i> Sign Out</button>
@@ -430,6 +434,7 @@
                 <div class="row-actions">
                   <a class="mini-btn mini-btn-link" href="https://www.hrzest.com/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard"><i class="ti ti-layout-dashboard"></i> Admin</a>
                   <a class="mini-btn mini-btn-link" href="https://www.hrzest.com/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page"><i class="ti ti-users"></i> Employees</a>
+                  <button type="button" class="mini-btn mini-btn-link" onclick="tenantChatOpen({{ t.id }}, {{ t.company_name | tojson }})" title="Chat with this company's admin/HR"><i class="ti ti-message-2"></i> Chat</button>
                   <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
                     {% if t.status == 'active' %}
@@ -590,5 +595,86 @@
         if (e.key === 'Escape') closePaymentModal();
       });
     </script>
+
+    <!-- ═══ PER-TENANT CHAT ═══ -->
+    <div id="tcOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:99998;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:100%;max-width:420px;height:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Segoe UI',sans-serif;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
+        <div style="background:linear-gradient(135deg,#1a3a8f,#4f46e5);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-size:13px;font-weight:800;" id="tcCompanyName">Chat</div>
+          <button onclick="tenantChatClose()" style="border:none;background:rgba(255,255,255,0.15);color:#fff;width:24px;height:24px;border-radius:7px;cursor:pointer;">&#10005;</button>
+        </div>
+        <div id="tcMsgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
+        <form id="tcSendForm" style="display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,0.1);" onsubmit="return tenantChatSend(event)">
+          <input id="tcInput" placeholder="Message this company's admin/HR&hellip;" autocomplete="off"
+                 style="flex:1;padding:9px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:20px;font-size:13px;outline:none;background:rgba(255,255,255,0.06);color:#e2e8f0;">
+          <button type="submit" style="border:none;background:#4f46e5;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;">&#10148;</button>
+        </form>
+      </div>
+    </div>
+    <script>
+      var tcTenantId = null;
+      var tcPollTimer = null;
+
+      function tcEscape(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+      }
+
+      function tcBubbleHtml(m) {
+        var mine = m.sender_kind === 'platform_admin';
+        return (
+          '<div style="max-width:82%;align-self:' + (mine ? 'flex-end' : 'flex-start') + ';">' +
+            '<div style="background:' + (mine ? '#4f46e5' : 'rgba(255,255,255,0.08)') + ';color:#f1f5f9;border-radius:14px;' +
+              (mine ? 'border-bottom-right-radius:4px;' : 'border-bottom-left-radius:4px;') +
+              'padding:8px 12px;font-size:13px;word-break:break-word;">' + tcEscape(m.message) + '</div>' +
+            '<div style="font-size:10px;color:#64748b;margin-top:2px;' + (mine ? 'text-align:right;' : '') + '">' + tcEscape(m.sender_name) + '</div>' +
+          '</div>'
+        );
+      }
+
+      function tenantChatOpen(tenantId, companyName) {
+        tcTenantId = tenantId;
+        document.getElementById('tcCompanyName').textContent = 'Chat · ' + companyName;
+        document.getElementById('tcOverlay').style.display = 'flex';
+        tenantChatLoad();
+        if (tcPollTimer) clearInterval(tcPollTimer);
+        tcPollTimer = setInterval(tenantChatLoad, 8000);
+      }
+
+      function tenantChatClose() {
+        document.getElementById('tcOverlay').style.display = 'none';
+        if (tcPollTimer) { clearInterval(tcPollTimer); tcPollTimer = null; }
+        tcTenantId = null;
+      }
+
+      function tenantChatLoad() {
+        if (!tcTenantId) return;
+        fetch('/super_admin/chat/' + tcTenantId + '/messages').then(function(r) { return r.json(); }).then(function(data) {
+          if (!data.ok) return;
+          var box = document.getElementById('tcMsgs');
+          box.innerHTML = data.messages.map(tcBubbleHtml).join('') ||
+            '<div style="font-size:12px;color:#64748b;text-align:center;margin-top:20px;">No messages yet.</div>';
+          box.scrollTop = box.scrollHeight;
+        }).catch(function() {});
+      }
+
+      function tenantChatSend(ev) {
+        ev.preventDefault();
+        if (!tcTenantId) return false;
+        var input = document.getElementById('tcInput');
+        var text = input.value.trim();
+        if (!text) return false;
+        input.value = '';
+        fetch('/super_admin/chat/' + tcTenantId + '/send', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({message: text}),
+        }).then(function() { tenantChatLoad(); }).catch(function() {});
+        return false;
+      }
+    </script>
+
+    <script>var DEVICE_API_BASE = '/super_admin/devices';</script>
+    {% include '_device_manager.html' %}
   </body>
 </html>

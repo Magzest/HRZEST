@@ -136,6 +136,9 @@
   <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}">
     <span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents
   </a>
+  <a class="nav-item" href="javascript:void(0)" onclick="dmOpen()">
+    <span class="nav-icon"><i class="ti ti-device-laptop"></i></span>My Devices
+  </a>
   {% if not _is_hr %}
   <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}">
     <span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics
@@ -226,6 +229,9 @@
     setInterval(pollLiveStats, 20000);
   })();
 </script>
+<script>var DEVICE_API_BASE = '/api/admin/devices';</script>
+{% include '_device_manager.html' %}
+{% include '_admin_chat_widget.html' %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

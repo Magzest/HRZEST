@@ -1362,6 +1362,34 @@ def _init_core_tables(cursor, db):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events (created_at DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_security_events_type ON security_events (event_type)")
 
+    # Self-service device management (employee/admin/hr dashboards -- see
+    # utils/device_utils.py). One shared table for all three owner kinds
+    # within this schema; platform_admin's own rows live in the identically-
+    # shaped copy of this table inside att_master (see init_master_db below),
+    # since platform admin identities aren't rows in any tenant's admin_users.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_devices (
+            id SERIAL PRIMARY KEY,
+            owner_kind VARCHAR(20) NOT NULL,
+            owner_id VARCHAR(50) NOT NULL,
+            device_token VARCHAR(64) NOT NULL,
+            kind VARCHAR(20) NOT NULL DEFAULT 'login',
+            device_name VARCHAR(150) DEFAULT NULL,
+            device_type VARCHAR(20) DEFAULT NULL,
+            browser VARCHAR(100) DEFAULT NULL,
+            os VARCHAR(100) DEFAULT NULL,
+            ip_address VARCHAR(45) DEFAULT NULL,
+            asset_model VARCHAR(150) DEFAULT NULL,
+            asset_serial VARCHAR(150) DEFAULT NULL,
+            last_sid VARCHAR(64) DEFAULT NULL,
+            is_revoked SMALLINT NOT NULL DEFAULT 0,
+            first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (owner_kind, owner_id, device_token)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_devices_owner ON user_devices (owner_kind, owner_id)")
+
     # Immutable audit trail: audit_logs (data/config changes) and
     # security_events (auth/access events) must be append-only -- a plain
     # table is only as tamper-resistant as every future line of code that
@@ -2187,6 +2215,54 @@ def init_master_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Identically-shaped copy of each tenant schema's user_devices table
+        # (see init_db above) for the platform_admin owner_kind, which has no
+        # tenant schema of its own to live in.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_devices (
+                id SERIAL PRIMARY KEY,
+                owner_kind VARCHAR(20) NOT NULL,
+                owner_id VARCHAR(50) NOT NULL,
+                device_token VARCHAR(64) NOT NULL,
+                kind VARCHAR(20) NOT NULL DEFAULT 'login',
+                device_name VARCHAR(150) DEFAULT NULL,
+                device_type VARCHAR(20) DEFAULT NULL,
+                browser VARCHAR(100) DEFAULT NULL,
+                os VARCHAR(100) DEFAULT NULL,
+                ip_address VARCHAR(45) DEFAULT NULL,
+                asset_model VARCHAR(150) DEFAULT NULL,
+                asset_serial VARCHAR(150) DEFAULT NULL,
+                last_sid VARCHAR(64) DEFAULT NULL,
+                is_revoked SMALLINT NOT NULL DEFAULT 0,
+                first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (owner_kind, owner_id, device_token)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_devices_owner ON user_devices (owner_kind, owner_id)")
+        # Internal messaging between the platform operator and a company's
+        # own admin/HR staff (blueprints/platform_admin.py's per-tenant chat
+        # panel, and admin_base.html's company-side widget). Lives here, not
+        # in a tenant schema, because platform admin -- which has no
+        # g.tenant_db (see this blueprint's module docstring) -- must be able
+        # to read/write it directly; tenant_schema is the join key back to a
+        # specific company. One shared thread per tenant: sender_kind
+        # distinguishes who actually wrote each line, but company_admin and
+        # hr both read/write the same thread for their company, since both
+        # represent "this company" to the platform operator on the other end.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id SERIAL PRIMARY KEY,
+                tenant_schema VARCHAR(100) NOT NULL,
+                sender_kind VARCHAR(20) NOT NULL,
+                sender_name VARCHAR(150) NOT NULL,
+                message VARCHAR(2000) NOT NULL,
+                read_by_platform SMALLINT NOT NULL DEFAULT 0,
+                read_by_company SMALLINT NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_tenant ON chat_messages (tenant_schema, created_at)")
         # Razorpay orders for the paid public /create_org signup flow (see
         # blueprints/billing.py, utils/razorpay_utils.py). Lives here, not
         # in a tenant schema, because the order is created and paid BEFORE
