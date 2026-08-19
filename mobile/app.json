@@ -32,10 +32,11 @@
       ]
     },
     "plugins": [
-      
       "expo-camera",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "expo-secure-store",
+      "@sentry/react-native"
     ]
   }
 }

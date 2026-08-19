@@ -22,23 +22,21 @@ export default function PersonalInfoScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
 
+  // marital_status, nationality and father_name aren't tracked anywhere in
+  // this database (no such columns on the employees table), so they've
+  // been removed rather than shown as invented "Single / Indian / Not
+  // Specified" defaults.
   const [profile, setProfile] = useState({
     employeeId: user?.employeeId || user?.employee_id || "",
     fullName: user?.name || "",
     gender: user?.gender || "Not Specified",
     dob: user?.dob || "Not Specified",
     bloodGroup: user?.blood_group || "Not Specified",
-    maritalStatus: "Single",
-    nationality: "Indian",
-    fatherName: "Not Specified",
   });
 
   const [editGender, setEditGender] = useState(profile.gender);
   const [editDob, setEditDob] = useState(profile.dob);
   const [editBloodGroup, setEditBloodGroup] = useState(profile.bloodGroup);
-  const [editMaritalStatus, setEditMaritalStatus] = useState(profile.maritalStatus);
-  const [editNationality, setEditNationality] = useState(profile.nationality);
-  const [editFatherName, setEditFatherName] = useState(profile.fatherName);
 
   useEffect(() => {
     fetchEmployeeProfile()
@@ -51,17 +49,11 @@ export default function PersonalInfoScreen() {
             gender: p.gender || "Not Specified",
             dob: p.dob || "Not Specified",
             bloodGroup: p.blood_group || "Not Specified",
-            maritalStatus: p.marital_status || "Single",
-            nationality: p.nationality || "Indian",
-            fatherName: p.father_name || "Not Specified",
           };
           setProfile(updated);
           setEditGender(updated.gender);
           setEditDob(updated.dob);
           setEditBloodGroup(updated.bloodGroup);
-          setEditMaritalStatus(updated.maritalStatus);
-          setEditNationality(updated.nationality);
-          setEditFatherName(updated.fatherName);
         }
       })
       .catch(() => {})
@@ -69,18 +61,13 @@ export default function PersonalInfoScreen() {
   }, []);
 
   const handleSave = () => {
-    setProfile((prev) => ({
-      ...prev,
-      gender: editGender.trim() || "Not Specified",
-      dob: editDob.trim() || "Not Specified",
-      bloodGroup: editBloodGroup.trim() || "Not Specified",
-      maritalStatus: editMaritalStatus.trim() || "Single",
-      nationality: editNationality.trim() || "Indian",
-      fatherName: editFatherName.trim() || "Not Specified",
-    }));
-
-    Alert.alert("Updated 🎉", "Personal information updated successfully.");
-    setModalVisible(false);
+    // No Bearer-token-compatible endpoint exists to update personal
+    // information from mobile yet -- only a session-based web route does
+    // this.
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Updating personal information is only available from the web employee portal for now."
+    );
   };
 
   return (
@@ -117,9 +104,6 @@ export default function PersonalInfoScreen() {
           <DetailCard icon="male-female-outline" label="Gender" value={profile.gender} />
           <DetailCard icon="calendar-outline" label="Date of Birth" value={profile.dob} />
           <DetailCard icon="water-outline" label="Blood Group" value={profile.bloodGroup} />
-          <DetailCard icon="heart-outline" label="Marital Status" value={profile.maritalStatus} />
-          <DetailCard icon="flag-outline" label="Nationality" value={profile.nationality} />
-          <DetailCard icon="people-outline" label="Father's / Guardian's Name" value={profile.fatherName} />
         </ScrollView>
       )}
 
@@ -142,12 +126,6 @@ export default function PersonalInfoScreen() {
 
             <Text style={styles.inputLabel}>BLOOD GROUP</Text>
             <TextInput style={styles.input} value={editBloodGroup} onChangeText={setEditBloodGroup} placeholder="e.g. O+" />
-
-            <Text style={styles.inputLabel}>MARITAL STATUS</Text>
-            <TextInput style={styles.input} value={editMaritalStatus} onChangeText={setEditMaritalStatus} placeholder="Single / Married" />
-
-            <Text style={styles.inputLabel}>FATHER'S / GUARDIAN'S NAME</Text>
-            <TextInput style={styles.input} value={editFatherName} onChangeText={setEditFatherName} placeholder="Full Name" />
 
             <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave}>
               <Text style={styles.saveModalBtnText}>Save Personal Details</Text>

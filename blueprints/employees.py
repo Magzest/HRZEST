@@ -15,7 +15,8 @@ from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
 from utils.helpers import (
     tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
-    validate_employee_email_domain, get_company_settings, employee_login_url, get_pending_action_counts,
+    validate_employee_email_domain, get_company_settings, employee_login_url, get_pending_counts,
+    add_employee_seat_cap_check,
 )
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
@@ -37,217 +38,7 @@ def admin_action():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
-    if action == "register":
-        try:
-            name = request.form["name"].strip()
-            emp_id = request.form["emp_id"].strip()
-            email = request.form.get("email", "").strip() or None
-            role = request.form.get("role", "").strip() or None
-            date_of_joining = request.form.get("date_of_joining", "").strip() or None
-            work_mode = request.form.get("work_mode", "office").strip() or "office"
-            work_lat_raw = request.form.get("work_lat", "").strip()
-            work_lon_raw = request.form.get("work_lon", "").strip()
-            work_lat = float(work_lat_raw) if work_lat_raw else None
-            work_lon = float(work_lon_raw) if work_lon_raw else None
-            company_id_raw = request.form.get("company_id", "").strip()
-            company_id = int(company_id_raw) if company_id_raw.isdigit() else None
-            # Extended fields
-            department = request.form.get("department", "").strip() or None
-            # phone (like name/email) is deliberately left plaintext, unlike
-            # every other PII field below -- it backs admin search (ILIKE),
-            # alphabetical employee listings, and ticket/leave search joins;
-            # encrypting it would break those with no equivalent replacement
-            # (Fernet ciphertext isn't ILIKE-able or sortable).
-            phone = request.form.get("phone", "").strip() or None
-            manager_id = request.form.get("manager_id", "").strip() or None
-            manager_name = request.form.get("manager_name", "").strip() or None
-            salary_per_day_raw = request.form.get("salary_per_day", "").strip()
-            salary_per_day = float(salary_per_day_raw) if salary_per_day_raw else None
-            gender = encrypt_pii(request.form.get("gender", "").strip() or None)
-            dob_raw = request.form.get("dob", "").strip()
-            dob = encrypt_pii(dob_raw) if dob_raw else None
-            blood_group = encrypt_pii(request.form.get("blood_group", "").strip() or None)
-            address = encrypt_pii(request.form.get("address", "").strip() or None)
-            city = encrypt_pii(request.form.get("city", "").strip() or None)
-            state = encrypt_pii(request.form.get("state", "").strip() or None)
-            pincode = encrypt_pii(request.form.get("pincode", "").strip() or None)
-            ec_name = encrypt_pii(request.form.get("emergency_contact_name", "").strip() or None)
-            ec_phone = encrypt_pii(request.form.get("emergency_contact_phone", "").strip() or None)
-            ec_relation = encrypt_pii(request.form.get("emergency_contact_relation", "").strip() or None)
-            aadhar = encrypt_pii(request.form.get("aadhar_number", "").strip() or None)
-            pan = encrypt_pii(request.form.get("pan_number", "").strip().upper() or None)
-            bank_name = encrypt_pii(request.form.get("bank_name", "").strip() or None)
-            bank_account = encrypt_pii(request.form.get("bank_account", "").strip() or None)
-            bank_ifsc = encrypt_pii(request.form.get("bank_ifsc", "").strip().upper() or None)
-            uan = encrypt_pii(request.form.get("uan_number", "").strip() or None)
-            file = request.files["face"]
-        except (KeyError, ValueError) as _e:
-            cursor.close()
-            db.close()
-            flash(f"Missing or invalid field in registration form: {_e}", "error")
-            return redirect(tpath("/admin"))
-        if not name:
-            cursor.close()
-            db.close()
-            flash("Full name is required.", "error")
-            return redirect(tpath("/admin"))
-        _domain_error = validate_employee_email_domain(email)
-        if _domain_error:
-            cursor.close()
-            db.close()
-            flash(_domain_error, "error")
-            return redirect(tpath("/admin"))
-        # Plaintext fields still bounded by a VARCHAR column width (the PII
-        # fields below this point are Fernet-encrypted into TEXT columns, so
-        # they can't overflow) -- checked here with a clear message instead of
-        # letting an oversized value hit psycopg2.errors.StringDataRightTruncation,
-        # an unhandled DataError that would otherwise fall through to the
-        # generic 500 page without cleaning up the already-uploaded photo.
-        _length_limits = (
-            (name, "Full name", 100), (email, "Email", 150), (role, "Role", 100),
-            (phone, "Phone", 20), (department, "Department", 100),
-            (manager_id, "Manager ID", 20), (manager_name, "Manager name", 150),
-        )
-        for _value, _label, _max_len in _length_limits:
-            if _value and len(_value) > _max_len:
-                cursor.close()
-                db.close()
-                flash(f"{_label} is too long (max {_max_len} characters).", "error")
-                return redirect(tpath("/admin"))
-        if not validate_emp_id(emp_id):
-            cursor.close()
-            db.close()
-            flash("Employee ID may only contain letters, digits, hyphens and underscores.", "error")
-            return redirect(tpath("/admin"))
-        # Auto-increment emp_id if it's already taken
-        cursor.execute("SELECT 1 FROM employees WHERE employee_id = %s", (emp_id,))
-        if cursor.fetchone():
-            prefix = ''.join(c for c in emp_id if not c.isdigit())
-            if prefix:
-                original_suffix = emp_id[len(prefix):]
-                # Preserve the width the admin actually typed (e.g. "TST001"
-                # -> "TST002") instead of always forcing 3 digits, which
-                # previously turned a collision on a 1-digit suffix like
-                # "EMP9" into the inconsistent "EMP010".
-                pad_width = len(original_suffix) if original_suffix.isdigit() else 3
-                cursor.execute(
-                    "SELECT employee_id FROM employees WHERE employee_id LIKE %s",
-                    (prefix + "%",)
-                )
-                max_seq = 0
-                for (eid,) in cursor.fetchall():
-                    sfx = eid[len(prefix):]
-                    if sfx.isdigit():
-                        max_seq = max(max_seq, int(sfx))
-                emp_id = f"{prefix}{max_seq + 1:0{pad_width}d}"
-        _img_ok, _img_err = _validate_image_file(file)
-        if not _img_ok:
-            flash(_img_err, "error")
-            cursor.close()
-            db.close()
-            return redirect(tpath("/admin"))
-        filepath = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
-        file.save(filepath)
-
-        # Validate that the uploaded photo contains a detectable face
-        if _face_recognition_available:
-            test_img = face_recognition.load_image_file(filepath)
-            if not face_recognition.face_encodings(test_img):
-                os.remove(filepath)
-                flash("No face detected in the uploaded photo. Please upload a clear, well-lit front-facing photo.", "error")
-                cursor.close()
-                db.close()
-                return redirect(tpath("/admin"))
-
-        qr_path = generate_qr(emp_id)
-        auto_pass = secrets.token_urlsafe(8)   # e.g. "aB3xQ7mR"
-        hashed_pwd = generate_password_hash(auto_pass)
-        try:
-            cursor.execute(
-                "INSERT INTO employees (name, employee_id, email, role, face_image, qr_code, password, "
-                "date_of_joining, work_mode, work_lat, work_lon, company_id, "
-                "department, phone, manager_id, manager_name, "
-                "gender, dob, blood_group, "
-                "address, city, state, pincode, "
-                "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
-                "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
-                "force_pin_change) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
-                "%s,%s,%s,%s,"
-                "%s,%s,%s,"
-                "%s,%s,%s,%s,"
-                "%s,%s,%s,"
-                "%s,%s,%s,%s,%s,%s,1)",
-                (name, emp_id, email, role, filepath, qr_path, hashed_pwd,
-                 date_of_joining, work_mode, work_lat, work_lon, company_id,
-                 department, phone, manager_id, manager_name,
-                 gender, dob, blood_group,
-                 address, city, state, pincode,
-                 ec_name, ec_phone, ec_relation,
-                 aadhar, pan, bank_name, bank_account, bank_ifsc, uan)
-            )
-            db.commit()
-            if salary_per_day is not None:
-                cursor.execute(
-                    "INSERT INTO salary_config (employee_id, salary_per_day) VALUES (%s,%s) "
-                    "ON CONFLICT (employee_id) DO UPDATE SET salary_per_day=%s",
-                    (emp_id, salary_per_day, salary_per_day)
-                )
-                db.commit()
-            _enroll_fingerprint_from_form(emp_id, cursor, db)
-            assign_leave_balances_for_employee(cursor, emp_id)
-            db.commit()
-            flash(f"✅ Employee '{name}' registered! ID: {emp_id} | Password: {auto_pass}", "success")
-            # Send welcome email with credentials
-            if not email:
-                flash("⚠️ No email address provided -- credentials email not sent. Share them manually.", "error")
-            else:
-                _ecfg = get_email_config()
-                if not _ecfg:
-                    flash("⚠️ SMTP not configured -- credentials email not sent. Go to Email Settings to set it up.", "error")
-                else:
-                    _login_url = employee_login_url()
-                    _welcome_html = f"""
-<div style="font-family:'Segoe UI',sans-serif;max-width:520px;margin:0 auto;background:#f8fafc;padding:32px 24px;border-radius:16px;">
-  <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:12px;padding:28px 24px;text-align:center;margin-bottom:24px;">
-    <div style="font-size:36px;margin-bottom:8px;">👋</div>
-    <h1 style="color:#fff;font-size:22px;margin:0;">Welcome to the Team!</h1>
-    <p style="color:rgba(255,255,255,0.8);font-size:14px;margin:6px 0 0;">Your employee account has been created</p>
-  </div>
-  <p style="color:#1e293b;font-size:15px;margin-bottom:20px;">Hi <strong>{name}</strong>, here are your login credentials for the Attendance Portal:</p>
-  <div style="background:#fff;border:1px solid #dbeafe;border-radius:12px;padding:20px 24px;margin-bottom:20px;">
-    <table style="width:100%;font-size:14px;border-collapse:collapse;">
-      <tr>
-        <td style="color:#64748b;padding:8px 0;border-bottom:1px solid #f1f5f9;font-weight:600;width:40%;">Employee ID</td>
-        <td style="color:#1e293b;padding:8px 0;border-bottom:1px solid #f1f5f9;font-weight:700;">{emp_id}</td>
-      </tr>
-      <tr>
-        <td style="color:#64748b;padding:8px 0;font-weight:600;">Password</td>
-        <td style="color:#1e293b;padding:8px 0;font-weight:700;font-family:monospace;font-size:15px;">{auto_pass}</td>
-      </tr>
-    </table>
-  </div>
-  <a href="{_login_url}" style="display:block;text-align:center;padding:14px 24px;background:#1e3a8a;color:#fff;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:16px;">Go to Login Page</a>
-  <p style="color:#94a3b8;font-size:11px;text-align:center;margin:-8px 0 20px;word-break:break-all;">{_login_url}</p>
-  <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;font-size:13px;color:#92400e;margin-bottom:20px;">
-    🔒 Please change your password after your first login for security.
-  </div>
-  <p style="color:#64748b;font-size:12px;text-align:center;margin:0;">This is an automated message -- please do not reply.</p>
-</div>"""
-                    try:
-                        send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _welcome_html, _ecfg)
-                        flash(f"📧 Credentials email sent to {email}", "success")
-                    except Exception as _mail_err:
-                        flash(f"⚠️ Email delivery failed: {_mail_err}. Share credentials manually.", "error")
-        except psycopg2.IntegrityError:
-            db.rollback()
-            os.remove(filepath)
-            flash(f"Employee ID '{emp_id}' already exists. Please use a different ID.", "error")
-            cursor.close()
-            db.close()
-            return redirect(tpath("/admin"))
-
-    elif action == "update_face":
+    if action == "update_face":
         emp_id = request.form["emp_id"]
         file = request.files["face"]
         cursor.execute("SELECT name FROM employees WHERE employee_id=%s", (emp_id,))
@@ -700,7 +491,7 @@ def view_employees():
     )
     departments = [r[0] for r in cursor.fetchall()]
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     cursor.execute("SELECT id, name FROM companies ORDER BY name")
     companies = cursor.fetchall()
     cursor.execute("SELECT id, name FROM onboarding_templates WHERE is_active=1 ORDER BY name")
@@ -881,7 +672,7 @@ def employee_detail(emp_id):
     """, (emp_id,))
     education = cursor.fetchall()
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
 
     # Documents for this employee
     cursor.execute(
@@ -932,6 +723,8 @@ def add_employee_page():
     work_lon = float(work_lon_raw) if work_lon_raw else None
     company_id_raw = request.form.get("company_id", "").strip()
     company_id = int(company_id_raw) if company_id_raw.isdigit() else None
+    shift_id_raw = request.form.get("shift_id", "").strip()
+    shift_id = int(shift_id_raw) if shift_id_raw else None
 
     gender = encrypt_pii(request.form.get("gender", "").strip() or None)
     dob_raw = request.form.get("dob", "").strip()
@@ -966,6 +759,10 @@ def add_employee_page():
     _domain_error = validate_employee_email_domain(email)
     if _domain_error:
         flash(_domain_error, "error")
+        return redirect(tpath("/employees"))
+    _seat_error = add_employee_seat_cap_check()
+    if _seat_error:
+        flash(_seat_error, "error")
         return redirect(tpath("/employees"))
 
     db = get_db_connection()
@@ -1039,15 +836,15 @@ def add_employee_page():
             cursor.execute(
                 "INSERT INTO employees (name, employee_id, email, role, face_image, qr_code, password, "
                 "date_of_joining, work_mode, work_lat, work_lon, company_id, manager_id, manager_name, department, "
-                "gender, dob, blood_group, address, city, state, pincode, "
+                "shift_id, gender, dob, blood_group, address, city, state, pincode, "
                 "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
                 "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
                 "force_pin_change) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
                 "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
                 (name, emp_id, email, role, filepath, qr_path, hashed_pwd,
                  date_of_joining, work_mode, work_lat, work_lon, company_id,
-                 _mgr_id, _mgr_name, _dept,
+                 _mgr_id, _mgr_name, _dept, shift_id,
                  gender, dob, blood_group, address, city, state, pincode,
                  ec_name, ec_phone, ec_relation,
                  aadhar, pan, bank_name, bank_account, bank_ifsc, uan)
@@ -2042,6 +1839,9 @@ def api_register_employee():
     _domain_error = validate_employee_email_domain(email)
     if _domain_error:
         return jsonify({"ok": False, "msg": _domain_error}), 400
+    _seat_error = add_employee_seat_cap_check()
+    if _seat_error:
+        return jsonify({"ok": False, "msg": _seat_error}), 403
     # Validate extension, MIME type, magic bytes and size before writing to disk.
     ok, err = _validate_image_file(file)
     if not ok:

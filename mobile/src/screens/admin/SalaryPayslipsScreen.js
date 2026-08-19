@@ -22,7 +22,7 @@ import SalaryStatsGrid from "../../components/admin/salary/SalaryStatsGrid";
 import PayrollActionButtons from "../../components/admin/salary/PayrollActionButtons";
 import EmployeeSalaryList from "../../components/admin/salary/EmployeeSalaryList";
 import SALARY_THEME from "../../constants/salaryTheme";
-import { fetchSalaryReport } from "../../api/client";
+import { fetchSalaryReport, fetchEmployees, sendPayslipEmail } from "../../api/client";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
 const MONTHS = [
@@ -30,16 +30,17 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December"
 ];
 
+const now = new Date();
 const YEARS = ["2024", "2025", "2026", "2027"];
 
 export default function SalaryPayslipsScreen({ navigation }) {
   const [search, setSearch] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState("July");
-  const [selectedYear, setSelectedYear] = useState("2026");
-  const [selectedStatus, setSelectedStatus] = useState("All");
+  const [selectedMonth, setSelectedMonth] = useState(MONTHS[now.getMonth()]);
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedDept, setSelectedDept] = useState("All");
   const [selectedSort, setSelectedSort] = useState("Highest Net Pay");
   const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [emailing, setEmailing] = useState(false);
 
   const [monthModalVisible, setMonthModalVisible] = useState(false);
   const [yearModalVisible, setYearModalVisible] = useState(false);
@@ -49,7 +50,6 @@ export default function SalaryPayslipsScreen({ navigation }) {
     totalGross: 0,
     totalNetPay: 0,
     totalDeductions: 0,
-    payrollStatus: "Draft",
   });
 
   const [employees, setEmployees] = useState([]);
@@ -61,63 +61,127 @@ export default function SalaryPayslipsScreen({ navigation }) {
   const loadSalaryData = async () => {
     try {
       const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
-      const res = await fetchSalaryReport(selectedYear, monthIdx);
-      if (res?.data) {
-        if (res.data.overview) setSalaryOverview(res.data.overview);
-        if (Array.isArray(res.data.employees)) setEmployees(res.data.employees);
+      const [salaryRes, empRes] = await Promise.all([
+        fetchSalaryReport(selectedYear, monthIdx),
+        fetchEmployees().catch(() => null),
+      ]);
+      if (salaryRes?.data?.ok && Array.isArray(salaryRes.data.salary_data)) {
+        const deptByEmpId = {};
+        const roleByEmpId = {};
+        (empRes?.data?.employees || []).forEach((e) => {
+          deptByEmpId[e.employee_id] = e.department;
+          roleByEmpId[e.employee_id] = e.role;
+        });
+        // Real per-employee daily-rate breakdown from /api/salary_report --
+        // no per-employee "Paid/Pending" payroll status exists in this API,
+        // so we deliberately don't invent one (see SalaryEmployeeCard for
+        // the fallback label it shows when payrollStatus is absent).
+        const mapped = salaryRes.data.salary_data.map((entry) => ({
+          name: entry.name,
+          employeeId: entry.emp_id,
+          department: deptByEmpId[entry.emp_id] || null,
+          role: roleByEmpId[entry.emp_id] || "",
+          gross: entry.gross,
+          net: entry.net,
+          deductions: entry.deduction,
+          workDays: entry.billable,
+          attendance: {
+            full: entry.full_days,
+            late: entry.late_days,
+            absent: entry.absent,
+          },
+        }));
+        setEmployees(mapped);
+        setSalaryOverview({
+          totalEmployees: mapped.length,
+          totalGross: mapped.reduce((s, e) => s + (e.gross || 0), 0),
+          totalNetPay: mapped.reduce((s, e) => s + (e.net || 0), 0),
+          totalDeductions: mapped.reduce((s, e) => s + (e.deductions || 0), 0),
+        });
+      } else {
+        setEmployees([]);
+        setSalaryOverview({ totalEmployees: 0, totalGross: 0, totalNetPay: 0, totalDeductions: 0 });
       }
-    } catch (_) {}
+    } catch (_) {
+      setEmployees([]);
+      setSalaryOverview({ totalEmployees: 0, totalGross: 0, totalNetPay: 0, totalDeductions: 0 });
+    }
   };
 
   const handleGeneratePayroll = () => {
+    // No Bearer-token-compatible endpoint exists to generate/lock a payroll
+    // run from mobile yet -- only a session-based web route does this.
     Alert.alert(
-      "Generate Payroll",
-      `Generating payroll report for ${selectedMonth} ${selectedYear}...`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: () => {
-            setSalaryOverview((prev) => ({
-              ...prev,
-              payrollStatus: "Completed",
-            }));
-            Alert.alert(
-              "Success",
-              `Payroll report for ${selectedMonth} ${selectedYear} generated successfully.`
-            );
-          },
-        },
-      ]
+      "Not Available on Mobile Yet",
+      "Generating and locking a payroll run is only available from the web admin dashboard for now."
     );
   };
 
-  const hasActiveFilter = selectedStatus !== "All" || selectedDept !== "All" || selectedSort !== "Highest Net Pay";
+  const handleEmailPayslip = async (employee) => {
+    setEmailing(true);
+    try {
+      const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+      const res = await sendPayslipEmail(employee.employeeId, selectedYear, monthIdx);
+      if (res?.data?.ok) {
+        Alert.alert("Email Sent", `Payslip for ${employee.name} emailed successfully.`);
+      } else {
+        Alert.alert("Email Failed", res?.data?.msg || `Could not send payslip for ${employee.name}.`);
+      }
+    } catch (e) {
+      Alert.alert("Email Failed", e?.response?.data?.msg || `Could not send payslip for ${employee.name}.`);
+    }
+    setEmailing(false);
+  };
 
-  const departments = ["All", "Engineering", "Human Resources", "Design", "Quality Assurance"];
-  const statuses = ["All", "Paid", "Pending"];
+  const handleBulkEmail = async () => {
+    if (filteredEmployees.length === 0 || emailing) return;
+    setEmailing(true);
+    let sent = 0;
+    let failed = 0;
+    const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+    for (const employee of filteredEmployees) {
+      try {
+        const res = await sendPayslipEmail(employee.employeeId, selectedYear, monthIdx);
+        if (res?.data?.ok) sent += 1;
+        else failed += 1;
+      } catch (_) {
+        failed += 1;
+      }
+    }
+    setEmailing(false);
+    Alert.alert(
+      "Bulk Email Complete",
+      failed > 0
+        ? `${sent} payslip(s) sent. ${failed} failed (missing email or send error).`
+        : `${sent} payslip(s) sent successfully.`
+    );
+  };
+
+  const hasActiveFilter = selectedDept !== "All" || selectedSort !== "Highest Net Pay";
+
+  // No per-employee "Paid/Pending" payroll status exists in the API this
+  // screen has access to, so that filter dimension was removed rather than
+  // left silently broken (it would've hidden every employee the moment a
+  // non-"All" status was picked). Departments are derived from the real
+  // employee directory instead of a hardcoded list.
+  const departments = ["All", ...new Set(employees.map((e) => e.department).filter(Boolean))];
   const sortOptions = ["Highest Net Pay", "Lowest Net Pay", "Name (A-Z)"];
 
   const filteredEmployees = employees
     .filter((e) => {
       const matchesSearch =
         e.name.toLowerCase().includes(search.toLowerCase()) ||
-        e.role.toLowerCase().includes(search.toLowerCase()) ||
+        (e.role || "").toLowerCase().includes(search.toLowerCase()) ||
         (e.employeeId && e.employeeId.toLowerCase().includes(search.toLowerCase()));
-
-      const matchesStatus =
-        selectedStatus === "All" ||
-        e.status === selectedStatus ||
-        e.payrollStatus === selectedStatus;
 
       const matchesDept =
         selectedDept === "All" || e.department === selectedDept;
 
-      return matchesSearch && matchesStatus && matchesDept;
+      return matchesSearch && matchesDept;
     })
     .sort((a, b) => {
-      const netA = a.netSalary ?? a.net ?? 0;
-      const netB = b.netSalary ?? b.net ?? 0;
+      const netA = a.net ?? 0;
+      const netB = b.net ?? 0;
       if (selectedSort === "Lowest Net Pay") return netA - netB;
       if (selectedSort === "Name (A-Z)") return a.name.localeCompare(b.name);
       return netB - netA;
@@ -161,7 +225,6 @@ export default function SalaryPayslipsScreen({ navigation }) {
           totalGross={salaryOverview.totalGross}
           totalNet={salaryOverview.totalNetPay}
           totalDeductions={salaryOverview.totalDeductions}
-          payrollStatus={salaryOverview.payrollStatus}
           onGeneratePayroll={handleGeneratePayroll}
         />
 
@@ -174,16 +237,20 @@ export default function SalaryPayslipsScreen({ navigation }) {
 
         <PayrollActionButtons
           onGenerate={handleGeneratePayroll}
-          onExport={() => Alert.alert("Export", "Exporting salary CSV summary...")}
-          onEmail={() => Alert.alert("Email Sent", "Bulk payslip emails dispatched to staff.")}
+          onExport={() => Alert.alert(
+            "Not Available on Mobile Yet",
+            "Exporting a salary report is only available from the web admin dashboard for now."
+          )}
+          onEmail={handleBulkEmail}
           onMore={() => Alert.alert("Options", "Additional payroll rules available under Settings.")}
         />
 
         <EmployeeSalaryList
           employees={filteredEmployees}
           onSelectEmployee={(emp) =>
-            Alert.alert("Employee Payslip", `${emp.name} (${emp.role})\nNet Pay: ₹${emp.net.toLocaleString()}\nStatus: ${emp.status}`)
+            Alert.alert("Employee Payslip", `${emp.name}${emp.role ? ` (${emp.role})` : ""}\nNet Pay: ₹${(emp.net || 0).toLocaleString()}`)
           }
+          onEmailEmployee={handleEmailPayslip}
         />
       </ScrollView>
 
@@ -285,9 +352,6 @@ export default function SalaryPayslipsScreen({ navigation }) {
         <SaasFilterSheet
           visible={filterModalVisible}
           title="Filter Salary & Payroll"
-          statusOptions={statuses}
-          selectedStatus={selectedStatus}
-          onSelectStatus={setSelectedStatus}
           deptOptions={departments}
           selectedDept={selectedDept}
           onSelectDept={setSelectedDept}
@@ -296,7 +360,6 @@ export default function SalaryPayslipsScreen({ navigation }) {
           onSelectSort={setSelectedSort}
           onApply={() => setFilterModalVisible(false)}
           onReset={() => {
-            setSelectedStatus("All");
             setSelectedDept("All");
             setSelectedSort("Highest Net Pay");
           }}

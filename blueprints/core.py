@@ -16,7 +16,7 @@ from utils.auth import (
 )
 from utils.helpers import (
     tpath, _db, get_auth_config, get_company_settings, validate_employee_email_domain,
-    employee_login_url, get_pending_action_counts,
+    employee_login_url, get_pending_counts,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.session_risk import is_session_compromised
@@ -68,7 +68,12 @@ def home():
         prefix = f"/{slug}" if slug else ""
         co = get_company_settings()
         if not co.get("setup_done"):
-            return redirect(prefix + "/setup")
+            # /setup (the old first-run wizard) was removed when the app
+            # moved to self-serve signup via /create_org -- this redirect
+            # target was never updated to match, so it pointed at a page
+            # that no longer exists. /create_org is apex-level (no tenant
+            # slug prefix), unlike the other redirects in this block.
+            return redirect("/create_org")
         if session.get("admin_logged_in"):
             return redirect(prefix + "/admin")
         if session.get("employee_id"):
@@ -226,7 +231,7 @@ def api_dashboard():
         }
         for r in rows
     ]
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     cursor.execute("SELECT COUNT(*) FROM notifications WHERE recipient_type='admin' AND is_read=FALSE")
     unread_notifications = cursor.fetchone()[0]
     cursor.execute("SELECT COALESCE(company_name, '') FROM company_settings LIMIT 1")

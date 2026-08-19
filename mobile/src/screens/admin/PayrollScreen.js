@@ -27,39 +27,41 @@ export default function PayrollScreen({ navigation }) {
 
   const [payrollData, setPayrollData] = useState([]);
   const [summary, setSummary] = useState({
-    totalPayroll: 0,
-    totalBasic: 0,
-    totalAllowances: 0,
+    totalNet: 0,
+    totalGross: 0,
     totalDeductions: 0,
     employeeCount: 0,
   });
 
   const loadData = async () => {
     try {
-      const res = await fetchSalaryReport(year, month);
-      if (res?.data?.report && Array.isArray(res.data.report)) {
-        setPayrollData(res.data.report);
-        calculateSummary(res.data.report);
-      } else {
-        const empRes = await fetchEmployees();
-        const employees = empRes?.data?.employees || [];
-        const mapped = employees.map((emp, i) => ({
-          employee_id: emp.employee_id || `EMP-${1001 + i}`,
-          name: emp.name,
-          department: emp.department || "General",
-          basic: emp.basic || 30000,
-          hra: emp.hra || 12000,
-          allowances: emp.allowances || 5000,
-          deductions: emp.deductions || 2500,
-          netPay: emp.net_pay || 44500,
-          status: "Pending",
+      const [salaryRes, empRes] = await Promise.all([
+        fetchSalaryReport(year, month),
+        fetchEmployees().catch(() => null),
+      ]);
+      if (salaryRes?.data?.ok && Array.isArray(salaryRes.data.salary_data)) {
+        // Real per-employee daily-rate salary breakdown (gross/deduction/net --
+        // this backend has no separate basic/HRA/allowances split). Department
+        // isn't part of this response, so it's merged in from the real
+        // employee directory purely for display -- never used for any salary
+        // figure.
+        const deptByEmpId = {};
+        (empRes?.data?.employees || []).forEach((e) => {
+          deptByEmpId[e.employee_id] = e.department;
+        });
+        const rows = salaryRes.data.salary_data.map((entry) => ({
+          ...entry,
+          department: deptByEmpId[entry.emp_id] || null,
         }));
-        setPayrollData(mapped);
-        calculateSummary(mapped);
+        setPayrollData(rows);
+        calculateSummary(rows);
+      } else {
+        setPayrollData([]);
+        setSummary({ totalNet: 0, totalGross: 0, totalDeductions: 0, employeeCount: 0 });
       }
     } catch (e) {
       setPayrollData([]);
-      setSummary({ totalPayroll: 0, totalBasic: 0, totalAllowances: 0, totalDeductions: 0, employeeCount: 0 });
+      setSummary({ totalNet: 0, totalGross: 0, totalDeductions: 0, employeeCount: 0 });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -67,15 +69,10 @@ export default function PayrollScreen({ navigation }) {
   };
 
   const calculateSummary = (data) => {
-    const totalPayroll = data.reduce((sum, item) => sum + (item.netPay || item.net_pay || 0), 0);
-    const totalBasic = data.reduce((sum, item) => sum + (item.basic || 0), 0);
-    const totalAllowances = data.reduce((sum, item) => sum + (item.hra || 0) + (item.allowances || 0), 0);
-    const totalDeductions = data.reduce((sum, item) => sum + (item.deductions || 0), 0);
     setSummary({
-      totalPayroll,
-      totalBasic,
-      totalAllowances,
-      totalDeductions,
+      totalNet: data.reduce((sum, item) => sum + (item.net || 0), 0),
+      totalGross: data.reduce((sum, item) => sum + (item.gross || 0), 0),
+      totalDeductions: data.reduce((sum, item) => sum + (item.deduction || 0), 0),
       employeeCount: data.length,
     });
   };
@@ -90,18 +87,12 @@ export default function PayrollScreen({ navigation }) {
   };
 
   const handleProcessPayroll = () => {
+    // No Bearer-token-compatible endpoint exists to lock/process payroll from
+    // mobile yet (only a session-based web route does this) -- so this stays
+    // an honest "not yet" instead of faking a successful run.
     Alert.alert(
-      "Process Payroll",
-      `Are you sure you want to finalize & generate payslips for ${month}/${year}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Process Now",
-          onPress: () => {
-            Alert.alert("Payroll Processed 🎉", `Payslips generated for ${summary.employeeCount} active employees.`);
-          },
-        },
-      ]
+      "Not Available on Mobile Yet",
+      "Processing and locking payroll for a period is only available from the web admin dashboard for now."
     );
   };
 
@@ -158,22 +149,22 @@ export default function PayrollScreen({ navigation }) {
           {/* Payroll Metric Hero Cards */}
           <LinearGradient colors={["#0F2027", "#203A43", "#2C5364"]} style={styles.heroSummaryCard}>
             <Text style={styles.heroLabel}>ESTIMATED NET PAYROLL ({month}/{year})</Text>
-            <Text style={styles.heroAmount}>₹{summary.totalPayroll.toLocaleString("en-IN")}</Text>
+            <Text style={styles.heroAmount}>₹{summary.totalNet.toLocaleString("en-IN")}</Text>
 
             <View style={styles.heroGrid}>
               <View style={styles.heroGridItem}>
-                <Text style={styles.gridLabel}>Total Basic Pay</Text>
-                <Text style={styles.gridValue}>₹{summary.totalBasic.toLocaleString("en-IN")}</Text>
+                <Text style={styles.gridLabel}>Total Gross</Text>
+                <Text style={styles.gridValue}>₹{summary.totalGross.toLocaleString("en-IN")}</Text>
               </View>
 
               <View style={styles.heroGridItem}>
-                <Text style={styles.gridLabel}>Allowances & HRA</Text>
-                <Text style={styles.gridValue}>₹{summary.totalAllowances.toLocaleString("en-IN")}</Text>
-              </View>
-
-              <View style={styles.heroGridItem}>
-                <Text style={styles.gridLabel}>Deductions (PF/Tax)</Text>
+                <Text style={styles.gridLabel}>Deductions</Text>
                 <Text style={styles.gridValue}>₹{summary.totalDeductions.toLocaleString("en-IN")}</Text>
+              </View>
+
+              <View style={styles.heroGridItem}>
+                <Text style={styles.gridLabel}>Employees</Text>
+                <Text style={styles.gridValue}>{summary.employeeCount}</Text>
               </View>
             </View>
           </LinearGradient>
@@ -185,24 +176,24 @@ export default function PayrollScreen({ navigation }) {
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 20 }} />
           ) : (
             payrollData.map((item, idx) => (
-              <View key={item.employee_id || idx} style={styles.salaryCard}>
+              <View key={item.emp_id || idx} style={styles.salaryCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.empAvatar}>
                     <Text style={styles.avatarText}>{item.name ? item.name.charAt(0) : "E"}</Text>
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.empName}>{item.name}</Text>
-                    <Text style={styles.empSub}>{item.employee_id} • {item.department}</Text>
+                    <Text style={styles.empSub}>{item.emp_id}{item.department ? ` • ${item.department}` : ""}</Text>
                   </View>
                   <View style={styles.netBadge}>
-                    <Text style={styles.netAmount}>₹{(item.netPay || item.net_pay || 0).toLocaleString("en-IN")}</Text>
+                    <Text style={styles.netAmount}>₹{(item.net || 0).toLocaleString("en-IN")}</Text>
                   </View>
                 </View>
 
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownText}>Basic: ₹{(item.basic || 0).toLocaleString()}</Text>
-                  <Text style={styles.breakdownText}>HRA: ₹{(item.hra || 0).toLocaleString()}</Text>
-                  <Text style={styles.breakdownText}>Deductions: -₹{(item.deductions || 0).toLocaleString()}</Text>
+                  <Text style={styles.breakdownText}>Present: {item.full_days || 0}d</Text>
+                  <Text style={styles.breakdownText}>Gross: ₹{(item.gross || 0).toLocaleString()}</Text>
+                  <Text style={styles.breakdownText}>Deduction: -₹{(item.deduction || 0).toLocaleString()}</Text>
                 </View>
               </View>
             ))

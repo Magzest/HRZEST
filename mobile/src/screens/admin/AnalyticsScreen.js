@@ -6,6 +6,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Alert,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,15 +22,6 @@ export default function AnalyticsScreen({ navigation }) {
   const [departments, setDepartments] = useState([]);
   const [performers, setPerformers] = useState([]);
   const [alerts, setAlerts] = useState([]);
-
-  const attendanceTrend = React.useMemo(() => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul"];
-    const basePct = overview.attendance || 0;
-    return months.map((m) => ({
-      label: m,
-      value: basePct > 0 ? Math.min(100, Math.round(basePct)) : 0,
-    }));
-  }, [overview.attendance]);
 
   React.useEffect(() => {
     loadAnalytics();
@@ -53,26 +45,31 @@ export default function AnalyticsScreen({ navigation }) {
         leave: dash.onLeave || 0,
       });
 
-      // Group departments dynamically
+      // Group departments dynamically. No per-department attendance % is
+      // available from any Bearer API (only a company-wide figure), so
+      // this no longer copies the overall % onto every department as if
+      // it were department-specific data -- just real headcounts.
       const deptMap = {};
       empList.forEach((e) => {
         const d = e.department || "General";
         deptMap[d] = (deptMap[d] || 0) + 1;
       });
       const deptColors = ["#10B981", "#2563EB", "#F59E0B", "#8B5CF6", "#EC4899"];
+      const totalEmp = empList.length || 1;
       const dynamicDepts = Object.keys(deptMap).map((name, i) => ({
         name,
         employees: deptMap[name],
-        attendance: pct || 100,
+        share: Math.round((deptMap[name] / totalEmp) * 100),
         color: deptColors[i % deptColors.length],
       }));
       setDepartments(dynamicDepts);
 
-      // Top performers dynamically from active staff
+      // No per-employee attendance % is available from /api/employees, so
+      // rather than invent a "100%" score for everyone, this lists active
+      // staff without a fabricated ranking metric.
       const topStaff = empList.filter(e => e.status === "Active").slice(0, 3).map((e) => ({
         name: e.name,
         department: e.department || "General",
-        attendance: "100%",
         role: e.role || "Staff Member",
       }));
       setPerformers(topStaff);
@@ -131,7 +128,14 @@ export default function AnalyticsScreen({ navigation }) {
               })}
             </View>
 
-            <TouchableOpacity style={styles.exportBtn} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.exportBtn}
+              activeOpacity={0.8}
+              onPress={() => Alert.alert(
+                "Not Available on Mobile Yet",
+                "Exporting analytics reports is only available from the web admin dashboard for now."
+              )}
+            >
               <Ionicons name="download-outline" size={16} color="#173B8C" />
               <Text style={styles.exportBtnText}>Export</Text>
             </TouchableOpacity>
@@ -141,25 +145,20 @@ export default function AnalyticsScreen({ navigation }) {
           <View style={styles.heroCard}>
             <View style={styles.heroTop}>
               <View>
-                <Text style={styles.heroLabel}>AVERAGE ATTENDANCE RATE</Text>
+                <Text style={styles.heroLabel}>TODAY'S ATTENDANCE RATE</Text>
                 <Text style={styles.heroValue}>{overview.attendance}%</Text>
-              </View>
-
-              <View style={styles.trendBadge}>
-                <Ionicons name="trending-up-sharp" size={14} color="#10B981" />
-                <Text style={styles.trendBadgeText}>+6.2%</Text>
               </View>
             </View>
 
             <Text style={styles.heroSubText}>
-              Workforce engagement is performant this {selectedPeriod.toLowerCase()} across all departments.
+              Live snapshot across all departments today.
             </Text>
 
-            {/* Attendance Segment Bar */}
+            {/* Attendance Segment Bar -- real split from today's counts */}
             <View style={styles.segmentBarContainer}>
-              <View style={[styles.segment, { flex: 94.8, backgroundColor: "#10B981" }]} />
-              <View style={[styles.segment, { flex: 4.2, backgroundColor: "#F59E0B" }]} />
-              <View style={[styles.segment, { flex: 1.0, backgroundColor: "#EF4444" }]} />
+              <View style={[styles.segment, { flex: Math.max(overview.present, 0.01), backgroundColor: "#10B981" }]} />
+              <View style={[styles.segment, { flex: Math.max(overview.leave, 0.01), backgroundColor: "#F59E0B" }]} />
+              <View style={[styles.segment, { flex: Math.max(overview.absent, 0.01), backgroundColor: "#EF4444" }]} />
             </View>
 
             <View style={styles.segmentLegendRow}>
@@ -200,7 +199,9 @@ export default function AnalyticsScreen({ navigation }) {
                   <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                 </View>
                 <View style={[styles.kpiTag, { backgroundColor: "#ECFDF5" }]}>
-                  <Text style={[styles.kpiTagText, { color: "#065F46" }]}>94.8%</Text>
+                  <Text style={[styles.kpiTagText, { color: "#065F46" }]}>
+                    {overview.employees > 0 ? `${Math.round((overview.present / overview.employees) * 100)}%` : "--"}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.kpiNumber}>{overview.present}</Text>
@@ -214,7 +215,9 @@ export default function AnalyticsScreen({ navigation }) {
                   <Ionicons name="close-circle" size={20} color="#EF4444" />
                 </View>
                 <View style={[styles.kpiTag, { backgroundColor: "#FEF2F2" }]}>
-                  <Text style={[styles.kpiTagText, { color: "#991B1B" }]}>5.1%</Text>
+                  <Text style={[styles.kpiTagText, { color: "#991B1B" }]}>
+                    {overview.employees > 0 ? `${Math.round((overview.absent / overview.employees) * 100)}%` : "--"}
+                  </Text>
                 </View>
               </View>
               <Text style={styles.kpiNumber}>{overview.absent}</Text>
@@ -237,42 +240,11 @@ export default function AnalyticsScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Monthly Attendance Trend Chart */}
-          <View style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <View>
-                <Text style={styles.sectionTitle}>Attendance Trend</Text>
-                <Text style={styles.sectionSubtitle}>Last 7 Months Performance (%)</Text>
-              </View>
-              <View style={styles.badgePill}>
-                <Text style={styles.badgePillText}>Monthly Average</Text>
-              </View>
-            </View>
-
-            <View style={styles.chartContainer}>
-              {attendanceTrend.map((item, index) => {
-                const barHeight = item.value * 1.3;
-                return (
-                  <View key={index} style={styles.chartCol}>
-                    <Text style={styles.barValText}>{item.value}%</Text>
-                    <View style={styles.barTrack}>
-                      <LinearGradient
-                        colors={["#2563EB", "#173B8C"]}
-                        style={[styles.barFill, { height: barHeight }]}
-                      />
-                    </View>
-                    <Text style={styles.barLabel}>{item.label}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
           {/* Department Breakdown */}
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Department Performance</Text>
-              <Text style={styles.sectionSubtitle}>Attendance Rate %</Text>
+              <Text style={styles.sectionTitle}>Department Breakdown</Text>
+              <Text style={styles.sectionSubtitle}>Share of Workforce</Text>
             </View>
 
             {departments.length === 0 ? (
@@ -289,14 +261,14 @@ export default function AnalyticsScreen({ navigation }) {
                       <View style={[styles.deptDot, { backgroundColor: dept.color }]} />
                       <Text style={styles.deptName}>{dept.name}</Text>
                     </View>
-                    <Text style={styles.deptRate}>{dept.attendance}%</Text>
+                    <Text style={styles.deptRate}>{dept.share}%</Text>
                   </View>
 
                   <View style={styles.deptProgressTrack}>
                     <View
                       style={[
                         styles.deptProgressFill,
-                        { width: `${dept.attendance}%`, backgroundColor: dept.color },
+                        { width: `${dept.share}%`, backgroundColor: dept.color },
                       ]}
                     />
                   </View>
@@ -306,20 +278,20 @@ export default function AnalyticsScreen({ navigation }) {
             )}
           </View>
 
-          {/* Top Performers */}
+          {/* Active Staff */}
           <View style={styles.sectionCard}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionTitle}>Top Performers</Text>
-              <Ionicons name="trophy" size={20} color="#F59E0B" />
+              <Text style={styles.sectionTitle}>Active Staff</Text>
+              <Ionicons name="people-outline" size={20} color="#173B8C" />
             </View>
 
             {performers.length === 0 ? (
               <View style={{ padding: 20, alignItems: "center" }}>
                 <Text style={{ fontSize: 13, color: "#64748B", fontWeight: "600" }}>
-                  No Top Performers Data Yet
+                  No Active Staff Yet
                 </Text>
                 <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>
-                  Active employees will be highlighted here once registered.
+                  Active employees will be listed here once registered.
                 </Text>
               </View>
             ) : (
@@ -333,7 +305,7 @@ export default function AnalyticsScreen({ navigation }) {
                     <Text style={styles.performerSub}>{p.role} • {p.department}</Text>
                   </View>
                   <View style={styles.scoreBadge}>
-                    <Text style={styles.scoreText}>{p.attendance}</Text>
+                    <Text style={styles.scoreText}>Active</Text>
                   </View>
                 </View>
               ))

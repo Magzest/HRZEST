@@ -65,18 +65,15 @@ export default function BankDetailsScreen() {
   }, []);
 
   const handleSave = () => {
-    setBankInfo((prev) => ({
-      ...prev,
-      bankName: editBankName.trim() || "Not Provided",
-      accountName: editAccountName.trim() || "",
-      accountNumber: editAccountNumber.trim() || "Not Provided",
-      ifscCode: editIfscCode.trim() || "Not Provided",
-      panNumber: editPanNumber.trim() || "Not Provided",
-      aadharNumber: editAadharNumber.trim() || "Not Provided",
-    }));
-
-    Alert.alert("Updated 🎉", "Bank and identity details updated successfully.");
-    setModalVisible(false);
+    // No Bearer-token-compatible endpoint exists to update bank/PAN/Aadhar
+    // details from mobile yet -- only a session-based web route does this.
+    // Given how sensitive this data is, silently discarding the edit while
+    // claiming success (the previous behavior) would be actively harmful,
+    // so this stays an honest "not yet" instead.
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Updating bank and identity details is only available from the web employee portal for now."
+    );
   };
 
   return (

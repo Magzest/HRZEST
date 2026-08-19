@@ -1,54 +1,69 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
   Text,
-  TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import THEME from "../../constants/theme";
 import AdminHeader from "../../components/admin/AdminHeader";
+import { fetchDepartments, fetchEmployees, fetchDashboard } from "../../api/client";
 
+// /api/org_chart_data exists but is session-cookie-only (@admin_required),
+// not reachable with a mobile Bearer token. Rather than show the invented
+// "Sarah Jenkins (VP Eng)" / fake team tags this screen used to, it builds
+// a real (if simpler) org view from /api/departments + /api/employees,
+// which are both genuinely Bearer-compatible.
 export default function OrgChartScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [departments, setDepartments] = useState([]);
+  const [employeesByDept, setEmployeesByDept] = useState({});
+  const [companyName, setCompanyName] = useState("");
+  const [totalStaff, setTotalStaff] = useState(0);
 
-  const departments = [
-    {
-      name: "Engineering & Product",
-      head: "Sarah Jenkins (VP Eng)",
-      members: 42,
-      teams: ["Frontend", "Backend", "DevOps", "QA"],
-    },
-    {
-      name: "Human Resources",
-      head: "Emily Watson (HR Director)",
-      members: 12,
-      teams: ["Recruitment", "Payroll & Ops", "Employee Relations"],
-    },
-    {
-      name: "Finance & Accounts",
-      head: "Robert Garcia (CFO)",
-      members: 8,
-      teams: ["Payroll", "Audit", "Billing"],
-    },
-    {
-      name: "Sales & Marketing",
-      head: "Jessica Alba (CMO)",
-      members: 24,
-      teams: ["Digital Marketing", "Enterprise Sales"],
-    },
-  ];
+  const load = useCallback(async () => {
+    try {
+      const [deptRes, empRes, dashRes] = await Promise.all([
+        fetchDepartments(),
+        fetchEmployees(),
+        fetchDashboard().catch(() => null),
+      ]);
+      const depts = deptRes?.data?.ok ? deptRes.data.departments : [];
+      setDepartments(depts);
 
-  const onRefresh = () => {
+      const employees = empRes?.data?.employees || [];
+      setTotalStaff(employees.length);
+      const grouped = {};
+      employees.forEach((e) => {
+        const dept = e.department || "Unassigned";
+        if (!grouped[dept]) grouped[dept] = [];
+        grouped[dept].push(e.name || e.employee_id);
+      });
+      setEmployeesByDept(grouped);
+
+      setCompanyName(dashRes?.data?.company_name || "");
+    } catch (_) {
+      setDepartments([]);
+      setEmployeesByDept({});
+    }
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    await load();
+    setRefreshing(false);
   };
 
   return (
@@ -73,15 +88,16 @@ export default function OrgChartScreen({ navigation }) {
             />
           }
         >
-          {/* Executive Leadership Box */}
+          {/* Company Summary Box */}
           <View style={styles.execCard}>
             <View style={styles.execBadge}>
-              <Text style={styles.execBadgeText}>CHIEF EXECUTIVE OFFICER</Text>
+              <Text style={styles.execBadgeText}>ORGANIZATION</Text>
             </View>
-            <Text style={styles.execName}>Super Administrator</Text>
-            <Text style={styles.execCompany}>HR Management System</Text>
+            <Text style={styles.execName}>{companyName || "Your Company"}</Text>
             <View style={styles.execStats}>
-              <Text style={styles.execStatsText}>86 Total Staff • 4 Departments</Text>
+              <Text style={styles.execStatsText}>
+                {totalStaff} Total Staff • {departments.length} Departments
+              </Text>
             </View>
           </View>
 
@@ -89,36 +105,54 @@ export default function OrgChartScreen({ navigation }) {
 
           {/* Department List */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Departments Hierarchy</Text>
+            <Text style={styles.sectionTitle}>Departments</Text>
           </View>
 
-          {departments.map((dept, index) => (
-            <View key={index} style={styles.deptCard}>
-              <View style={styles.deptHeader}>
-                <View style={styles.deptIconBadge}>
-                  <Ionicons name="briefcase-outline" size={20} color="#173B8C" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.deptName}>{dept.name}</Text>
-                  <Text style={styles.deptHead}>Lead: {dept.head}</Text>
-                </View>
-                <View style={styles.countBadge}>
-                  <Text style={styles.countText}>{dept.members} Staff</Text>
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-
-              <Text style={styles.teamsLabel}>Teams & Sub-groups</Text>
-              <View style={styles.teamsWrap}>
-                {dept.teams.map((t, idx) => (
-                  <View key={idx} style={styles.teamTag}>
-                    <Text style={styles.teamTagText}>{t}</Text>
-                  </View>
-                ))}
-              </View>
+          {loading ? (
+            <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 20 }} />
+          ) : departments.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="business-outline" size={40} color="#94A3B8" />
+              <Text style={styles.emptyText}>No departments found yet.</Text>
             </View>
-          ))}
+          ) : (
+            departments.map((dept, index) => (
+              <View key={index} style={styles.deptCard}>
+                <View style={styles.deptHeader}>
+                  <View style={styles.deptIconBadge}>
+                    <Ionicons name="briefcase-outline" size={20} color="#173B8C" />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.deptName}>{dept.name}</Text>
+                  </View>
+                  <View style={styles.countBadge}>
+                    <Text style={styles.countText}>{dept.count} Staff</Text>
+                  </View>
+                </View>
+
+                {employeesByDept[dept.name]?.length > 0 && (
+                  <>
+                    <View style={styles.divider} />
+                    <Text style={styles.teamsLabel}>Team Members</Text>
+                    <View style={styles.teamsWrap}>
+                      {employeesByDept[dept.name].slice(0, 8).map((name, idx) => (
+                        <View key={idx} style={styles.teamTag}>
+                          <Text style={styles.teamTagText}>{name}</Text>
+                        </View>
+                      ))}
+                      {employeesByDept[dept.name].length > 8 && (
+                        <View style={styles.teamTag}>
+                          <Text style={styles.teamTagText}>
+                            +{employeesByDept[dept.name].length - 8} more
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </>
+                )}
+              </View>
+            ))
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -146,7 +180,6 @@ const styles = StyleSheet.create({
   },
   execBadgeText: { color: "#93C5FD", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
   execName: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
-  execCompany: { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 2 },
   execStats: { marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)" },
   execStatsText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
   treeConnector: {
@@ -158,6 +191,15 @@ const styles = StyleSheet.create({
   },
   sectionHeader: { marginBottom: 12 },
   sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  emptyCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 32,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  emptyText: { marginTop: 10, fontSize: 13, color: "#64748B", fontWeight: "600" },
   deptCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
@@ -177,7 +219,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   deptName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
-  deptHead: { fontSize: 13, color: "#64748B", marginTop: 2 },
   countBadge: {
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 10,

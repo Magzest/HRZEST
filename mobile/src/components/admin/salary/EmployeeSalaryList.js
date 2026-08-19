@@ -3,7 +3,7 @@ import { View, StyleSheet } from "react-native";
 import SalaryEmployeeCard from "./SalaryEmployeeCard";
 import EmptySalaryState from "./EmptySalaryState";
 
-export default function EmployeeSalaryList({ employees = [], onSelectEmployee }) {
+export default function EmployeeSalaryList({ employees = [], onSelectEmployee, onEmailEmployee }) {
   if (!employees || employees.length === 0) {
     return <EmptySalaryState title="No Employee Records" subtitle="No salary records match your search." />;
   }
@@ -16,7 +16,7 @@ export default function EmployeeSalaryList({ employees = [], onSelectEmployee })
           employee={employee}
           onView={() => onSelectEmployee && onSelectEmployee(employee)}
           onDownload={() => onSelectEmployee && onSelectEmployee(employee)}
-          onEmail={() => onSelectEmployee && onSelectEmployee(employee)}
+          onEmail={() => (onEmailEmployee || onSelectEmployee)?.(employee)}
         />
       ))}
     </View>

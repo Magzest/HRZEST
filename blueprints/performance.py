@@ -10,7 +10,7 @@ import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required
-from utils.helpers import tpath, co_scope_column, _db, get_pending_action_counts
+from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings
 from extensions import limiter
 
 performance_bp = Blueprint("performance", __name__)
@@ -142,9 +142,8 @@ def performance():
     cursor.execute("SELECT employee_id, name FROM employees WHERE is_active=1 ORDER BY name")
     ann_emp_list = cursor.fetchall()
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
-    cursor.execute("SELECT COALESCE(company_name,'') FROM company_settings LIMIT 1")
-    co = cursor.fetchone()
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
+    co = get_company_settings()
 
     cursor.execute(
         "SELECT id, label, min_rating, max_rating, hike_pct, incentive_pct, color FROM hike_config ORDER BY min_rating DESC")
@@ -277,9 +276,8 @@ def performance_review(emp_id):
     """, (emp_id,))
     history = cursor.fetchall()
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
-    cursor.execute("SELECT COALESCE(company_name,'') FROM company_settings LIMIT 1")
-    co = cursor.fetchone()
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
+    co = get_company_settings()
     cursor.close()
     db.close()
 

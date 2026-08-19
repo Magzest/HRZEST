@@ -410,6 +410,52 @@ def invalidate_settings_cache():
         _auth_cache["data"] = None
 
 
+_pending_counts_cache = {"data": None, "expires": None}
+_PENDING_COUNTS_CACHE_TTL = 30  # shorter than company_settings' 60s -- these
+# counts (leave/resignation/ticket approvals) change far more often, so a
+# tighter window keeps sidebar badges from looking stale for too long.
+
+
+def invalidate_pending_counts_cache():
+    with _settings_lock:
+        _pending_counts_cache["data"] = None
+
+
+def get_pending_counts():
+    """(pending_leaves, pending_resignations, pending_tickets) for sidebar
+    badges -- the single-tenant/unscoped count, cached for
+    _PENDING_COUNTS_CACHE_TTL seconds. This used to be copy-pasted as three
+    separate sequential cursor.execute() calls across a dozen route
+    handlers (admin dashboard, employees, documents, attendance, tickets,
+    leave, payroll, performance...), each paying that cost freshly on every
+    single page load -- collapsing it to one shared cache is what actually
+    fixes "clicking between sidebar modules feels slow," since almost every
+    module page was re-running the identical query trio on every click.
+
+    NOT for routes that scope these counts by active_company_id (multi-
+    tenant) -- those need a live per-request query via co_scope_subquery,
+    not this shared unscoped cache."""
+    with _settings_lock:
+        if not _co_expired(_pending_counts_cache):
+            return tuple(_pending_counts_cache["data"])
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        # get_pending_action_counts() (below) is the actual query logic --
+        # this just adds a cache on top of its default (unscoped,
+        # open+in-progress) case, which is what every uncached call site
+        # this replaced was already computing.
+        result = tuple(get_pending_action_counts(cursor))
+        cursor.close()
+        db.close()
+        with _settings_lock:
+            _pending_counts_cache["data"] = result
+            _pending_counts_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_PENDING_COUNTS_CACHE_TTL)
+        return result
+    except Exception:
+        return (0, 0, 0)
+
+
 def get_company_settings():
     with _settings_lock:
         if not _co_expired(_co_cache):
@@ -442,6 +488,10 @@ def get_company_settings():
                 "logo_url": row_dict.get("logo_url") or "",
                 "plan": row_dict.get("plan") or "basic",
                 "email_domain": row_dict.get("email_domain") or "",
+                # None = unlimited (unmetered tenant, or predates this
+                # column); a real integer is the seat count actually paid
+                # for at signup -- see add_employee_seat_cap_check() below.
+                "paid_employee_slots": row_dict.get("paid_employee_slots"),
             }
             with _settings_lock:
                 _co_cache["data"] = result
@@ -452,7 +502,7 @@ def get_company_settings():
     return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
             "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
-            "email_domain": ""}
+            "email_domain": "", "paid_employee_slots": None}
 
 
 # ── Company email domain (employee-registration gate) ────────────────────────
@@ -501,6 +551,35 @@ def validate_employee_email_domain(email) -> str:
 
 
 # ── Paid employee-seat cap (employee-registration gate) ──────────────────────
+def add_employee_seat_cap_check() -> str:
+    """Enforces the seat count actually paid for at signup (self-service
+    /create_org via blueprints/billing.py's payment-verified flow) --
+    company_settings.paid_employee_slots. None means unlimited: the
+    free/unmetered provisioning paths (local-dev fallback, mobile app
+    registration, Platform Admin's own tenant creation) never set this
+    column, and existing tenants provisioned before this check existed
+    also have it unset, so this never blocks them. Returns an error
+    message ready to flash/return as-is, or None if there's room."""
+    cap = get_company_settings().get("paid_employee_slots")
+    if cap is None:
+        return None
+    try:
+        db = get_db_connection()
+        cur = db.cursor()
+        cur.execute("SELECT COUNT(*) FROM employees")
+        current = cur.fetchone()[0]
+        cur.close()
+        db.close()
+    except Exception:
+        return None  # fail open -- a transient DB hiccup shouldn't block registration
+    if current >= cap:
+        return (
+            f"You've reached your plan's limit of {cap} employee"
+            f"{'s' if cap != 1 else ''}. Upgrade your plan in Settings to add more."
+        )
+    return None
+
+
 # ── Companies list + overdue-onboarding count caches (short TTL) ─────────────
 # Both back per-request context processors (app.py's inject_companies_context
 # / inject_overdue_onboardings) that previously ran on every single

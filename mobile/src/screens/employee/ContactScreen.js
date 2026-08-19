@@ -67,17 +67,12 @@ export default function ContactScreen() {
   }, []);
 
   const handleSave = () => {
-    setContactInfo((prev) => ({
-      ...prev,
-      phone: editPhone.trim() || "Not Provided",
-      address: editAddress.trim() || "Not Provided",
-      city: editCity.trim() || "Not Provided",
-      state: editState.trim() || "Not Provided",
-      pincode: editPincode.trim() || "Not Provided",
-    }));
-
-    Alert.alert("Updated 🎉", "Contact details updated successfully.");
-    setModalVisible(false);
+    // No Bearer-token-compatible endpoint exists to update contact details
+    // from mobile yet -- only a session-based web route does this.
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Updating contact details is only available from the web employee portal for now."
+    );
   };
 
   return (

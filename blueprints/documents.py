@@ -8,7 +8,7 @@ from extensions import app
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, enforce_ownership
-from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect, get_pending_action_counts
+from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect, get_company_settings, get_pending_action_counts
 
 documents_bp = Blueprint("documents", __name__)
 
@@ -16,9 +16,7 @@ _DOC_ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
 
 
 def _doc_admin_ctx(cursor):
-    cursor.execute("SELECT company_name FROM company_settings LIMIT 1")
-    row = cursor.fetchone()
-    co = type('Co', (), {'company_name': row[0] if row else 'My Company'})()
+    co = get_company_settings()
     pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
     return co, pending_leaves, pending_resignations, pending_tickets
 

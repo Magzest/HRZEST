@@ -23,8 +23,6 @@ import {
   fetchCompOff,
   compoffAction,
   fetchHolidays,
-  addHoliday,
-  deleteHoliday,
 } from "../../api/client";
 import THEME from "../../constants/theme";
 
@@ -109,43 +107,22 @@ export default function LeavesHolidaysScreen({ navigation }) {
     }
   };
 
-  const handleAddHoliday = async () => {
-    if (!holidayName.trim() || !holidayDate.trim()) {
-      Alert.alert("Validation Error", "Holiday title and date (YYYY-MM-DD) are required.");
-      return;
-    }
-    try {
-      const res = await addHoliday({ name: holidayName.trim(), date: holidayDate.trim(), type: holidayType });
-      if (res?.data?.ok) {
-        Alert.alert("Holiday Added 🎉", "New holiday added to company calendar.");
-        setAddHolidayModalVisible(false);
-        setHolidayName("");
-        setHolidayDate("");
-        loadData();
-      } else {
-        Alert.alert("Failed", res?.data?.msg || "Could not add holiday.");
-      }
-    } catch (e) {
-      Alert.alert("Error", e?.response?.data?.msg || "Failed to add holiday.");
-    }
+  // No Bearer-token-compatible endpoint exists to add/delete holidays from
+  // mobile -- /api/holidays/add and /api/holidays/<id>/delete don't exist
+  // anywhere in the backend. These calls were guaranteed to fail every
+  // time; staying honest about that instead of attempting them.
+  const handleAddHoliday = () => {
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Adding a company holiday is only available from the web admin dashboard for now."
+    );
   };
 
-  const handleDeleteHoliday = async (hid) => {
-    Alert.alert("Confirm Delete", "Remove this holiday from the company calendar?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteHoliday(hid);
-            loadData();
-          } catch (e) {
-            Alert.alert("Error", "Could not delete holiday.");
-          }
-        },
-      },
-    ]);
+  const handleDeleteHoliday = () => {
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Removing a company holiday is only available from the web admin dashboard for now."
+    );
   };
 
   return (

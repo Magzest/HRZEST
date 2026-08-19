@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -8,24 +8,78 @@ import {
   TouchableOpacity,
   View,
   Switch,
+  Alert,
 } from "react-native";
+import * as LocalAuthentication from "expo-local-authentication";
 
 import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SaveButton from "../../components/profile/SaveButton";
+import { changePassword } from "../../api/client";
+import { getBiometricLockEnabled, setBiometricLockEnabled } from "../../utils/preferences";
 
 export default function SecurityScreen() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [biometric, setBiometric] = useState(true);
-  const [twoFactor, setTwoFactor] = useState(false);
+
+  useEffect(() => {
+    getBiometricLockEnabled().then(setBiometric);
+  }, []);
+
+  const handleToggleBiometric = async (value) => {
+    if (value) {
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = hasHw && await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        Alert.alert(
+          "Not Available",
+          "No fingerprint or Face ID is enrolled on this device. Set it up in your device settings first."
+        );
+        return;
+      }
+    }
+    setBiometric(value);
+    await setBiometricLockEnabled(value);
+  };
+
+  const handleUpdateSecurity = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Alert.alert("Input Required", "Please fill in all password fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert("Mismatch", "New password and confirmation don't match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      Alert.alert("Too Short", "New password must be at least 6 characters.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await changePassword(currentPassword, newPassword);
+      if (res?.data?.ok) {
+        Alert.alert("Password Changed", "Your password has been updated successfully.");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } else {
+        Alert.alert("Failed", res?.data?.msg || "Could not change password.");
+      }
+    } catch (e) {
+      Alert.alert("Failed", e?.response?.data?.msg || "Could not change password.");
+    }
+    setSaving(false);
+  };
 
   const PasswordInput = ({
     label,
@@ -140,50 +194,15 @@ export default function SecurityScreen() {
         <SecurityOption
           icon="finger-print-outline"
           title="Biometric Authentication"
-          subtitle="Login using fingerprint or Face ID"
+          subtitle="Unlock the app using fingerprint or Face ID"
           value={biometric}
-          onValueChange={setBiometric}
+          onValueChange={handleToggleBiometric}
         />
-
-        <SecurityOption
-          icon="shield-checkmark-outline"
-          title="Two-Factor Authentication"
-          subtitle="Extra layer of account security"
-          value={twoFactor}
-          onValueChange={setTwoFactor}
-        />
-
-        <Text style={styles.sectionTitle}>
-          Login Activity
-        </Text>
-
-        <View style={styles.activityCard}>
-          <View style={styles.activityIcon}>
-            <Ionicons
-              name="phone-portrait-outline"
-              size={22}
-              color="#173B8C"
-            />
-          </View>
-
-          <View style={{ flex: 1 }}>
-            <Text style={styles.activityTitle}>
-              Current Device
-            </Text>
-
-            <Text style={styles.activitySubtitle}>
-              Android • Hyderabad
-            </Text>
-
-            <Text style={styles.activityTime}>
-              Last Active: Just now
-            </Text>
-          </View>
-        </View>
 
         <SaveButton
-          title="Update Security"
-          onPress={() => {}}
+          title="Update Password"
+          onPress={handleUpdateSecurity}
+          loading={saving}
         />
 
         <View style={{ height: 40 }} />

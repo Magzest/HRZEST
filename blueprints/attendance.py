@@ -35,6 +35,7 @@ attendance_bp = Blueprint("attendance", __name__)
 
 
 def _today_pending_counts(cursor):
+    """Sidebar badge counts, shared by today_present/today_absent/today_late."""
     return get_pending_action_counts(cursor)
 
 

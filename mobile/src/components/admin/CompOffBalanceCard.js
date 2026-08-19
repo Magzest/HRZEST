@@ -11,10 +11,11 @@ import { Ionicons } from "@expo/vector-icons";
 import COMPOFF_THEME from "../../constants/compOffTheme";
 
 export default function CompOffBalanceCard({
+  employeeName,
+  department,
   availableDays,
   usedDays,
   remainingDays,
-  expiryDate,
 }) {
   const total =
     availableDays + usedDays;
@@ -34,11 +35,11 @@ export default function CompOffBalanceCard({
         <View>
 
           <Text style={styles.title}>
-            Comp-off Balance
+            {employeeName || "Comp-off Balance"}
           </Text>
 
           <Text style={styles.subtitle}>
-            Available Leave Credits
+            {department || "Available Leave Credits"}
           </Text>
 
         </View>
@@ -157,22 +158,6 @@ export default function CompOffBalanceCard({
           </Text>
 
         </View>
-
-      </View>
-
-      {/* Footer */}
-
-      <View style={styles.footer}>
-
-        <Ionicons
-          name="alarm-outline"
-          size={18}
-          color={COMPOFF_THEME.colors.textMuted}
-        />
-
-        <Text style={styles.footerText}>
-          Expires on {expiryDate}
-        </Text>
 
       </View>
 

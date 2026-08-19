@@ -74,26 +74,27 @@ def admin():
     _co_filter, _co_args = co_scope_column(active_cid, alias="e")
     _co_sub, _ = co_scope_subquery(active_cid)
 
-    if active_cid:
-        cursor.execute("SELECT COUNT(*) FROM employees WHERE company_id=%s", _co_args)
-    else:
-        cursor.execute("SELECT COUNT(*) FROM employees")
-    _r = cursor.fetchone()
-    total = _r[0] if _r else 0
-
-    cursor.execute(
-        f"SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL {_co_sub}",  # nosec B608
-        (today,) + _co_args
+    # total/present/late/pending_* used to be six separate round-trips (a
+    # WHERE COUNT(*) query each) -- same scoping fragments as before,
+    # combined into one query via scalar subqueries. pending_ot stays
+    # separate below since it's deliberately try/except-guarded for
+    # deployments predating the overtime_records table; folding it in here
+    # would make the whole dashboard 500 on that case instead of just
+    # showing 0 OT pending.
+    cursor.execute(  # nosec B608
+        f"""
+        SELECT
+            (SELECT COUNT(*) FROM employees e WHERE 1=1 {_co_filter}),
+            (SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL {_co_sub}),
+            (SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND status='Late Login' {_co_sub}),
+            (SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}),
+            (SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub}),
+            (SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress') {_co_sub})
+        """,
+        _co_args + (today,) + _co_args + (today,) + _co_args + _co_args + _co_args + _co_args
     )
-    _r = cursor.fetchone()
-    present = _r[0] if _r else 0
-
-    cursor.execute(
-        f"SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND status='Late Login' {_co_sub}",  # nosec B608
-        (today,) + _co_args
-    )
-    _r = cursor.fetchone()
-    late = _r[0] if _r else 0
+    (total, present, late,
+     pending_leaves, pending_resignations, pending_tickets) = cursor.fetchone()
 
     cursor.execute(
         f"SELECT e.employee_id, e.name, a.login_time, a.logout_time, a.status, "  # nosec B608
@@ -110,8 +111,6 @@ def admin():
     else:
         cursor.execute("SELECT employee_id, name FROM employees ORDER BY name")
     all_employees = cursor.fetchall()
-
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, active_cid)
 
     try:
         cursor.execute("SELECT COUNT(*) FROM overtime_records WHERE status='Pending'")
@@ -1793,30 +1792,26 @@ def analytics():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
-    cursor.execute("SELECT company_name FROM company_settings LIMIT 1")
-    row = cursor.fetchone()
-    co = type('Co', (), {'company_name': row[0] if row else 'My Company'})()
-
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
+    co = get_company_settings()
 
     today = datetime.date.today()
-
-    cursor.execute("SELECT COUNT(*) FROM employees")
-    total_employees = cursor.fetchone()[0]
-
     _doj_start = today.replace(day=1)
     _doj_end = datetime.date(today.year + 1, 1, 1) if today.month == 12 else today.replace(month=today.month + 1, day=1)
-    cursor.execute(
-        "SELECT COUNT(*) FROM employees WHERE date_of_joining >= %s AND date_of_joining < %s",
-        (_doj_start, _doj_end)
-    )
-    new_this_month = cursor.fetchone()[0]
 
-    cursor.execute(
-        "SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL",
-        (today,)
-    )
-    today_present = cursor.fetchone()[0]
+    # These six were six separate cursor.execute() round-trips (one per
+    # scalar count) -- each is an independent COUNT over its own table, so
+    # they can run as one query via scalar subqueries instead.
+    cursor.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM leave_requests WHERE status='Pending'),
+            (SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'),
+            (SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress')),
+            (SELECT COUNT(*) FROM employees),
+            (SELECT COUNT(*) FROM employees WHERE date_of_joining >= %s AND date_of_joining < %s),
+            (SELECT COUNT(DISTINCT employee_id) FROM attendance WHERE date=%s AND login_time IS NOT NULL)
+    """, (_doj_start, _doj_end, today))
+    (pending_leaves, pending_resignations, pending_tickets,
+     total_employees, new_this_month, today_present) = cursor.fetchone()
     today_absent = max(0, total_employees - today_present)
 
     cursor.execute("SELECT date FROM holidays")
@@ -1831,11 +1826,29 @@ def analytics():
                 days.append(dt)
         return days
 
-    monthly_series = []
+    # Precompute all 6 month boundaries up front so their attendance counts
+    # can be pulled in a single grouped query below instead of one
+    # cursor.execute() per month -- this loop used to be the single biggest
+    # contributor to this route's sequential DB round-trips.
+    _month_bounds = []
     for i in range(5, -1, -1):
         ref = today.replace(day=1) - datetime.timedelta(days=1) * (i * 28)
         ref = ref.replace(day=1)
         y, m = ref.year, ref.month
+        month_start = datetime.date(y, m, 1)
+        month_end = datetime.date(y + 1, 1, 1) if m == 12 else datetime.date(y, m + 1, 1)
+        _month_bounds.append((y, m, month_start, month_end))
+
+    cursor.execute("""
+        SELECT date_trunc('month', date)::date AS month_start, COUNT(DISTINCT employee_id)
+        FROM attendance
+        WHERE date >= %s AND date < %s AND login_time IS NOT NULL
+        GROUP BY date_trunc('month', date)
+    """, (_month_bounds[0][2], _month_bounds[-1][3]))
+    _present_by_month = {r[0]: r[1] for r in cursor.fetchall()}
+
+    monthly_series = []
+    for y, m, month_start, month_end in _month_bounds:
         working_days = _working_days_in_month(y, m)
         if not working_days:
             continue
@@ -1843,20 +1856,11 @@ def analytics():
         total_days = len(past_days)
         if total_days == 0:
             monthly_series.append({
-                'month_label': datetime.date(y, m, 1).strftime("%b %Y"),
+                'month_label': month_start.strftime("%b %Y"),
                 'total_days': 0, 'present_days': 0, 'absent_days': 0, 'att_pct': 0
             })
             continue
-        month_start = datetime.date(y, m, 1)
-        if m == 12:
-            month_end = datetime.date(y + 1, 1, 1)
-        else:
-            month_end = datetime.date(y, m + 1, 1)
-        cursor.execute("""
-            SELECT COUNT(DISTINCT employee_id) FROM attendance
-            WHERE date >= %s AND date < %s AND login_time IS NOT NULL
-        """, (month_start, month_end))
-        present_records = cursor.fetchone()[0]
+        present_records = _present_by_month.get(month_start, 0)
         expected = total_days * (total_employees or 1)
         present_pct = round(present_records / expected * 100, 1) if expected else 0
         monthly_series.append({
@@ -1867,25 +1871,9 @@ def analytics():
             'att_pct': present_pct
         })
 
-    if today.month >= 1:
-        y, m = today.year, today.month
-        working_days = _working_days_in_month(y, m)
-        past_days = [d for d in working_days if d <= today]
-        total_m = len(past_days)
-        if total_m > 0:
-            _ms = datetime.date(y, m, 1)
-            _me = datetime.date(y + 1, 1, 1) if m == 12 else datetime.date(y, m + 1, 1)
-            cursor.execute("""
-                SELECT COUNT(DISTINCT employee_id) FROM attendance
-                WHERE date >= %s AND date < %s AND login_time IS NOT NULL
-            """, (_ms, _me))
-            present_m = cursor.fetchone()[0]
-            expected_m = total_m * (total_employees or 1)
-            avg_attendance_pct = round(present_m / expected_m * 100, 1) if expected_m else 0
-        else:
-            avg_attendance_pct = 0
-    else:
-        avg_attendance_pct = 0
+    # Current month is always the loop's last entry (i=0 above) -- reuse it
+    # instead of re-running the identical query a second time.
+    avg_attendance_pct = monthly_series[-1]['att_pct'] if monthly_series else 0
 
     cursor.execute("""
         SELECT department, COUNT(*) as cnt FROM employees
@@ -1995,6 +1983,24 @@ def analytics():
     # Smart Alerts Panel
     smart_alerts = []
 
+    # These four were four separate round-trips scattered across alerts #2
+    # and #6 below -- same consolidation as the block above, run together
+    # up front so the alert-building logic below just reads the results.
+    week_start = today - datetime.timedelta(days=today.weekday())
+    last_week_start = week_start - datetime.timedelta(days=7)
+    cursor.execute("""
+        SELECT
+            (SELECT COUNT(*) FROM leave_requests WHERE leave_date >= %s),
+            (SELECT COUNT(*) FROM leave_requests WHERE leave_date >= %s AND leave_date < %s),
+            (SELECT COUNT(*) FROM overtime_records WHERE status='Pending'),
+            (SELECT COUNT(*) FROM employee_documents
+                WHERE expiry_date IS NOT NULL
+                  AND expiry_date >= CURRENT_DATE
+                  AND expiry_date <= CURRENT_DATE + INTERVAL '30 days')
+    """, (week_start, last_week_start, week_start))
+    (leaves_this_week, leaves_last_week,
+     ot_pending_count, expiring_docs) = cursor.fetchone()
+
     # 1. Employees absent 3+ consecutive working days
     working_days_back = []
     for i in range(1, 15):
@@ -2028,13 +2034,6 @@ def analytics():
             })
 
     # 2. Leave requests spike this week vs last week
-    week_start = today - datetime.timedelta(days=today.weekday())
-    last_week_start = week_start - datetime.timedelta(days=7)
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE leave_date >= %s", (week_start,))
-    leaves_this_week = cursor.fetchone()[0]
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE leave_date >= %s AND leave_date < %s",
-                   (last_week_start, week_start))
-    leaves_last_week = cursor.fetchone()[0]
     if leaves_last_week > 0 and leaves_this_week > leaves_last_week * 1.4:
         pct_jump = round((leaves_this_week - leaves_last_week) / leaves_last_week * 100)
         smart_alerts.append({
@@ -2098,8 +2097,6 @@ def analytics():
         })
 
     # 6. Pending overtime approvals
-    cursor.execute("SELECT COUNT(*) FROM overtime_records WHERE status='Pending'")
-    ot_pending_count = cursor.fetchone()[0]
     if ot_pending_count >= 3:
         smart_alerts.append({
             'level': 'info',
@@ -2109,14 +2106,7 @@ def analytics():
             'link': '/overtime'
         })
 
-    # 6. Documents expiring in next 30 days
-    cursor.execute("""
-        SELECT COUNT(*) FROM employee_documents
-        WHERE expiry_date IS NOT NULL
-          AND expiry_date >= CURRENT_DATE
-          AND expiry_date <= CURRENT_DATE + INTERVAL '30 days'
-    """)
-    expiring_docs = cursor.fetchone()[0]
+    # 7. Documents expiring in next 30 days
     if expiring_docs > 0:
         smart_alerts.append({
             'level': 'warning',

@@ -25,7 +25,6 @@ import {
   fetchEmployeeNotifications,
   markNotificationsRead,
   markEmployeeNotificationsRead,
-  broadcastNotification,
 } from "../api/client";
 import { notificationFilters } from "../data/notificationsData";
 
@@ -87,26 +86,15 @@ export default function NotificationsScreen() {
   };
 
   const handleSendBroadcast = async () => {
-    if (!broadcastTitle.trim() || !broadcastMessage.trim()) {
-      Alert.alert("Input Required", "Please enter both announcement title and message.");
-      return;
-    }
-    setBroadcasting(true);
-    try {
-      await broadcastNotification(broadcastTitle.trim(), broadcastMessage.trim());
-      Alert.alert("Announcement Sent 📢", "Notification broadcasted to all staff members.");
-      setBroadcastVisible(false);
-      setBroadcastTitle("");
-      setBroadcastMessage("");
-      loadNotifications();
-    } catch (_) {
-      Alert.alert("Announcement Queued 📢", "Notification broadcasted locally to active staff.");
-      setBroadcastVisible(false);
-      setBroadcastTitle("");
-      setBroadcastMessage("");
-    } finally {
-      setBroadcasting(false);
-    }
+    // No broadcast endpoint exists anywhere in the backend -- not a Bearer
+    // API, not even a session-based web route -- so this call was always
+    // guaranteed to fail, and the old catch block claimed success anyway
+    // ("Announcement Queued... broadcasted locally") on every single
+    // attempt. Staying honest about this instead.
+    Alert.alert(
+      "Not Available Yet",
+      "Broadcasting an announcement to all staff isn't implemented yet on either web or mobile."
+    );
   };
 
   const filteredNotifications = useMemo(() => {

@@ -26,7 +26,7 @@ try {
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
-import { fetchEmployees, addEmployee, employeeSignup, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
+import { fetchEmployees, addEmployee, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
 import { saveLocalEmployee, mergeEmployeesWithLocal } from "../../utils/employeeStore";
 import THEME from "../../constants/theme";
 
@@ -191,6 +191,25 @@ export default function EmployeesScreen({ navigation }) {
       date_of_joining: newEmpDoj.trim() || new Date().toISOString().split("T")[0],
     };
 
+    // Real API call first -- only treat this as a success (and only cache
+    // locally / show the success alert) once the server actually confirms
+    // the account was created. Previously this added the employee to local
+    // state and showed "Staff Registered" unconditionally, before the API
+    // call was even awaited -- a failed signup (duplicate ID, validation
+    // error) still left a phantom employee in the directory forever.
+    let res;
+    try {
+      res = await addEmployee(payload);
+    } catch (e) {
+      res = e?.response;
+    }
+
+    if (!res?.data?.ok) {
+      Alert.alert("Registration Failed", res?.data?.msg || "Could not register this employee. Check the details and try again.");
+      setSubmitting(false);
+      return;
+    }
+
     const newStaffObj = {
       id: empIdTrim,
       employee_id: empIdTrim,
@@ -203,37 +222,23 @@ export default function EmployeesScreen({ navigation }) {
       date_of_joining: payload.date_of_joining,
       has_photo: !!newEmpPhoto,
     };
-
-    // Save locally so created employee is preserved across app reloads, different emulators & physical devices
+    // Cache locally so the new employee shows up immediately even if the
+    // subsequent list refresh is briefly stale.
     await saveLocalEmployee(newStaffObj);
     setEmployees((prev) => [newStaffObj, ...prev.filter((e) => (e.employee_id || e.id) !== empIdTrim)]);
 
-    try {
-      const res = await addEmployee(payload).catch(() => null);
-      if (!res?.data?.ok) {
-        await employeeSignup(
-          empIdTrim,
-          empNameTrim,
-          empPassTrim,
-          payload.email,
-          payload.role,
-          payload.department
-        ).catch(() => null);
-      }
-
-      if (newEmpPhoto) {
-        try {
-          const formData = new FormData();
-          formData.append("employee_id", empIdTrim);
-          formData.append("photo", {
-            uri: newEmpPhoto,
-            name: `${empIdTrim}.jpg`,
-            type: "image/jpeg",
-          });
-          await uploadEmployeePhoto(formData).catch(() => null);
-        } catch (_) {}
-      }
-    } catch (_) {}
+    if (newEmpPhoto) {
+      try {
+        const formData = new FormData();
+        formData.append("employee_id", empIdTrim);
+        formData.append("photo", {
+          uri: newEmpPhoto,
+          name: `${empIdTrim}.jpg`,
+          type: "image/jpeg",
+        });
+        await uploadEmployeePhoto(formData).catch(() => null);
+      } catch (_) {}
+    }
 
     await loadData();
 
@@ -493,10 +498,14 @@ export default function EmployeesScreen({ navigation }) {
                     <TouchableOpacity
                       style={{ flex: 1, backgroundColor: "#EF4444", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
                       onPress={() => {
-                        const targetId = selectedEmp.employee_id;
-                        setEmployees((prev) => prev.filter((e) => e.employee_id !== targetId));
-                        setSelectedEmp(null);
-                        Alert.alert("Staff Removed", "Employee profile removed from directory.");
+                        // No Bearer-token-compatible endpoint exists to delete
+                        // an employee from mobile yet -- filtering local state
+                        // here would just make them reappear on next refresh
+                        // while claiming they were removed.
+                        Alert.alert(
+                          "Not Available on Mobile Yet",
+                          "Removing a staff member is only available from the web admin dashboard for now."
+                        );
                       }}
                     >
                       <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Remove Staff</Text>
@@ -554,14 +563,16 @@ export default function EmployeesScreen({ navigation }) {
               </View>
 
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
-                {/* 1-Tap Quick Fill Demo Preset */}
-                <TouchableOpacity
-                  style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#FEF3C7", borderWidth: 1, borderColor: "#FDE68A", paddingVertical: 10, borderRadius: 12, marginBottom: 14 }}
-                  onPress={handleQuickFill}
-                >
-                  <Ionicons name="flash" size={15} color="#D97706" style={{ marginRight: 6 }} />
-                  <Text style={{ fontSize: 12, fontWeight: "800", color: "#B45309" }}>⚡ Quick Fill Demo Staff Preset</Text>
-                </TouchableOpacity>
+                {/* 1-Tap Quick Fill Demo Preset -- dev convenience only */}
+                {__DEV__ && (
+                  <TouchableOpacity
+                    style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#FEF3C7", borderWidth: 1, borderColor: "#FDE68A", paddingVertical: 10, borderRadius: 12, marginBottom: 14 }}
+                    onPress={handleQuickFill}
+                  >
+                    <Ionicons name="flash" size={15} color="#D97706" style={{ marginRight: 6 }} />
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: "#B45309" }}>⚡ Quick Fill Demo Staff Preset (dev only)</Text>
+                  </TouchableOpacity>
+                )}
 
                 {/* Face Photo Registration Box */}
                 <View style={{ alignItems: "center", marginBottom: 16, backgroundColor: "#F8FAFC", padding: 16, borderRadius: 18, borderWidth: 2, borderColor: "#BFDBFE", borderStyle: "dashed" }}>

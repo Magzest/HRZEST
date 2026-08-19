@@ -1,18 +1,45 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
+import { secureGetItem } from '../utils/secureStorage';
 
 const client = axios.create({ baseURL: API_BASE_URL, timeout: 10000 });
 
 client.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('token');
+  const token = await secureGetItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+// AuthContext registers a handler here so a genuinely dead session (the
+// Bearer token expired/was revoked) clears storage and bounces the user
+// back to login instead of leaving them stuck.
+//
+// Deliberately NOT wired to every 401 in the app: several endpoints 401 for
+// reasons that have nothing to do with the session being dead -- wrong
+// token type for that route, a feature endpoint that still expects a
+// session cookie, etc. Auto-logging out on any of those would silently
+// kill a perfectly valid session over an unrelated background call, which
+// is exactly why we don't do that here. Instead, only 401s from the calls
+// that establish "is my session even alive" (the dashboards' own initial
+// load) are treated as fatal.
+const SESSION_CRITICAL_PATHS = ['/api/dashboard', '/api/employee/portal'];
+
+let unauthorizedHandler = null;
+export const setUnauthorizedHandler = (handler) => {
+  unauthorizedHandler = handler;
+};
+
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const status = error?.response?.status;
+    if (status === 401) {
+      const url = error?.config?.url || '';
+      const isSessionCritical = SESSION_CRITICAL_PATHS.some((p) => url.includes(p));
+      if (isSessionCritical && unauthorizedHandler) {
+        unauthorizedHandler();
+      }
+    }
     return Promise.reject(error);
   }
 );
@@ -22,17 +49,6 @@ export const adminLogin = (username, password) =>
   client.post('/api/login', { username, password });
 
 export const adminLogout = () => client.post('/api/logout');
-
-export const createOrganisation = (company_name, subdomain, admin_username, admin_password, admin_email = '', signup_secret = '', company_logo = '') =>
-  client.post('/api/create_org', {
-    company_name,
-    subdomain,
-    admin_username,
-    admin_password,
-    admin_email,
-    signup_secret,
-    company_logo,
-  });
 
 export const fetchDashboard = () => client.get('/api/dashboard');
 
@@ -46,6 +62,16 @@ export const markAttendance = (date, records) =>
   client.post('/api/bulk_mark_attendance', { date, records });
 
 export const fetchHolidays = () => client.get('/api/holidays');
+
+export const fetchShifts = () => client.get('/api/shifts');
+
+export const createShift = (name, start_time, half_time, end_time) =>
+  client.post('/api/shifts', { name, start_time, half_time, end_time });
+
+export const deleteShift = (sid) => client.delete(`/api/shifts/${sid}`);
+
+export const assignShift = (emp_id, shift_id) =>
+  client.post('/api/shifts/assign', { emp_id, shift_id });
 
 export const fetchMonthlyReport = (year, month) =>
   client.get('/api/monthly_report', { params: { year, month } });
@@ -173,23 +199,19 @@ export const addEmployee = (employeeData) =>
     role: employeeData.role || 'Software Engineer',
     department: employeeData.department || 'Engineering',
   });
-export const editEmployee = (empId, employeeData) => client.post(`/api/employees/${empId}/edit`, employeeData);
-export const deleteEmployee = (empId) => client.post(`/api/employees/${empId}/delete`);
-export const forgotPassword = (email, role = 'employee') => client.post('/api/forgot-password', { email, role });
-export const resetPassword = (email, token, new_password, role = 'employee') => client.post('/api/reset-password', { email, token, new_password, role });
-export const verifyMfaOtp = (otpCode) => client.post('/api/mfa/verify', { otp: otpCode });
-export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai_hrms', { query });
-export const addHoliday = (holidayData) => client.post('/api/holidays/add', holidayData);
-export const deleteHoliday = (hid) => client.post(`/api/holidays/${hid}/delete`);
+// editEmployee, deleteEmployee, forgotPassword, resetPassword, addHoliday,
+// deleteHoliday were removed -- their routes (/api/employees/<id>/edit,
+// /api/employees/<id>/delete, /api/forgot-password, /api/reset-password,
+// /api/holidays/add, /api/holidays/<id>/delete) don't exist anywhere in
+// the backend, Bearer or session-based, and none had a mobile caller left
+// after removing the broken UI that used them.
+export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai/hr-helpdesk', { query });
 export const compoffAction = (cid, action) => client.post(`/api/compoff/${cid}/action`, { action });
 export const updateSettings = (settingsData) => client.post('/api/settings/update', settingsData);
 
 // ── Additional Parity APIs ──────────────────────────────────────────
 export const sendPayslipEmail = (empId, year, month) =>
-  client.post('/api/payroll/send_payslip', { employee_id: empId, year, month });
-
-export const lockPayroll = (year, month, status = true) =>
-  client.post('/api/payroll/lock', { year, month, status });
+  client.post('/api/send_salary_email', { emp_id: empId, year, month });
 
 export const submitPerformanceReview = (empId, rating, comments, hike_percentage = 0, bonus = 0) =>
   client.post('/api/performance/review', { employee_id: empId, rating, comments, hike_percentage, bonus });

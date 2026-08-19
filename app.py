@@ -885,18 +885,22 @@ def _attach_updated_at_trigger(cursor, table):
     """)
 
 
-def init_db():
+def init_db(seed_admin=True):
     """Create/upgrade the schema, then seed defaults. Split into three
     ordered phases -- table creation, ALTER-TABLE migrations for existing
     installs, and one-time seeding -- so each phase is independently
     readable/testable instead of one 1000+ line function; the phases must
     still run in exactly this order (migrations assume their tables
-    already exist, seeding assumes its columns already exist)."""
+    already exist, seeding assumes its columns already exist).
+
+    seed_admin=False skips seeding the env-var admin (but still creates
+    the blank company_settings row) -- see _seed_defaults_and_admin's
+    docstring; used by init_tenant_db() for new SaaS tenant schemas."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     _init_core_tables(cursor, db)
     _run_schema_migrations(cursor, db)
-    _seed_defaults_and_admin(cursor, db)
+    _seed_defaults_and_admin(cursor, db, seed_admin=seed_admin)
     cursor.close()
     db.close()
 
@@ -2079,14 +2083,29 @@ def _run_fk_backstop_migration(cursor, db):
         pass
 
 
-def _seed_defaults_and_admin(cursor, db):
+def _seed_defaults_and_admin(cursor, db, seed_admin=True):
     """One-time seeding for a fresh install: the company_settings row,
      the env-configured admin account, and marking existing installs
-     that already have an admin as setup-complete."""
+     that already have an admin as setup-complete.
+
+     seed_admin=False skips the env-var admin entirely -- used when this
+     runs against a brand-new SaaS tenant schema (init_tenant_db(), called
+     from provision_tenant() during /create_org self-signup). That path
+     inserts its own admin right after using the credentials the customer
+     actually typed on the signup form; seeding one from ADMIN_USERNAME/
+     ADMIN_PASSWORD first meant every new tenant silently got a second,
+     undocumented admin login shared across every tenant on the box,
+     using whichever operator credentials happen to be in this server's
+     .env. The blank company_settings row this also creates is still
+     needed either way -- provision_tenant()'s own UPDATE assumes that
+     row (id=1) already exists."""
     cursor.execute("SELECT COUNT(*) FROM company_settings")
     if cursor.fetchone()[0] == 0:
         cursor.execute("INSERT INTO company_settings (setup_done) VALUES (0)")
         db.commit()
+
+    if not seed_admin:
+        return
 
     # Seed admin from env -- only if no admin exists yet
     _admin_user = os.environ.get("ADMIN_USERNAME", "admin").strip()
@@ -2255,10 +2274,14 @@ def init_master_db():
 
 
 def init_tenant_db(schema_name: str):
-    """Initialize schema in a freshly created tenant schema."""
+    """Initialize schema in a freshly created tenant schema. seed_admin=False
+    -- provision_tenant() (blueprints/org.py) inserts the real admin right
+    after this using the credentials the customer entered at signup; see
+    _seed_defaults_and_admin's docstring for why seeding the env-var admin
+    here too was a real bug, not a redundant no-op."""
     from flask import g as _g
     _g.tenant_db = schema_name
-    init_db()
+    init_db(seed_admin=False)
 
 
 # ---------------- NOTIFICATION HELPER ----------------

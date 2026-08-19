@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,17 +7,74 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Switch,
+  Alert,
 } from "react-native";
+import * as LocalAuthentication from "expo-local-authentication";
 
 import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
+import { useAuth } from "../../store/AuthContext";
+import {
+  getBiometricLockEnabled, setBiometricLockEnabled,
+  getNotificationsEnabled, setNotificationsEnabled,
+} from "../../utils/preferences";
+import {
+  requestNotificationPermission, scheduleDailyCheckinReminder, cancelDailyCheckinReminder,
+} from "../../utils/localNotifications";
 
 export default function SettingsScreen() {
+  const { signOut } = useAuth();
   const [notifications, setNotifications] = useState(true);
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
   const [biometric, setBiometric] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setBiometric(await getBiometricLockEnabled());
+      setNotifications(await getNotificationsEnabled());
+    })();
+  }, []);
+
+  const handleToggleNotifications = async (value) => {
+    if (value) {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        Alert.alert(
+          "Permission Needed",
+          "Enable notifications for this app in your device settings to receive attendance reminders."
+        );
+        return;
+      }
+      await scheduleDailyCheckinReminder();
+    } else {
+      await cancelDailyCheckinReminder();
+    }
+    setNotifications(value);
+    await setNotificationsEnabled(value);
+  };
+
+  const handleToggleBiometric = async (value) => {
+    if (value) {
+      const hasHw = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = hasHw && await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) {
+        Alert.alert(
+          "Not Available",
+          "No fingerprint or Face ID is enrolled on this device. Set it up in your device settings first."
+        );
+        return;
+      }
+    }
+    setBiometric(value);
+    await setBiometricLockEnabled(value);
+  };
+
+  const handleLogout = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign Out", style: "destructive", onPress: signOut },
+    ]);
+  };
 
   const SettingItem = ({
     icon,
@@ -85,12 +142,12 @@ export default function SettingsScreen() {
 
         <SettingItem
           icon="notifications-outline"
-          title="Push Notifications"
-          subtitle="Receive app notifications"
+          title="Attendance Reminders"
+          subtitle="Daily on-device check-in reminder"
           right={
             <Switch
               value={notifications}
-              onValueChange={setNotifications}
+              onValueChange={handleToggleNotifications}
               trackColor={{
                 false: "#CBD5E1",
                 true: "#173B8C",
@@ -102,11 +159,11 @@ export default function SettingsScreen() {
         <SettingItem
           icon="mail-outline"
           title="Email Alerts"
-          subtitle="Receive updates via email"
+          subtitle="Coming soon"
           right={
             <Switch
-              value={emailAlerts}
-              onValueChange={setEmailAlerts}
+              value={false}
+              disabled
               trackColor={{
                 false: "#CBD5E1",
                 true: "#173B8C",
@@ -118,11 +175,11 @@ export default function SettingsScreen() {
         <SettingItem
           icon="moon-outline"
           title="Dark Mode"
-          subtitle="Enable dark appearance"
+          subtitle="Coming soon"
           right={
             <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
+              value={false}
+              disabled
               trackColor={{
                 false: "#CBD5E1",
                 true: "#173B8C",
@@ -142,7 +199,7 @@ export default function SettingsScreen() {
           right={
             <Switch
               value={biometric}
-              onValueChange={setBiometric}
+              onValueChange={handleToggleBiometric}
               trackColor={{
                 false: "#CBD5E1",
                 true: "#173B8C",
@@ -216,6 +273,7 @@ export default function SettingsScreen() {
           title="Logout"
           subtitle="Sign out from this device"
           danger
+          onPress={handleLogout}
           right={
             <Ionicons
               name="chevron-forward"

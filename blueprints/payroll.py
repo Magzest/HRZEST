@@ -24,7 +24,7 @@ from flask import (
 from database import get_db_connection
 from extensions import app_log, limiter, log_security_event
 from utils.auth import admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required
-from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_action_counts
+from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
@@ -1282,7 +1282,7 @@ def admin_payslips():
     cursor.execute("SELECT employee_id, name, role, COALESCE(phone,''), COALESCE(email,'') FROM employees ORDER BY name")
     employees = cursor.fetchall()
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
 
     cursor.close()
     db.close()
@@ -1392,9 +1392,8 @@ def payroll_settings():
     """)
     employees = cursor.fetchall()
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
-    cursor.execute("SELECT COALESCE(company_name,'') FROM company_settings LIMIT 1")
-    co = cursor.fetchone()
+    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
+    co = get_company_settings()
     cursor.close()
     db.close()
 

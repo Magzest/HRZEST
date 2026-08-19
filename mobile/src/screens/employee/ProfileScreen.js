@@ -143,31 +143,12 @@ export default function ProfileScreen() {
   );
 
   const handleSaveProfile = async () => {
-    if (!editName.trim() || !editEmail.trim()) {
-      Alert.alert("Input Required", "Full Name and Email Address are required.");
-      return;
-    }
-    setSubmitting(true);
-
-    const updatedProfile = {
-      ...profileData,
-      name: editName.trim(),
-      email: editEmail.trim(),
-      phone: editPhone.trim(),
-      address: editAddress.trim(),
-      emergencyContact: editEmergency.trim(),
-    };
-
-    const stats = calculateCompletion(updatedProfile);
-    updatedProfile.completion = stats.completionPct;
-    updatedProfile.completedSections = stats.completedCount;
-    updatedProfile.totalSections = stats.totalCount;
-
-    setProfileData(updatedProfile);
-
-    Alert.alert("Profile Updated 🎉", "Your profile details have been updated successfully.");
-    setEditModalVisible(false);
-    setSubmitting(false);
+    // No Bearer-token-compatible endpoint exists to update profile details
+    // from mobile yet -- only a session-based web route does this.
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Editing profile details is only available from the web employee portal for now."
+    );
   };
 
   const handleChangePhoto = async () => {
@@ -194,14 +175,18 @@ export default function ProfileScreen() {
           type: "image/jpeg",
         });
 
-        const res = await uploadEmployeePhoto(formData).catch(() => null);
+        let res;
+        try {
+          res = await uploadEmployeePhoto(formData);
+        } catch (e) {
+          res = e?.response;
+        }
         setSubmitting(false);
         if (res?.data?.ok) {
           Alert.alert("Face Photo Registered 🎉", "Your official face photo has been registered successfully for Face Verification!");
           setProfileData((prev) => ({ ...prev, photo: photoUri }));
         } else {
-          setProfileData((prev) => ({ ...prev, photo: photoUri }));
-          Alert.alert("Face Photo Registered 📸", "Official face photo updated for Face Verification.");
+          Alert.alert("Upload Failed", res?.data?.msg || "Could not upload your photo. Check your connection and try again.");
         }
       }
     } catch (_) {

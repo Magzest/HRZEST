@@ -177,7 +177,7 @@
         </button>
         <button class="sandbox-tab module-card" data-tab="tab-leave">
           <div class="module-card-icon"><i class="ti ti-calendar-stats"></i></div>
-          <span class="module-card-title">Leave &amp; Rosters</span>
+          <span class="module-card-title">Leave &amp; Holidays</span>
           <p class="module-card-desc">Approval workflows synced with shift schedules and holiday calendars.</p>
           <span class="module-card-cta">Try it <i class="ti ti-arrow-right"></i></span>
         </button>
@@ -392,14 +392,29 @@
                 </div>
               </div>
 
-              <div style="background: linear-gradient(135deg, rgba(79, 70, 229, 0.1), rgba(67, 56, 202, 0.1)); border: 1px solid var(--border-color-glow); padding: 1.5rem; border-radius: var(--radius-xl); display: flex; gap: 1rem; align-items: center;">
-                <div id="badgePhoto" class="avatar-photo" style="width: 90px; height: 90px; border-radius: var(--radius-md); background-image:url('/static/face_scan_demo.jpg');" role="img" aria-label="Employee ID badge photo"></div>
-                <div>
-                  <h4 id="badgeName" style="font-size: 1.1rem; margin-bottom: 0.2rem;">Sarah Jenkins</h4>
-                  <p id="badgeRole" style="color: var(--accent-cyan); font-size: 0.85rem; font-weight: 600;">Senior Software Architect</p>
-                  <p id="badgeId" style="color: var(--text-subtle); font-size: 0.75rem;">ID: HR-994821 | Dept: Engineering</p>
-                  <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+              <div style="display: flex; justify-content: center;">
+                <!-- Vertical ID badge, styled like a real employee credential card -->
+                <div style="width: 232px; background: var(--bg-card); border: 1px solid var(--border-color-glow); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; position: relative;">
+                  <div style="position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 36px; height: 8px; border-radius: 6px; background: rgba(0,0,0,0.18); z-index: 2;" aria-hidden="true"></div>
+                  <div style="background: var(--gradient-brand); padding: 1.7rem 1rem 2.6rem; text-align: center;">
+                    <div style="font-size: 0.66rem; font-weight: 800; color: rgba(255,255,255,0.85); letter-spacing: 0.09em; text-transform: uppercase;">HRzest.com</div>
+                  </div>
+                  <div style="margin-top: -2.6rem; display: flex; justify-content: center;">
+                    <div style="position: relative;">
+                      <div id="badgePhoto" class="avatar-photo" style="width: 84px; height: 84px; border-radius: 50%; background-image:url('/static/face_scan_demo.jpg'); border: 4px solid var(--bg-card); box-shadow: var(--shadow-md);" role="img" aria-label="Employee ID badge photo"></div>
+                      <div style="position: absolute; bottom: 0; right: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--accent-emerald); border: 3px solid var(--bg-card); display: flex; align-items: center; justify-content: center;" aria-hidden="true">
+                        <i class="ti ti-check" style="color: #fff; font-size: 13px; font-weight: 800;"></i>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="text-align: center; padding: 0.75rem 1.25rem 1.15rem;">
+                    <h4 id="badgeName" style="font-size: 1.05rem; margin-bottom: 0.15rem;">Sarah Jenkins</h4>
+                    <p id="badgeRole" style="color: var(--accent-cyan); font-size: 0.8rem; font-weight: 700; margin-bottom: 0.55rem;">Senior Software Architect</p>
+                    <p id="badgeId" style="color: var(--text-subtle); font-size: 0.7rem; margin-bottom: 0.9rem;">ID: HR-994821 | Dept: Engineering</p>
                     <span class="badge badge-gps"><i class="ti ti-shield-check"></i> Verified Credential</span>
+                  </div>
+                  <div style="border-top: 1px dashed var(--border-color); padding: 0.8rem 1.25rem; background: var(--bg-secondary);">
+                    <div style="height: 26px; background: repeating-linear-gradient(90deg, var(--text-main) 0 2px, transparent 2px 5px); opacity: 0.55;" aria-hidden="true"></div>
                   </div>
                 </div>
               </div>
@@ -454,17 +469,29 @@
         </div>
         <div class="chapter-media wash-cool">
           <div class="chapter-panel">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+            <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-subtle); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1.1rem;">This payroll cycle</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem 1rem;">
               <div>
-                <strong>PAYSLIP — AUG 2026</strong><br>
-                <small style="color: var(--text-subtle);">EMP-8842 | Senior Engineer</small>
+                <i class="ti ti-receipt" style="color: var(--accent-cyan); font-size: 1.1rem;"></i>
+                <div style="font-size: 1.6rem; font-weight: 600; color: var(--text-main); margin-top: 0.3rem;">142</div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Payslips generated</div>
               </div>
-              <span class="badge badge-face"><i class="ti ti-lock"></i> Locked</span>
+              <div>
+                <i class="ti ti-currency-rupee" style="color: var(--accent-emerald); font-size: 1.1rem;"></i>
+                <div style="font-size: 1.6rem; font-weight: 600; color: var(--text-main); margin-top: 0.3rem;">₹18.4L</div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Disbursed</div>
+              </div>
+              <div>
+                <i class="ti ti-bolt" style="color: var(--accent-amber); font-size: 1.1rem;"></i>
+                <div style="font-size: 1.6rem; font-weight: 600; color: var(--text-main); margin-top: 0.3rem;">3d → 2h</div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Cycle time cut</div>
+              </div>
+              <div>
+                <i class="ti ti-shield-check" style="color: var(--accent-purple); font-size: 1.1rem;"></i>
+                <div style="font-size: 1.6rem; font-weight: 600; color: var(--text-main); margin-top: 0.3rem;">0</div>
+                <div style="font-size: 0.76rem; color: var(--text-muted);">Manual errors</div>
+              </div>
             </div>
-            <div class="chapter-panel-row"><span>Gross Salary</span><span>₹65,000.00</span></div>
-            <div class="chapter-panel-row"><span>Performance Bonus</span><span>₹8,000.00</span></div>
-            <div class="chapter-panel-row"><span>Tax Deductions</span><span style="color:var(--accent-rose);">-₹13,140.00</span></div>
-            <div class="chapter-panel-row"><span style="font-weight:700; color:var(--text-main);">Net Pay</span><span style="color:var(--accent-emerald); font-size:1.15rem;">₹59,860.00</span></div>
           </div>
         </div>
       </div>

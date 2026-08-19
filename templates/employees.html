@@ -95,6 +95,12 @@
       /* AVATAR */
       .avatar { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; border: 2px solid #dbeafe; }
       .avatar-ph { width: 34px; height: 34px; border-radius: 50%; background: #e2e8f0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 14px; border: 2px solid #dbeafe; }
+      /* .avatar-ph's own display:flex above and the sitewide .u-d-none
+         utility are both single-class selectors -- same specificity, so
+         whichever loads later in the cascade wins. This rule's two-class
+         selector outranks both, so the placeholder actually stays hidden
+         behind a loaded photo instead of rendering next to it. */
+      .avatar-ph.u-d-none { display: none; }
       .avatar-btn { background: none; border: none; padding: 0; cursor: pointer; position: relative; display: inline-flex; border-radius: 50%; }
       .avatar-btn:hover .avatar { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.3); }
       .avatar-eye { position: absolute; inset: 0; border-radius: 50%; background: rgba(30,58,138,0.55); display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.18s; font-size: 13px; color: #fff; pointer-events: none; }
