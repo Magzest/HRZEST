@@ -723,6 +723,8 @@ def add_employee_page():
     work_lon = float(work_lon_raw) if work_lon_raw else None
     company_id_raw = request.form.get("company_id", "").strip()
     company_id = int(company_id_raw) if company_id_raw.isdigit() else None
+    shift_id_raw = request.form.get("shift_id", "").strip()
+    shift_id = int(shift_id_raw) if shift_id_raw else None
 
     gender = encrypt_pii(request.form.get("gender", "").strip() or None)
     dob_raw = request.form.get("dob", "").strip()
@@ -834,15 +836,15 @@ def add_employee_page():
             cursor.execute(
                 "INSERT INTO employees (name, employee_id, email, role, face_image, qr_code, password, "
                 "date_of_joining, work_mode, work_lat, work_lon, company_id, manager_id, manager_name, department, "
-                "gender, dob, blood_group, address, city, state, pincode, "
+                "shift_id, gender, dob, blood_group, address, city, state, pincode, "
                 "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
                 "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
                 "force_pin_change) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
                 "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
                 (name, emp_id, email, role, filepath, qr_path, hashed_pwd,
                  date_of_joining, work_mode, work_lat, work_lon, company_id,
-                 _mgr_id, _mgr_name, _dept,
+                 _mgr_id, _mgr_name, _dept, shift_id,
                  gender, dob, blood_group, address, city, state, pincode,
                  ec_name, ec_phone, ec_relation,
                  aadhar, pan, bank_name, bank_account, bank_ifsc, uan)
