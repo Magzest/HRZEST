@@ -1671,6 +1671,24 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
             _idc_center_text(fd, line, addr_font, CW, addr_y, _IDC_DGRAY)
             addr_y += 18
 
+    # Small QR, front bottom -- a compact convenience copy of the full-size
+    # scannable one on the back (which keeps the "Scan to Mark Attendance"
+    # label and info block). Anchored off addr_y so it always sits below
+    # whatever optional content (blood group badge, office address) came
+    # before it, rather than a fixed y that could overlap on longer cards.
+    qr_path = os.path.join("static", "qrcodes", emp_id + ".png")
+    if not os.path.exists(qr_path):
+        qr_path = generate_qr(emp_id)
+    QS_SMALL = 60
+    qr_x = CW // 2 - QS_SMALL // 2
+    qr_y = addr_y + 8
+    try:
+        fd.rounded_rectangle([(qr_x - 6, qr_y - 6), (qr_x + QS_SMALL + 6, qr_y + QS_SMALL + 6)], radius=6, fill=_IDC_WHITE)
+        qr_img = Image.open(qr_path).convert("RGB").resize((QS_SMALL, QS_SMALL), Image.LANCZOS)
+        front.paste(qr_img, (qr_x, qr_y))
+    except Exception:
+        pass
+
     fd.rectangle([(0, CH - 60), (CW, CH)], fill=_IDC_BLUE)
     fd.rectangle([(0, CH - 62), (CW, CH - 60)], fill=_IDC_GOLD)
     _idc_footer_contact(fd, CW, CH, company_name, company_website, company_phone)

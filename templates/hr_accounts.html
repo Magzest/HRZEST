@@ -1,0 +1,240 @@
+{% extends "admin_base.html" %}
+
+{% block title %}HR Accounts{% endblock %}
+
+{% block page_css %}
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    html,body{height:100%}
+    body{background:#eff6ff;display:flex;min-height:100vh}
+    .main{flex:1;padding:28px 30px;overflow-y:auto;min-width:0}
+    .page-header{margin-bottom:24px}
+    .page-header h1{font-size:22px;font-weight:800;color:#1e293b}
+    .page-header p{font-size:13px;color:#64748b;margin-top:4px}
+    .content-grid{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+    .panel{background:#fff;border:1px solid #dbeafe;border-radius:14px;padding:20px}
+    .panel-title{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    label{display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+    input[type=text],input[type=email],input[type=password]{width:100%;padding:9px 12px;border:1px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:13px;outline:none;margin-bottom:14px;font-family:inherit}
+    input:focus{border-color:#3b82f6;background:#fff}
+    .hint{font-size:11px;color:#94a3b8;margin-top:-10px;margin-bottom:14px}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.18s;text-decoration:none}
+    .btn-primary{background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff}
+    .btn-primary:hover{opacity:.9}
+    .btn-sm{padding:5px 11px;font-size:12px;border-radius:7px}
+    .btn-danger{background:#fef2f2;color:#ef4444;border:1px solid #fecaca}
+    .btn-danger:hover{background:#fee2e2}
+    .btn-success{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+    .btn-success:hover{background:#dcfce7}
+    .btn-ghost{background:#f8fafc;color:#64748b;border:1px solid #e2e8f0}
+    .btn-ghost:hover{background:#f1f5f9}
+    table{width:100%;border-collapse:collapse}
+    th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;background:#f8fafc}
+    td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#374151;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+    .badge-active{background:#f0fdf4;color:#16a34a}
+    .badge-terminated{background:#fef2f2;color:#ef4444}
+    .empty-state{text-align:center;padding:48px 20px;color:#94a3b8}
+    .empty-state i{font-size:48px;margin-bottom:12px;display:block}
+    .msg{padding:10px 16px;border-radius:10px;margin-bottom:18px;font-size:13px;font-weight:600;display:none}
+    .msg-success{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+    .msg-danger{background:#fef2f2;color:#ef4444;border:1px solid #fecaca}
+    .history-row{display:none;background:#f8fafc}
+    .history-row td{padding:14px}
+    .history-item{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e2e8f0;font-size:12px}
+    .history-item:last-child{border-bottom:none}
+    .history-empty{font-size:12px;color:#94a3b8;padding:6px 0}
+    body.dark-mode{background:#0d1117!important}
+    body.dark-mode .main{background:#0d1117!important;color:#cdd9e5!important}
+    body.dark-mode .page-header h1{color:#f1f5f9!important}
+    body.dark-mode .panel{background:#161b22!important;border-color:#30363d!important}
+    body.dark-mode .panel-title{color:#cdd9e5!important}
+    body.dark-mode label{color:#768390!important}
+    body.dark-mode input{background:#0d1117!important;border-color:#30363d!important;color:#cdd9e5!important}
+    body.dark-mode th{background:#1c2128!important;color:#768390!important;border-color:#30363d!important}
+    body.dark-mode td{color:#cdd9e5!important;border-color:#30363d!important}
+    body.dark-mode .history-row{background:#1c2128!important}
+    body.dark-mode .history-item{border-color:#30363d!important}
+  </style>
+{% endblock %}
+
+{% block main %}
+  <div class="page-header">
+    <h1><i class="ti ti-user-shield u-c-3b82f6"></i> HR Accounts</h1>
+    <p>Create HR dashboard logins, and activate, terminate, or review sign-in history for existing ones</p>
+  </div>
+
+  <div id="hrMsg" class="msg"></div>
+
+  <div class="content-grid">
+    <!-- CREATE -->
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-user-plus u-c-22c55e"></i> Create HR Account</div>
+      <form id="hrCreateForm">
+        <label>Username</label>
+        <input type="text" id="hrUsername" required pattern="[a-zA-Z0-9_.\-]{3,40}" placeholder="e.g. hr_jane" />
+        <div class="hint">3-40 characters: letters, numbers, . _ -</div>
+
+        <label>Email <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+        <input type="email" id="hrEmail" placeholder="jane@company.com" />
+
+        <label>Password</label>
+        <input type="password" id="hrPassword" required minlength="8" placeholder="At least 8 characters" />
+
+        <button type="submit" class="btn btn-primary u-w-100pct u-jc-center">
+          <i class="ti ti-plus"></i> Create Account
+        </button>
+      </form>
+    </div>
+
+    <!-- LIST -->
+    <div class="panel">
+      <div class="panel-title">
+        <i class="ti ti-list u-c-6366f1"></i> HR Accounts
+        <span class="u-ml-auto u-fs-12 u-c-94a3b8 u-fw-400">{{ accounts|length }} account(s)</span>
+      </div>
+      {% if accounts %}
+      <div class="u-ovx-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in accounts %}
+            <tr>
+              <td class="u-fw-600">{{ a[0] }}</td>
+              <td>{{ a[1] or '—' }}</td>
+              <td>
+                {% if a[2] %}
+                  <span class="badge badge-active">Active</span>
+                {% else %}
+                  <span class="badge badge-terminated">Terminated</span>
+                {% endif %}
+              </td>
+              <td>{{ a[3].strftime('%d %b %Y') if a[3] else '—' }}</td>
+              <td>
+                <div class="u-d-flex u-gap-6 u-ai-center">
+                  {% if a[2] %}
+                    <button class="btn btn-sm btn-danger" onclick="hrSetStatus('{{ a[0] }}', false, this)">
+                      <i class="ti ti-user-off"></i> Terminate
+                    </button>
+                  {% else %}
+                    <button class="btn btn-sm btn-success" onclick="hrSetStatus('{{ a[0] }}', true, this)">
+                      <i class="ti ti-user-check"></i> Activate
+                    </button>
+                  {% endif %}
+                  <button class="btn btn-sm btn-ghost" onclick="hrToggleHistory('{{ a[0] }}')">
+                    <i class="ti ti-history"></i> History
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr class="history-row" id="hrHist-{{ a[0] }}">
+              <td colspan="5">
+                <div class="u-fs-11 u-fw-700 u-c-64748b u-mb-8 u-ttr-uppercase u-ls-0d4">Recent Login Activity</div>
+                <div id="hrHistBody-{{ a[0] }}"><div class="history-empty">Loading…</div></div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <i class="ti ti-user-shield"></i>
+        No HR accounts yet. Create one on the left.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    function hrShowMsg(text, ok) {
+      var el = document.getElementById('hrMsg');
+      el.textContent = text;
+      el.className = 'msg ' + (ok ? 'msg-success' : 'msg-danger');
+      el.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.getElementById('hrCreateForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        var resp = await fetch("{{ tpath('/api/hr_accounts') }}", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('hrUsername').value.trim(),
+            email: document.getElementById('hrEmail').value.trim(),
+            password: document.getElementById('hrPassword').value,
+          }),
+        });
+        var result = await resp.json();
+        if (!result.ok) { hrShowMsg(result.msg || 'Could not create account.', false); return; }
+        hrShowMsg(result.msg, true);
+        setTimeout(function() { location.reload(); }, 900);
+      } catch (err) {
+        hrShowMsg('Something went wrong. Please try again.', false);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    async function hrSetStatus(username, active, btn) {
+      var verb = active ? 'activate' : 'terminate';
+      if (!confirm('Are you sure you want to ' + verb + ' the HR account "' + username + '"?')) return;
+      btn.disabled = true;
+      try {
+        var resp = await fetch("{{ tpath('/api/hr_accounts/') }}" + encodeURIComponent(username) + "/status", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ active: active }),
+        });
+        var result = await resp.json();
+        if (!result.ok) { hrShowMsg(result.msg || 'Could not update account.', false); btn.disabled = false; return; }
+        hrShowMsg(result.msg, true);
+        setTimeout(function() { location.reload(); }, 700);
+      } catch (err) {
+        hrShowMsg('Something went wrong. Please try again.', false);
+        btn.disabled = false;
+      }
+    }
+
+    var hrHistLoaded = {};
+    async function hrToggleHistory(username) {
+      var row = document.getElementById('hrHist-' + username);
+      var isOpen = row.style.display === 'table-row';
+      row.style.display = isOpen ? 'none' : 'table-row';
+      if (isOpen || hrHistLoaded[username]) return;
+      hrHistLoaded[username] = true;
+
+      var body = document.getElementById('hrHistBody-' + username);
+      try {
+        var resp = await fetch("{{ tpath('/api/hr_accounts/') }}" + encodeURIComponent(username) + "/history");
+        var result = await resp.json();
+        if (!result.ok || !result.events.length) {
+          body.innerHTML = '<div class="history-empty">No login activity recorded yet.</div>';
+          return;
+        }
+        body.innerHTML = result.events.map(function(ev) {
+          var icon = ev.event_type.indexOf('success') !== -1 ? '✅' : (ev.event_type.indexOf('denied') !== -1 || ev.event_type.indexOf('failure') !== -1 ? '⚠️' : 'ℹ️');
+          return '<div class="history-item">' +
+            '<span>' + icon + ' ' + ev.message + '</span>' +
+            '<span style="color:#94a3b8;white-space:nowrap;">' + ev.created_at + (ev.ip ? ' · ' + ev.ip : '') + '</span>' +
+          '</div>';
+        }).join('');
+      } catch (err) {
+        body.innerHTML = '<div class="history-empty">Couldn\'t load history right now.</div>';
+      }
+    }
+  </script>
+{% endblock %}

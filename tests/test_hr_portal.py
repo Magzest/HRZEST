@@ -3,20 +3,19 @@
 The standalone HR Portal (its own /hr_login page and /hr dashboard,
 blueprints/hr_portal.py) was intentionally removed from the codebase (git
 log: "chore: remove HR portal, SuperAdmin, SecOps, Compliance modules &
-cleanup duplicates") -- unlike SuperAdmin/SecOps, it was never reintroduced,
-and neither was /compliance. There is no login path left that can produce
-an hr-role session in production anymore (blueprints/auth.py's /login
-explicitly rejects role='hr' credentials -- see
-tests/test_login_mfa.py::TestAdminLoginMfa::test_hr_role_cannot_use_admin_login_even_with_mfa_enabled),
-and role='hr' rows in admin_users are effectively orphaned.
+cleanup duplicates") and, unlike SuperAdmin/SecOps, was never reintroduced.
+HR accounts are back, though, via a different path: blueprints/admin_views.py's
+/hr_accounts page lets an admin create/terminate/reactivate role='hr' rows
+in admin_users, and they log in through the same general /login as admin
+(see tests/test_login_mfa.py::TestAdminLoginMfa::test_hr_role_can_use_admin_login_and_completes_mfa),
+landing on /employees instead of /admin.
 
-What's tested here instead: the generic role_required("admin")/admin_required
-RBAC machinery still correctly scopes an hr-role session (stamped directly
-via session_transaction, the same way test_secops.py exercises the
-soc_analyst role) away from admin-only surfaces and into the shared
-employee-lifecycle ones -- defense-in-depth regression coverage in case
-role='hr' data or a login path for it ever reappears, not a claim that
-real users can reach this today.
+What's tested here: the generic role_required("admin")/admin_required RBAC
+machinery correctly scopes an hr-role session (stamped directly via
+session_transaction, the same way test_secops.py exercises the soc_analyst
+role) away from admin-only surfaces and into the shared employee-lifecycle
+ones -- this is what actually keeps an HR account from reaching payroll,
+company settings, etc. once logged in.
 """
 import pytest
 

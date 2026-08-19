@@ -473,11 +473,12 @@ def email_settings_step_up_clear():
 SOC_ANALYST_ROLE = "soc_analyst"
 SOC_2FA_WINDOW_SEC = 10 * 60
 
-# HR accounts are a separate credential (blueprints/hr_portal.py's /hr_login)
-# from regular admin_users rows -- same reasoning as SOC_ANALYST_ROLE: a
-# dedicated, narrowly-scoped portal (employees, attendance, leave, onboarding,
-# performance, tickets, documents) rather than the full admin session, which
-# also carries tenant/system settings, company management, and analytics.
+# HR accounts (created/managed via blueprints/admin_views.py's /hr_accounts
+# page) log in through the same general /login as admin, unlike
+# SOC_ANALYST_ROLE -- but role_required("admin") elsewhere still scopes
+# them to employees/attendance/leave/onboarding/performance/tickets/
+# documents, away from tenant/system settings, company management, and
+# analytics that a full admin session carries.
 HR_ROLE = "hr"
 
 

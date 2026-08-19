@@ -810,6 +810,7 @@ def employee_portal():
                            swap_error=request.args.get("swap_error", ""),
                            fp_enrolled=fp_enrolled,
                            fp_enabled=get_auth_config().get("fingerprint_enabled", False),
+                           attendance_auth_cfg=get_auth_config(),
                            )
 
 
@@ -1197,8 +1198,16 @@ def api_employee_auth_config():
 @employee_portal_bp.route("/api/employee/qr-face-checkin", methods=["POST"])
 @limiter.limit("20 per minute")
 def api_employee_qr_face_checkin():
-    """Public kiosk endpoint -- supports auth_combo: qr_face | qr_fingerprint | face_fingerprint."""
-    employee_id = request.form.get("employee_id", "").strip().upper()
+    """Kiosk endpoint -- supports auth_combo: qr_face | qr_fingerprint | face_fingerprint.
+
+    Also serves the logged-in employee's own dashboard "Mark Attendance"
+    widget: when an employee session exists, its employee_id always wins
+    over whatever was posted, so a logged-in employee can never mark
+    attendance under a different employee_id. With no session (the shared
+    kiosk device, which is never logged in), falls back to the posted
+    employee_id exactly as before -- unauthenticated by design there, since
+    the QR/face/fingerprint combo itself is the proof of identity."""
+    employee_id = (session.get("employee_id") or request.form.get("employee_id", "")).strip().upper()
     lat = request.form.get("lat")
     lon = request.form.get("lon")
     face_photo = request.files.get("face_photo")

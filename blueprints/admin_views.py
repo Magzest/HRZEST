@@ -29,14 +29,14 @@ from utils.auth import (
     admin_required, role_required, require_email_2fa, EMAIL_2FA_WINDOW_SEC,
     email_settings_step_up_refresh, email_settings_step_up_clear,
     security_settings_step_up_clear,
-    check_password_hash,
+    check_password_hash, generate_password_hash, HR_ROLE,
 )
 from utils.helpers import (
     tpath,
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
-    _validate_image_file, get_pending_action_counts,
+    _validate_image_file, get_pending_action_counts, _audit,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
@@ -2317,4 +2317,126 @@ def api_test_email():
     except Exception as exc:
         app_log.exception("api_test_email: SMTP delivery exception")
         return jsonify({"ok": False, "msg": f"SMTP test failed: {exc}"}), 500
+
+
+# ── HR account management ───────────────────────────────────────────────────
+# Lets an admin create/list/terminate/reactivate role='hr' rows in
+# admin_users on demand, per company requirements, rather than these being
+# fixed accounts set up once. HR accounts log in through the normal
+# /admin_login form (see blueprints/auth.py) and land on /employees, scoped
+# away from admin-only pages by the existing role_required("admin") checks
+# elsewhere -- this page only manages the account records themselves.
+
+@admin_views_bp.route("/hr_accounts")
+@role_required("admin")
+def hr_accounts():
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT username, email, is_active, created_at FROM admin_users WHERE role=%s ORDER BY created_at DESC",
+        (HR_ROLE,)
+    )
+    accounts = cursor.fetchall()
+    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
+    cursor.close()
+    db.close()
+    return render_template(
+        "hr_accounts.html",
+        accounts=accounts,
+        co=get_company_settings(),
+        pending_leaves=pending_leaves,
+        pending_resignations=pending_resignations,
+        pending_tickets=pending_tickets,
+        active_nav="hr_accounts",
+    )
+
+
+@admin_views_bp.route("/api/hr_accounts", methods=["POST"])
+@role_required("admin")
+def api_hr_accounts_create():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not re.match(r"^[a-zA-Z0-9_.-]{3,40}$", username):
+        return jsonify({"ok": False, "msg": "Username must be 3-40 characters (letters, numbers, . _ - only)."}), 400
+    if len(password) < 8:
+        return jsonify({"ok": False, "msg": "Password must be at least 8 characters."}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT 1 FROM admin_users WHERE username=%s", (username,))
+    if cursor.fetchone():
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "That username is already taken."}), 409
+
+    cursor.execute(
+        "INSERT INTO admin_users (username, password, email, role, is_active) VALUES (%s,%s,%s,%s,1)",
+        (username, generate_password_hash(password), email or None, HR_ROLE)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("create_hr_account", "admin_users", username, f"Created HR account '{username}'")
+    log_security_event(
+        "admin.hr_account_created", f"HR account '{username}' created by '{session.get('admin_username')}'",
+        level="INFO", identifier=username,
+    )
+    return jsonify({"ok": True, "msg": f"HR account '{username}' created."})
+
+
+@admin_views_bp.route("/api/hr_accounts/<username>/status", methods=["POST"])
+@role_required("admin")
+def api_hr_accounts_set_status(username):
+    data = request.get_json(silent=True) or {}
+    active = bool(data.get("active"))
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT role FROM admin_users WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row or row[0] != HR_ROLE:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "HR account not found."}), 404
+
+    cursor.execute("UPDATE admin_users SET is_active=%s WHERE username=%s", (1 if active else 0, username))
+    db.commit()
+    cursor.close()
+    db.close()
+    action = "activate_hr_account" if active else "terminate_hr_account"
+    _audit(action, "admin_users", username, f"{'Activated' if active else 'Terminated'} HR account '{username}'")
+    log_security_event(
+        "admin.hr_account_status_changed",
+        f"HR account '{username}' {'activated' if active else 'terminated'} by '{session.get('admin_username')}'",
+        level="INFO", identifier=username,
+    )
+    return jsonify({"ok": True, "msg": f"HR account '{username}' {'activated' if active else 'terminated'}."})
+
+
+@admin_views_bp.route("/api/hr_accounts/<username>/history")
+@role_required("admin")
+def api_hr_accounts_history(username):
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT 1 FROM admin_users WHERE username=%s AND role=%s", (username, HR_ROLE))
+    if not cursor.fetchone():
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "HR account not found."}), 404
+
+    cursor.execute(
+        "SELECT event_type, level, message, ip, created_at FROM security_events "
+        "WHERE identifier=%s AND event_type LIKE 'auth.%%' ORDER BY created_at DESC LIMIT 25",
+        (username,)
+    )
+    events = [
+        {"event_type": r[0], "level": r[1], "message": r[2], "ip": r[3], "created_at": str(r[4])}
+        for r in cursor.fetchall()
+    ]
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "events": events})
 

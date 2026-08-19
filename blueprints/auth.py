@@ -138,18 +138,23 @@ def admin_login():
 
         # Try admin credentials first
         with _db() as (cursor, db):
-            cursor.execute("SELECT password, COALESCE(role,'admin'), email FROM admin_users WHERE username=%s", (identifier,))
+            cursor.execute(
+                "SELECT password, COALESCE(role,'admin'), email, COALESCE(is_active,1) FROM admin_users WHERE username=%s",
+                (identifier,)
+            )
             admin_row = cursor.fetchone()
-        if admin_row and admin_row[1] in (SOC_ANALYST_ROLE, HR_ROLE) and check_password_hash(admin_row[0], password):
-            # SOC analyst and HR accounts are deliberately separate
-            # credentials (blueprints/secops.py's /sp_admin/login,
-            # blueprints/hr_portal.py's /hr_login) -- letting either also
-            # complete the regular admin login here would grant them a full
+        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
+            # SOC analyst accounts are deliberately a separate credential
+            # (blueprints/secops.py's /sp_admin/login) -- letting it also
+            # complete the regular admin login here would grant it a full
             # admin_required session (payroll, tenant settings, company
-            # management, everything), which those dedicated, narrowly-scoped
-            # logins exist specifically to avoid. Same generic error either
+            # management, everything), which that dedicated, narrowly-scoped
+            # login exists specifically to avoid. Same generic error either
             # way, no distinction leaked between "wrong role" and "wrong
-            # password".
+            # password". HR accounts use this same general login instead
+            # (see the is_active check and role='hr' redirect below) --
+            # role_required("admin") already scopes them away from
+            # admin-only pages, so a second gate here was redundant.
             _record_login_failure(identifier)
             return render_template(
                 "admin_login.html", co=co,
@@ -157,6 +162,20 @@ def admin_login():
                 show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
             )
         if admin_row and check_password_hash(admin_row[0], password):
+            if not admin_row[3]:
+                # Terminated account -- same generic error as a wrong
+                # password, so a probe can't distinguish "deactivated" from
+                # "doesn't exist"/"wrong password".
+                _record_login_failure(identifier)
+                log_security_event(
+                    "access.denied", "Login attempt against a terminated admin account",
+                    level="WARNING", identifier=identifier,
+                )
+                return render_template(
+                    "admin_login.html", co=co,
+                    error="Invalid credentials. Check your ID and password.",
+                    show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
+                )
             _clear_login_failures(identifier)
             # Upgrade legacy hash to bcrypt on first successful login
             if admin_row[0] and not admin_row[0].startswith("$2"):
@@ -175,10 +194,16 @@ def admin_login():
             session["soc_step_up_until"] = time.time() + 600
             session.permanent = True
             ensure_session_id(session)
+            log_security_event(
+                "auth.admin_login_success", f"Admin login for '{identifier}' (role={admin_row[1]})",
+                level="INFO", identifier=identifier,
+            )
             if admin_row[2]:
                 notify_if_new_login_ip(identifier, "admin", request.remote_addr, identifier, admin_row[2])
             if admin_row[1] == "superadmin":
                 return redirect(tpath("/superadmin"))
+            if admin_row[1] == HR_ROLE:
+                return redirect(tpath("/employees"))
             return redirect(tpath("/admin"))
         # Try employee credentials
         with _db() as (cursor, db):
@@ -291,7 +316,7 @@ def mfa_verify():
                 ensure_session_id(session)
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
-                return redirect(tpath("/hr" if role == "hr" else "/admin"))
+                return redirect(tpath("/employees" if role == HR_ROLE else "/admin"))
 
         log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
         return render_template("mfa_verify.html", username=username, error="Invalid code. Please try again.")

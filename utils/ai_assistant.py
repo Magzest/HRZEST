@@ -2,16 +2,17 @@
 """Employee AI chat assistant -- Q&A scoped to the logged-in employee's own
 attendance/leave data plus general HR policy questions.
 
-Two possible backends, tried in order:
+Three possible backends, tried in order:
   1. An n8n workflow, if N8N_WEBHOOK_URL is configured -- lets whoever owns
      the n8n instance build/change the actual query-answering logic (RAG
      over a knowledge base, ticket creation, HR system lookups, etc.)
      without touching this app's code at all.
-  2. The Anthropic Messages API directly, if ANTHROPIC_API_KEY is
+  2. Google's Gemini API, if GEMINI_API_KEY is configured.
+  3. The Anthropic Messages API directly, if ANTHROPIC_API_KEY is
      configured -- the original implementation, kept as a fallback so the
      chat still works before n8n is set up, or if the n8n workflow/instance
      is temporarily down.
-Both are optional; if neither is configured, ask_assistant() says so.
+All three are optional; if none are configured, ask_assistant() says so.
 
 The Anthropic call goes over HTTPS via urllib.request (stdlib) rather than
 the `anthropic` SDK -- the same pattern already used for webhook delivery in
@@ -54,6 +55,9 @@ _MODEL = "claude-sonnet-5"
 _MAX_TOKENS = 500
 _TIMEOUT_SECONDS = 20
 _N8N_TIMEOUT_SECONDS = 25  # workflows can chain several steps; a bit more slack than the direct Claude call
+
+_GEMINI_MODEL = "gemini-3.6-flash"
+_GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{_GEMINI_MODEL}:generateContent"
 MAX_MESSAGE_LEN = 1000
 MAX_HISTORY_TURNS = 6
 
@@ -75,6 +79,10 @@ Rules:
 
 def _api_key():
     return os.environ.get("ANTHROPIC_API_KEY")
+
+
+def _gemini_api_key():
+    return os.environ.get("GEMINI_API_KEY")
 
 
 def _n8n_webhook_url():
@@ -214,6 +222,50 @@ def _call_claude(system_prompt, messages):
     return text, None
 
 
+def _call_gemini(system_prompt, messages):
+    """Raw HTTPS POST to the Gemini API. Returns (text, error) -- exactly
+    one is None. Same (role, content) message shape as _call_claude;
+    translated here to Gemini's contents/systemInstruction format since
+    the two APIs don't share a request/response shape."""
+    api_key = _gemini_api_key()
+    contents = [
+        {"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]}
+        for m in messages
+    ]
+    body = json.dumps({
+        "contents": contents,
+        "systemInstruction": {"parts": [{"text": system_prompt}]},
+        "generationConfig": {"maxOutputTokens": _MAX_TOKENS},
+    }).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
+    req = urllib.request.Request(_GEMINI_API_URL, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=_TIMEOUT_SECONDS) as resp:  # nosec B310
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read().decode("utf-8"))
+            msg = err_body.get("error", {}).get("message", str(e))
+        except Exception:
+            msg = str(e)
+        return None, f"HTTP {e.code}: {msg}"
+    except urllib.error.URLError as e:
+        return None, f"network error: {e.reason}"
+    except Exception as e:
+        return None, f"unexpected error: {e}"
+
+    candidates = data.get("candidates") or []
+    if not candidates:
+        block_reason = (data.get("promptFeedback") or {}).get("blockReason")
+        return None, f"no candidates returned{' (blocked: ' + block_reason + ')' if block_reason else ''}"
+    parts = (candidates[0].get("content") or {}).get("parts") or []
+    text = "".join(p.get("text", "") for p in parts).strip()
+    return text, None
+
+
 def _call_n8n(webhook_url, emp_id, context, message, turns):
     """POST the query to the configured n8n webhook. Returns (text, error) --
     exactly one is None. See module docstring for the request/response
@@ -250,9 +302,10 @@ def _call_n8n(webhook_url, emp_id, context, message, turns):
 def ask_assistant(context: str, message: str, history: list = None, emp_id: str = None):
     """Answer one turn, scoped to `context`, with prior turns in `history`.
 
-    Tries the n8n webhook first (if N8N_WEBHOOK_URL is set), then falls
-    back to calling Claude directly (if ANTHROPIC_API_KEY is set). See the
-    module docstring for why there are two backends and how they differ.
+    Tries the n8n webhook first (if N8N_WEBHOOK_URL is set), then Gemini
+    (if GEMINI_API_KEY is set), then falls back to calling Claude directly
+    (if ANTHROPIC_API_KEY is set). See the module docstring for why there
+    are three backends and how they differ.
 
     Returns (ok: bool, reply_or_error: str).
     """
@@ -263,22 +316,32 @@ def ask_assistant(context: str, message: str, history: list = None, emp_id: str 
         return False, f"That message is too long (max {MAX_MESSAGE_LEN} characters)."
 
     n8n_url = _n8n_webhook_url()
+    has_gemini = bool(_gemini_api_key())
     has_anthropic = bool(_api_key())
-    if not n8n_url and not has_anthropic:
+    if not n8n_url and not has_gemini and not has_anthropic:
         return False, "The AI assistant isn't configured yet. Contact your admin to enable it."
 
     turns = _sanitize_history(history)
     turns.append({"role": "user", "content": message})
+    full_system_prompt = _SYSTEM_PROMPT + "\n\n--- Employee data ---\n" + context
 
     if n8n_url:
         text, err = _call_n8n(n8n_url, emp_id, context, message, turns)
         if err is None:
             return True, text
         app_log.warning("n8n webhook call failed, falling back: %s", err)
+        if not has_gemini and not has_anthropic:
+            return False, "Sorry, I couldn't reach the AI assistant right now. Please try again shortly."
+
+    if has_gemini:
+        text, err = _call_gemini(full_system_prompt, turns)
+        if err is None:
+            return True, text or "I couldn't come up with a response -- please try rephrasing."
+        app_log.warning("Gemini call failed, falling back: %s", err)
         if not has_anthropic:
             return False, "Sorry, I couldn't reach the AI assistant right now. Please try again shortly."
 
-    text, err = _call_claude(_SYSTEM_PROMPT + "\n\n--- Employee data ---\n" + context, turns)
+    text, err = _call_claude(full_system_prompt, turns)
     if err is not None:
         app_log.warning("AI assistant call failed: %s", err)
         return False, "Sorry, I couldn't reach the AI assistant right now. Please try again shortly."

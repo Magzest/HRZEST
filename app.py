@@ -1739,6 +1739,12 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_enabled SMALLINT NOT NULL DEFAULT 0",
         "ALTER TABLE performance_reviews ADD COLUMN IF NOT EXISTS potential_rating DECIMAL(3,1) DEFAULT 0",
+        # Lets an admin terminate/reactivate an HR account (or any admin_users
+        # row) without deleting it -- login history and the row itself stay
+        # intact. Existing accounts default active (1), so this is a no-op
+        # for every login path until something explicitly sets it to 0.
+        "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS is_active SMALLINT NOT NULL DEFAULT 1",
+        "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
     ]:
         try:
             cursor.execute(sql)
