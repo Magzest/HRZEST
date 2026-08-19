@@ -441,13 +441,11 @@ def get_pending_counts():
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute("""
-            SELECT
-                (SELECT COUNT(*) FROM leave_requests WHERE status='Pending'),
-                (SELECT COUNT(*) FROM resignation_requests WHERE status='Pending'),
-                (SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress'))
-        """)
-        result = tuple(cursor.fetchone())
+        # get_pending_action_counts() (below) is the actual query logic --
+        # this just adds a cache on top of its default (unscoped,
+        # open+in-progress) case, which is what every uncached call site
+        # this replaced was already computing.
+        result = tuple(get_pending_action_counts(cursor))
         cursor.close()
         db.close()
         with _settings_lock:
