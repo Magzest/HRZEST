@@ -23,10 +23,10 @@ export default function EmergencyContactScreen() {
   const [modalVisible, setModalVisible] = useState(false);
 
   const [emergency, setEmergency] = useState({
-    primaryName: user?.emergency_contact_name || "Family Contact",
-    primaryRelation: user?.emergency_contact_relation || "Parent / Guardian",
-    primaryPhone: user?.emergency_contact_phone || "Not Specified",
-    address: user?.address || "Registered Family Address",
+    primaryName: user?.emergency_contact_name || "Not Provided",
+    primaryRelation: user?.emergency_contact_relation || "Not Provided",
+    primaryPhone: user?.emergency_contact_phone || "Not Provided",
+    address: user?.address || "Not Provided",
   });
 
   const [editName, setEditName] = useState(emergency.primaryName);
@@ -40,10 +40,10 @@ export default function EmergencyContactScreen() {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
           const updated = {
-            primaryName: p.emergency_contact_name || user?.emergency_contact_name || "Family Contact",
-            primaryRelation: p.emergency_contact_relation || user?.emergency_contact_relation || "Parent / Guardian",
-            primaryPhone: p.emergency_contact_phone || user?.emergency_contact_phone || "Not Specified",
-            address: p.address || user?.address || "Registered Family Address",
+            primaryName: p.emergency_contact_name || user?.emergency_contact_name || "Not Provided",
+            primaryRelation: p.emergency_contact_relation || user?.emergency_contact_relation || "Not Provided",
+            primaryPhone: p.emergency_contact_phone || user?.emergency_contact_phone || "Not Provided",
+            address: p.address || user?.address || "Not Provided",
           };
           setEmergency(updated);
           setEditName(updated.primaryName);
@@ -57,21 +57,13 @@ export default function EmergencyContactScreen() {
   }, []);
 
   const handleSave = () => {
-    if (!editName.trim() || !editPhone.trim()) {
-      Alert.alert("Input Required", "Contact Name and Phone Number are required.");
-      return;
-    }
-
-    setEmergency((prev) => ({
-      ...prev,
-      primaryName: editName.trim(),
-      primaryRelation: editRelation.trim() || "Parent / Guardian",
-      primaryPhone: editPhone.trim(),
-      address: editAddress.trim() || "Registered Family Address",
-    }));
-
-    Alert.alert("Updated 🎉", "Emergency contact details updated successfully.");
-    setModalVisible(false);
+    // No Bearer-token-compatible endpoint exists to update emergency
+    // contact details from mobile yet -- only a session-based web route
+    // does this.
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Updating emergency contact details is only available from the web employee portal for now."
+    );
   };
 
   return (

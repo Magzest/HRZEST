@@ -84,19 +84,18 @@ export default function LeaveRequestsScreen({ navigation }) {
 
   const handleAction = async (id, actionType) => {
     const apiAction = actionType === "Approved" ? "Approved" : "Declined";
-    setRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: actionType } : r))
-    );
-
     try {
       const res = await leaveAction(id, apiAction);
       if (res?.data?.ok) {
+        setRequests((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, status: actionType } : r))
+        );
         Alert.alert("Success 🎉", `Leave request ${actionType.toLowerCase()} successfully.`);
       } else {
-        Alert.alert("Notice", `Leave request marked as ${actionType}.`);
+        Alert.alert("Failed", res?.data?.msg || `Could not mark leave request as ${actionType}.`);
       }
     } catch (e) {
-      Alert.alert("Notice", `Leave request marked as ${actionType}.`);
+      Alert.alert("Failed", e?.response?.data?.msg || `Could not mark leave request as ${actionType}. Check your connection.`);
     }
   };
 

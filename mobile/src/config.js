@@ -1,14 +1,15 @@
 // ─────────────────────────────────────────────────────────────
-//  API_BASE_URL — set this before building a release APK/IPA.
+//  API_BASE_URL is environment-driven — set EXPO_PUBLIC_API_BASE_URL
+//  and it is inlined at build time (Expo auto-loads .env / .env.production
+//  and any EXPO_PUBLIC_* var, see mobile/.env.example).
 //
-//  PRODUCTION:
-//    export const API_BASE_URL = 'https://yourdomain.com';
+//  PRODUCTION (set in .env.production or the EAS "production" build
+//  profile's env — see eas.json):
+//    EXPO_PUBLIC_API_BASE_URL=https://yourdomain.com
 //
-//  LOCAL DEV — USB debugging (adb reverse tcp:5000 tcp:5000):
-//    export const API_BASE_URL = 'http://localhost:5000';
-//
-//  LOCAL DEV — real Android device on same Wi-Fi:
-//    export const API_BASE_URL = 'http://192.168.1.x:5000';
+//  If EXPO_PUBLIC_API_BASE_URL is not set, we fall back to auto-detecting
+//  the Expo dev-server host so `expo start` keeps working out of the box —
+//  but this fallback is always http:// and is NEVER safe to ship.
 //
 //  SECURITY: Never ship a build pointing at http:// — Bearer
 //  tokens are visible to anyone on the same network.
@@ -30,8 +31,21 @@ const getDevHost = () => {
   return Platform.OS === 'android' ? '10.0.2.2' : 'localhost';
 };
 
+const ENV_API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+if (!ENV_API_BASE_URL && !__DEV__) {
+  // A production JS bundle with no configured API URL is a build
+  // misconfiguration, not something to silently paper over with the
+  // dev-host guess below.
+  console.error(
+    '[config] EXPO_PUBLIC_API_BASE_URL is not set in this production build. ' +
+    'The app will fall back to a dev host and most API calls will fail.'
+  );
+}
+
 const DEV_HOST = getDevHost();
-export const API_BASE_URL = `http://${DEV_HOST}:5000`;
+export const API_BASE_URL = ENV_API_BASE_URL || `http://${DEV_HOST}:5000`;
+export const IS_PRODUCTION_API = !!ENV_API_BASE_URL && ENV_API_BASE_URL.startsWith('https://');
 
 export const COLORS = {
   // Backgrounds

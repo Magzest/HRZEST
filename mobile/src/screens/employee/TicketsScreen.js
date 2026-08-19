@@ -61,26 +61,22 @@ export default function TicketsScreen() {
       return;
     }
     setSubmitting(true);
-    const newTicket = {
-      id: `TK-${Math.floor(1000 + Math.random() * 9000)}`,
-      category: category.toUpperCase(),
-      subject: subject.trim(),
-      description: description.trim(),
-      priority,
-      status: "Open",
-      created_at: new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }),
-    };
-
-    setTicketList((prev) => [newTicket, ...prev]);
-
     try {
-      await raiseTicket(category, subject.trim(), description.trim(), priority).catch(() => null);
-    } catch (_) {}
-
-    Alert.alert("Ticket Submitted 🎉", "Your support request has been created.");
-    setSubject("");
-    setDescription("");
-    setAttachment("");
+      const res = await raiseTicket(category, subject.trim(), description.trim(), priority);
+      if (res?.data?.ok) {
+        Alert.alert("Ticket Submitted 🎉", "Your support request has been created.");
+        setSubject("");
+        setDescription("");
+        setAttachment("");
+        // Reload from the server rather than fabricate a local entry --
+        // the create endpoint doesn't return the new ticket's real id.
+        await loadTickets();
+      } else {
+        Alert.alert("Submission Failed", res?.data?.msg || "Could not submit your ticket.");
+      }
+    } catch (e) {
+      Alert.alert("Submission Failed", e?.response?.data?.msg || "Could not submit your ticket. Check your connection.");
+    }
     setSubmitting(false);
   };
 

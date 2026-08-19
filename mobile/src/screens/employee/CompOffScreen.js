@@ -3,44 +3,67 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  View,
-  TouchableOpacity,
-  Text,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { fetchMyOvertime, requestOvertime } from "../../api/client";
+import { fetchMyOvertime, fetchEmployeeProfile } from "../../api/client";
+import { useAuth } from "../../store/AuthContext";
 
 import CompOffHeaderCard from "../../components/compoff/CompOffHeaderCard";
 import CompOffStatsGrid from "../../components/compoff/CompOffStatsGrid";
 import CompOffInfoCard from "../../components/compoff/CompOffInfoCard";
 import OvertimeHistoryCard from "../../components/compoff/OvertimeHistoryCard";
-import CompOffApplicationCard from "../../components/compoff/CompOffApplicationCard";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 
 export default function CompOffScreen() {
-  const navigation = useNavigation();
-  const today = new Date();
+  const { user } = useAuth();
   const [loading, setLoading] = React.useState(false);
-  const [overtimeData, setOvertimeData] = React.useState(null);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [overtimeRecords, setOvertimeRecords] = React.useState([]);
+  const [profile, setProfile] = React.useState(null);
 
-  const loadOvertime = async () => {
-    setLoading(true);
+  const load = async () => {
     try {
-      const res = await fetchMyOvertime();
-      if (res.data && res.data.ok) {
-        setOvertimeData(res.data);
+      const [otRes, profRes] = await Promise.all([
+        fetchMyOvertime(),
+        fetchEmployeeProfile().catch(() => null),
+      ]);
+      if (otRes?.data?.ok && Array.isArray(otRes.data.records)) {
+        setOvertimeRecords(otRes.data.records);
       }
-    } catch {}
-    setLoading(false);
+      if (profRes?.data?.ok && profRes?.data?.profile) {
+        setProfile(profRes.data.profile);
+      }
+    } catch (_) {}
   };
 
   React.useEffect(() => {
-    loadOvertime();
+    setLoading(true);
+    load().finally(() => setLoading(false));
   }, []);
-  const overtimeRecords = overtimeData?.overtime_records || overtimeData?.records || [];
-  const applications = overtimeData?.compoff_applications || overtimeData?.applications || [];
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
+  // Real total from actual overtime records. No employee-facing API exposes
+  // a comp-off day balance (only an admin-only endpoint does), so that
+  // figure is shown as "--" rather than a fabricated number.
+  const totalOtHours = (
+    overtimeRecords.reduce((sum, r) => sum + (r.ot_minutes || 0), 0) / 60
+  ).toFixed(1);
+
+  // Map the real /api/employee/my_overtime shape onto what
+  // OvertimeHistoryCard renders. It also displays "Comp-off Earned" and
+  // "Approved By" -- neither exists in this API response, so those cells
+  // are left blank rather than filled with invented values.
+  const historyItems = overtimeRecords.map((r) => ({
+    ...r,
+    day: r.date ? new Date(r.date).toLocaleDateString("en-US", { weekday: "short" }) : "",
+    hours: r.ot_minutes ? (r.ot_minutes / 60).toFixed(1) : "0.0",
+  }));
 
   return (
   <LinearGradient
@@ -57,22 +80,29 @@ export default function CompOffScreen() {
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
     >
 
-      {/* Your existing components */}
+      <CompOffHeaderCard
+        employeeName={profile?.name || user?.name}
+        designation={profile?.role}
+        department={profile?.department}
+        availableDays="--"
+      />
 
-      <CompOffHeaderCard />
-
-      <CompOffStatsGrid />
+      <CompOffStatsGrid
+        otHours={totalOtHours}
+        availableDays="--"
+        usedDays="--"
+        earnedDays="--"
+      />
 
       <CompOffInfoCard />
 
       <OvertimeHistoryCard
-        records={overtimeRecords}
-      />
-
-      <CompOffApplicationCard
-        applications={applications}
+        records={historyItems}
       />
 
     </ScrollView>
@@ -90,56 +120,5 @@ const styles = StyleSheet.create({
   paddingHorizontal: 18,
   paddingTop: 0,
   paddingBottom: 120,
-},
-  header: {
-  paddingHorizontal: 20,
-  paddingTop: 56,
-  paddingBottom: 18,
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-},
-
-headerCenter: {
-  flex: 1,
-  alignItems: "center",
-},
-
-iconButton: {
-  width: 46,
-  height: 46,
-  borderRadius: 14,
-  backgroundColor: "#FFFFFF",
-  justifyContent: "center",
-  alignItems: "center",
-
-  shadowColor: "#000",
-  shadowOpacity: 0.05,
-  shadowRadius: 8,
-  shadowOffset: {
-    width: 0,
-    height: 3,
-  },
-
-  elevation: 4,
-},
-
-smallTitle: {
-  fontSize: 13,
-  color: "#64748B",
-  fontWeight: "600",
-},
-
-title: {
-  marginTop: 3,
-  fontSize: 18,
-  color: "#0F172A",
-  fontWeight: "800",
-},
-
-date: {
-  marginTop: 4,
-  fontSize: 13,
-  color: "#94A3B8",
 },
 });

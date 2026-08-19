@@ -9,13 +9,19 @@ import { useAuth } from "../../store/AuthContext";
 
 export default function DigitalIdCardModal({ visible, employee, onClose }) {
   const { user } = useAuth();
+  // Hooks must run unconditionally on every render -- the early
+  // `if (!employee) return null` used to sit above this useState call,
+  // which throws a "Rendered fewer hooks than expected" error the moment
+  // `employee` is ever null on one render and non-null on another (e.g.
+  // while ProfileScreen's data is still loading).
+  const empId = employee?.employeeId || employee?.employee_id || "EMP-1001";
+  const serverQrUri = `${API_BASE_URL}/static/qrcodes/${empId}.png`;
+  const [qrUri, setQrUri] = React.useState(serverQrUri);
+
   if (!employee) return null;
 
   const companyName = (employee.company || user?.company || "Enterprise Workforce Platform").toUpperCase();
-  const empId = employee.employeeId || employee.employee_id || "EMP-1001";
-  const serverQrUri = `${API_BASE_URL}/static/qrcodes/${empId}.png`;
   const fallbackQrUri = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(empId)}`;
-  const [qrUri, setQrUri] = React.useState(serverQrUri);
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>

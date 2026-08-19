@@ -67,9 +67,8 @@ function TicketCard({ ticket, onUpdate }) {
       } else {
         Alert.alert("Error", res?.data?.msg || "Failed to update ticket.");
       }
-    } catch (_) {
-      Alert.alert("Updated", `Ticket #${ticket.id} status set to ${status}.`);
-      onUpdate();
+    } catch (e) {
+      Alert.alert("Error", e?.response?.data?.msg || "Failed to update ticket. Check your connection.");
     } finally {
       setSaving(false);
     }

@@ -1,142 +1,44 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  View,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
+import EmptyState from "../../components/ui/EmptyState";
+import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
 
 import OnboardingStatusCard from "../../components/onboarding/OnboardingStatusCard";
-import ProgressCard from "../../components/onboarding/ProgressCard";
-import CompanyInfoCard from "../../components/onboarding/CompanyInfoCard";
-import HRContactCard from "../../components/onboarding/HRContactCard";
-import TimelineCard from "../../components/onboarding/TimelineCard";
-import ChecklistCard from "../../components/onboarding/ChecklistCard";
-import NextActionCard from "../../components/onboarding/NextActionCard";
 
+import { useAuth } from "../../store/AuthContext";
+import { fetchEmployeeProfile } from "../../api/client";
+
+// No Bearer-token-compatible endpoint exposes an employee's own onboarding
+// progress/checklist/timeline (only a session-based web route, /my_onboarding,
+// does) -- so this screen shows the real employee identity and an honest
+// "not available" state instead of the fully hardcoded "John Doe / 72% /
+// Priya Sharma" content it used to have.
 export default function OnboardingScreen() {
-  const onboarding = {
-    employeeName: "John Doe",
-    employeeId: "EMP001",
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    status: "In Progress",
-    progress: 72,
-
-    department: "Engineering",
-    designation: "Software Engineer",
-
-    manager: "Rakesh Sharma",
-
-    officeLocation: "Hyderabad",
-
-    joiningDate: "15 June 2026",
-
-    workMode: "Hybrid",
-
-    employmentType: "Full Time",
-
-    shift: "General Shift",
-
-    hr: {
-      name: "Priya Sharma",
-
-      designation: "HR Executive",
-
-      email: "hr@company.com",
-
-      phone: "+91 9876543210",
-    },
-  };
-
-  const timeline = [
-    {
-      title: "Offer Accepted",
-      date: "10 Jun 2026",
-      status: "Completed",
-    },
-
-    {
-      title: "Documents Submitted",
-      date: "12 Jun 2026",
-      status: "Completed",
-    },
-
-    {
-      title: "HR Verification",
-      date: "13 Jun 2026",
-      status: "Completed",
-    },
-
-    {
-      title: "Laptop Allocation",
-      date: "15 Jun 2026",
-      status: "Completed",
-    },
-
-    {
-      title: "Team Introduction",
-      date: "20 Jun 2026",
-      status: "Pending",
-    },
-
-    {
-      title: "Technical Training",
-      date: "24 Jun 2026",
-      status: "Pending",
-    },
-
-    {
-      title: "Project Allocation",
-      date: "30 Jun 2026",
-      status: "Pending",
-    },
-  ];
-
-  const checklist = [
-    {
-      title: "Accept Offer Letter",
-      subtitle: "Employment contract signed",
-      completed: true,
-    },
-
-    {
-      title: "Submit Aadhaar Card",
-      subtitle: "Identity verification",
-      completed: true,
-    },
-
-    {
-      title: "Submit PAN Card",
-      subtitle: "Tax verification",
-      completed: true,
-    },
-
-    {
-      title: "Upload Degree Certificate",
-      subtitle: "Educational verification",
-      completed: true,
-    },
-
-    {
-      title: "Complete HR Orientation",
-      subtitle: "Mandatory HR induction",
-      completed: false,
-    },
-
-    {
-      title: "Meet Reporting Manager",
-      subtitle: "Manager introduction",
-      completed: false,
-    },
-
-    {
-      title: "Complete Technical Training",
-      subtitle: "Training module",
-      completed: false,
-    },
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        setLoading(true);
+        try {
+          const res = await fetchEmployeeProfile();
+          if (!cancelled && res?.data?.ok) setProfile(res.data.profile);
+        } catch (_) {}
+        if (!cancelled) setLoading(false);
+      })();
+      return () => { cancelled = true; };
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -149,59 +51,23 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
-        <OnboardingStatusCard
-          employeeName={onboarding.employeeName}
-          employeeId={onboarding.employeeId}
-          status={onboarding.status}
-        />
+        {loading ? (
+          <LoadingSkeleton height={110} radius={24} />
+        ) : (
+          <>
+            <OnboardingStatusCard
+              employeeName={profile?.name || user?.name || "Employee"}
+              employeeId={profile?.employee_id || user?.employeeId || "-"}
+              status="Active"
+            />
 
-        <ProgressCard
-          progress={onboarding.progress}
-        />
-
-        <CompanyInfoCard
-          designation={onboarding.designation}
-          department={onboarding.department}
-          manager={onboarding.manager}
-          officeLocation={onboarding.officeLocation}
-          joiningDate={onboarding.joiningDate}
-          workMode={onboarding.workMode}
-          employmentType={onboarding.employmentType}
-          shift={onboarding.shift}
-        />
-
-        <HRContactCard
-          name={onboarding.hr.name}
-          designation={onboarding.hr.designation}
-          email={onboarding.hr.email}
-          phone={onboarding.hr.phone}
-          onCall={() => {
-            console.log("Call HR");
-          }}
-          onEmail={() => {
-            console.log("Email HR");
-          }}
-        />
-
-        <TimelineCard
-          timeline={timeline}
-        />
-
-        <ChecklistCard
-          items={checklist}
-        />
-
-        <NextActionCard
-          title="Complete HR Orientation"
-          description="Attend the mandatory HR onboarding session to learn about company policies, benefits, and workplace guidelines."
-          dueDate="24 June 2026"
-          priority="High"
-          onPress={() => {
-            console.log("Continue Onboarding");
-          }}
-        />
-
-        <View style={{ height: 40 }} />
+            <EmptyState
+              icon="checkmark-done-circle-outline"
+              title="Onboarding tracker isn't on mobile yet"
+              description="Your onboarding checklist, timeline and HR contact are managed on the web portal for now. Check there for your current progress."
+            />
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -215,5 +81,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 18,
     paddingBottom: 120,
+    paddingTop: 18,
   },
 });

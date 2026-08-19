@@ -22,7 +22,6 @@ import MonthYearSelector from "../../components/admin/MonthYearSelector";
 import CompOffSegmentTabs from "../../components/admin/CompOffSegmentTabs";
 import OvertimeHistoryCard from "../../components/admin/OvertimeHistoryCard";
 import CompOffBalanceCard from "../../components/admin/CompOffBalanceCard";
-import CompOffApplicationCard from "../../components/admin/CompOffApplicationCard";
 import CompOffQuickActions from "../../components/admin/CompOffQuickActions";
 import CompOffAnalyticsCard from "../../components/admin/CompOffAnalyticsCard";
 import CompOffInfoCard from "../../components/admin/CompOffInfoCard";
@@ -33,11 +32,29 @@ import CompOffEmptyState from "../../components/admin/CompOffEmptyState";
 import COMPOFF_THEME from "../../constants/compOffTheme";
 import { fetchOvertime, fetchCompOff } from "../../api/client";
 
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const monthOptions = MONTH_NAMES;
+const currentYearNum = new Date().getFullYear();
+const yearOptions = [currentYearNum - 1, currentYearNum, currentYearNum + 1].map(String);
+
+// No backend concept of comp-off policy text exists (same as the Policies
+// screen) -- this is legitimate static reference content, not fabricated
+// business data.
+const compOffPolicies = [
+  { title: "Overtime Eligibility", description: "Overtime must be pre-approved and logged on the date it was worked." },
+  { title: "Comp-Off Conversion", description: "Approved overtime accrues as comp-off days, tracked per employee." },
+  { title: "Expiry", description: "Unused comp-off balances should be used within the current quarter per company policy." },
+];
+
 export default function CompOffScreen({
   navigation,
 }) {
-  const [selectedMonth, setSelectedMonth] = useState("August");
-  const [selectedYear, setSelectedYear] = useState("2026");
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(MONTH_NAMES[now.getMonth()]);
+  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedTab, setSelectedTab] = useState("overtime");
   const [filterVisible, setFilterVisible] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("All");
@@ -80,27 +97,44 @@ export default function CompOffScreen({
   }, []);
 
   const compOffSummary = useMemo(() => {
-    const totalOtHours = overtimeData.reduce((acc, curr) => acc + Number(curr.hours || curr.ot_hours || 0), 0);
+    const totalOtHours = overtimeData.reduce((acc, curr) => acc + Number(curr.hours || 0), 0);
     const approvedRequests = overtimeData.filter((item) => item.status === "Approved").length;
     const pendingApproval = overtimeData.filter((item) => item.status === "Pending").length;
     const rejectedRequests = overtimeData.filter((item) => item.status === "Rejected").length;
-    const compOffAvailable = balancesData.reduce((acc, curr) => acc + Number(curr.balance || 0), 0);
-    const otPay = totalOtHours * 250;
+    // /api/compoff returns balance_days per employee -- no per-employee OT
+    // pay rate is exposed by any Bearer-token API, so there's no honest way
+    // to compute a rupee OT-pay figure here (it used to be a hardcoded
+    // ₹250/hr guess, which has been removed rather than kept as fiction).
+    const compOffAvailable = balancesData.reduce((acc, curr) => acc + Number(curr.balance_days || 0), 0);
     return {
       totalOtHours,
       approvedRequests,
       pendingApproval,
       rejectedRequests,
       compOffAvailable,
-      otPay: "₹" + otPay.toLocaleString("en-IN"),
     };
   }, [overtimeData, balancesData]);
 
   const analytics = useMemo(() => {
     const totalRecords = overtimeData.length;
     const averageHours = totalRecords > 0 ? (compOffSummary.totalOtHours / totalRecords).toFixed(1) : "0.0";
-    return { averageHours };
-  }, [overtimeData, compOffSummary]);
+    const approvalRate = totalRecords > 0
+      ? Math.round((compOffSummary.approvedRequests / totalRecords) * 100)
+      : 0;
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weeklyHours = overtimeData
+      .filter((item) => item.date && new Date(item.date) >= weekAgo)
+      .reduce((acc, curr) => acc + Number(curr.hours || 0), 0);
+    const monthlyHours = overtimeData
+      .filter((item) => {
+        if (!item.date) return false;
+        const d = new Date(item.date);
+        return d.getMonth() === MONTH_NAMES.indexOf(selectedMonth) && String(d.getFullYear()) === selectedYear;
+      })
+      .reduce((acc, curr) => acc + Number(curr.hours || 0), 0);
+    return { averageHours, approvalRate, weeklyHours, monthlyHours };
+  }, [overtimeData, compOffSummary, selectedMonth, selectedYear]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -158,7 +192,7 @@ export default function CompOffScreen({
           totalHours={
             compOffSummary.totalOtHours
           }
-          otPay={compOffSummary.otPay}
+          totalRecords={overtimeData.length}
           pendingApproval={
             compOffSummary.pendingApproval
           }
@@ -249,61 +283,31 @@ export default function CompOffScreen({
 
           <>
 
-            {compOffBalances.map((balance) => (
-
-              <CompOffBalanceCard
-                key={balance.id}
-                availableDays={
-                  balance.availableDays
-                }
-                usedDays={
-                  balance.usedDays
-                }
-                remainingDays={
-                  balance.remainingDays
-                }
-                expiryDate={
-                  balance.expiryDate
-                }
+            {balancesData.length === 0 ? (
+              <CompOffEmptyState
+                title="No Comp-off Balances"
+                description="No employees have a comp-off balance on record yet."
               />
+            ) : (
+              balancesData.map((balance) => (
 
-            ))}
-
-            {filteredHistory
-              .filter(
-                (item) =>
-                  item.compOffEarned > 0
-              )
-              .map((item) => (
-
-                <CompOffApplicationCard
-                  key={`co-${item.id}`}
-                  item={{
-                    employeeName:
-                      item.employeeName,
-
-                    department:
-                      item.department,
-
-                    startDate:
-                      item.date,
-
-                    endDate:
-                      item.date,
-
-                    days:
-                      item.compOffEarned,
-
-                    reason:
-                      item.reason,
-
-                    status:
-                      item.status,
-                  }}
-                  onPress={() => {}}
+                <CompOffBalanceCard
+                  key={balance.id}
+                  employeeName={balance.name}
+                  department={balance.department}
+                  availableDays={
+                    balance.earned_days
+                  }
+                  usedDays={
+                    balance.used_days
+                  }
+                  remainingDays={
+                    balance.balance_days
+                  }
                 />
 
-              ))}
+              ))
+            )}
 
             <CompOffInfoCard
               policies={compOffPolicies}

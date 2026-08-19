@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  RefreshControl,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -214,6 +215,9 @@ export default function LeaveScreen() {
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={histLoading} onRefresh={loadHistory} />
+          }
         >
           {success && (
             <View style={styles.successBanner}>
@@ -222,25 +226,28 @@ export default function LeaveScreen() {
             </View>
           )}
 
-          {/* Leave Quota Balance Cards */}
-          <Text style={styles.sectionLabel}>LEAVE BALANCES</Text>
+          {/* Leave summary for this year -- real counts from the server.
+              Per-type quota balances (e.g. "8 of 12 Casual Leave left")
+              aren't exposed by any employee-facing API yet, so we show
+              request-status counts instead of inventing numbers. */}
+          <Text style={styles.sectionLabel}>THIS YEAR</Text>
           <View style={styles.balanceRow}>
-            <View style={[styles.balCard, { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" }]}>
-              <Ionicons name="briefcase" size={18} color="#1D4ED8" />
-              <Text style={[styles.balNum, { color: "#1E40AF" }]}>8 / 12</Text>
-              <Text style={[styles.balLabel, { color: "#1D4ED8" }]}>Casual Leave</Text>
+            <View style={[styles.balCard, { backgroundColor: "#DCFCE7", borderColor: "#BBF7D0" }]}>
+              <Ionicons name="checkmark-circle" size={18} color="#15803D" />
+              <Text style={[styles.balNum, { color: "#166534" }]}>{history?.summary?.approved ?? "—"}</Text>
+              <Text style={[styles.balLabel, { color: "#15803D" }]}>Approved</Text>
             </View>
 
-            <View style={[styles.balCard, { backgroundColor: "#F0FDFA", borderColor: "#99F6E4" }]}>
-              <Ionicons name="medical" size={18} color="#0D9488" />
-              <Text style={[styles.balNum, { color: "#115E59" }]}>6 / 10</Text>
-              <Text style={[styles.balLabel, { color: "#0D9488" }]}>Sick Leave</Text>
+            <View style={[styles.balCard, { backgroundColor: "#FEF9C3", borderColor: "#FDE047" }]}>
+              <Ionicons name="time" size={18} color="#A16207" />
+              <Text style={[styles.balNum, { color: "#854D0E" }]}>{history?.summary?.pending ?? "—"}</Text>
+              <Text style={[styles.balLabel, { color: "#A16207" }]}>Pending</Text>
             </View>
 
-            <View style={[styles.balCard, { backgroundColor: "#FEF3C7", borderColor: "#FDE68A" }]}>
-              <Ionicons name="star" size={18} color="#D97706" />
-              <Text style={[styles.balNum, { color: "#92400E" }]}>12 / 15</Text>
-              <Text style={[styles.balLabel, { color: "#D97706" }]}>Earned Leave</Text>
+            <View style={[styles.balCard, { backgroundColor: "#FEE2E2", borderColor: "#FECACA" }]}>
+              <Ionicons name="close-circle" size={18} color="#B91C1C" />
+              <Text style={[styles.balNum, { color: "#991B1B" }]}>{history?.summary?.rejected ?? "—"}</Text>
+              <Text style={[styles.balLabel, { color: "#B91C1C" }]}>Rejected</Text>
             </View>
           </View>
 
@@ -355,7 +362,13 @@ export default function LeaveScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       ) : (
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={histLoading} onRefresh={loadHistory} />
+          }
+        >
           {/* Status Filter Chips */}
           <View style={styles.filterRow}>
             {["All", "Pending", "Approved", "Rejected"].map((st) => (

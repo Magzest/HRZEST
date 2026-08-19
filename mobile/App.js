@@ -7,11 +7,15 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
 import LaunchCountdownScreen from "./src/screens/LaunchCountdownScreen";
 import LoginScreen from "./src/screens/LoginScreen";
+import AppLockScreen from "./src/screens/AppLockScreen";
 import AdminDrawerNavigator from "./src/navigation/AdminDrawerNavigator";
 import EmployeeDrawerNavigator from "./src/navigation/EmployeeDrawerNavigator";
+import { initCrashReporting } from "./src/utils/crashReporting";
+
+initCrashReporting();
 
 function RootNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, locked } = useAuth();
   const [showLaunch, setShowLaunch] = useState(true);
 
   if (loading) {
@@ -38,6 +42,10 @@ function RootNavigator() {
       );
     }
     return <LoginScreen />;
+  }
+
+  if (locked) {
+    return <AppLockScreen />;
   }
 
   if (user.role === "admin") {

@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AdminHeader from "../../components/admin/AdminHeader";
 import THEME from "../../constants/theme";
 import { useAuth } from "../../store/AuthContext";
+import { fetchShifts, createShift } from "../../api/client";
 
 export default function SettingsScreen({ navigation, route }) {
   const { signOut } = useAuth();
@@ -40,12 +41,11 @@ export default function SettingsScreen({ navigation, route }) {
   const [companyAddress, setCompanyAddress] = useState("123 Corporate Blvd, Suite 400");
   const [workingDays, setWorkingDays] = useState("Mon - Fri");
 
-  // Form States - Shifts
-  const [shifts, setShifts] = useState([
-    { id: 1, name: "General Shift", start: "09:00 AM", end: "06:00 PM", half: "01:00 PM" },
-    { id: 2, name: "Morning Shift", start: "07:00 AM", end: "04:00 PM", half: "11:30 AM" },
-    { id: 3, name: "Evening Shift", start: "02:00 PM", end: "11:00 PM", half: "06:30 PM" },
-  ]);
+  // Shifts -- real data from /api/shifts (Bearer-compatible), not the
+  // hardcoded 3-shift list this used to show regardless of what actually
+  // existed in the database.
+  const [shifts, setShifts] = useState([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
   const [gracePeriod, setGracePeriod] = useState("15");
   const [halfDayHours, setHalfDayHours] = useState("4.0");
 
@@ -96,8 +96,17 @@ export default function SettingsScreen({ navigation, route }) {
     { id: "profile", label: "Admin Profile", icon: "person" },
   ];
 
+  // Every one of these settings sections (Company Info, Geofence, Salary
+  // Rules, Notification prefs, etc.) is backed only by session-based web
+  // routes (/save_company_info, /save_geo_radius, /save_salary_rules, ...)
+  // -- none accept a Bearer token, so there's no way to actually persist
+  // any of this from mobile. This used to claim "settings updated
+  // successfully" unconditionally with zero API call for every section.
   const handleSave = (sectionName) => {
-    Alert.alert("Success", `${sectionName} settings updated successfully!`);
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      `Saving ${sectionName.toLowerCase()} is only available from the web admin dashboard for now.`
+    );
   };
 
   const handleChangePassword = () => {
@@ -109,22 +118,68 @@ export default function SettingsScreen({ navigation, route }) {
       Alert.alert("Error", "New password and confirmation do not match.");
       return;
     }
-    Alert.alert("Success", "Admin password changed successfully.");
-    setCurrentPass("");
-    setNewPass("");
-    setConfirmPass("");
+    // No Bearer-token-compatible endpoint exists to change the admin
+    // password from mobile -- /change_admin_password is a session-based
+    // web route only. This used to claim "Admin password changed
+    // successfully" with zero API call, which is actively dangerous: an
+    // admin could believe their password changed when it never did.
+    Alert.alert(
+      "Not Available on Mobile Yet",
+      "Changing the admin password is only available from the web admin dashboard for now."
+    );
   };
 
-  const handleAddShift = () => {
+  // Converts a "09:00 AM" / "6:30 PM" style string (what this form collects)
+  // into the 24-hour "HH:MM" the API expects (matches what /api/shifts GET
+  // already returns, so the round-trip is consistent).
+  const to24Hour = (t) => {
+    const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(t.trim());
+    if (!m) return t.trim();
+    let [, h, min, period] = m;
+    h = parseInt(h, 10);
+    if (period.toUpperCase() === "PM" && h !== 12) h += 12;
+    if (period.toUpperCase() === "AM" && h === 12) h = 0;
+    return `${String(h).padStart(2, "0")}:${min}`;
+  };
+
+  const loadShifts = async () => {
+    setShiftsLoading(true);
+    try {
+      const res = await fetchShifts();
+      if (res?.data?.ok && Array.isArray(res.data.shifts)) {
+        setShifts(res.data.shifts);
+      }
+    } catch (_) {}
+    setShiftsLoading(false);
+  };
+
+  useEffect(() => {
+    loadShifts();
+  }, []);
+
+  const handleAddShift = async () => {
     if (!newShiftName.trim()) {
       Alert.alert("Error", "Please enter shift name.");
       return;
     }
-    const newId = Date.now();
-    setShifts([...shifts, { id: newId, name: newShiftName, start: newShiftStart, end: newShiftEnd, half: "01:00 PM" }]);
-    setAddShiftModal(false);
-    setNewShiftName("");
-    Alert.alert("Success", `Shift "${newShiftName}" created successfully!`);
+    try {
+      const start24 = to24Hour(newShiftStart);
+      const end24 = to24Hour(newShiftEnd);
+      // No half-day time field in this form yet -- defaults to the
+      // midpoint-ish 13:00, matching what the shift list already implies
+      // as a typical half-day cutoff.
+      const res = await createShift(newShiftName.trim(), start24, "13:00", end24);
+      if (res?.data?.ok) {
+        Alert.alert("Success", `Shift "${newShiftName}" created successfully!`);
+        setAddShiftModal(false);
+        setNewShiftName("");
+        await loadShifts();
+      } else {
+        Alert.alert("Failed", res?.data?.msg || "Could not create shift.");
+      }
+    } catch (e) {
+      Alert.alert("Failed", e?.response?.data?.msg || "Could not create shift.");
+    }
   };
 
   return (

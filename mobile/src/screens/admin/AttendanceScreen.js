@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   FlatList,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -44,9 +45,17 @@ export default function AttendanceScreen({ navigation }) {
     holidays: 0,
   });
 
+  const [refreshing, setRefreshing] = useState(false);
+
   useEffect(() => {
     loadData();
   }, [selectedMonth, selectedYear]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
 
   const loadData = async () => {
     try {
@@ -84,29 +93,19 @@ export default function AttendanceScreen({ navigation }) {
         }));
         setEmployees(mapped);
       } else {
+        // The real monthly report call failed or returned an unexpected
+        // shape -- this used to fabricate a full month of attendance
+        // (22 full days, 100%) for every "Active" employee based on
+        // nothing but their status flag. Showing an honest empty state
+        // instead of invented per-employee attendance records.
         const total = empList.length || dash.total_employees || 0;
-        const present = dash.present || 0;
-        const pct = total > 0 ? Math.round((present / total) * 100) : 0;
-
         setSummary({
           employees: total,
           workingDays: dash.working_days || 26,
-          attendance: pct,
+          attendance: 0,
           holidays: dash.holidays || 0,
         });
-
-        const mapped = empList.map((emp, i) => ({
-          id: emp.employee_id || `EMP-${1001 + i}`,
-          name: emp.name,
-          full: emp.status === "Active" ? 22 : 0,
-          late: 0,
-          half: 0,
-          absent: emp.status === "Active" ? 0 : 1,
-          working: 26,
-          percent: emp.status === "Active" ? 100 : 0,
-          status: emp.status === "Active" ? "Present" : "Absent",
-        }));
-        setEmployees(mapped);
+        setEmployees([]);
       }
     } catch (e) {
       setEmployees([]);
@@ -184,7 +183,13 @@ export default function AttendanceScreen({ navigation }) {
           onMenu={() => navigation.dispatch(DrawerActions.openDrawer())}
         />
 
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
           {/* Quick Mark Attendance Banner */}
           <TouchableOpacity
             style={styles.markBanner}
