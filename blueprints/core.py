@@ -7,7 +7,7 @@ last routes drained out of app.py, which now holds only shared setup
 import time
 import secrets
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, Response, redirect
+from flask import Blueprint, request, session, jsonify, render_template, Response
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import (
@@ -15,7 +15,7 @@ from utils.auth import (
     _check_login_lockout, _record_login_failure, _clear_login_failures,
 )
 from utils.helpers import (
-    tpath, _db, get_auth_config, get_company_settings, validate_employee_email_domain,
+    _db, get_auth_config, validate_employee_email_domain,
     employee_login_url, get_pending_counts,
 )
 from utils.email_utils import get_email_config, send_email_smtp
@@ -46,48 +46,10 @@ def csp_report():
 
 @core_bp.route("/")
 def home():
-    # session["tenant_db"] is only ever set by _resolve_tenant() (app.py)
-    # when the request resolved to a real tenant (either the URL carried a
-    # recognized company slug, or -- the case that matters here -- an
-    # earlier request in this same session already did, and it's cached).
-    # Its absence means this visit is on the bare/apex domain with no live
-    # tenant session at all. That's the signal used to decide "marketing
-    # landing page" vs. "this company's own portal", without a second
-    # lookup.
-    #
-    # Note this specific route can be hit with NO company slug in the URL
-    # even while session["tenant_db"] is set -- e.g. someone already
-    # logged into a company bookmarks/types the bare www.hrzest.com and
-    # lands here directly. tpath() reflects the *current* request's
-    # (slug-less) prefix, which would build an unprefixed destination and
-    # lose the company slug from the URL bar -- so these redirects build
-    # the destination from the session's own bound tenant_slug instead of
-    # tpath(), to always land back on that company's own path.
-    if session.get("tenant_db"):
-        slug = session.get("tenant_slug")
-        prefix = f"/{slug}" if slug else ""
-        co = get_company_settings()
-        if not co.get("setup_done"):
-            # /setup (the old first-run wizard) was removed when the app
-            # moved to self-serve signup via /create_org -- this redirect
-            # target was never updated to match, so it pointed at a page
-            # that no longer exists. /create_org is apex-level (no tenant
-            # slug prefix), unlike the other redirects in this block.
-            return redirect("/create_org")
-        if session.get("admin_logged_in"):
-            return redirect(prefix + "/admin")
-        if session.get("employee_id"):
-            return redirect(prefix + "/employee_portal")
-        return redirect(prefix + "/login")
-
-    # Apex/marketing domain: send anyone with a live session straight to
-    # where they were going; anonymous visitors get the public pitch.
-    if session.get("admin_logged_in"):
-        return redirect(tpath("/admin"))
-    if session.get("employee_id"):
-        return redirect(tpath("/employee_portal"))
-    if session.get("platform_admin_logged_in"):
-        return redirect(tpath("/super_admin"))
+    # Always show the marketing landing page at "/", regardless of tenant
+    # or session state -- logged-in admins/employees and tenant-slug
+    # visits used to be auto-redirected straight to their portal/login;
+    # now everyone lands here first and clicks through themselves.
     from utils.analytics import track_page_view
     from utils.plan_limits import PER_EMPLOYEE_PAISE
     track_page_view("/")
