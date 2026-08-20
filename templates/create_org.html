@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -15,12 +15,21 @@
        differently-themed page bolted on. Only page-specific layout/component
        rules live here. */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }
-    html, body { min-height: 100vh; background: var(--bg-secondary); color: var(--text-main); }
+    html, body { min-height: 100vh; color: var(--text-main); }
+    body {
+      background:
+        linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+      background-attachment: fixed;
+    }
 
     /* ── Header ── */
     .top-nav {
       display: flex; justify-content: space-between; align-items: center;
       max-width: 1180px; margin: 0 auto; padding: 22px 24px;
+      position: sticky; top: 0; z-index: 10;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-color);
     }
     .brand-logo {
       display: flex; align-items: center; gap: 10px;
@@ -30,7 +39,7 @@
       width: 38px; height: 38px; border-radius: var(--radius-sm);
       background: var(--gradient-brand);
       display: flex; align-items: center; justify-content: center;
-      font-size: 19px; color: #fff; box-shadow: var(--shadow-sm);
+      font-size: 19px; color: #fff; box-shadow: 0 4px 18px rgba(79, 70, 229, 0.35);
     }
     .nav-link-btn {
       display: inline-flex; align-items: center; gap: 8px;
@@ -38,83 +47,54 @@
       padding: 8px 16px; border-radius: var(--radius-sm); background: var(--bg-card);
       border: 1px solid var(--border-color); transition: var(--transition-fast);
     }
-    .nav-link-btn:hover { color: var(--accent-cyan); border-color: var(--border-color-glow); }
+    .nav-link-btn:hover { color: var(--accent-cyan); border-color: var(--border-color-glow); box-shadow: var(--shadow-sm); }
 
-    /* ── Main Layout Grid ── */
+    /* ── Main Layout ── */
     .page-container {
-      max-width: 1180px; margin: 0 auto; padding: 16px 24px 64px;
-      display: grid; grid-template-columns: 1fr 1.1fr; gap: 56px; align-items: start;
-    }
-    @media (max-width: 960px) {
-      .page-container { grid-template-columns: 1fr; gap: 32px; }
+      max-width: 560px; margin: 0 auto; padding: 56px 24px 72px;
     }
 
-    /* ── Left Column: Value Proposition ── */
-    .value-props { padding-top: 24px; position: sticky; top: 24px; }
-    .hero-tag {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 6px 14px; border-radius: var(--radius-full);
-      background: rgba(79, 70, 229, 0.08); border: 1px solid var(--border-color-glow);
-      color: var(--accent-cyan); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.7px;
-      margin-bottom: 18px;
-    }
-    .headline {
-      font-family: var(--font-heading);
-      font-size: 34px; font-weight: 800; line-height: 1.2; letter-spacing: -0.5px;
-      margin-bottom: 14px; color: var(--text-main);
-    }
-    .headline .gradient-text {
+    .page-intro { text-align: center; margin-bottom: 32px; }
+    .page-intro .intro-icon {
+      width: 52px; height: 52px; margin: 0 auto 18px;
+      border-radius: var(--radius-md);
       background: var(--gradient-brand);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; color: #fff;
+      box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
     }
-    .subheadline {
-      font-size: 15px; color: var(--text-muted); line-height: 1.6; margin-bottom: 32px;
+    .page-intro h1 {
+      font-family: var(--font-heading);
+      font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
+      color: var(--text-main); margin-bottom: 8px;
     }
+    .page-intro p { font-size: 14.5px; color: var(--text-muted); }
 
-    .feature-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 32px; }
-    .feature-item { display: flex; align-items: center; gap: 14px; }
-    .feature-icon {
-      width: 38px; height: 38px; border-radius: var(--radius-sm); flex-shrink: 0;
-      background: rgba(79, 70, 229, 0.08); border: 1px solid var(--border-color-glow);
-      color: var(--accent-cyan); display: flex; align-items: center; justify-content: center; font-size: 18px;
-    }
-    .feature-text h4 { font-size: 14px; font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
-    .feature-text p { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
-
-    .trust-badges {
-      padding: 16px; border-radius: var(--radius-md);
-      background: var(--bg-card); border: 1px solid var(--border-color);
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center;
-      box-shadow: var(--shadow-sm);
-    }
-    .trust-badge-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-    .trust-badge-item i { font-size: 19px; color: var(--accent-emerald); }
-    .trust-badge-item span { font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
-
-    /* ── Right Column: Registration Card ── */
+    /* ── Registration Card ── */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border-color); border-radius: var(--radius-lg);
       padding: 32px 32px 28px; box-shadow: var(--shadow-lg);
+      position: relative; overflow: hidden;
     }
-
-    .card-header { margin-bottom: 24px; }
-    .card-header h2 { font-family: var(--font-heading); font-size: 21px; font-weight: 800; color: var(--text-main); letter-spacing: -0.3px; margin-bottom: 5px; }
-    .card-header p { font-size: 13px; color: var(--text-muted); }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: var(--gradient-brand);
+    }
 
     /* Step indicator */
     .step-bar {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border-color);
     }
-    .step-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-subtle); }
+    .step-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-subtle); transition: var(--transition-fast); }
     .step-item.active { color: var(--accent-cyan); }
     .step-number {
       width: 24px; height: 24px; border-radius: 50%;
       background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; color: var(--text-subtle);
+      font-size: 11px; font-weight: 700; color: var(--text-subtle); transition: var(--transition-fast);
     }
-    .step-item.active .step-number { background: var(--gradient-brand); color: #fff; }
+    .step-item.active .step-number { background: var(--gradient-brand); color: #fff; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
     .step-line { flex: 1; height: 1px; background: var(--border-color); margin: 0 10px; }
 
     /* Form Fields */
@@ -231,69 +211,14 @@
   <!-- Main Container -->
   <div class="page-container">
 
-    <!-- Left Column: Value Proposition -->
-    <div class="value-props">
-      <div class="hero-tag">
-        <i class="ti ti-building-skyscraper"></i> Multi-Tenant HR Platform
-      </div>
-      <h1 class="headline">
-        Deploy your company's <br/>
-        <span class="gradient-text">HR & Biometric Workspace</span>
-      </h1>
-      <p class="subheadline">
-        Everything you need to run HR, attendance, and payroll — live in minutes.
-      </p>
-
-      <div class="feature-list">
-        <div class="feature-item">
-          <div class="feature-icon"><i class="ti ti-face-id"></i></div>
-          <div class="feature-text">
-            <h4>Touchless Check-in</h4>
-            <p>Face recognition, QR, and passkey attendance.</p>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <div class="feature-icon"><i class="ti ti-receipt-tax"></i></div>
-          <div class="feature-text">
-            <h4>Automated Payroll</h4>
-            <p>Salaries, deductions, and payslips — one click.</p>
-          </div>
-        </div>
-
-        <div class="feature-item">
-          <div class="feature-icon"><i class="ti ti-shield-lock"></i></div>
-          <div class="feature-text">
-            <h4>Enterprise Data Protection</h4>
-            <p>AES-256 encryption and full audit trails.</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Trust Badges -->
-      <div class="trust-badges">
-        <div class="trust-badge-item">
-          <i class="ti ti-shield-check"></i>
-          <span>ISO 27001 Ready</span>
-        </div>
-        <div class="trust-badge-item">
-          <i class="ti ti-lock"></i>
-          <span>AES-256 Encrypted</span>
-        </div>
-        <div class="trust-badge-item">
-          <i class="ti ti-bolt"></i>
-          <span>99.9% Uptime</span>
-        </div>
-      </div>
+    <div class="page-intro">
+      <div class="intro-icon"><i class="ti ti-building-skyscraper"></i></div>
+      <h1>Register Your Organisation</h1>
+      <p>Set up your dedicated corporate portal in just a few steps.</p>
     </div>
 
-    <!-- Right Column: Registration Card -->
+    <!-- Registration Card -->
     <div class="card">
-      <div class="card-header">
-        <h2>Register Your Organisation</h2>
-        <p>Set up your dedicated corporate portal URL and admin credentials</p>
-      </div>
-
       <!-- Step Indicator Bar -->
       <div class="step-bar">
         <div class="step-item active">
@@ -463,10 +388,8 @@
   </div>
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="/static/darkmode.min.js"></script>
   <script>
   let subdomainUserEdited = false;
-  const PER_EMPLOYEE_PAISE = {{ per_employee_paise }};
 
   function cleanSubdomainInput(el) {
     subdomainUserEdited = true;
@@ -511,10 +434,6 @@
     if (userEl) userEl.value = localPart;
     if (domainEl) domainEl.value = domainPart;
     if (label) label.textContent = localPart || '—';
-  }
-
-  function formatInr(paise) {
-    return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
   }
 
   // Payment-gated signup: create_order() stages the signup + a Razorpay
