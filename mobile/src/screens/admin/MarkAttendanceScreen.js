@@ -221,16 +221,18 @@ export default function MarkAttendanceScreen({ navigation }) {
 
     setSaving(true);
     try {
-      await markAttendance(formatDateISO(selectedDate), records);
-      Alert.alert(
-        "Success",
-        `Attendance saved for ${records.length} employee(s) on ${formatDate(selectedDate)}.`
-      );
-    } catch {
-      Alert.alert(
-        "Success",
-        `Attendance saved for ${records.length} employee(s) on ${formatDate(selectedDate)}.`
-      );
+      const res = await markAttendance(formatDateISO(selectedDate), records);
+      if (res.data?.ok) {
+        Alert.alert(
+          "Success",
+          `Attendance saved for ${records.length} employee(s) on ${formatDate(selectedDate)}.`
+        );
+      } else {
+        Alert.alert("Save Failed", res.data?.msg || "Could not save attendance. Please try again.");
+      }
+    } catch (e) {
+      const msg = e.response?.data?.msg || e.message || "Could not save attendance. Please check your connection and try again.";
+      Alert.alert("Save Failed", msg);
     }
     setSaving(false);
   };

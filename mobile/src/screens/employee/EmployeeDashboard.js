@@ -188,7 +188,10 @@ export default function EmployeeDashboard({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        const loc = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+        ]);
         lat = loc.coords.latitude;
         lon = loc.coords.longitude;
       }
@@ -221,19 +224,22 @@ export default function EmployeeDashboard({ navigation }) {
           [{ text: "Sign In", onPress: () => signOut() }]
         );
       } else {
-        await queuePunch();
+        await queuePunch(lat, lon);
         const q = await getPendingPunches();
         setPendingCount(q.length);
         const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const wasCheckedIn = data?.today_attendance?.login_time && !data?.today_attendance?.logout_time;
         setData((prev) => ({
           ...prev,
           today_attendance: {
-            status: "Checked In",
-            check_in: timeNow,
+            ...prev?.today_attendance,
+            status: wasCheckedIn ? "Checked Out" : "Checked In",
+            check_in: wasCheckedIn ? prev?.today_attendance?.check_in : timeNow,
+            check_out: wasCheckedIn ? timeNow : prev?.today_attendance?.check_out,
           },
         }));
         Alert.alert(
-          "Check-In Recorded 📍",
+          wasCheckedIn ? "Check-Out Recorded 📍" : "Check-In Recorded 📍",
           `Punch recorded at ${timeNow}. Saved locally and will sync to server.`
         );
       }

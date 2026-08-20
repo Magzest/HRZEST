@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   attendanceCheckin, getAuthConfig, getMobileBiometricNonce, attestMobileBiometric,
 } from '../api/client';
+import { queuePunch } from '../utils/offlineQueue';
 import { useAuth } from '../store/AuthContext';
 
 const COMBO_QR_FACE        = 'qr_face';
@@ -111,12 +112,19 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
       const defaultCombo = combos[0] || COMBO_QR_FACE;
       setAuthMethod(defaultCombo);
 
-      // location step — attempt softly without blocking scanner
+      // location step — attempt softly without blocking scanner. GPS fixes can
+      // stall indefinitely (indoors, flaky sensor, emulator with no mock fix),
+      // and getCurrentPositionAsync has no built-in timeout, so race it against
+      // one instead of letting the whole check-in flow hang on "Getting your
+      // location…" forever.
       if (cfg.location_enabled) {
         try {
           const locPerm = await Location.requestForegroundPermissionsAsync();
           if (locPerm.status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(() => null);
+            const loc = await Promise.race([
+              Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+              new Promise((resolve) => setTimeout(() => resolve(null), 8000)),
+            ]).catch(() => null);
             if (loc?.coords) {
               setCoords({ lat: loc.coords.latitude, lon: loc.coords.longitude });
             }
@@ -174,11 +182,32 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
         ]);
       }
     } catch (e) {
-      const errMsg = e.response?.data?.msg || e.message || 'Connection error. Please try again.';
-      Alert.alert('Verification Error ❌', errMsg, [
-        { text: 'Retry', onPress: () => { setScanned(false); setProcessing(false); setStep('qr'); } },
-        { text: 'Cancel', onPress: onClose },
-      ]);
+      if (!e.response) {
+        // No response reached the server at all — a real connectivity drop,
+        // not a rejected verification. Don't lose the punch: fall back to a
+        // plain GPS punch that syncs later via /api/employee/sync_punches
+        // (the same offline path the quick check-in button uses), instead
+        // of just erroring out with nothing recorded.
+        try {
+          await queuePunch(coords?.lat ?? null, coords?.lon ?? null);
+          Alert.alert(
+            'Saved Offline 📍',
+            `Could not reach the server, but your check-in at ${timeNow} was saved on this device and will sync automatically once you're back online.`,
+            [{ text: 'OK', onPress: () => { onSuccess && onSuccess({ offline: true }); onClose(); } }]
+          );
+        } catch {
+          Alert.alert('Verification Error ❌', 'Connection error and could not save offline. Please try again.', [
+            { text: 'Retry', onPress: () => { setScanned(false); setProcessing(false); setStep('qr'); } },
+            { text: 'Cancel', onPress: onClose },
+          ]);
+        }
+      } else {
+        const errMsg = e.response?.data?.msg || e.message || 'Connection error. Please try again.';
+        Alert.alert('Verification Error ❌', errMsg, [
+          { text: 'Retry', onPress: () => { setScanned(false); setProcessing(false); setStep('qr'); } },
+          { text: 'Cancel', onPress: onClose },
+        ]);
+      }
     }
     setProcessing(false);
   };
