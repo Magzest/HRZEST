@@ -5,7 +5,7 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { qrFaceCheckin } from '../api/client';
+import { qrFaceCheckin, getAuthConfig } from '../api/client';
 
 export default function QRScannerModal({ visible, onClose }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -16,6 +16,7 @@ export default function QRScannerModal({ visible, onClose }) {
   const [employeeId, setEmployeeId] = useState(null);
   const [coords, setCoords]       = useState(null);
   const [locError, setLocError]   = useState(null);
+  const [faceEnabled, setFaceEnabled] = useState(true);
   const cameraRef = useRef(null);
 
   useEffect(() => {
@@ -27,7 +28,11 @@ export default function QRScannerModal({ visible, onClose }) {
       setEmployeeId(null);
       setCoords(null);
       setLocError(null);
+      setFaceEnabled(true);
       fetchLocation();
+      getAuthConfig()
+        .then(res => setFaceEnabled(res.data?.face_enabled !== false))
+        .catch(() => setFaceEnabled(true));
     }
   }, [visible]);
 
@@ -38,9 +43,13 @@ export default function QRScannerModal({ visible, onClose }) {
         setLocError('Location permission denied. Please enable location to mark attendance.');
         return;
       }
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      // getCurrentPositionAsync has no built-in timeout and can stall
+      // indefinitely on a slow/absent GPS fix, so race it against one
+      // instead of leaving the kiosk stuck on "Getting your location…" forever.
+      const loc = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]);
       setCoords({ lat: loc.coords.latitude, lon: loc.coords.longitude });
       setStep('qr');
     } catch {
@@ -75,14 +84,66 @@ export default function QRScannerModal({ visible, onClose }) {
     return raw.toUpperCase() || "EMP-1001";
   };
 
-  const handleQRScan = ({ data }) => {
+  const handleQRScan = async ({ data }) => {
     if (scanned || processing) return;
     const empId = parseEmployeeIdFromQR(data);
     if (!empId) return;
     setScanned(true);
     setEmployeeId(empId);
-    setFacing('front');
-    setStep('face');
+
+    if (faceEnabled) {
+      setFacing('front');
+      setStep('face');
+    } else {
+      // Tenant has face recognition disabled — QR alone is sufficient proof.
+      await submitCheckin({ empId, combo: 'qr_only' });
+    }
+  };
+
+  const submitCheckin = async ({ empId, combo, photo }) => {
+    setProcessing(true);
+    try {
+      const formData = new FormData();
+      formData.append('employee_id', empId || employeeId);
+      formData.append('auth_combo', combo || 'qr_face');
+      if (coords) {
+        formData.append('lat', String(coords.lat));
+        formData.append('lon', String(coords.lon));
+      }
+      if (photo?.uri) {
+        formData.append('face_photo', {
+          uri: photo.uri,
+          name: 'face.jpg',
+          type: 'image/jpeg',
+        });
+      }
+
+      const res = await qrFaceCheckin(formData);
+      if (res.data.ok) {
+        const action = res.data.action;
+        const title =
+          action === 'login'  ? '✅ Checked In'  :
+          action === 'logout' ? '✅ Checked Out' : '✅ Re-Logged In';
+        Alert.alert(title, `${res.data.name}\n${res.data.status}\nTime: ${res.data.time}`, [
+          { text: 'OK', onPress: onClose },
+        ]);
+      } else {
+        Alert.alert('Cannot Mark Attendance', res.data.msg || 'Something went wrong.', [
+          { text: 'Retry', onPress: resetToQR },
+          { text: 'Cancel', onPress: onClose },
+        ]);
+      }
+    } catch (e) {
+      const msg =
+        e.response?.data?.msg ||
+        (e.response ? `Server error ${e.response.status}` : e.message) ||
+        'Cannot connect to server.';
+      Alert.alert('Server Error', msg, [
+        { text: 'Retry', onPress: resetToQR },
+        { text: 'Cancel', onPress: onClose },
+      ]);
+    }
+    setProcessing(false);
   };
 
   const handleCaptureFace = async () => {
@@ -112,45 +173,7 @@ export default function QRScannerModal({ visible, onClose }) {
     }
 
     /* Step B: upload + mark attendance */
-    try {
-      const formData = new FormData();
-      formData.append('employee_id', employeeId);
-      if (coords) {
-        formData.append('lat', String(coords.lat));
-        formData.append('lon', String(coords.lon));
-      }
-      formData.append('face_photo', {
-        uri: photo.uri,
-        name: 'face.jpg',
-        type: 'image/jpeg',
-      });
-
-      const res = await qrFaceCheckin(formData);
-      if (res.data.ok) {
-        const action = res.data.action;
-        const title =
-          action === 'login'  ? '✅ Checked In'  :
-          action === 'logout' ? '✅ Checked Out' : '✅ Re-Logged In';
-        Alert.alert(title, `${res.data.name}\n${res.data.status}\nTime: ${res.data.time}`, [
-          { text: 'OK', onPress: onClose },
-        ]);
-      } else {
-        Alert.alert('Cannot Mark Attendance', res.data.msg || 'Something went wrong.', [
-          { text: 'Retry', onPress: resetToQR },
-          { text: 'Cancel', onPress: onClose },
-        ]);
-      }
-    } catch (e) {
-      const msg =
-        e.response?.data?.msg ||
-        (e.response ? `Server error ${e.response.status}` : e.message) ||
-        'Cannot connect to server.';
-      Alert.alert('Server Error', msg, [
-        { text: 'Retry', onPress: resetToQR },
-        { text: 'Cancel', onPress: onClose },
-      ]);
-    }
-    setProcessing(false);
+    await submitCheckin({ empId: employeeId, combo: 'qr_face', photo });
   };
 
   const resetToQR = () => {
@@ -271,7 +294,18 @@ export default function QRScannerModal({ visible, onClose }) {
               <View style={[styles.stepDot, styles.stepDotActive]} />
               <View style={styles.stepDot} />
             </View>
-            <Text style={styles.hintTxt}>Step 1 of 2 — Hold your employee QR code in the frame</Text>
+            {processing ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" style={{ marginTop: 4 }} />
+                <Text style={styles.hintTxt}>Marking attendance…</Text>
+              </>
+            ) : (
+              <Text style={styles.hintTxt}>
+                {faceEnabled
+                  ? 'Step 1 of 2 — Hold your employee QR code in the frame'
+                  : 'Hold your employee QR code in the frame'}
+              </Text>
+            )}
           </View>
         </View>
       </Modal>

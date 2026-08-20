@@ -14,6 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
 import { fetchEmployeeAttendance, employeeCheckin } from "../../api/client";
+import { queuePunch } from "../../utils/offlineQueue";
 
 import { useAuth } from "../../store/AuthContext";
 
@@ -70,7 +71,10 @@ export default function AttendanceScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        const loc = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
+        ]);
         lat = loc.coords.latitude;
         lon = loc.coords.longitude;
       }
@@ -107,18 +111,23 @@ export default function AttendanceScreen() {
           [{ text: "Sign In", onPress: () => signOut() }]
         );
       } else {
+        await queuePunch(lat, lon);
+        const existing = attendance.find((x) => x.date === todayIso);
+        const wasCheckedIn = existing?.login_time && !existing?.logout_time;
         setAttendance((prev) => {
           const updated = [...prev];
           const idx = updated.findIndex((x) => x.date === todayIso);
           if (idx >= 0) {
-            updated[idx] = { ...updated[idx], login_time: timeNow, status: "Checked In", attendance_type: "Full Day" };
+            updated[idx] = wasCheckedIn
+              ? { ...updated[idx], logout_time: timeNow, status: "Checked Out" }
+              : { ...updated[idx], login_time: timeNow, status: "Checked In", attendance_type: "Full Day" };
           } else {
             updated.unshift({ date: todayIso, login_time: timeNow, logout_time: "", status: "Checked In", attendance_type: "Full Day" });
           }
           return updated;
         });
         Alert.alert(
-          "Check-In Recorded 📍",
+          wasCheckedIn ? "Check-Out Recorded 📍" : "Check-In Recorded 📍",
           `Punch recorded at ${timeNow}. Saved locally and will sync to server.`
         );
       }
@@ -264,12 +273,6 @@ export default function AttendanceScreen() {
           <AttendanceEmptyState />
         )}
       </ScrollView>
-
-      <AttendanceScannerModal
-        visible={showScanner}
-        onClose={() => setShowScanner(false)}
-        onSuccess={() => loadAttendance()}
-      />
     </LinearGradient>
   );
 }

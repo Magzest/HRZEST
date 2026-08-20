@@ -103,15 +103,22 @@ export default function ProfileScreen() {
     try {
       const res = await fetchEmployeeProfile();
       if (res?.data?.ok && res?.data?.profile) {
-        const p = res.data.profile;
+        // `role` is excluded from the spread below: the backend returns it
+        // display-cased (e.g. "Employee"), which would silently overwrite
+        // AuthContext's `user.role` -- the lowercase "employee"/"admin"
+        // discriminator App.js's RootNavigator matches on -- and bounce the
+        // user to the login screen the instant this profile loads (looks
+        // exactly like an unexpected logout, even though the session is
+        // still valid). `designation` below already carries the display role.
+        const { role: _displayRole, ...p } = res.data.profile;
 
-        const stats = calculateCompletion(p);
+        const stats = calculateCompletion(res.data.profile);
 
         const updated = {
           ...p,
           name: p.name || user?.name || user?.employeeId || "",
           employeeId: p.employee_id || user?.employeeId || "",
-          designation: p.role || user?.role || "",
+          designation: _displayRole || user?.role || "",
           department: p.department || user?.department || "",
           email: p.email || user?.email || "",
           phone: p.phone || user?.phone || "Not Provided",
