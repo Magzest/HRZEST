@@ -393,6 +393,36 @@ def _validate_image_file(file):
     return True, ""
 
 
+_LOGO_NAME_RE = re.compile(r'[^a-z0-9\-]')
+
+
+def save_uploaded_logo(file_storage, name_hint):
+    """Validate and save an uploaded company-logo image under
+    static/company_logos/, named after name_hint (the tenant's subdomain
+    slug, already restricted to [a-z0-9-] by org.py's _SUBDOMAIN_RE --
+    scrubbed again here defensively since other callers may not enforce
+    that). Returns (relative_path, None) on success -- relative_path is
+    under static/ and is what company_settings.logo_url is built from --
+    or (None, error_message) if the file is present but invalid. Callers
+    should treat "no file provided" as optional and skip calling this
+    entirely rather than treating it as an error.
+
+    Deterministic filename (no re-upload dedup needed): a second signup
+    attempt for the same subdomain just overwrites the previous file,
+    which is fine since a subdomain can only ever back one live tenant."""
+    from flask import current_app
+    ok, err = _validate_image_file(file_storage)
+    if not ok:
+        return None, err
+    ext = os.path.splitext(file_storage.filename)[1].lower()
+    safe_name = _LOGO_NAME_RE.sub("", name_hint.lower()) or "logo"
+    folder = os.path.join(current_app.root_path, "static", "company_logos")
+    os.makedirs(folder, exist_ok=True)
+    filename = f"{safe_name}{ext}"
+    file_storage.save(os.path.join(folder, filename))
+    return f"company_logos/{filename}", None
+
+
 # ── Company settings cache (60-second TTL) ────────────────────────────────────
 _co_cache = {"data": None, "expires": None}
 _auth_cache = {"data": None, "expires": None}

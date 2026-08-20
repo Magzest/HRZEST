@@ -1709,6 +1709,14 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS company_code VARCHAR(10) DEFAULT NULL",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS paid_employee_slots INT DEFAULT NULL",
+        # Read by utils/helpers.py's get_company_settings() as co.logo_url,
+        # rendered in templates/admin_base.html's sidebar (admin + HR) and
+        # templates/employee_portal.html's sidebar -- this ALTER, not
+        # database.py's _ensure_pg_schema() (which only ever runs once,
+        # against the connection pool's default schema at process startup),
+        # is what actually reaches every tenant schema, including ones
+        # created long after startup via provision_tenant().
+        "ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'admin'",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE companies ADD COLUMN IF NOT EXISTS address TEXT DEFAULT NULL",
@@ -2300,6 +2308,11 @@ def init_master_db():
         # the tenant's own company_settings row doesn't exist yet at
         # create_order() time.
         cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS email_domain VARCHAR(255) DEFAULT NULL")
+        # Company logo, uploaded on the signup form and staged here at
+        # create_order() time (before any tenant/company_settings row
+        # exists) -- verify_payment() reads it back and hands it to
+        # provision_tenant() once the tenant schema is actually created.
+        cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL")
         # Lightweight traffic counter for the public marketing pages
         # (landing page, get-started, create_org) -- one row per
         # (path, day), incremented via ON CONFLICT below rather than one

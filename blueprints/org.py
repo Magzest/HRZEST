@@ -77,7 +77,7 @@ _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
 def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                      payment_option="online", email_domain=None, employee_count=None):
+                      payment_option="online", email_domain=None, employee_count=None, logo_path=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
@@ -92,6 +92,14 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     email_domain (e.g. "acme.com") is stored on the new tenant's own
     company_settings row -- utils/helpers.py's validate_employee_email_domain()
     reads it from there to require/check new employees' emails going forward.
+
+    logo_path is a relative static/ path (e.g. "company_logos/acme.png",
+    as returned by utils/helpers.py's save_uploaded_logo()) for the
+    company logo collected on the registration form -- written to
+    company_settings.logo_url so it's already in place the first time
+    anyone (employee, admin, or HR) opens a dashboard. None/omitted means
+    no logo was uploaded at signup; the default "no logo" rendering
+    (templates already fall back to a generic building icon) applies.
 
     employee_count is the number of seats actually paid for -- written to
     company_settings.paid_employee_slots (a column that already existed in
@@ -149,9 +157,11 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         from database import get_tenant_db
         tconn = get_tenant_db(db_name)
         tcur = tconn.cursor()
+        logo_url = f"/static/{logo_path}" if logo_path else None
         tcur.execute(
-            "UPDATE company_settings SET company_name=%s, email_domain=%s, paid_employee_slots=%s, setup_done=1 WHERE id=1",
-            (company_name, clean_email_domain(email_domain) or None, employee_count)
+            "UPDATE company_settings SET company_name=%s, email_domain=%s, paid_employee_slots=%s, "
+            "logo_url=COALESCE(%s, logo_url), setup_done=1 WHERE id=1",
+            (company_name, clean_email_domain(email_domain) or None, employee_count, logo_url)
         )
         # Plain INSERT, no ON CONFLICT: the schema-existence check above
         # guarantees this is a brand-new schema, so a conflict here means a
@@ -409,8 +419,17 @@ def create_org():
         flash(error, "error")
         return redirect("/create_org")
 
+    logo_path = None
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        from utils.helpers import save_uploaded_logo
+        logo_path, logo_err = save_uploaded_logo(logo_file, subdomain)
+        if logo_err:
+            flash(f"Company logo: {logo_err}", "error")
+            return redirect("/create_org")
+
     ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
-                                                            admin_email, email_domain=email_domain)
+                                                            admin_email, email_domain=email_domain, logo_path=logo_path)
     if not ok:
         flash(error, "error")
         return redirect("/create_org")

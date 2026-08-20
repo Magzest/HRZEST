@@ -80,6 +80,19 @@ def create_order():
     if error:
         return jsonify({"ok": False, "msg": error}), 400
 
+    # Logo, if the signup form's file input was used -- staged now (before
+    # any tenant/payment exists) since request.files is only available on
+    # this request, not the later verify_payment() call that actually
+    # provisions the tenant. Optional: signup proceeds with no logo on a
+    # validation failure too, same as an unset file input.
+    logo_path = None
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        from utils.helpers import save_uploaded_logo
+        logo_path, logo_err = save_uploaded_logo(logo_file, subdomain)
+        if logo_err:
+            return jsonify({"ok": False, "msg": f"Company logo: {logo_err}"}), 400
+
     amount_paise = calculate_price(employee_count)
 
     is_demo = not razorpay_configured()
@@ -98,10 +111,10 @@ def create_order():
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO payment_orders (razorpay_order_id, plan, employee_count, amount_paise, "
-            "company_name, subdomain, admin_username, admin_email, email_domain, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'created')",
+            "company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'created')",
             (order_id, PLAN_LABEL, employee_count, amount_paise, company_name, subdomain, admin_username, admin_email,
-             email_domain)
+             email_domain, logo_path)
         )
         conn.commit()
         cur.close()
@@ -152,7 +165,7 @@ def verify_payment():
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "SELECT employee_count, company_name, subdomain, admin_username, admin_email, email_domain, status "
+        "SELECT employee_count, company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status "
         "FROM payment_orders WHERE razorpay_order_id=%s",
         (razorpay_order_id,)
     )
@@ -162,7 +175,7 @@ def verify_payment():
         conn.close()
         return jsonify({"ok": False, "msg": "Unknown order."}), 404
 
-    employee_count, company_name, subdomain, admin_username, admin_email, email_domain, status = row
+    employee_count, company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status = row
 
     # Idempotent: a retried/duplicate client POST for an already-provisioned
     # order must not attempt to re-provision (the subdomain is now taken,
@@ -190,7 +203,7 @@ def verify_payment():
     random_password = secrets.token_urlsafe(24)
     ok, error, portal_url, checkin_url = provision_tenant(
         company_name, subdomain, admin_username, random_password, admin_email,
-        email_domain=email_domain, employee_count=employee_count
+        email_domain=email_domain, employee_count=employee_count, logo_path=logo_path
     )
     if not ok:
         app_log.error("billing.verify_payment: provisioning failed for order %s: %s", razorpay_order_id, error)

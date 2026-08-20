@@ -498,8 +498,18 @@ def platform_admin_create_tenant():
         flash(error, "error")
         return redirect("/super_admin")
 
+    logo_path = None
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        from utils.helpers import save_uploaded_logo
+        logo_path, logo_err = save_uploaded_logo(logo_file, subdomain)
+        if logo_err:
+            flash(f"Company logo: {logo_err}", "error")
+            return redirect("/super_admin")
+
     ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
-                                                            admin_email, payment_option, email_domain=email_domain)
+                                                            admin_email, payment_option, email_domain=email_domain,
+                                                            logo_path=logo_path)
     if not ok:
         flash(error, "error")
         return redirect("/super_admin")

@@ -320,7 +320,7 @@
         {% endfor %}
       {% endwith %}
 
-      <form autocomplete="off" id="createOrgForm">
+      <form autocomplete="off" id="createOrgForm" enctype="multipart/form-data">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
 
         <!-- Field: Company Name -->
@@ -348,6 +348,20 @@
           </div>
           <div class="field-hint">
             Your team will access their portal at: <strong id="liveUrlPreview" style="color: var(--accent-cyan);">www.hrzest.com/acme/login</strong>
+          </div>
+        </div>
+
+        <!-- Field: Company Logo (optional) -->
+        <div class="field-group">
+          <label class="field-label" for="logo_input">
+            <i class="ti ti-photo"></i> Company Logo (optional)
+          </label>
+          <div class="input-wrapper">
+            <input class="field-input" type="file" name="logo" id="logo_input"
+                   accept="image/jpeg,image/png,image/webp,image/bmp" />
+          </div>
+          <div class="field-hint">
+            Shown in your team's employee, admin and HR dashboards. JPG, PNG, WEBP or BMP, up to 5&nbsp;MB. You can skip this and add it later from Settings.
           </div>
         </div>
 
@@ -532,10 +546,15 @@
     const data = Object.fromEntries(formData.entries());
 
     try {
+      // multipart/form-data, not JSON: the logo file above can't survive
+      // JSON.stringify(), and letting fetch set its own Content-Type
+      // (with the multipart boundary) instead of forcing application/json
+      // is what makes that work -- billing.py's create_order() already
+      // reads request.form/request.files as a fallback for exactly this.
       const res = await fetch('/api/billing/create_order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': data._csrf_token },
-        body: JSON.stringify(data)
+        headers: { 'X-CSRF-Token': data._csrf_token },
+        body: formData
       });
       const json = await res.json();
       if (!json.ok) {
