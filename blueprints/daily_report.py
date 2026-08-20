@@ -15,7 +15,7 @@ company -- tracked as separate follow-up work, not done here.
 import os
 import datetime
 import threading
-from flask import Blueprint, g as _g
+from flask import Blueprint, g as _g, jsonify
 
 from database import get_db_connection
 from extensions import app, app_log
@@ -279,7 +279,6 @@ def trigger_daily_report():
 @admin_required
 def trigger_weekly_digest():
     """Triggers the weekly employee email digest."""
-    from flask import jsonify
     t = threading.Thread(target=send_weekly_employee_digests, daemon=True)
     t.start()
     return jsonify({"ok": True, "msg": "Weekly employee digest generation started."})

@@ -1312,8 +1312,13 @@ def attendance():
             cursor.close()
             db.close()
             return jsonify({"ok": False, "msg": "No face detected in photo. Look directly at the camera."})
+        # tolerance=0.5, matching every other compare_faces() call site in
+        # this codebase (utils/face_utils.py, blueprints/employee_portal.py)
+        # -- omitting it silently falls back to face_recognition's default
+        # of 0.6, a looser threshold that let unrelated-but-similar faces
+        # pass as a match on this specific, unattended kiosk check-in path.
         matched = any(
-            True in face_recognition.compare_faces([known_encoding], enc)
+            True in face_recognition.compare_faces([known_encoding], enc, tolerance=0.5)
             for enc in encs
         )
         if not matched:

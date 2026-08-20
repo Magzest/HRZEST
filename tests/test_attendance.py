@@ -12,7 +12,9 @@ default). See TestCheckinGeofencing below.
 Run with:
     python -m pytest tests/test_attendance.py -v
 """
+import base64
 import datetime
+import io
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +241,98 @@ class TestCheckinStateMachine:
             r3 = client.post("/attendance", json=payload)
             assert r3.status_code == 200
             assert r3.get_json()["ok"] is True
+        finally:
+            _cleanup_employee(db_engine, emp_id)
+
+
+# ===========================================================================
+# /attendance qr_face — regression coverage for the missing tolerance= bug
+# ===========================================================================
+
+def _fake_face_b64():
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (10, 10), color=(120, 120, 120)).save(buf, format="JPEG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+class TestQrFaceMatchTolerance:
+    """Every other face_recognition.compare_faces() call site in this
+    codebase (utils/face_utils.py, blueprints/employee_portal.py) passes
+    tolerance=0.5 explicitly. This endpoint's qr_face branch omitted it,
+    silently falling back to the library's looser default of 0.6 -- a real
+    false-accept bug on the actual public kiosk check-in path (reported as
+    "it will take others faces for one face"). Asserts the kwarg is
+    actually passed on every call, not just that a match/no-match result
+    is honored -- a test that only checked the boolean outcome would not
+    have caught this regression, since both tolerances can agree on an
+    obviously-matching or obviously-different pair."""
+
+    def _make_face_employee(self, db_engine, tmp_path, employee_id="ATT_FACE01"):
+        face_path = str(tmp_path / f"{employee_id}.jpg")
+        from PIL import Image
+        Image.new("RGB", (10, 10), color=(50, 50, 50)).save(face_path, "JPEG")
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO employees (employee_id, name, email, password, force_pin_change, "
+            "work_mode, work_lat, work_lon, face_image) VALUES (%s,%s,%s,%s,0,'wfh',%s,%s,%s) "
+            "ON CONFLICT (employee_id) DO UPDATE SET work_mode='wfh', work_lat=%s, work_lon=%s, face_image=%s",
+            (employee_id, "Face Emp", f"{employee_id.lower()}@test.local", "x",
+             12.9716, 77.5946, face_path, 12.9716, 77.5946, face_path),
+        )
+        cur.close()
+        return employee_id
+
+    def test_compare_faces_called_with_strict_tolerance(self, client, db_engine, tmp_path, mocker):
+        emp_id = self._make_face_employee(db_engine, tmp_path)
+        captured = []
+
+        def _fake_compare(known, test, tolerance=0.6):
+            captured.append(tolerance)
+            return [True]
+
+        mocker.patch("blueprints.attendance._get_known_face_encoding", return_value="known-enc")
+        mocker.patch("blueprints.attendance.face_recognition.face_locations", return_value=["loc"])
+        mocker.patch("blueprints.attendance.face_recognition.face_encodings", return_value=["test-enc"])
+        mocker.patch("blueprints.attendance.face_recognition.compare_faces", side_effect=_fake_compare)
+        try:
+            resp = client.post("/attendance", json={
+                "employee_id": emp_id,
+                "auth_combo": "qr_face",
+                "face_image": _fake_face_b64(),
+                "lat": "12.9716",
+                "lon": "77.5946",
+            })
+            assert resp.status_code == 200
+            assert resp.get_json()["ok"] is True
+            assert captured == [0.5]
+        finally:
+            _cleanup_employee(db_engine, emp_id)
+
+    def test_stricter_tolerance_rejects_a_borderline_face(self, client, db_engine, tmp_path, mocker):
+        """A face that would pass under the library's default 0.6 but fail
+        under this app's 0.5 must be rejected -- proves the tolerance value
+        actually reaches the comparison, not just that it's passed as an
+        argument."""
+        emp_id = self._make_face_employee(db_engine, tmp_path, "ATT_FACE02")
+
+        mocker.patch("blueprints.attendance._get_known_face_encoding", return_value="known-enc")
+        mocker.patch("blueprints.attendance.face_recognition.face_locations", return_value=["loc"])
+        mocker.patch("blueprints.attendance.face_recognition.face_encodings", return_value=["test-enc"])
+        mocker.patch("blueprints.attendance.face_recognition.compare_faces",
+                     side_effect=lambda known, test, tolerance=0.6: [tolerance >= 0.6])
+        try:
+            resp = client.post("/attendance", json={
+                "employee_id": emp_id,
+                "auth_combo": "qr_face",
+                "face_image": _fake_face_b64(),
+                "lat": "12.9716",
+                "lon": "77.5946",
+            })
+            assert resp.status_code == 200
+            body = resp.get_json()
+            assert body["ok"] is False
+            assert "does not match" in body["msg"].lower()
         finally:
             _cleanup_employee(db_engine, emp_id)
 

@@ -80,6 +80,7 @@ class TestAskAssistant:
     def test_missing_api_key_returns_friendly_error(self, monkeypatch):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         ok, reply = ask_assistant("ctx", "How many leave days do I have?")
         assert ok is False
         assert "isn't configured" in reply.lower()
@@ -91,6 +92,7 @@ class TestAskAssistant:
             return "You have 5 leave days remaining.", None
 
         monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", _fake_call)
         ok, reply = ask_assistant("Leave balance: 5 days", "How many leave days do I have?")
@@ -99,6 +101,7 @@ class TestAskAssistant:
 
     def test_api_failure_returns_friendly_error_not_exception(self, monkeypatch):
         monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: (None, "network error: simulated outage"))
         ok, reply = ask_assistant("ctx", "hello")
@@ -113,6 +116,7 @@ class TestAskAssistant:
             return "ok", None
 
         monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", _fake_call)
         history = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello there"}]
@@ -159,6 +163,7 @@ class TestN8nBackend:
 
     def test_n8n_not_configured_falls_straight_through_to_claude(self, monkeypatch):
         monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: ("claude reply", None))
         ok, reply = ask_assistant("ctx", "hi")
@@ -168,6 +173,7 @@ class TestN8nBackend:
     def test_neither_backend_configured_returns_friendly_error(self, monkeypatch):
         monkeypatch.delenv("N8N_WEBHOOK_URL", raising=False)
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         ok, reply = ask_assistant("ctx", "hi")
         assert ok is False
         assert "isn't configured" in reply.lower()
@@ -182,6 +188,7 @@ class TestN8nBackend:
 
     def test_n8n_failure_falls_back_to_claude_when_configured(self, monkeypatch):
         monkeypatch.setenv("N8N_WEBHOOK_URL", "https://n8n.example.com/webhook/chat")
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
         monkeypatch.setattr(ai_assistant, "_call_n8n", lambda url, emp_id, ctx, msg, turns: (None, "network error: simulated outage"))
         monkeypatch.setattr(ai_assistant, "_call_claude", lambda s, m: ("claude fallback reply", None))
@@ -192,6 +199,7 @@ class TestN8nBackend:
     def test_n8n_failure_with_no_claude_configured_returns_friendly_error(self, monkeypatch):
         monkeypatch.setenv("N8N_WEBHOOK_URL", "https://n8n.example.com/webhook/chat")
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("GEMINI_API_KEY", raising=False)
         monkeypatch.setattr(ai_assistant, "_call_n8n", lambda url, emp_id, ctx, msg, turns: (None, "HTTP 500"))
         ok, reply = ask_assistant("ctx", "hi")
         assert ok is False

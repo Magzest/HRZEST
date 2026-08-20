@@ -102,7 +102,7 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     /api/create_org registration flow, and Platform Admin's own tenant
     creation), which intentionally don't gate on payment.
 
-    Returns (ok, error_message_or_None, portal_url_or_None).
+    Returns (ok, error_message_or_None, portal_url_or_None, checkin_url_or_None).
     """
     if payment_option not in _PAYMENT_OPTIONS:
         payment_option = "online"
@@ -124,17 +124,17 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         mcur.close()
         mconn.close()
         if taken:
-            return False, f"Subdomain '{subdomain}' is already taken. Choose another.", None
+            return False, f"Subdomain '{subdomain}' is already taken. Choose another.", None, None
     except Exception as exc:
         app_log.error("provision_tenant subdomain check failed: %s", exc)
-        return False, "Could not check subdomain availability. Please try again.", None
+        return False, "Could not check subdomain availability. Please try again.", None, None
 
     try:
         from database import create_tenant_schema
         create_tenant_schema(db_name)
     except Exception as exc:
         app_log.error("provision_tenant schema creation failed: %s", exc)
-        return False, "Failed to create organisation. Please contact support.", None
+        return False, "Failed to create organisation. Please contact support.", None, None
 
     try:
         from flask import g as _g
@@ -143,7 +143,7 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         init_tenant_db(db_name)
     except Exception as exc:
         app_log.error("provision_tenant schema init failed: %s", exc)
-        return False, "Failed to initialise organisation schema. Please contact support.", None
+        return False, "Failed to initialise organisation schema. Please contact support.", None, None
 
     try:
         from database import get_tenant_db
@@ -164,7 +164,7 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         tcur.close()
         tconn.close()
     except Exception as exc:
-        return False, f"Failed to seed tenant data: {exc}", None
+        return False, f"Failed to seed tenant data: {exc}", None, None
 
     try:
         from database import get_master_db
@@ -179,7 +179,7 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         mcur.close()
         mconn.close()
     except Exception as exc:
-        return False, f"Tenant registered in DB but master registry failed: {exc}", None
+        return False, f"Tenant registered in DB but master registry failed: {exc}", None, None
 
     # NOTE: the live tenant-admin login route is "/login" (auth.py's
     # admin_login() view) -- "/admin_login" hasn't been a real route since
@@ -194,11 +194,21 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
     # wherever this app is actually running (localhost in dev, a staging
     # host, etc).
     portal_url = f"{_safe_app_url()}/{subdomain}/login"
-    return True, None, portal_url
+    # Public, unauthenticated kiosk scanner for this company (blueprints/
+    # core.py's checkin_page()) -- separate from portal_url above, which is
+    # the admin login. Employees mark attendance here without ever logging
+    # into a dashboard first.
+    checkin_url = f"{_safe_app_url()}/{subdomain}/checkin"
+    return True, None, portal_url, checkin_url
 
 
-def send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password=""):
-    """Welcome email with the tenant's dedicated portal link and login credentials."""
+def send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password="", checkin_url=None):
+    """Welcome email with the tenant's dedicated portal link and login credentials.
+
+    checkin_url is the company's own public attendance-scanner page
+    (blueprints/core.py's checkin_page()) -- included so whoever registered
+    the company can immediately hand it to employees / post it at the
+    office without first finding it themselves in Settings."""
     try:
         email_cfg = get_email_config()
         if not email_cfg:
@@ -220,6 +230,16 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
             </div>
             """
 
+        checkin_block = ""
+        if checkin_url:
+            checkin_block = f"""
+            <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:14px;border-radius:6px;margin:18px 0;font-size:13px;color:#166534;">
+              <div style="font-weight:700;margin-bottom:6px;">&#128205; Employee Check-In Page</div>
+              <div>Share this link with your employees, or post it as a QR code at the office -- no login required to mark attendance:</div>
+              <div style="margin-top:8px;"><a href="{checkin_url}" style="color:#15803d;font-weight:700;">{checkin_url}</a></div>
+            </div>
+            """
+
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
   <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:28px;color:white;text-align:center;">
@@ -238,6 +258,8 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
     </a>
 
     <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser: <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
+
+    {checkin_block}
   </div>
 </div>"""
         send_email_async(admin_email, f"Your HRzest.com Portal is Ready -- {company_name}", html_body, email_cfg)
@@ -248,13 +270,17 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 
 
 def send_payment_confirmation_email(admin_email, company_name, portal_url, set_password_url,
-                                     employee_count, amount_paise, razorpay_payment_id):
+                                     employee_count, amount_paise, razorpay_payment_id, checkin_url=None):
     """Post-payment welcome email for the paid /create_org flow
     (blueprints/billing.py's verify_payment). Like send_portal_ready_email,
     never includes a plaintext password -- instead links to a one-time
     "set your password" reset-token URL, plus a payment receipt summary.
     Never raises; billing.py doesn't gate the API response on this
-    succeeding, same best-effort contract as send_portal_ready_email."""
+    succeeding, same best-effort contract as send_portal_ready_email.
+
+    checkin_url is the company's own public attendance-scanner page, same
+    as send_portal_ready_email's -- included here too so a paid signup
+    gets it just as readily as a manually-provisioned one."""
     try:
         email_cfg = get_email_config()
         if not email_cfg:
@@ -263,6 +289,15 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
         amount_display = format_price_inr(amount_paise)
         plan_display_name = f"₹{PER_EMPLOYEE_PAISE // 100}/employee × {employee_count}"
         paid_on = _dt.datetime.now().strftime("%d %b %Y")
+        checkin_block = ""
+        if checkin_url:
+            checkin_block = f"""
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:14px;border-radius:6px;margin-bottom:16px;font-size:13px;color:#166534;">
+      <div style="font-weight:700;margin-bottom:6px;">&#128205; Employee Check-In Page</div>
+      <div>Share this link with your employees, or post it as a QR code at the office -- no login required to mark attendance:</div>
+      <div style="margin-top:8px;"><a href="{checkin_url}" style="color:#15803d;font-weight:700;">{checkin_url}</a></div>
+    </div>
+            """
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
@@ -282,6 +317,9 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Date</span><strong>{paid_on}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;"><span>Payment ID</span><strong>{razorpay_payment_id}</strong></div>
     </div>
+
+    {checkin_block}
+
     <p style="font-size:12px;color:#94a3b8;">Your portal: {portal_url}</p>
   </div>
 </div>"""
@@ -371,19 +409,20 @@ def create_org():
         flash(error, "error")
         return redirect("/create_org")
 
-    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                                              email_domain=email_domain)
+    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
+                                                            admin_email, email_domain=email_domain)
     if not ok:
         flash(error, "error")
         return redirect("/create_org")
 
-    email_sent = send_portal_ready_email(admin_email, company_name, admin_username, portal_url)
+    email_sent = send_portal_ready_email(admin_email, company_name, admin_username, portal_url,
+                                          checkin_url=checkin_url)
 
     return render_template(
         "org_created.html",
         company_name=company_name, subdomain=subdomain,
         admin_username=admin_username, admin_email=admin_email,
-        portal_url=portal_url, email_sent=email_sent,
+        portal_url=portal_url, checkin_url=checkin_url, email_sent=email_sent,
     )
 
 
@@ -432,8 +471,8 @@ def api_create_org():
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                                                   email_domain=email_domain)
+        ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
+                                                                admin_email, email_domain=email_domain)
         if not ok:
             # "Already taken" is client-correctable (400); anything else is
             # a provisioning-side failure (schema creation, seeding, master
@@ -452,6 +491,7 @@ def api_create_org():
             # silently fell through to the bare /login page instead of the
             # new tenant's own portal.
             "portal_url": portal_url,
+            "checkin_url": checkin_url,
         })
     except Exception as global_exc:
         app_log.error("api_create_org global exception: %s", global_exc)

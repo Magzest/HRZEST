@@ -55,6 +55,14 @@
 
   <a href="{{ portal_url }}" class="btn">Go to Your Dashboard <i class="ti ti-arrow-right"></i></a>
 
+  {% if checkin_url %}
+  <div class="portal-box">
+    <div class="portal-label">Employee Check-In Page</div>
+    <div class="portal-link">{{ checkin_url }}</div>
+  </div>
+  <p class="note" style="margin-top:-8px;">Share this with your employees, or post it as a QR code at the office — no login needed to mark attendance.</p>
+  {% endif %}
+
   {% if email_sent %}
   <p class="note">We've also emailed this link to <strong>{{ admin_email }}</strong>.</p>
   {% else %}

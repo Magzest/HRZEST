@@ -188,7 +188,7 @@ def verify_payment():
     # docstring for why (agreed with the user: no plaintext password in
     # email, matching this codebase's existing posture everywhere else).
     random_password = secrets.token_urlsafe(24)
-    ok, error, portal_url = provision_tenant(
+    ok, error, portal_url, checkin_url = provision_tenant(
         company_name, subdomain, admin_username, random_password, admin_email,
         email_domain=email_domain, employee_count=employee_count
     )
@@ -249,7 +249,7 @@ def verify_payment():
 
     send_payment_confirmation_email(
         admin_email, company_name, portal_url, set_password_url,
-        employee_count, amount_paise, razorpay_payment_id,
+        employee_count, amount_paise, razorpay_payment_id, checkin_url=checkin_url,
     )
 
     log_security_event(

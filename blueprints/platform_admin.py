@@ -18,7 +18,7 @@ enforces its own (lighter) idle timeout below.
 import time
 import secrets
 import functools
-from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
+from flask import Blueprint, request, session, redirect, render_template, flash, jsonify, current_app
 
 from database import get_master_db, get_db_connection
 from extensions import app_log, log_security_event, limiter
@@ -42,6 +42,40 @@ _IDLE_TIMEOUT_SEC = 30 * 60  # 30 minutes of inactivity
 # every time. Same 60s-cache idea as utils/helpers.py's _co_expired pattern.
 _COUNT_CACHE_TTL_SEC = 60
 _employee_count_cache = {}
+
+
+def _complete_platform_admin_login(username):
+    """Build the real session once credentials (and MFA, when required)
+    have checked out -- shared by the MFA-verify completion below and the
+    direct-login path taken when MANDATORY_PLATFORM_ADMIN_MFA is off."""
+    session.clear()
+    session["platform_admin_logged_in"] = True
+    session["platform_admin_username"] = username
+    session["platform_admin_last_activity"] = time.time()
+    # Picked up by app.py's _enforce_session_lifetime before_request hook
+    # (not gated on admin_logged_in -- it checks this key on every
+    # request), giving this identity the same 8-hour absolute session cap
+    # as every other login flow, for free.
+    session["_session_created"] = time.time()
+    session.permanent = True
+    log_security_event(
+        "auth.platform_admin_login_success",
+        f"Platform admin session established for '{username}'",
+        level="INFO", identifier=username,
+    )
+    dest = redirect("/super_admin")
+    try:
+        token, is_new = get_or_create_device_token(request)
+        # No session_risk participation here (see this module's docstring
+        # on why platform admin keeps its own lighter session model), so
+        # last_sid stays unset -- revoke on this owner_kind is row-only,
+        # not a live session kill.
+        record_login_device(get_master_db, "platform_admin", username, token, None, request)
+        if is_new:
+            set_device_cookie(dest, token)
+    except Exception as exc:
+        app_log.warning("device capture failed for platform_admin '%s': %s", username, exc)
+    return dest
 
 
 def _platform_admin_required(view):
@@ -79,6 +113,13 @@ def platform_admin_login():
             conn.close()
 
         if row and check_password_hash(row[0], password):
+            # Local-dev escape hatch, same convention as blueprints/auth.py's
+            # MANDATORY_LOGIN_MFA -- defaults True (secure by default), only
+            # off when explicitly set in .env. Password is still checked
+            # above either way; this only skips the emailed-OTP step.
+            if not current_app.config.get("MANDATORY_PLATFORM_ADMIN_MFA", True):
+                return _complete_platform_admin_login(username)
+
             email = row[1]
             otp_code = f"{secrets.randbelow(900000) + 100000}"
             try:
@@ -119,34 +160,7 @@ def platform_admin_mfa_verify():
         submitted = (request.form.get("otp_code") or "").strip()
         expected = session.get("platform_mfa_otp_code") or ""
         if submitted and expected and secrets.compare_digest(submitted, expected):
-            session.clear()
-            session["platform_admin_logged_in"] = True
-            session["platform_admin_username"] = username
-            session["platform_admin_last_activity"] = time.time()
-            # Picked up by app.py's _enforce_session_lifetime before_request
-            # hook (not gated on admin_logged_in -- it checks this key on
-            # every request), giving this identity the same 8-hour absolute
-            # session cap as every other login flow, for free.
-            session["_session_created"] = time.time()
-            session.permanent = True
-            log_security_event(
-                "auth.platform_admin_login_success",
-                f"Platform admin session established for '{username}'",
-                level="INFO", identifier=username,
-            )
-            dest = redirect("/super_admin")
-            try:
-                token, is_new = get_or_create_device_token(request)
-                # No session_risk participation here (see this module's
-                # docstring on why platform admin keeps its own lighter
-                # session model), so last_sid stays unset -- revoke on this
-                # owner_kind is row-only, not a live session kill.
-                record_login_device(get_master_db, "platform_admin", username, token, None, request)
-                if is_new:
-                    set_device_cookie(dest, token)
-            except Exception as exc:
-                app_log.warning("device capture failed for platform_admin '%s': %s", username, exc)
-            return dest
+            return _complete_platform_admin_login(username)
 
         log_security_event(
             "auth.platform_admin_mfa_failure", "Invalid platform admin login MFA code",
@@ -484,13 +498,14 @@ def platform_admin_create_tenant():
         flash(error, "error")
         return redirect("/super_admin")
 
-    ok, error, portal_url = provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
-                                              payment_option, email_domain=email_domain)
+    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
+                                                            admin_email, payment_option, email_domain=email_domain)
     if not ok:
         flash(error, "error")
         return redirect("/super_admin")
 
-    send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password)
+    send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password,
+                             checkin_url=checkin_url)
 
     log_security_event(
         "platform_admin.tenant_created",

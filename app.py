@@ -488,6 +488,11 @@ _MANDATORY_MFA_EXEMPT_PATHS = {
 
 app.config.setdefault("MANDATORY_ADMIN_MFA", False)
 app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
+# Platform admin's emailed-OTP step (blueprints/platform_admin.py) --
+# defaults on (secure by default) unlike the two flags above, since this is
+# the highest-privilege identity in the system; only skip it by explicitly
+# setting this in .env for local dev without SMTP configured.
+app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
 
 
 @app.before_request
