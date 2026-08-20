@@ -217,9 +217,7 @@ def admin_login():
             )
             if admin_row[2]:
                 notify_if_new_login_ip(identifier, "admin", request.remote_addr, identifier, admin_row[2])
-            if admin_row[1] == "superadmin":
-                dest = redirect(tpath("/superadmin"))
-            elif admin_row[1] == HR_ROLE:
+            if admin_row[1] == HR_ROLE:
                 dest = redirect(tpath("/employees"))
             else:
                 dest = redirect(tpath("/admin"))

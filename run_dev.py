@@ -11,6 +11,9 @@ from wsgi import app
 # Local-only: skip the mandatory admin TOTP enrollment gate so the app is
 # reachable without an authenticator app during local dev/testing.
 app.config["MANDATORY_ADMIN_MFA"] = False
+# Local-only: skip the platform admin's emailed-OTP step -- no SMTP is
+# configured locally, so that email never actually arrives.
+app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = False
 
 if __name__ == "__main__":
     # Same cert-detection pattern as wsgi.py's own __main__ block -- kept
