@@ -87,15 +87,22 @@
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border-color);
     }
-    .step-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-subtle); transition: var(--transition-fast); }
+    .step-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-subtle); transition: var(--transition-fast); cursor: default; }
     .step-item.active { color: var(--accent-cyan); }
+    .step-item.completed { color: var(--accent-emerald); cursor: pointer; }
     .step-number {
       width: 24px; height: 24px; border-radius: 50%;
       background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 700; color: var(--text-subtle); transition: var(--transition-fast);
     }
     .step-item.active .step-number { background: var(--gradient-brand); color: #fff; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
+    .step-item.completed .step-number { background: var(--accent-emerald); color: #fff; font-size: 13px; }
     .step-line { flex: 1; height: 1px; background: var(--border-color); margin: 0 10px; }
+
+    /* Step panels -- only one visible at a time */
+    .step-panel { display: none; }
+    .step-panel.active { display: block; animation: fadeStep 0.25s ease; }
+    @keyframes fadeStep { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
     /* Form Fields */
     .field-group { margin-bottom: 18px; }
@@ -139,6 +146,47 @@
 
     .field-hint { font-size: 11.5px; color: var(--text-subtle); margin-top: 6px; line-height: 1.4; }
 
+    /* Employee count stepper */
+    .stepper-row { display: flex; align-items: stretch; gap: 10px; }
+    .stepper-btn {
+      width: 44px; flex-shrink: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+      background: var(--bg-secondary); color: var(--text-main); font-size: 18px; font-weight: 700;
+      cursor: pointer; transition: var(--transition-fast);
+    }
+    .stepper-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); background: var(--bg-card); }
+    .stepper-input { text-align: center; font-weight: 700; }
+    .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+    /* Live price box */
+    .price-box {
+      background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);
+      padding: 16px 18px; margin: 18px 0;
+    }
+    .price-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+    .price-total-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      padding-top: 10px; border-top: 1px dashed var(--border-color);
+      font-size: 15px; font-weight: 800; color: var(--text-main);
+    }
+    .price-period { font-size: 11px; font-weight: 600; color: var(--text-subtle); margin-left: 3px; }
+
+    /* Review summary */
+    .review-box {
+      background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);
+      padding: 14px 18px; margin-bottom: 18px;
+    }
+    .review-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 6px 0; }
+    .review-row span:first-child { color: var(--text-muted); }
+    .review-row strong { color: var(--text-main); font-weight: 700; text-align: right; word-break: break-word; }
+
+    /* Info note (replaces the old, unused admin-password field) */
+    .info-note {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: rgba(79, 70, 229, 0.06); border: 1px solid var(--border-color-glow);
+      border-radius: var(--radius-sm); padding: 12px 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5;
+    }
+    .info-note i { color: var(--accent-cyan); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
     .btn-submit {
       width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm);
       background: var(--gradient-brand);
@@ -149,6 +197,15 @@
     .btn-submit:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
     .btn-submit:active { transform: translateY(0); }
     .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+    .step-nav-row { display: flex; gap: 12px; margin-top: 4px; }
+    .step-nav-row .btn-submit { flex: 1; }
+    .btn-back {
+      flex: 0 0 auto; padding: 15px 20px; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
+      background: var(--bg-card); color: var(--text-main); font-size: 14.5px; font-weight: 700;
+      cursor: pointer; transition: var(--transition-fast); display: flex; align-items: center; gap: 8px;
+    }
+    .btn-back:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
 
     .alert {
       padding: 13px 15px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
@@ -221,17 +278,17 @@
     <div class="card">
       <!-- Step Indicator Bar -->
       <div class="step-bar">
-        <div class="step-item active">
+        <div class="step-item active" data-step="1">
           <div class="step-number">1</div>
           <span>Organisation</span>
         </div>
         <div class="step-line"></div>
-        <div class="step-item">
+        <div class="step-item" data-step="2">
           <div class="step-number">2</div>
           <span>Admin Setup</span>
         </div>
         <div class="step-line"></div>
-        <div class="step-item">
+        <div class="step-item" data-step="3">
           <div class="step-number">3</div>
           <span>Activation</span>
         </div>
@@ -245,102 +302,136 @@
         {% endfor %}
       {% endwith %}
 
-      <form autocomplete="off" id="createOrgForm" enctype="multipart/form-data">
+      <!-- novalidate: per-step validation (validateStep() below) runs its own
+           reportValidity() checks before advancing, so the browser's native
+           full-form validation -- which would otherwise also inspect
+           required fields sitting in other, currently display:none panels --
+           never gets a chance to trip over them. -->
+      <form autocomplete="off" id="createOrgForm" enctype="multipart/form-data" novalidate>
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
 
-        <!-- Field: Company Name -->
-        <div class="field-group">
-          <label class="field-label" for="company_name_input">
-            <i class="ti ti-building"></i> Company Name
-          </label>
-          <div class="input-wrapper">
-            <input class="field-input" type="text" name="company_name" id="company_name_input"
-                   placeholder="e.g. Acme Corporation" required autofocus oninput="autoFillSubdomain(this.value)" />
+        <!-- STEP 1: Organisation -->
+        <div class="step-panel active" data-step="1">
+          <div class="field-group">
+            <label class="field-label" for="company_name_input">
+              <i class="ti ti-building"></i> Company Name
+            </label>
+            <div class="input-wrapper">
+              <input class="field-input" type="text" name="company_name" id="company_name_input"
+                     placeholder="e.g. Acme Corporation" required autofocus oninput="autoFillSubdomain(this.value)" />
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="subdomain_input">
+              <i class="ti ti-world-www"></i> Corporate Subdomain URL
+            </label>
+            <div class="subdomain-container">
+              <div class="subdomain-prefix">www.hrzest.com/</div>
+              <input class="field-input subdomain-input" type="text" name="subdomain" id="subdomain_input"
+                     placeholder="acme" pattern="[a-z0-9\-]+" required
+                     title="Lowercase letters, digits and hyphens only"
+                     oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
+            </div>
+            <div class="field-hint">
+              Your team will access their portal at: <strong id="liveUrlPreview" style="color: var(--accent-cyan);">www.hrzest.com/acme/login</strong>
+            </div>
+          </div>
+
+          <div class="field-group" style="margin-bottom: 0;">
+            <label class="field-label" for="logo_input">
+              <i class="ti ti-photo"></i> Company Logo (optional)
+            </label>
+            <div class="input-wrapper">
+              <input class="field-input" type="file" name="logo" id="logo_input"
+                     accept="image/jpeg,image/png,image/webp,image/bmp" />
+            </div>
+            <div class="field-hint">
+              Shown in your team's employee, admin and HR dashboards. JPG, PNG, WEBP or BMP, up to 5&nbsp;MB. You can skip this and add it later from Settings.
+            </div>
           </div>
         </div>
 
-        <!-- Field: Subdomain -->
-        <div class="field-group">
-          <label class="field-label" for="subdomain_input">
-            <i class="ti ti-world-www"></i> Corporate Subdomain URL
-          </label>
-          <div class="subdomain-container">
-            <div class="subdomain-prefix">www.hrzest.com/</div>
-            <input class="field-input subdomain-input" type="text" name="subdomain" id="subdomain_input"
-                   placeholder="acme" pattern="[a-z0-9\-]+" required
-                   title="Lowercase letters, digits and hyphens only"
-                   oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
+        <!-- STEP 2: Admin Setup -->
+        <div class="step-panel" data-step="2">
+          <div class="field-group">
+            <label class="field-label" for="admin_email_input">
+              <i class="ti ti-mail"></i> Executive Admin Email
+            </label>
+            <div class="input-wrapper">
+              <input class="field-input" type="email" name="admin_email" id="admin_email_input"
+                     placeholder="admin@acme.com" required autocomplete="email"
+                     oninput="deriveFromEmail(this.value)" onblur="deriveFromEmail(this.value)" />
+            </div>
+            <div class="field-hint">
+              Also used as your admin login (username: <strong id="derivedUsername">—</strong>).
+            </div>
           </div>
-          <div class="field-hint">
-            Your team will access their portal at: <strong id="liveUrlPreview" style="color: var(--accent-cyan);">www.hrzest.com/acme/login</strong>
+
+          <div class="info-note" style="margin-bottom: 0;">
+            <i class="ti ti-shield-lock"></i>
+            For security we don't collect a password here. Once payment is confirmed, we'll email a secure link to <strong>set your admin password</strong> — valid for 1 hour.
           </div>
         </div>
 
-        <!-- Field: Company Logo (optional) -->
-        <div class="field-group">
-          <label class="field-label" for="logo_input">
-            <i class="ti ti-photo"></i> Company Logo (optional)
-          </label>
-          <div class="input-wrapper">
-            <input class="field-input" type="file" name="logo" id="logo_input"
-                   accept="image/jpeg,image/png,image/webp,image/bmp" />
+        <!-- STEP 3: Activation -->
+        <div class="step-panel" data-step="3">
+          <div class="field-group">
+            <label class="field-label" for="employeeCount">
+              <i class="ti ti-users"></i> Number of Employees
+            </label>
+            <div class="stepper-row">
+              <button type="button" class="stepper-btn" id="empMinus" aria-label="Decrease employee count">−</button>
+              <input class="field-input stepper-input" type="number" name="employee_count" id="employeeCount"
+                     value="10" min="1" max="100000" required />
+              <button type="button" class="stepper-btn" id="empPlus" aria-label="Increase employee count">+</button>
+            </div>
+            <div class="field-hint">You can add or remove employees anytime later — billing adjusts automatically.</div>
           </div>
-          <div class="field-hint">
-            Shown in your team's employee, admin and HR dashboards. JPG, PNG, WEBP or BMP, up to 5&nbsp;MB. You can skip this and add it later from Settings.
+
+          <div class="price-box">
+            <div class="price-row">
+              <span>₹99 / employee / month × <span id="priceCount">10</span></span>
+              <span id="priceMonthly">₹990</span>
+            </div>
+            <div class="price-total-row">
+              <span>Total due today</span>
+              <span id="priceTotal">₹990<span class="price-period">/month</span></span>
+            </div>
           </div>
+
+          <div class="review-box">
+            <div class="review-row"><span>Company</span><strong id="reviewCompany">—</strong></div>
+            <div class="review-row"><span>Portal URL</span><strong id="reviewSubdomain">—</strong></div>
+            <div class="review-row"><span>Admin Email</span><strong id="reviewEmail">—</strong></div>
+          </div>
+
+          {% if show_captcha %}
+          <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
+          <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+          {% endif %}
         </div>
 
         <!-- Email Domain and Admin Username are auto-derived from the admin
-             email below (deriveFromEmail() in the script block) instead of
-             asking for them separately -- both are already contained in the
-             email address itself. Employee count no longer blocks signup
-             either (it's a display-only price estimate, not enforced
-             anywhere in provision_tenant); it defaults to 10 here. -->
+             email in step 2 (deriveFromEmail() below) instead of asking for
+             them separately -- both are already contained in the email
+             address itself. -->
         <input type="hidden" name="email_domain" id="email_domain_input" />
-        <input type="hidden" name="employee_count" id="employeeCount" value="10" />
         <input type="hidden" name="admin_username" id="admin_username_input" />
-
-        <div style="height: 1px; background: var(--border-color); margin: 22px 0;"></div>
-
-        <!-- Section: Admin Account -->
-        <div class="field-group">
-          <label class="field-label" for="admin_email_input">
-            <i class="ti ti-mail"></i> Executive Admin Email
-          </label>
-          <div class="input-wrapper">
-            <input class="field-input" type="email" name="admin_email" id="admin_email_input"
-                   placeholder="admin@acme.com" required autocomplete="email"
-                   oninput="deriveFromEmail(this.value)" onblur="deriveFromEmail(this.value)" />
-          </div>
-          <div class="field-hint">
-            We will send your initial setup link and invoice receipt to this email address. Also used as your admin login (username: <strong id="derivedUsername">—</strong>).
-          </div>
-        </div>
-
-        <div class="field-group">
-          <label class="field-label" for="admin_password_input">
-            <i class="ti ti-lock"></i> Admin Password
-          </label>
-          <div class="input-wrapper">
-            <input class="field-input" type="password" name="admin_password" id="admin_password_input"
-                   placeholder="At least 8 characters" required minlength="8" autocomplete="new-password" />
-          </div>
-          <div class="field-hint">
-            You'll use this to sign in as the executive admin after setup.
-          </div>
-        </div>
-
-        {% if show_captcha %}
-        <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
-        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-        {% endif %}
 
         <div id="formError" class="alert alert-error" style="display:none;"></div>
 
-        <button type="submit" class="btn-submit" id="payBtn">
-          <span>Provision Corporate Workspace</span>
-          <i class="ti ti-arrow-right"></i>
-        </button>
+        <div class="step-nav-row">
+          <button type="button" class="btn-back" id="backBtn" style="display:none;">
+            <i class="ti ti-arrow-left"></i> Back
+          </button>
+          <button type="button" class="btn-submit" id="nextBtn">
+            <span>Continue</span> <i class="ti ti-arrow-right"></i>
+          </button>
+          <button type="submit" class="btn-submit" id="payBtn" style="display:none;">
+            <span>Provision Corporate Workspace</span> <i class="ti ti-arrow-right"></i>
+          </button>
+        </div>
       </form>
 
       <a href="/login" class="footer-login-link">
@@ -389,6 +480,7 @@
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
+  const PER_EMPLOYEE_PAISE = {{ per_employee_paise }};
   let subdomainUserEdited = false;
 
   function cleanSubdomainInput(el) {
@@ -436,6 +528,91 @@
     if (label) label.textContent = localPart || '—';
   }
 
+  function formatInr(paise) {
+    return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
+  }
+
+  function updatePrice() {
+    const countEl = document.getElementById('employeeCount');
+    let count = parseInt(countEl.value, 10);
+    if (!count || count < 1) count = 1;
+    countEl.value = count;
+    const totalPaise = count * PER_EMPLOYEE_PAISE;
+    document.getElementById('priceCount').textContent = count;
+    document.getElementById('priceMonthly').textContent = formatInr(totalPaise);
+    document.getElementById('priceTotal').innerHTML = formatInr(totalPaise) + '<span class="price-period">/month</span>';
+  }
+
+  function updateReview() {
+    const company = document.getElementById('company_name_input').value;
+    const subdomain = document.getElementById('subdomain_input').value;
+    const email = document.getElementById('admin_email_input').value;
+    document.getElementById('reviewCompany').textContent = company || '—';
+    document.getElementById('reviewSubdomain').textContent = subdomain ? ('www.hrzest.com/' + subdomain) : '—';
+    document.getElementById('reviewEmail').textContent = email || '—';
+  }
+
+  document.getElementById('employeeCount').addEventListener('input', updatePrice);
+  document.getElementById('empMinus').addEventListener('click', () => {
+    const el = document.getElementById('employeeCount');
+    el.value = Math.max(1, (parseInt(el.value, 10) || 1) - 1);
+    updatePrice();
+  });
+  document.getElementById('empPlus').addEventListener('click', () => {
+    const el = document.getElementById('employeeCount');
+    el.value = (parseInt(el.value, 10) || 1) + 1;
+    updatePrice();
+  });
+  updatePrice();
+
+  // ── 3-step wizard: Organisation -> Admin Setup -> Activation ──────────────
+  let currentStep = 1;
+  let maxStepReached = 1;
+
+  function validateStep(step) {
+    const panel = document.querySelector('.step-panel[data-step="' + step + '"]');
+    const inputs = panel.querySelectorAll('[required]');
+    for (const inp of inputs) {
+      if (!inp.checkValidity()) {
+        inp.reportValidity();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function goToStep(step) {
+    if (step > currentStep && !validateStep(currentStep)) return;
+    if (step > maxStepReached + 1) return; // can't skip ahead of validated steps
+
+    currentStep = step;
+    maxStepReached = Math.max(maxStepReached, step);
+
+    document.querySelectorAll('.step-panel').forEach(function (p) {
+      p.classList.toggle('active', p.dataset.step === String(step));
+    });
+    document.querySelectorAll('.step-item').forEach(function (item) {
+      const s = parseInt(item.dataset.step, 10);
+      item.classList.toggle('active', s === step);
+      if (s < step) item.classList.add('completed');
+    });
+
+    document.getElementById('backBtn').style.display = step > 1 ? 'flex' : 'none';
+    document.getElementById('nextBtn').style.display = step < 3 ? 'flex' : 'none';
+    document.getElementById('payBtn').style.display = step === 3 ? 'flex' : 'none';
+
+    if (step === 3) updateReview();
+  }
+
+  document.getElementById('nextBtn').addEventListener('click', function () { goToStep(currentStep + 1); });
+  document.getElementById('backBtn').addEventListener('click', function () { goToStep(currentStep - 1); });
+  document.querySelectorAll('.step-item').forEach(function (item) {
+    item.addEventListener('click', function () {
+      const s = parseInt(item.dataset.step, 10);
+      if (s <= maxStepReached) goToStep(s);
+    });
+  });
+
   // Payment-gated signup: create_order() stages the signup + a Razorpay
   // order WITHOUT creating any tenant yet (blueprints/billing.py); the
   // tenant only gets provisioned once verify_payment() confirms the
@@ -455,6 +632,7 @@
 
   document.getElementById('createOrgForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (!validateStep(3)) return;
     const btn = document.getElementById('payBtn');
     const err = document.getElementById('formError');
     err.style.display = 'none';

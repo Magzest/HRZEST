@@ -1,212 +1,201 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login — HRzest.com</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/landing_v2.css" />
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
-
+      /* Same design system as templates/create_org.html -- landing_v2.css's
+         tokens (--bg-card, --accent-cyan, --text-main, --shadow-*,
+         --radius-*, the Inter @font-face) so Login and Register read as one
+         product instead of two differently-styled pages. Locked to light
+         theme (data-theme="light", no darkmode.min.js) rather than following
+         the system/site dark-mode toggle, same reasoning as create_org.html. */
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }
+      html, body { min-height: 100vh; color: var(--text-main); }
       body {
-        min-height: 100vh;
-        background: linear-gradient(135deg, #e0f2fe 0%, #ede9fe 50%, #fce7f3 100%);
+        background:
+          linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+        background-attachment: fixed;
         display: flex; align-items: center; justify-content: center;
         padding: 24px;
-        position: relative; overflow: hidden;
       }
 
-      body::before {
-        content: '';
-        position: fixed; inset: 0; pointer-events: none;
-        background-image: radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px);
-        background-size: 28px 28px;
+      /* ── Header ── */
+      .top-nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+        display: flex; justify-content: space-between; align-items: center;
+        max-width: 1180px; margin: 0 auto; padding: 22px 24px;
+        background: var(--bg-glass);
+        backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color);
       }
-
-      .orb {
-        position: fixed; border-radius: 50%; filter: blur(80px);
-        opacity: 0.35; pointer-events: none; animation: float 8s ease-in-out infinite;
+      .brand-logo {
+        display: flex; align-items: center; gap: 10px;
+        text-decoration: none; color: var(--text-main); font-weight: 800; font-size: 20px;
       }
-      .orb1 { width: 500px; height: 500px; background: radial-gradient(circle, #93c5fd, #a5b4fc); top: -150px; left: -150px; animation-delay: 0s; }
-      .orb2 { width: 400px; height: 400px; background: radial-gradient(circle, #c4b5fd, #f9a8d4); bottom: -100px; right: -100px; animation-delay: -3s; }
-      .orb3 { width: 300px; height: 300px; background: radial-gradient(circle, #7dd3fc, #86efac); bottom: 100px; left: 30%; animation-delay: -5s; }
-
-      @keyframes float {
-        0%, 100% { transform: translateY(0px) scale(1); }
-        50% { transform: translateY(-30px) scale(1.05); }
+      .brand-logo .logo-badge {
+        width: 38px; height: 38px; border-radius: var(--radius-sm);
+        background: var(--gradient-brand);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 19px; color: #fff; box-shadow: 0 4px 18px rgba(79, 70, 229, 0.35);
       }
+      .nav-link-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600;
+        padding: 8px 16px; border-radius: var(--radius-sm); background: var(--bg-card);
+        border: 1px solid var(--border-color); transition: var(--transition-fast);
+      }
+      .nav-link-btn:hover { color: var(--accent-cyan); border-color: var(--border-color-glow); box-shadow: var(--shadow-sm); }
 
+      /* ── Card ── */
       .card {
         width: 100%; max-width: 420px;
-        background: rgba(255,255,255,0.75);
-        -webkit-backdrop-filter: blur(24px);
-        backdrop-filter: blur(24px);
-        border: 1px solid rgba(255,255,255,0.9);
-        border-radius: 28px;
-        padding: 44px 40px 36px;
-        position: relative; z-index: 1;
-        box-shadow: 0 20px 60px rgba(99,102,241,0.15), 0 4px 20px rgba(0,0,0,0.06);
+        background: var(--bg-card);
+        border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+        padding: 40px 36px 32px;
+        box-shadow: var(--shadow-lg);
+        position: relative; overflow: hidden;
+      }
+      .card::before {
+        content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+        background: var(--gradient-brand);
       }
 
-      .logo {
-        text-align: center;
-        margin-bottom: 36px;
-      }
+      .logo { text-align: center; margin-bottom: 32px; }
       .logo-icon {
-        width: 68px; height: 68px;
-        background: linear-gradient(135deg, #3b82f6, #6366f1);
-        border-radius: 20px;
+        width: 64px; height: 64px; margin: 0 auto 16px;
+        background: var(--gradient-brand);
+        border-radius: var(--radius-md);
         display: flex; align-items: center; justify-content: center;
-        font-size: 30px;
-        margin: 0 auto 18px;
-        box-shadow: 0 8px 24px rgba(59,130,246,0.4);
+        font-size: 28px; color: #fff; overflow: hidden;
+        box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
       }
       .logo h1 {
-        font-size: 24px; font-weight: 800;
-        color: #1e293b; letter-spacing: -0.3px;
-        margin-bottom: 6px;
+        font-family: var(--font-heading);
+        font-size: 22px; font-weight: 800; letter-spacing: -0.4px;
+        color: var(--text-main); margin-bottom: 6px;
       }
-      .logo p {
-        font-size: 13px; color: #64748b;
-        letter-spacing: 0.3px;
-      }
+      .logo p { font-size: 13.5px; font-weight: 600; color: var(--text-muted); }
 
+      .field-group { margin-bottom: 18px; }
       .field-label {
         display: block;
         font-size: 11px; font-weight: 700;
-        text-transform: uppercase; letter-spacing: 0.7px;
-        color: #475569;
-        margin-bottom: 8px;
+        text-transform: uppercase; letter-spacing: 0.6px;
+        color: var(--text-muted);
+        margin-bottom: 7px;
       }
-
       .field-input {
-        width: 100%;
-        padding: 14px 16px;
-        background: #f8fafc;
-        border: 1.5px solid #e2e8f0;
-        border-radius: 12px;
-        color: #1e293b;
-        font-size: 15px;
-        outline: none;
-        transition: 0.2s;
-        margin-bottom: 20px;
+        width: 100%; padding: 12px 15px;
+        background: var(--bg-secondary); border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm); color: var(--text-main); font-size: 14px; outline: none;
+        transition: var(--transition-fast);
       }
-      .field-input::placeholder { color: #94a3b8; }
+      .field-input::placeholder { color: var(--text-subtle); }
       .field-input:focus {
-        background: #fff;
-        border-color: #818cf8;
-        box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+        background: var(--bg-card); border-color: var(--accent-cyan);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
       }
 
-      .btn-login {
-        width: 100%; padding: 15px;
-        border: none; border-radius: 12px;
-        background: linear-gradient(135deg, #3b82f6, #6366f1);
-        color: #ffffff;
-        font-size: 15px; font-weight: 700;
-        cursor: pointer; transition: 0.2s;
-        letter-spacing: 0.3px;
-        box-shadow: 0 6px 20px rgba(59,130,246,0.4);
+      .btn-submit {
+        width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm);
+        background: var(--gradient-brand);
+        color: #ffffff; font-size: 14.5px; font-weight: 700; letter-spacing: 0.2px;
+        cursor: pointer; transition: var(--transition-fast); box-shadow: var(--shadow-md);
         margin-top: 4px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
       }
-      .btn-login:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 28px rgba(59,130,246,0.5);
-      }
-      .btn-login:active { transform: translateY(0); }
+      .btn-submit:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+      .btn-submit:active { transform: translateY(0); }
 
-      .error-box {
-        background: rgba(239,68,68,0.15);
-        border: 1px solid rgba(239,68,68,0.35);
-        border-radius: 10px;
-        padding: 12px 16px;
-        font-size: 13px; font-weight: 600;
-        color: #fca5a5;
-        margin-bottom: 20px;
-        display: flex; align-items: center; gap: 8px;
+      .alert {
+        padding: 13px 15px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
+        margin-bottom: 18px; display: flex; align-items: center; gap: 10px;
       }
+      .alert-error { background: rgba(225, 29, 72, 0.08); border: 1px solid rgba(225, 29, 72, 0.25); color: var(--accent-rose); }
 
       .links {
         margin-top: 20px;
         display: flex; justify-content: space-between; align-items: center;
-        font-size: 12px;
+        font-size: 12.5px;
       }
-      .links a {
-        color: #94a3b8;
-        text-decoration: none;
-        transition: 0.2s;
-      }
-      .links a:hover { color: #475569; }
-      .links .forgot { color: #6366f1; }
-      .links .forgot:hover { color: #4f46e5; }
+      .links a { color: var(--text-subtle); text-decoration: none; transition: var(--transition-fast); }
+      .links a:hover { color: var(--text-muted); }
+      .links .forgot { color: var(--accent-cyan); font-weight: 600; }
+      .links .forgot:hover { color: var(--accent-blue); }
 
       .hint {
         margin-top: 24px;
-        padding: 14px 16px;
-        background: #f1f5f9;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        font-size: 12px; color: #64748b;
+        padding: 13px 15px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        font-size: 12px; color: var(--text-muted);
         line-height: 1.6;
       }
-      .hint strong { color: #475569; }
+      .hint strong { color: var(--text-main); }
 
       @media (max-width: 480px) {
         .card { padding: 32px 24px 28px; }
       }
-      /* ── Dark mode ── */
-      body.dark-mode { background: #0d1117 !important; }
-      body.dark-mode .orb { opacity: 0.05 !important; }
-      body.dark-mode .card { background: rgba(22,27,34,0.92) !important; border-color: #30363d !important; }
-      body.dark-mode .logo h1,body.dark-mode .logo h2 { color: #cdd9e5 !important; }
-      body.dark-mode .logo p { color: #768390 !important; }
-      body.dark-mode label { color: #768390 !important; }
-      body.dark-mode input { background: #0d1117 !important; border-color: #30363d !important; color: #cdd9e5 !important; }
-      body.dark-mode input::placeholder { color: #768390 !important; opacity: 1 !important; }
-      body.dark-mode .error { background: #7f1d1d !important; border-color: #991b1b !important; color: #fca5a5 !important; }
-      body.dark-mode .hint { background: #1c2128 !important; border-color: #30363d !important; color: #768390 !important; }
-      body.dark-mode .hint strong { color: #94a3b8 !important; }
-      body.dark-mode .links .forgot { color: #4d9de0 !important; }
     </style>
-    <link rel="stylesheet" href="/static/shared.min.css" />
-    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   </head>
   <body>
-    <div class="orb orb1"></div>
-    <div class="orb orb2"></div>
-    <div class="orb orb3"></div>
+    <header class="top-nav">
+      <a href="/" class="brand-logo">
+        <div class="logo-badge"><i class="ti ti-shield-check"></i></div>
+        <span>HRzest</span>
+      </a>
+      <a href="/create_org" class="nav-link-btn">
+        <i class="ti ti-building"></i> Register a Company
+      </a>
+    </header>
+
     <div class="card">
       <div class="logo">
-        <div class="logo-icon"><i class="ti ti-shield-check"></i></div>
+        <div class="logo-icon">
+          {% if co and co.logo_url %}
+            <img src="{{ co.logo_url }}" alt="{{ co.company_name }}" style="width:100%;height:100%;object-fit:contain;" onerror="this.outerHTML='<i class=\'ti ti-shield-check\'></i>'" />
+          {% else %}
+            <i class="ti ti-shield-check"></i>
+          {% endif %}
+        </div>
         <h1>Sign In to Your Workspace</h1>
-        <p style="font-weight: 600; color: #475569; font-size: 14px; margin-top: 4px;">{{ co.company_name if co and co.company_name else "HRzest Enterprise Governance" }}</p>
+        <p>{{ co.company_name if co and co.company_name else "HRzest Enterprise Governance" }}</p>
       </div>
 
       {% if error %}
-      <div class="error-box"><i class="ti ti-alert-circle"></i> {{ error }}</div>
+      <div class="alert alert-error"><i class="ti ti-alert-circle"></i> {{ error }}</div>
       {% endif %}
 
-      <a href="/quick_admin_login" style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3); border-radius: 12px; color: #2563eb; font-weight: 700; text-decoration: none; margin-bottom: 20px; font-size: 14px; transition: 0.2s;">
-        🚀 1-Click Open Admin Dashboard →
-      </a>
-
       <form action="{{ tpath('/login') }}" method="POST" autocomplete="on">
-        <label class="field-label" for="login_identifier">Username or Employee ID</label>
-        <input class="field-input" type="text" id="login_identifier" name="identifier"
-               placeholder="Enter your username or employee ID"
-               required autofocus autocomplete="username" />
+        <div class="field-group">
+          <label class="field-label" for="login_identifier">Username or Employee ID</label>
+          <input class="field-input" type="text" id="login_identifier" name="identifier"
+                 placeholder="Enter your username or employee ID"
+                 required autofocus autocomplete="username" />
+        </div>
 
-        <label class="field-label" for="login_password">Password</label>
-        <input class="field-input" type="password" id="login_password" name="password"
-               placeholder="Enter your password"
-               required autocomplete="current-password" />
+        <div class="field-group">
+          <label class="field-label" for="login_password">Password</label>
+          <input class="field-input" type="password" id="login_password" name="password"
+                 placeholder="Enter your password"
+                 required autocomplete="current-password" />
+        </div>
 
         {% if show_captcha %}
         <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
         <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         {% endif %}
 
-        <button type="submit" class="btn-login">Sign In →</button>
+        <button type="submit" class="btn-submit">
+          <span>Sign In</span> <i class="ti ti-arrow-right"></i>
+        </button>
       </form>
 
       <div class="links">
@@ -218,6 +207,5 @@
         <strong>Sign In Help</strong> — Use your <strong>username</strong> or <strong>employee ID</strong> to continue.
       </div>
     </div>
-    <script src="/static/darkmode.min.js"></script>
   </body>
 </html>

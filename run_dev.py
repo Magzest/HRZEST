@@ -5,6 +5,11 @@ import os
 # Pre-set environment variables for smooth local execution
 os.environ.setdefault("FLASK_ENV", "development")
 os.environ.setdefault("SECRET_KEY", "dev-secret-key-12345")
+# Local-only: no ClamAV instance is reachable from a bare local dev setup --
+# APP_ENV=development makes utils/helpers.py's malware scan fail OPEN
+# (upload allowed, warning logged) instead of fail CLOSED like it does in
+# production when the scanner is unreachable.
+os.environ.setdefault("APP_ENV", "development")
 
 from wsgi import app
 
