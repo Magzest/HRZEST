@@ -632,8 +632,7 @@
                     <button class="u-p-4-10 u-bd-1-solid-dbeafe u-br-7 u-bg-eff6ff u-c-1e3a8a u-fs-11 u-fw-700 u-cur-pointer" onclick="openEditBreakModal(this.dataset.id,this.dataset.name,this.dataset.time,+this.dataset.dur,this.dataset.active==='True')" data-id="{{ b.id }}" data-name="{{ b.name|e }}" data-time="{{ b.time|e }}" data-dur="{{ b.duration }}" data-active="{{ b.active }}">
                       <i class="ti ti-pencil"></i> Edit
                     </button>
-                    <form method="POST" action="{{ tpath('/delete_break') }}" onsubmit="return confirm('Delete this break?')">
-                      <input type="hidden" name="break_id" value="{{ b.id }}" />
+                    <form method="POST" action="{{ tpath('/delete_break/' + b.id|string) }}" onsubmit="return confirm('Delete this break?')">
                       <button class="u-p-4-10 u-bd-1-solid-fecaca u-br-7 u-bg-fee2e2 u-c-dc2626 u-fs-11 u-fw-700 u-cur-pointer" type="submit">
                         <i class="ti ti-trash"></i>
                       </button>

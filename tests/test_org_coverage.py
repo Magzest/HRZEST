@@ -19,7 +19,7 @@ class TestCreateOrgPage:
     def test_get_shows_form(self, client):
         rv = client.get("/create_org")
         assert rv.status_code == 200
-        assert b"Create Organisation" in rv.data
+        assert b"Register Your Organisation" in rv.data
 
     def test_post_missing_fields_returns_error(self, client):
         rv = client.post("/create_org", data={
@@ -50,7 +50,7 @@ class TestOrgChartPage:
     def test_unauthenticated_redirects(self, client):
         rv = client.get("/org_chart")
         assert rv.status_code == 302
-        assert "/login" in rv.headers["Location"]
+        assert "/admin-login" in rv.headers["Location"]
 
     def test_renders_for_admin(self, client, seed_admin):
         _admin_session(client, seed_admin)

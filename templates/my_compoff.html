@@ -378,19 +378,20 @@
     </div>
     {% endif %}
 
-    <form method="POST" action="{{ tpath('/apply_leave') }}" class="apply-form">
+    <form method="POST" action="{{ tpath('/request_leave') }}" class="apply-form">
       <input type="hidden" name="leave_type_id" value="{{ compoff_lt_id }}"/>
       <div class="form-row">
         <div class="form-group">
           <label>Leave Date</label>
-          <input type="date" name="leave_date" required min="{{ today }}"/>
+          <input type="date" name="leave_date_start" required min="{{ today }}"/>
         </div>
         <div class="form-group">
           <label>Type</label>
-          <select name="is_half">
+          <select onchange="this.form.is_half_day.checked = (this.value === '1')">
             <option value="0">Full Day</option>
             <option value="1">Half Day</option>
           </select>
+          <input type="checkbox" name="is_half_day" value="1" hidden />
         </div>
       </div>
       <div class="form-group">

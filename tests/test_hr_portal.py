@@ -58,12 +58,21 @@ class TestHrScopeRestrictions:
 
     @pytest.mark.parametrize("path", [
         "/employees", "/monthly_report", "/leave_holidays", "/overtime",
-        "/performance", "/onboarding", "/tickets", "/documents",
+        "/performance", "/onboarding", "/documents",
     ])
     def test_hr_role_reaches_shared_employee_lifecycle_pages(self, client, hr_admin, path):
         _admin_session(client, hr_admin["username"], role="hr")
         resp = client.get(path)
         assert resp.status_code == 200
+
+    def test_hr_role_reaches_tickets_via_redirect(self, client, hr_admin):
+        # /tickets redirects to the Leaves & Holidays page's Tickets tab now
+        # (blueprints/tickets.py's tickets_view()) instead of rendering
+        # inline -- HR still isn't blocked from it (302, not 403).
+        _admin_session(client, hr_admin["username"], role="hr")
+        resp = client.get("/tickets", follow_redirects=False)
+        assert resp.status_code == 302
+        assert "/leave_holidays" in resp.headers["Location"]
 
     def test_hr_role_blocked_from_payroll(self, client, hr_admin):
         _admin_session(client, hr_admin["username"], role="hr")

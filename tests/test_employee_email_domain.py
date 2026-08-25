@@ -8,6 +8,13 @@ covers both states: the default/no-domain-set schema (backward compatible
 -- email stays optional, matching every pre-existing registration test)
 and a domain explicitly configured.
 
+Exercised through POST /add_employee_page (blueprints/employees.py) --
+the actual, current employee-registration route. This used to go through
+POST /admin_action (action="register"), which had its own registration
+branch once; that branch was removed and the feature lives solely on
+/add_employee_page now (see tests/test_employee_registration.py's
+docstring for the full story).
+
 Mutates company_settings.email_domain on the shared att_test default
 schema for the "domain configured" tests -- always restored to NULL in a
 finally block, since that column being unset is the baseline every other
@@ -47,7 +54,6 @@ def _admin_session(client, seed_admin):
 
 def _registration_payload(emp_id, email, **overrides):
     payload = {
-        "action": "register",
         "name": "Domain Gate Test Employee",
         "emp_id": emp_id,
         "email": email,
@@ -89,7 +95,7 @@ class TestNoDomainConfigured:
         _set_domain(db_engine, None)
         try:
             _admin_session(client, seed_admin)
-            resp = client.post("/admin_action", data=_registration_payload(emp_id, ""), follow_redirects=True)
+            resp = client.post("/add_employee_page", data=_registration_payload(emp_id, ""), follow_redirects=True)
             assert resp.status_code == 200
 
             cur = db_engine.cursor()
@@ -108,7 +114,7 @@ class TestDomainConfigured:
         _set_domain(db_engine, "acme.com")
         try:
             _admin_session(client, seed_admin)
-            resp = client.post("/admin_action", data=_registration_payload(emp_id, "someone@other.com"),
+            resp = client.post("/add_employee_page", data=_registration_payload(emp_id, "someone@other.com"),
                                 follow_redirects=True)
             assert resp.status_code == 200
             assert b"must be a @acme.com address" in resp.data
@@ -127,7 +133,7 @@ class TestDomainConfigured:
         _set_domain(db_engine, "acme.com")
         try:
             _admin_session(client, seed_admin)
-            resp = client.post("/admin_action", data=_registration_payload(emp_id, ""), follow_redirects=True)
+            resp = client.post("/add_employee_page", data=_registration_payload(emp_id, ""), follow_redirects=True)
             assert resp.status_code == 200
             assert b"Employee email is required" in resp.data
 
@@ -145,7 +151,7 @@ class TestDomainConfigured:
         _set_domain(db_engine, "acme.com")
         try:
             _admin_session(client, seed_admin)
-            resp = client.post("/admin_action", data=_registration_payload(emp_id, "new.hire@acme.com"),
+            resp = client.post("/add_employee_page", data=_registration_payload(emp_id, "new.hire@acme.com"),
                                 follow_redirects=True)
             assert resp.status_code == 200
 

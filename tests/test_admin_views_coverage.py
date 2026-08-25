@@ -45,21 +45,23 @@ class TestCspReport:
 class TestHome:
 
     def test_get_home_renders_marketing_landing_page(self, client):
-        """"/" is the apex marketing domain now (blueprints/core.py's home()) --
-        an anonymous visitor with no session gets the public landing page
-        directly, not a redirect. A session-bound visitor (admin/employee/
-        platform-admin) still gets redirected onward -- see
-        test_get_home_redirects_authenticated_admin below."""
+        """"/" always renders the marketing landing page now (blueprints/
+        core.py's home()) regardless of session state -- see
+        test_get_home_renders_for_authenticated_admin_too below."""
         rv = client.get("/", follow_redirects=False)
         assert rv.status_code == 200
         assert b"HRzest" in rv.data
 
-    def test_get_home_redirects_authenticated_admin(self, client):
+    def test_get_home_renders_for_authenticated_admin_too(self, client):
+        """A session-bound visitor (admin/employee/platform-admin) used to be
+        auto-redirected straight to their portal; that was removed so
+        everyone lands on the landing page first and clicks through
+        themselves (see blueprints/core.py's home())."""
         with client.session_transaction() as sess:
             sess["admin_logged_in"] = True
         rv = client.get("/", follow_redirects=False)
-        assert rv.status_code == 302
-        assert "/admin" in rv.headers["Location"]
+        assert rv.status_code == 200
+        assert b"HRzest" in rv.data
 
     def test_get_checkin_renders_200(self, client):
         rv = client.get("/checkin")
@@ -86,7 +88,7 @@ class TestAdminDashboard:
     def test_admin_unauthenticated_redirects(self, client):
         rv = client.get("/admin")
         assert rv.status_code == 302
-        assert "/login" in rv.headers["Location"]
+        assert "/admin-login" in rv.headers["Location"]
 
 
 # ── dashboard_live ────────────────────────────────────────────────────────────

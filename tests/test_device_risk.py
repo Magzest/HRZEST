@@ -79,7 +79,7 @@ class TestDeviceRiskEndpoint:
         # should now reject this same session's very next request, on any route.
         next_resp = client.get("/employee_portal", follow_redirects=False)
         assert next_resp.status_code == 302
-        assert "/login" in next_resp.headers.get("Location", "")
+        assert "/admin-login" in next_resp.headers.get("Location", "")
 
     def test_non_integer_score_rejected(self, client, seed_employee):
         with client.session_transaction() as sess:

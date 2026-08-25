@@ -1,8 +1,12 @@
 """New-employee welcome emails now include a clickable link to the
 tenant's own login page, not just bare credentials (previously the email
-listed an Employee ID + password with nowhere to use them). Covers all 4
-employee-creation entry points: /admin_action (register), /add_employee_page,
-the Bearer-token /api/employees, and the self-service /api/employee/signup.
+listed an Employee ID + password with nowhere to use them). Covers all 3
+live employee-creation entry points: /add_employee_page, the Bearer-token
+/api/employees, and the self-service /api/employee/signup. (A 4th used to
+exist -- POST /admin_action action="register" -- but that branch was
+removed from blueprints/employees.py; see tests/test_employee_registration.py's
+docstring. /add_employee_page's coverage below is the same welcome-email
+behavior, just through the route that actually creates employees now.)
 
 get_email_config()/send_email_smtp() are monkeypatched per call site
 (imported directly into each blueprint module, same pattern
@@ -10,7 +14,6 @@ tests/test_org.py uses for org_module.get_email_config) so these tests
 don't depend on real SMTP being configured.
 """
 import io
-import datetime
 import os
 from PIL import Image
 
@@ -67,35 +70,6 @@ class TestEmployeeLoginUrlHelper:
             from utils.helpers import employee_login_url
             url = employee_login_url()
             assert url.endswith("/acme/login")
-
-
-class TestAdminActionWelcomeEmail:
-    def test_register_sends_email_with_login_link(self, client, seed_admin, db_engine, monkeypatch):
-        _mock_face_detected(monkeypatch)
-        import blueprints.employees as employees_module
-        monkeypatch.setattr(employees_module, "get_email_config", lambda: {"host": "smtp.test"})
-        sent = []
-        monkeypatch.setattr(employees_module, "send_email_smtp",
-                             lambda to, subject, html, cfg: sent.append((to, subject, html)))
-
-        emp_id = "WELMAIL001"
-        try:
-            _admin_session(client, seed_admin)
-            resp = client.post("/admin_action", data={
-                "action": "register", "name": "Welcome Mail Test", "emp_id": emp_id,
-                "email": "welmail001@test.local", "role": "Developer",
-                "date_of_joining": datetime.date.today().isoformat(), "work_mode": "office",
-                "face": (io.BytesIO(_fake_jpeg_bytes()), "face.jpg"),
-            }, follow_redirects=True)
-            assert resp.status_code == 200
-
-            assert len(sent) == 1
-            to, subject, html = sent[0]
-            assert to == "welmail001@test.local"
-            assert "/login" in html
-            assert "http" in html
-        finally:
-            _cleanup_employee(db_engine, emp_id)
 
 
 class TestAddEmployeePageWelcomeEmail:

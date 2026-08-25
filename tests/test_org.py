@@ -35,11 +35,16 @@ class TestSignupPage:
     def test_get_page_renders(self, client):
         resp = client.get("/create_org")
         assert resp.status_code == 200
-        assert b"Create Organisation" in resp.data
+        assert b"Register Your Organisation" in resp.data
 
     def test_page_shows_flat_per_employee_rate(self, client):
+        """The flat per-employee rate used to be shown on /create_org itself
+        -- the "Redesign registration page" commit dropped the marketing
+        sidebar it lived in (dead pricing-display JS included). Pricing is
+        now shown only on the landing page ("/"), which is where this
+        checks instead."""
         import utils.plan_limits as plan_limits
-        resp = client.get("/create_org")
+        resp = client.get("/")
         assert plan_limits.format_price_inr(plan_limits.PER_EMPLOYEE_PAISE).encode() in resp.data
 
 
@@ -164,6 +169,7 @@ class TestPortalLinkOnSuccess:
 
     def test_success_page_shows_dedicated_portal_link_no_smtp(self, client, db_engine, monkeypatch):
         import blueprints.org as org_module
+        from utils.helpers import _safe_app_url
         monkeypatch.setattr(org_module, "get_email_config", lambda: None)
 
         from app import init_master_db
@@ -179,7 +185,11 @@ class TestPortalLinkOnSuccess:
                 "admin_email": "portal@test.local", "email_domain": "test.local",
             }, follow_redirects=False)
             assert resp.status_code == 200
-            assert f"https://www.hrzest.com/{subdomain}/login".encode() in resp.data
+            # portal_url is built from _safe_app_url() (APP_URL if set, else
+            # the request's own host) -- not a hardcoded production domain,
+            # since that would send every dev/test/staging signup to a real
+            # external host instead of wherever this app is actually running.
+            assert f"{_safe_app_url()}/{subdomain}/login".encode() in resp.data
             assert b"portal_admin" in resp.data
             # No SMTP configured -- the page must degrade gracefully to
             # "bookmark this link" rather than falsely claiming an email
