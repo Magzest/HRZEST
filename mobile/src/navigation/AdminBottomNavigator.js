@@ -21,6 +21,7 @@ import OnboardingScreen from "../screens/admin/OnboardingScreen";
 import OrgChartScreen from "../screens/admin/OrgChartScreen";
 import DepartmentsScreen from "../screens/admin/DepartmentsScreen";
 import LeavesHolidaysScreen from "../screens/admin/LeavesHolidaysScreen";
+import SeatsBillingScreen from "../screens/admin/SeatsBillingScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -197,6 +198,12 @@ export default function AdminBottomNavigator() {
       <Tab.Screen
         name="LeavesHolidays"
         component={LeavesHolidaysScreen}
+        options={{ tabBarItemStyle: { display: "none" } }}
+      />
+
+      <Tab.Screen
+        name="SeatsBilling"
+        component={SeatsBillingScreen}
         options={{ tabBarItemStyle: { display: "none" } }}
       />
     </Tab.Navigator>

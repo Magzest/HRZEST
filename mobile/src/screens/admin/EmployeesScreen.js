@@ -26,7 +26,7 @@ try {
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
-import { fetchEmployees, addEmployee, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
+import { fetchEmployees, addEmployee, uploadEmployeePhoto, getPhotoUrl, fetchBillingStatus } from "../../api/client";
 import { saveLocalEmployee, mergeEmployeesWithLocal } from "../../utils/employeeStore";
 import THEME from "../../constants/theme";
 
@@ -42,6 +42,10 @@ export default function EmployeesScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(null);
+  // Same paid_employee_slots cap the web app's employees.html banner shows
+  // -- surfaced here too so Admin/HR see it right where they'd try to add
+  // someone, not just after being blocked (see SeatsBillingScreen).
+  const [billingStatus, setBillingStatus] = useState(null);
 
   // Add Employee Form State
   const [addModalVisible, setAddModalVisible] = useState(false);
@@ -162,13 +166,24 @@ export default function EmployeesScreen({ navigation }) {
     }
   };
 
+  const loadBillingStatus = async () => {
+    try {
+      const res = await fetchBillingStatus();
+      if (res?.data?.ok) setBillingStatus(res.data);
+    } catch (e) {
+      // Non-critical -- the banner just doesn't render without it.
+    }
+  };
+
   useEffect(() => {
     loadData();
+    loadBillingStatus();
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
+    loadBillingStatus();
   };
 
   const handleAddEmployeeSubmit = async () => {
@@ -326,6 +341,34 @@ export default function EmployeesScreen({ navigation }) {
               {employees.filter((e) => e.status === "On Leave" || e.status === "Leave").length} On Leave
             </Text>
           </View>
+
+          {/* Seat-limit banner -- same data as web's employees.html banner */}
+          {billingStatus && billingStatus.paid_employee_slots != null && (
+            <TouchableOpacity
+              style={[
+                styles.seatBanner,
+                billingStatus.employee_count >= billingStatus.paid_employee_slots && styles.seatBannerDanger,
+              ]}
+              onPress={() => navigation.navigate("SeatsBilling")}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={billingStatus.employee_count >= billingStatus.paid_employee_slots ? "lock-closed" : "people"}
+                size={16}
+                color={billingStatus.employee_count >= billingStatus.paid_employee_slots ? "#991B1B" : "#1E40AF"}
+              />
+              <Text
+                style={[
+                  styles.seatBannerText,
+                  billingStatus.employee_count >= billingStatus.paid_employee_slots && { color: "#991B1B" },
+                ]}
+              >
+                Seats: {billingStatus.employee_count} / {billingStatus.paid_employee_slots} used
+                {billingStatus.employee_count >= billingStatus.paid_employee_slots ? " — tap to buy more" : ""}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
 
           {/* Search & Filter */}
           <AdminSearchBar
@@ -751,6 +794,20 @@ const styles = StyleSheet.create({
   heroNumber: { fontSize: 22, fontWeight: "800", color: "#FFFFFF" },
   heroTitle: { fontSize: 14, fontWeight: "700", color: "rgba(255,255,255,0.85)", marginTop: 2 },
   heroSubtitle: { fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 8 },
+  seatBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 12,
+  },
+  seatBannerDanger: { backgroundColor: "#FEE2E2", borderColor: "#FCA5A5" },
+  seatBannerText: { flex: 1, fontSize: 12, fontWeight: "700", color: "#1E40AF" },
   heroIconBadge: {
     width: 48,
     height: 48,

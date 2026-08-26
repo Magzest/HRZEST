@@ -1491,6 +1491,22 @@ def _init_core_tables(cursor, db):
             expires_at TIMESTAMP NOT NULL
         )
     """)
+    # Single-use, short-lived tokens that let the mobile app (Bearer-token
+    # auth only) hand a WebView a real session-cookie admin login, so
+    # web-only pages -- currently just /settings/seats (blueprints/seats.py,
+    # blueprints/auto_debit.py) -- can be reused as-is inside the app rather
+    # than reimplementing Razorpay Checkout natively. Same hash-and-expire
+    # shape as admin_users.reset_token (blueprints/auth.py's
+    # admin_forgot_password) -- see /api/mobile/web_session_link and
+    # /mobile_bridge_login/<token> in blueprints/core.py.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS mobile_bridge_tokens (
+            token_hash VARCHAR(64) PRIMARY KEY,
+            admin_username VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL
+        )
+    """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mobile_biometric_proofs (
             employee_id VARCHAR(50) PRIMARY KEY,

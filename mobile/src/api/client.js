@@ -242,3 +242,16 @@ export const addDepartment = (name, code = '') =>
 export const deleteDepartment = (deptId) =>
   client.post(`/api/departments/${deptId}/delete`);
 
+// ── Seats & Billing ───────────────────────────────────────────────
+// Employee-count-vs-plan-limit + monthly auto-debit status -- same
+// underlying data as the web app's Seats & Billing page
+// (templates/seat_checkout.html), served here as JSON.
+export const fetchBillingStatus = () => client.get('/api/billing_status');
+
+// Buying seats / enabling auto-debit needs Razorpay Checkout, which this
+// app doesn't embed natively -- instead we bridge the current Bearer
+// session into a one-time web session-cookie login and open that URL in
+// an in-app WebView (see SeatsBillingScreen). The link is single-use and
+// expires in 5 minutes.
+export const getWebSessionLink = () => client.post('/api/mobile/web_session_link');
+

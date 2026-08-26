@@ -105,6 +105,13 @@ export default function AdminDrawerContent(props) {
       route: "Payroll",
       section: "PAYROLL & COMP",
     },
+    {
+      title: "Seats & Billing",
+      icon: "pricetag-outline",
+      iconFocused: "pricetag",
+      route: "SeatsBilling",
+      section: "PAYROLL & COMP",
+    },
 
     // SUPPORT & HELPDESK
     {

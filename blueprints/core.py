@@ -7,8 +7,8 @@ last routes drained out of app.py, which now holds only shared setup
 import time
 import secrets
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, Response
-from extensions import limiter, app_log
+from flask import Blueprint, request, session, jsonify, render_template, redirect, Response
+from extensions import limiter, app_log, log_security_event
 from database import get_db_connection
 from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
@@ -16,10 +16,10 @@ from utils.auth import (
 )
 from utils.helpers import (
     _db, get_auth_config, validate_employee_email_domain,
-    employee_login_url, get_pending_counts,
+    employee_login_url, get_pending_counts, tpath, add_employee_seat_cap_check,
 )
 from utils.email_utils import get_email_config, send_email_smtp
-from utils.session_risk import is_session_compromised
+from utils.session_risk import is_session_compromised, ensure_session_id
 
 core_bp = Blueprint("core", __name__)
 
@@ -213,6 +213,167 @@ def api_dashboard():
 
 
 
+@core_bp.route("/api/billing_status", methods=["GET"])
+@api_required
+def api_billing_status():
+    """Mobile equivalent of the web's employee-count/seat-limit banner
+    (templates/employees.html) and Seats & Billing page
+    (templates/seat_checkout.html) -- same underlying data, same tables,
+    just JSON instead of server-rendered HTML."""
+    from utils.helpers import get_company_settings
+    from utils.plan_limits import calculate_price, format_price_inr
+    from database import get_master_db
+
+    co = get_company_settings()
+    try:
+        db = get_db_connection()
+        cursor = db.cursor(buffered=True)
+        cursor.execute("SELECT COUNT(*) FROM employees")
+        employee_count = cursor.fetchone()[0]
+        cursor.close()
+        db.close()
+    except Exception:
+        employee_count = 0
+
+    auto_debit_status = None
+    invoices = []
+    try:
+        from flask import g as _g
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute(
+            "SELECT status, quantity_synced, activated_at FROM auto_debit_mandates WHERE tenant_schema=%s",
+            (_g.tenant_db,)
+        )
+        row = cur.fetchone()
+        if row:
+            auto_debit_status = {
+                "status": row[0], "quantity_synced": row[1],
+                "activated_at": row[2].isoformat() if row[2] else None,
+            }
+        cur.execute(
+            "SELECT billing_period, employee_count, amount_paise, status, created_at "
+            "FROM monthly_invoices WHERE tenant_schema=%s ORDER BY created_at DESC LIMIT 12",
+            (_g.tenant_db,)
+        )
+        invoices = [
+            {
+                "billing_period": r[0].isoformat() if r[0] else None, "employee_count": r[1],
+                "amount_display": format_price_inr(r[2]), "status": r[3],
+                "created_at": r[4].isoformat() if r[4] else None,
+            }
+            for r in cur.fetchall()
+        ]
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        app_log.warning("api_billing_status: auto-debit lookup failed: %s", exc)
+
+    return jsonify({
+        "ok": True,
+        "employee_count": employee_count,
+        "paid_employee_slots": co.get("paid_employee_slots"),
+        "monthly_bill_display": format_price_inr(calculate_price(employee_count)),
+        "auto_debit": auto_debit_status,
+        "invoices": invoices,
+    })
+
+
+@core_bp.route("/api/mobile/web_session_link", methods=["POST"])
+@api_required
+@limiter.limit("10 per minute")
+def api_mobile_web_session_link():
+    """Bridges the mobile app's Bearer-token session into a one-time,
+    short-lived link that establishes a normal session-cookie admin login
+    when opened -- lets the mobile app open /settings/seats (Razorpay
+    Checkout for seat top-ups / auto-debit enrollment) in an in-app WebView
+    without reimplementing that payment UI natively. See
+    /mobile_bridge_login/<token> below for the redemption side."""
+    from flask import g as _g
+
+    username = _g.api_user
+    raw_token = secrets.token_hex(32)
+    token_hash = _hash_token(raw_token)
+    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+    with _db() as (cursor, conn):
+        cursor.execute("DELETE FROM mobile_bridge_tokens WHERE expires_at < NOW()")
+        cursor.execute(
+            "INSERT INTO mobile_bridge_tokens (token_hash, admin_username, expires_at) VALUES (%s, %s, %s)",
+            (token_hash, username, expires_at)
+        )
+        conn.commit()
+
+    from utils.helpers import _safe_app_url
+    url = f"{_safe_app_url()}{tpath('/mobile_bridge_login/' + raw_token)}"
+    return jsonify({"ok": True, "url": url})
+
+
+def _bridge_link_expired_response():
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1.0'>"
+        "<title>Link Expired</title>"
+        "<style>body{font-family:'Segoe UI',sans-serif;background:#f1f5f9;display:flex;"
+        "align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;}"
+        ".card{max-width:380px;text-align:center;background:#fff;border-radius:16px;"
+        "padding:32px 24px;box-shadow:0 4px 20px rgba(0,0,0,0.08);}"
+        "h1{font-size:17px;color:#0f172a;margin:0 0 8px;}"
+        "p{font-size:13px;color:#64748b;margin:0;}</style></head><body>"
+        "<div class='card'><h1>This link has expired</h1>"
+        "<p>Go back to the app and try again.</p></div></body></html>",
+        403,
+    )
+
+
+@core_bp.route("/mobile_bridge_login/<token>", methods=["GET"])
+@limiter.limit("30 per minute")
+def mobile_bridge_login(token):
+    """Redeems a one-time bridge token (see /api/mobile/web_session_link
+    above) into a real admin session-cookie login, then sends the browser
+    (an in-app WebView on mobile) straight into /settings/seats -- the only
+    page this bridge exists for today. No @admin_required here on purpose:
+    this route's whole job is to CREATE a session, not require one already
+    existing. Single-use (deleted immediately on redemption) and expires in
+    5 minutes, same hash-and-expire shape as admin_users.reset_token."""
+    token_hash = _hash_token(token)
+    with _db() as (cursor, conn):
+        cursor.execute(
+            "SELECT admin_username FROM mobile_bridge_tokens WHERE token_hash=%s AND expires_at > NOW()",
+            (token_hash,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            cursor.close()
+            conn.close()
+            return _bridge_link_expired_response()
+        username = row[0]
+        cursor.execute("DELETE FROM mobile_bridge_tokens WHERE token_hash=%s", (token_hash,))
+        cursor.execute("SELECT COALESCE(role,'admin') FROM admin_users WHERE username=%s", (username,))
+        role_row = cursor.fetchone()
+        conn.commit()
+
+    if not role_row:
+        return _bridge_link_expired_response()
+
+    # Same session state blueprints/auth.py's admin_login sets on success,
+    # minus device-fingerprint capture/new-IP email (this is an ephemeral
+    # WebView session bridging an already-authenticated mobile session, not
+    # a fresh login worth alerting on).
+    session.clear()
+    session["admin_logged_in"] = True
+    session["admin_username"] = username
+    session["admin_role"] = role_row[0]
+    session["_session_created"] = time.time()
+    session.permanent = True
+    ensure_session_id(session)
+
+    log_security_event(
+        "auth.mobile_bridge_login", f"Mobile app bridged into a web session for '{username}'",
+        level="INFO", identifier=username,
+    )
+    return redirect(tpath("/settings/seats"))
+
+
 @core_bp.route("/api/settings/update", methods=["POST"])
 @api_required
 def api_settings_update():
@@ -300,6 +461,16 @@ def api_employee_signup():
     _domain_error = validate_employee_email_domain(email)
     if _domain_error:
         return jsonify({"ok": False, "msg": _domain_error}), 400
+
+    # Same paid-seat cap blueprints/employees.py's add_employee_page() and
+    # api_register_employee() already enforce on the web/token-authenticated
+    # admin-add-employee paths -- this is the endpoint the mobile app's own
+    # admin "Add Employee" screen calls (see mobile/src/api/client.js's
+    # addEmployee()), so without this check a tenant's plan-limit cap was
+    # only ever real on the web, not on mobile.
+    _seat_error = add_employee_seat_cap_check()
+    if _seat_error:
+        return jsonify({"ok": False, "msg": _seat_error}), 403
 
     db = None
     cursor = None
