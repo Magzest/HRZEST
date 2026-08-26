@@ -605,7 +605,7 @@ def add_employee_seat_cap_check() -> str:
     if current >= cap:
         return (
             f"You've reached your plan's limit of {cap} employee"
-            f"{'s' if cap != 1 else ''}. Upgrade your plan in Settings to add more."
+            f"{'s' if cap != 1 else ''}. Buy more seats under Seats & Billing to add more."
         )
     return None
 

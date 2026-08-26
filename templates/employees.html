@@ -319,6 +319,21 @@
         </div>
       </div>
 
+      {% if co.paid_employee_slots is not none %}
+      {% set _at_cap = employee_count >= co.paid_employee_slots %}
+      {% set _near_cap = not _at_cap and co.paid_employee_slots > 0 and (employee_count / co.paid_employee_slots) >= 0.8 %}
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; background:{{ '#fee2e2' if _at_cap else ('#fef9c3' if _near_cap else '#eff6ff') }}; border:1px solid {{ '#fca5a5' if _at_cap else ('#fde68a' if _near_cap else '#bfdbfe') }}; border-radius:12px; padding:12px 16px; margin-bottom:16px;">
+        <div style="font-size:13px; font-weight:700; color:{{ '#991b1b' if _at_cap else ('#854d0e' if _near_cap else '#1e40af') }}; display:flex; align-items:center; gap:8px;">
+          <i class="ti ti-{{ 'lock' if _at_cap else 'users' }}"></i>
+          Employee Seats: {{ employee_count }} / {{ co.paid_employee_slots }} used
+          {% if _at_cap %} — limit reached, new employees need more seats{% endif %}
+        </div>
+        <a href="{{ tpath('/settings/seats') }}" style="flex-shrink:0; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; background:{{ '#dc2626' if _at_cap else '#2563eb' }}; color:#fff;">
+          {{ 'Buy More Seats' if _at_cap else 'Manage Seats' }}
+        </a>
+      </div>
+      {% endif %}
+
       <!-- DEPARTMENT TABS -->
       {% if departments %}
       <div class="dept-tabs" id="deptTabs">

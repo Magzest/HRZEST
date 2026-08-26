@@ -16,6 +16,7 @@ session key means those hooks simply no-op here, and this blueprint
 enforces its own (lighter) idle timeout below.
 """
 import time
+import datetime
 import secrets
 import functools
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify, current_app
@@ -241,7 +242,13 @@ def _self_signup_tenant_ids():
 def _recent_payments(limit=20):
     """Payment history across every tenant -- real and demo-mode orders
     alike (payment_orders.razorpay_order_id starts with "demo_order_" for
-    the latter, same table either way per blueprints/billing.py)."""
+    the latter, same table either way per blueprints/billing.py). Also
+    merges in seat_topup_orders (blueprints/seats.py) -- an existing
+    tenant paying to raise its paid_employee_slots cap -- and
+    monthly_invoices (blueprints/auto_debit.py) -- a tenant's recurring
+    per-employee auto-debit charge, collected automatically each cycle --
+    so the Platform Admin sees every payment reaching them through any of
+    the three flows in one feed."""
     try:
         conn = get_master_db()
         cur = conn.cursor(buffered=True)
@@ -252,19 +259,58 @@ def _recent_payments(limit=20):
             "FROM payment_orders ORDER BY created_at DESC LIMIT %s",
             (limit,)
         )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [
+        signup_payments = [
             {
                 "company_name": r[0], "subdomain": r[1], "employee_count": r[2],
                 "amount_display": format_price_inr(r[3]), "status": r[4],
                 "is_demo": (r[5] or "").startswith("demo_order_"),
                 "order_id": r[5], "payment_id": r[6], "created_at": r[7], "paid_at": r[8],
-                "admin_username": r[9], "admin_email": r[10],
+                "admin_username": r[9], "admin_email": r[10], "kind": "Signup",
             }
-            for r in rows
+            for r in cur.fetchall()
         ]
+
+        cur.execute(
+            "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
+            "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
+            "s.company_name AS fallback_company_name "
+            "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
+            "ORDER BY s.created_at DESC LIMIT %s",
+            (limit,)
+        )
+        seat_payments = [
+            {
+                "company_name": r[0] or r[10], "subdomain": r[1] or "—", "employee_count": r[2],
+                "amount_display": format_price_inr(r[3]), "status": r[4],
+                "is_demo": (r[5] or "").startswith("demo_seat_order_"),
+                "order_id": r[5], "payment_id": r[6], "created_at": r[7], "paid_at": r[8],
+                "admin_username": r[9], "admin_email": "—", "kind": "Seat Top-up",
+            }
+            for r in cur.fetchall()
+        ]
+        cur.execute(
+            "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
+            "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
+            "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
+            "ORDER BY m.created_at DESC LIMIT %s",
+            (limit,)
+        )
+        auto_debit_payments = [
+            {
+                "company_name": r[0] or r[8], "subdomain": r[1] or "—", "employee_count": r[2],
+                "amount_display": format_price_inr(r[3]), "status": r[4],
+                "is_demo": (r[6] or "") == "demo_payment",
+                "order_id": r[5], "payment_id": r[6], "created_at": r[7], "paid_at": r[7],
+                "admin_username": "—", "admin_email": "—", "kind": "Auto-Debit",
+            }
+            for r in cur.fetchall()
+        ]
+        cur.close()
+        conn.close()
+
+        merged = signup_payments + seat_payments + auto_debit_payments
+        merged.sort(key=lambda p: p["paid_at"] or p["created_at"] or datetime.datetime.min, reverse=True)
+        return merged[:limit]
     except Exception as exc:
         app_log.warning("platform_admin: payment history lookup failed: %s", exc)
         return []

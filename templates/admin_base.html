@@ -110,6 +110,10 @@
   <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}">
     <span class="nav-icon"><i class="ti ti-users"></i></span>Employees
   </a>
+  <a class="nav-item {{ 'active' if active_nav == 'seats' }}" href="{{ tpath('/settings/seats') }}">
+    <span class="nav-icon"><i class="ti ti-ticket"></i></span>Seats &amp; Billing
+    {% if co.paid_employee_slots is not none and employee_count is defined and employee_count >= co.paid_employee_slots %}<span class="badge-count">Full</span>{% endif %}
+  </a>
   <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}">
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>

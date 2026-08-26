@@ -158,8 +158,11 @@ class _SqliteCursor:
         except Exception:
             pass
 
+_SQLITE_FALLBACK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance", "local_fallback.db")
+
 class _SqliteConnWrapper:
-    def __init__(self, db_path="local_fallback.db"):
+    def __init__(self, db_path=_SQLITE_FALLBACK_PATH):
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.autocommit = True
@@ -388,7 +391,13 @@ def _create_pool(retries=1, delay=0.1):
             _log.warning('"PostgreSQL not ready (attempt %d/%d): %s"', attempt, retries, e)
             if attempt < retries:
                 time.sleep(delay)
-    _log.warning("PostgreSQL unavailable -- activating local Standalone/Demo SQLite mode.")
+    _log.error(
+        "PostgreSQL unavailable -- falling back to local SQLite (%s). "
+        "This is fine for local/demo use, but if this happens in production, "
+        "writes are going to a per-instance SQLite file instead of the shared "
+        "database and WILL be lost/inconsistent across restarts or workers.",
+        _SQLITE_FALLBACK_PATH,
+    )
     _pool = _SqlitePool()
 
 

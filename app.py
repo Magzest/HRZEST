@@ -2313,6 +2313,90 @@ def init_master_db():
         # exists) -- verify_payment() reads it back and hands it to
         # provision_tenant() once the tenant schema is actually created.
         cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL")
+        # Razorpay orders for an EXISTING tenant buying more employee seats
+        # after signup (blueprints/seats.py) -- separate from payment_orders
+        # above (that table stages a brand-new tenant that doesn't exist yet;
+        # this one always references an already-provisioned tenant_schema).
+        # Paid orders top up that tenant's own company_settings.paid_employee_slots
+        # once verify_payment() confirms the signature, the same seat cap
+        # add_employee_seat_cap_check() (utils/helpers.py) enforces at
+        # employee-registration time.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS seat_topup_orders (
+                id SERIAL PRIMARY KEY,
+                tenant_schema VARCHAR(100) NOT NULL,
+                company_name VARCHAR(200) NOT NULL,
+                razorpay_order_id VARCHAR(100) UNIQUE NOT NULL,
+                razorpay_payment_id VARCHAR(100) DEFAULT NULL,
+                seats_purchased INT NOT NULL,
+                amount_paise INT NOT NULL,
+                requested_by VARCHAR(100) DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'created',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                paid_at TIMESTAMP DEFAULT NULL
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_seat_topup_orders_tenant ON seat_topup_orders (tenant_schema, created_at)")
+        # Singleton row (id=1) caching the one shared Razorpay Plan ID used
+        # for every tenant's monthly per-employee auto-debit subscription
+        # (blueprints/auto_debit.py) -- created once via the Plans API on
+        # first enrollment rather than requiring manual Razorpay-dashboard
+        # setup, then reused by every tenant's own Subscription (which
+        # carries that tenant's `quantity` = employee count).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS billing_config (
+                id SMALLINT PRIMARY KEY DEFAULT 1,
+                razorpay_plan_id VARCHAR(100) DEFAULT NULL,
+                CHECK (id = 1)
+            )
+        """)
+        cur.execute("INSERT INTO billing_config (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
+        # One row per tenant that has ever enrolled in monthly auto-debit
+        # (blueprints/auto_debit.py). status='pending' until the Razorpay
+        # Checkout subscription-authorization round-trip confirms via
+        # /api/auto_debit/confirm; 'active' is billed going forward by
+        # Razorpay's own recurring engine (or, in demo mode, by this app's
+        # own simulated monthly cron -- see sync_and_bill_auto_debit()).
+        # quantity_synced tracks what Razorpay's subscription was last told
+        # the headcount is, so the daily sync job only PATCHes when it
+        # actually changed.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS auto_debit_mandates (
+                id SERIAL PRIMARY KEY,
+                tenant_schema VARCHAR(100) UNIQUE NOT NULL,
+                company_name VARCHAR(200) NOT NULL,
+                razorpay_customer_id VARCHAR(100) DEFAULT NULL,
+                razorpay_subscription_id VARCHAR(100) DEFAULT NULL,
+                quantity_synced INT NOT NULL DEFAULT 0,
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                requested_by VARCHAR(100) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                activated_at TIMESTAMP DEFAULT NULL,
+                cancelled_at TIMESTAMP DEFAULT NULL
+            )
+        """)
+        # One row per successfully (or unsuccessfully) collected monthly
+        # auto-debit charge -- written by the Razorpay webhook
+        # (subscription.charged / payment.failed) in real mode, or by the
+        # simulated monthly cron in demo mode. Visible to the tenant
+        # (templates/seat_checkout.html billing history) and to the
+        # Platform Admin dashboard (recurring-billing feed).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS monthly_invoices (
+                id SERIAL PRIMARY KEY,
+                tenant_schema VARCHAR(100) NOT NULL,
+                company_name VARCHAR(200) NOT NULL,
+                employee_count INT NOT NULL,
+                amount_paise INT NOT NULL,
+                razorpay_payment_id VARCHAR(100) DEFAULT NULL,
+                razorpay_subscription_id VARCHAR(100) DEFAULT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'paid',
+                billing_period DATE NOT NULL,
+                failure_reason VARCHAR(255) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_monthly_invoices_tenant ON monthly_invoices (tenant_schema, billing_period)")
         # Lightweight traffic counter for the public marketing pages
         # (landing page, get-started, create_org) -- one row per
         # (path, day), incremented via ON CONFLICT below rather than one
@@ -3326,13 +3410,15 @@ if "core.home" not in app.view_functions:
     from blueprints.email_blast import email_blast_bp
     from blueprints.daily_report import daily_report_bp
     from blueprints.billing import billing_bp
+    from blueprints.seats import seats_bp
+    from blueprints.auto_debit import auto_debit_bp
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.secops import secops_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, platform_admin_bp,
-                secops_bp):
+                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, seats_bp, auto_debit_bp,
+                platform_admin_bp, secops_bp):
         app.register_blueprint(_bp)
 
 

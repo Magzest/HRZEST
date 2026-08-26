@@ -501,7 +501,7 @@
         {% if recent_payments %}
         <table>
           <thead>
-            <tr><th>Company</th><th>Employees</th><th>Amount</th><th>Status</th><th>Type</th><th>Date</th></tr>
+            <tr><th>Company</th><th>Kind</th><th>Employees</th><th>Amount</th><th>Status</th><th>Type</th><th>Date</th></tr>
           </thead>
           <tbody>
             {% for p in recent_payments %}
@@ -518,6 +518,7 @@
                 <div class="co-name">{{ p.company_name }}</div>
                 <div class="subdomain">{{ p.subdomain }}</div>
               </td>
+              <td><span class="badge badge-{{ 'active' if p.kind == 'Signup' else ('payment-manual' if p.kind == 'Seat Top-up' else 'source-self') }}">{{ p.kind }}</span></td>
               <td>{{ p.employee_count }}</td>
               <td class="bill">{{ p.amount_display }}</td>
               <td><span class="badge badge-{{ 'active' if p.status in ('paid', 'provisioned') else 'suspended' }}">{{ p.status }}</span></td>
