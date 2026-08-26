@@ -6,11 +6,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+// holidays has no type column on the backend (see HolidayHeaderCard's
+// note) -- holidayType default changed from a fabricated "Public Holiday"
+// to a generic, always-true label.
 export default function HolidaySummaryCard({
-  upcomingHoliday = "Independence Day",
-  holidayDate = "15 August 2026",
-  remainingDays = 46,
-  holidayType = "Public Holiday",
+  upcomingHoliday = "No upcoming holiday",
+  holidayDate = "",
+  remainingDays = 0,
+  holidayType = "Holiday",
 }) {
   return (
     <View style={styles.container}>

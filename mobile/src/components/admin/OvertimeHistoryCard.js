@@ -41,7 +41,7 @@ export default function OvertimeHistoryCard({
           <View style={styles.employeeInfo}>
 
             <Text style={styles.name}>
-              {item.employeeName}
+              {item.name}
             </Text>
 
             <Text style={styles.department}>
@@ -85,26 +85,28 @@ export default function OvertimeHistoryCard({
           />
 
           <Text style={styles.infoText}>
-            {item.checkIn} - {item.checkOut}
+            {item.shift_end || "--"} - {item.actual_logout || "--"}
           </Text>
 
         </View>
 
       </View>
 
-      {/* Reason */}
+      {/* Notes -- only present once approved/rejected with a note attached */}
 
-      <View style={styles.reasonCard}>
+      {!!item.notes && (
+        <View style={styles.reasonCard}>
 
-        <Text style={styles.reasonTitle}>
-          Reason
-        </Text>
+          <Text style={styles.reasonTitle}>
+            Notes
+          </Text>
 
-        <Text style={styles.reason}>
-          {item.reason}
-        </Text>
+          <Text style={styles.reason}>
+            {item.notes}
+          </Text>
 
-      </View>
+        </View>
+      )}
 
       {/* Bottom Stats */}
 
@@ -113,7 +115,7 @@ export default function OvertimeHistoryCard({
         <View style={styles.stat}>
 
           <Text style={styles.statValue}>
-            {item.overtimeHours}h
+            {item.hours}h
           </Text>
 
           <Text style={styles.statLabel}>
@@ -135,33 +137,11 @@ export default function OvertimeHistoryCard({
               },
             ]}
           >
-            ₹{item.overtimePay}
+            ₹{item.ot_pay}
           </Text>
 
           <Text style={styles.statLabel}>
             OT Pay
-          </Text>
-
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.stat}>
-
-          <Text
-            style={[
-              styles.statValue,
-              {
-                color:
-                  COMPOFF_THEME.colors.purple,
-              },
-            ]}
-          >
-            {item.compOffEarned}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Comp-Off
           </Text>
 
         </View>

@@ -16,7 +16,12 @@ export default function AdminHeader({
   title = "Dashboard",
   subtitle = "ADMIN PORTAL",
   profileImage,
-  notificationCount = 3,
+  // No caller ever passes a real count -- this used to default to a literal
+  // 3, a permanently fake "unread" badge. Defaulting to 0 until a real
+  // unread count is threaded through (api_dashboard() already returns
+  // unread_notifications -- a future pass could lift that into a shared
+  // context this header reads) is honest: no badge, not a fabricated one.
+  notificationCount = 0,
   onMenu,
   onNotification,
   onProfile,
@@ -45,6 +50,18 @@ export default function AdminHeader({
         navigation.navigate("Settings", { tab: "profile" });
       } catch (e) {
         // Fallback if settings route not found
+      }
+    }
+  };
+
+  const handleNotificationPress = () => {
+    if (typeof onNotification === "function") {
+      onNotification();
+    } else {
+      try {
+        navigation.navigate("Notifications");
+      } catch (e) {
+        // Fallback if the Notifications route isn't registered on this navigator
       }
     }
   };
@@ -84,26 +101,24 @@ export default function AdminHeader({
 
         {/* Right Action Icons */}
         <View style={styles.rightGroup}>
-          {onNotification && (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              style={styles.iconButton}
-              onPress={onNotification}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color="#0F172A"
-              />
-              {notificationCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>
-                    {notificationCount > 9 ? "9+" : notificationCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.iconButton}
+            onPress={handleNotificationPress}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={20}
+              color="#0F172A"
+            />
+            {notificationCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.8}

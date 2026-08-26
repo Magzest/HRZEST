@@ -26,8 +26,11 @@ try {
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
-import { fetchEmployees, addEmployee, uploadEmployeePhoto, getPhotoUrl, fetchBillingStatus } from "../../api/client";
-import { saveLocalEmployee, mergeEmployeesWithLocal } from "../../utils/employeeStore";
+import {
+  fetchEmployees, addEmployee, uploadEmployeePhoto, getPhotoUrl, fetchBillingStatus,
+  editEmployee, deleteEmployee,
+} from "../../api/client";
+import { saveLocalEmployee, mergeEmployeesWithLocal, deleteLocalEmployee } from "../../utils/employeeStore";
 import THEME from "../../constants/theme";
 
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
@@ -58,6 +61,17 @@ export default function EmployeesScreen({ navigation }) {
   const [newEmpDoj, setNewEmpDoj] = useState(new Date().toISOString().split("T")[0]);
   const [newEmpPassword, setNewEmpPassword] = useState("welcome123");
   const [newEmpPhoto, setNewEmpPhoto] = useState(null);
+
+  // Edit Employee Form State -- mirrors blueprints/employees.py's
+  // api_edit_employee(), which only accepts name/email/role/date_of_joining.
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editEmpId, setEditEmpId] = useState("");
+  const [editEmpName, setEditEmpName] = useState("");
+  const [editEmpEmail, setEditEmpEmail] = useState("");
+  const [editEmpRole, setEditEmpRole] = useState("");
+  const [editEmpDoj, setEditEmpDoj] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const handleAutoGenerateId = () => {
@@ -272,6 +286,88 @@ export default function EmployeesScreen({ navigation }) {
     setNewEmpPassword("welcome123");
     setNewEmpPhoto(null);
     setSubmitting(false);
+  };
+
+  const openEditModal = (emp) => {
+    setEditEmpId(emp.employee_id || emp.id);
+    setEditEmpName(emp.name || "");
+    setEditEmpEmail(emp.email || "");
+    setEditEmpRole(emp.role || "");
+    setEditEmpDoj(emp.date_of_joining || "");
+    setSelectedEmp(null);
+    setEditModalVisible(true);
+  };
+
+  const handleEditEmployeeSubmit = async () => {
+    const nameTrim = editEmpName.trim();
+    if (!nameTrim) {
+      Alert.alert("Input Required", "Full Name is required.");
+      return;
+    }
+    setEditSubmitting(true);
+    const payload = {
+      name: nameTrim,
+      email: editEmpEmail.trim(),
+      role: editEmpRole.trim(),
+      date_of_joining: editEmpDoj.trim(),
+    };
+
+    let res;
+    try {
+      res = await editEmployee(editEmpId, payload);
+    } catch (e) {
+      res = e?.response;
+    }
+
+    if (!res?.data?.ok) {
+      Alert.alert("Update Failed", res?.data?.msg || "Could not update this employee. Please try again.");
+      setEditSubmitting(false);
+      return;
+    }
+
+    setEmployees((prev) =>
+      prev.map((e) =>
+        (e.employee_id || e.id) === editEmpId ? { ...e, ...payload } : e
+      )
+    );
+    await saveLocalEmployee({ employee_id: editEmpId, ...payload });
+
+    setEditSubmitting(false);
+    setEditModalVisible(false);
+    Alert.alert("Updated", `${nameTrim}'s details were updated.`);
+  };
+
+  const handleDeleteEmployee = (emp) => {
+    const empId = emp.employee_id || emp.id;
+    Alert.alert(
+      "Remove Staff Member",
+      `Remove ${emp.name || empId}? This permanently deletes their attendance, salary, leave, resignation, and ticket history. This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            let res;
+            try {
+              res = await deleteEmployee(empId);
+            } catch (e) {
+              res = e?.response;
+            }
+            setDeleting(false);
+            if (!res?.data?.ok) {
+              Alert.alert("Removal Failed", res?.data?.msg || "Could not remove this employee. Please try again.");
+              return;
+            }
+            await deleteLocalEmployee(empId);
+            setEmployees((prev) => prev.filter((e) => (e.employee_id || e.id) !== empId));
+            setSelectedEmp(null);
+            Alert.alert("Removed", `${emp.name || empId} has been removed.`);
+          },
+        },
+      ]
+    );
   };
 
   const departments = ["All", "Engineering", "Design", "HR", "Testing"];
@@ -539,19 +635,22 @@ export default function EmployeesScreen({ navigation }) {
 
                   <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
                     <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: "#EF4444", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
-                      onPress={() => {
-                        // No Bearer-token-compatible endpoint exists to delete
-                        // an employee from mobile yet -- filtering local state
-                        // here would just make them reappear on next refresh
-                        // while claiming they were removed.
-                        Alert.alert(
-                          "Not Available on Mobile Yet",
-                          "Removing a staff member is only available from the web admin dashboard for now."
-                        );
-                      }}
+                      style={{ flex: 1, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      onPress={() => openEditModal(selectedEmp)}
                     >
-                      <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Remove Staff</Text>
+                      <Text style={{ color: "#1D4ED8", fontWeight: "700", fontSize: 13 }}>Edit</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: "#EF4444", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      onPress={() => handleDeleteEmployee(selectedEmp)}
+                      disabled={deleting}
+                    >
+                      {deleting ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={{ color: "#FFFFFF", fontWeight: "700", fontSize: 13 }}>Remove</Text>
+                      )}
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -563,6 +662,71 @@ export default function EmployeesScreen({ navigation }) {
                   </View>
                 </>
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* Edit Employee Modal -- fields mirror what
+            blueprints/employees.py's api_edit_employee() actually accepts
+            (name/email/role/date_of_joining only -- no department/phone,
+            since the backend column set for PUT differs from POST). */}
+        <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
+            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "90%" }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Ionicons name="create-outline" size={20} color="#173B8C" style={{ marginRight: 8 }} />
+                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Edit {editEmpId}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                  <Ionicons name="close-circle" size={26} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>FULL NAME *</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  value={editEmpName}
+                  onChangeText={setEditEmpName}
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMAIL ADDRESS</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  value={editEmpEmail}
+                  onChangeText={setEditEmpEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>JOB ROLE / DESIGNATION</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  value={editEmpRole}
+                  onChangeText={setEditEmpRole}
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DATE OF JOINING</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  placeholder="YYYY-MM-DD"
+                  value={editEmpDoj}
+                  onChangeText={setEditEmpDoj}
+                />
+
+                <TouchableOpacity
+                  style={{ backgroundColor: "#173B8C", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 10 }}
+                  onPress={handleEditEmployeeSubmit}
+                  disabled={editSubmitting}
+                >
+                  {editSubmitting ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 14 }}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
             </View>
           </View>
         </Modal>

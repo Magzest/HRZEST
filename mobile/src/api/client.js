@@ -91,6 +91,9 @@ export const resignationAction = (rid, action) =>
 
 export const fetchOvertime = () => client.get('/api/overtime');
 
+export const overtimeAction = (oid, action, notes = '') =>
+  client.post(`/api/overtime/${oid}/action`, { action, notes });
+
 export const fetchCompOff = () => client.get('/api/compoff');
 
 export const fetchPerformance = () => client.get('/api/performance');
@@ -199,29 +202,85 @@ export const addEmployee = (employeeData) =>
     role: employeeData.role || 'Software Engineer',
     department: employeeData.department || 'Engineering',
   });
-// editEmployee, deleteEmployee, forgotPassword, resetPassword, addHoliday,
-// deleteHoliday were removed -- their routes (/api/employees/<id>/edit,
-// /api/employees/<id>/delete, /api/forgot-password, /api/reset-password,
+// forgotPassword, resetPassword, addHoliday, deleteHoliday stay removed --
+// their routes (/api/forgot-password, /api/reset-password,
 // /api/holidays/add, /api/holidays/<id>/delete) don't exist anywhere in
 // the backend, Bearer or session-based, and none had a mobile caller left
 // after removing the broken UI that used them.
+//
+// editEmployee/deleteEmployee/getEmployeeDetail DO have real Bearer-token
+// backends -- blueprints/employees.py's api_employee_detail (GET),
+// api_edit_employee (PUT), api_delete_employee (DELETE), all at
+// /api/employees/<emp_id> (RESTful method dispatch on one path, not a
+// /edit or /delete suffix, which is why an earlier pass here concluded
+// they didn't exist).
+export const getEmployeeDetail = (empId) => client.get(`/api/employees/${empId}`);
+
+export const editEmployee = (empId, employeeData) =>
+  client.put(`/api/employees/${empId}`, {
+    name: employeeData.name,
+    email: employeeData.email,
+    role: employeeData.role,
+    date_of_joining: employeeData.date_of_joining,
+  });
+
+export const deleteEmployee = (empId) => client.delete(`/api/employees/${empId}`);
+
+// Real manager_id-based reporting hierarchy -- Bearer twin of
+// blueprints/admin_views.py's session-only /api/org_chart_data.
+export const fetchOrgChart = () => client.get('/api/org_chart');
 export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai/hr-helpdesk', { query });
-export const compoffAction = (cid, action) => client.post(`/api/compoff/${cid}/action`, { action });
+// compoffAction/api_compoff_action removed together -- the backend route
+// referenced a compoff_balances (plural) table that is never created
+// anywhere in this codebase's schema, so it silently 500'd/no-op'd on
+// every call, and there is no real "approve a comp-off request" concept
+// to wire up anyway (comp-off is credited automatically from approved
+// overtime -- see blueprints/leave.py's overtime_action()). See
+// api_compoff()'s docstring for the read-side fix.
 export const updateSettings = (settingsData) => client.post('/api/settings/update', settingsData);
 
 // ── Additional Parity APIs ──────────────────────────────────────────
 export const sendPayslipEmail = (empId, year, month) =>
   client.post('/api/send_salary_email', { emp_id: empId, year, month });
 
-export const submitPerformanceReview = (empId, rating, comments, hike_percentage = 0, bonus = 0) =>
-  client.post('/api/performance/review', { employee_id: empId, rating, comments, hike_percentage, bonus });
+// Field names match what blueprints/performance.py's api_submit_performance_review()
+// (and the web's performance_save_review()) actually store -- quarter/year
+// upsert with reviewer feedback + a manager-set potential rating, not the
+// rating/comments/hike/bonus shape this used to send (which had no
+// matching backend route or table columns at all).
+export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, potentialRating = 0, status = 'Draft') =>
+  client.post('/api/performance/review', {
+    employee_id: employeeId, quarter, year,
+    reviewer_feedback: reviewerFeedback, potential_rating: potentialRating, status,
+  });
 
-export const createOnboardingTask = (title, description, role = 'All') =>
-  client.post('/api/onboarding/template/add', { title, description, role });
+// createOnboardingTask (template creation) stays removed -- that's a
+// bigger admin-config feature (multi-task templates), not the per-employee
+// task-completion flow below, and still has no Bearer or session route.
+//
+// fetchOnboardingTasks/updateOnboardingTaskStatus DO have real backends now
+// -- blueprints/onboarding.py's api_onboarding_tasks() (GET) and
+// api_onboarding_task_update() (POST), Bearer twins of the session-only
+// onboarding_detail()/onboarding_admin_task_update().
+export const fetchOnboardingTasks = (obId) => client.get(`/api/onboarding/${obId}/tasks`);
 
-export const updateOnboardingTaskStatus = (taskId, status) =>
-  client.post(`/api/onboarding/task/${taskId}/update`, { status });
+export const updateOnboardingTaskStatus = (taskId, status, adminNotes = '') =>
+  client.post(`/api/onboarding/task/${taskId}/update`, { status, admin_notes: adminNotes });
 
+// ── HR Accounts (admin-only) ──────────────────────────────────────────
+// blueprints/admin_views.py's Bearer twins of the session-only
+// /hr_accounts page and its /api/hr_accounts* actions.
+export const fetchHrAccounts = () => client.get('/api/hr/accounts');
+
+export const createHrAccount = (username, email, password) =>
+  client.post('/api/hr/accounts', { username, email, password });
+
+export const setHrAccountStatus = (username, active) =>
+  client.post(`/api/hr/accounts/${username}/status`, { active });
+
+// blueprints/documents.py's Bearer twins of the session-only document
+// routes -- both admin (manage any employee's documents) and the
+// employee's own upload/list/delete of their own documents.
 export const uploadDocument = (formData) =>
   client.post('/api/employee/documents/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -230,12 +289,28 @@ export const uploadDocument = (formData) =>
 
 export const fetchEmployeeDocuments = () => client.get('/api/employee/documents');
 
+export const deleteMyDocument = (docId) => client.delete(`/api/employee/documents/${docId}`);
+
+// ── Documents (admin) ──────────────────────────────────────────────
+export const fetchDocuments = (empId) =>
+  client.get('/api/documents', empId ? { params: { emp_id: empId } } : undefined);
+
+export const uploadDocumentForEmployee = (formData) =>
+  client.post('/api/documents/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000,
+  });
+
+export const deleteDocument = (docId) => client.delete(`/api/documents/${docId}`);
+
 export const broadcastNotification = (title, message, audience = 'all') =>
   client.post('/api/notifications/broadcast', { title, message, audience });
 
-export const submitAttendanceRegularization = (date, reason, punch_in = '', punch_out = '') =>
-  client.post('/api/employee/regularization', { date, reason, punch_in, punch_out });
-
+// submitAttendanceRegularization removed -- /api/employee/regularization
+// doesn't exist anywhere in the backend (Bearer or session-based). The
+// regularization_requests table (app.py) is scaffolded but no route was
+// ever built against it on either web or mobile, and no screen called
+// this export. A real feature here needs a backend route first.
 export const addDepartment = (name, code = '') =>
   client.post('/api/departments/add', { name, code });
 
@@ -252,6 +327,33 @@ export const fetchBillingStatus = () => client.get('/api/billing_status');
 // app doesn't embed natively -- instead we bridge the current Bearer
 // session into a one-time web session-cookie login and open that URL in
 // an in-app WebView (see SeatsBillingScreen). The link is single-use and
-// expires in 5 minutes.
-export const getWebSessionLink = () => client.post('/api/mobile/web_session_link');
+// expires in 5 minutes. `target` must match one of the paths in
+// blueprints/core.py's _BRIDGE_TARGET_ALLOWLIST -- an unrecognized or
+// omitted value falls back to the server's default (/settings/seats)
+// rather than erroring.
+export const getWebSessionLink = (target) => client.post('/api/mobile/web_session_link', target ? { target } : {});
+
+// ── Settings (real data + saves) ─────────────────────────────────────
+// blueprints/admin_views.py's Bearer twins of the session-only settings
+// routes -- SettingsScreen used to show hardcoded fallback text with no
+// fetch at all, and every Save button was a no-op alert.
+export const fetchSettings = () => client.get('/api/settings');
+
+export const saveCompanySettings = (companyName, companyCode, timezone, workingDays) =>
+  client.post('/api/settings/company', {
+    company_name: companyName, company_code: companyCode, timezone, working_days: workingDays,
+  });
+
+export const saveGeoRadius = (geoRadius, officeLat, officeLon) =>
+  client.post('/api/settings/geo_radius', { geo_radius: geoRadius, office_lat: officeLat, office_lon: officeLon });
+
+export const toggleCompanyFeature = (feature, value) =>
+  client.post('/api/settings/toggle_feature', { feature, value });
+
+export const fetchAdminProfile = () => client.get('/api/admin/profile');
+
+export const changeAdminPassword = (currentPassword, newPassword, confirmPassword) =>
+  client.post('/api/admin/password', {
+    current_password: currentPassword, new_password: newPassword, confirm_password: confirmPassword,
+  });
 

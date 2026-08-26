@@ -19,8 +19,10 @@ Design (Razorpay's documented pattern for seat-based recurring billing):
     via PATCH .../subscriptions/{id} (real) since Razorpay has no way to
     know a tenant's employee table changed.
   - Real-mode charges are confirmed asynchronously via Razorpay's
-    "subscription.charged" webhook (POST /webhooks/razorpay below), not by
-    any browser round-trip -- the browser is only present for the initial
+    "subscription.charged" webhook (POST /webhooks/razorpay, owned by
+    blueprints/webhooks.py -- this module just registers handlers for the
+    events it cares about, near the bottom of this file), not by any
+    browser round-trip -- the browser is only present for the initial
     enrollment authorization.
 """
 import datetime
@@ -29,13 +31,15 @@ from flask import Blueprint, request, session, jsonify, g
 from extensions import app_log, limiter, log_security_event
 from database import get_db_connection, get_master_db
 from utils.auth import admin_required
-from utils.helpers import get_company_settings
+from utils.helpers import get_company_settings, coerce_datetime
 from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
 from utils.razorpay_utils import (
     create_plan, create_customer, create_subscription, update_subscription_quantity,
-    cancel_subscription as razorpay_cancel_subscription, verify_payment_signature,
-    verify_webhook_signature, key_id as razorpay_key_id, razorpay_configured,
+    cancel_subscription as razorpay_cancel_subscription, verify_subscription_signature,
+    key_id as razorpay_key_id, razorpay_configured,
+    create_id_or_demo, verify_or_demo,
 )
+from blueprints.webhooks import register_webhook_handler
 
 auto_debit_bp = Blueprint("auto_debit", __name__)
 
@@ -95,25 +99,15 @@ def enroll():
     if mandate and mandate["status"] == "active":
         return jsonify({"ok": False, "msg": "Auto-debit is already enabled for your company."}), 400
 
-    try:
-        db = get_db_connection()
-        cur = db.cursor()
-        cur.execute("SELECT COUNT(*) FROM employees")
-        employee_count = cur.fetchone()[0]
-        cur.close()
-        db.close()
-    except Exception:
-        employee_count = 0
+    employee_count = get_tenant_employee_count(g.tenant_db)
 
-    is_demo = not razorpay_configured()
-    if is_demo:
-        subscription_id = _DEMO_SUBSCRIPTION_PREFIX + g.tenant_db
-        customer_id = None
-    else:
+    customer_id = None
+
+    def _create_real_subscription():
+        nonlocal customer_id
         plan_id, error = _get_or_create_plan_id()
         if error:
-            app_log.error("auto_debit.enroll: plan creation failed: %s", error)
-            return jsonify({"ok": False, "msg": error}), 502
+            return None, error
 
         cur_db = get_db_connection()
         c = cur_db.cursor(buffered=True)
@@ -125,13 +119,14 @@ def enroll():
 
         customer_id, error = create_customer(co.get("company_name") or g.tenant_db, admin_email)
         if error:
-            app_log.error("auto_debit.enroll: customer creation failed: %s", error)
-            return jsonify({"ok": False, "msg": error}), 502
+            return None, error
 
-        subscription_id, error = create_subscription(plan_id, customer_id, employee_count or 1)
-        if error:
-            app_log.error("auto_debit.enroll: subscription creation failed: %s", error)
-            return jsonify({"ok": False, "msg": error}), 502
+        return create_subscription(plan_id, customer_id, employee_count or 1)
+
+    subscription_id, is_demo, error = create_id_or_demo(_DEMO_SUBSCRIPTION_PREFIX, _create_real_subscription)
+    if error:
+        app_log.error("auto_debit.enroll: subscription setup failed: %s", error)
+        return jsonify({"ok": False, "msg": error}), 502
 
     conn = get_master_db()
     cur = conn.cursor()
@@ -173,20 +168,21 @@ def confirm():
     if not mandate or mandate["subscription_id"] != subscription_id:
         return jsonify({"ok": False, "msg": "Unknown or mismatched subscription."}), 404
 
-    is_demo_sub = subscription_id.startswith(_DEMO_SUBSCRIPTION_PREFIX)
-    if is_demo_sub:
-        if razorpay_configured():
-            return jsonify({"ok": False, "msg": "This was a demo enrollment. Please start again."}), 400
+    ok, is_demo, error = verify_or_demo(
+        subscription_id, _DEMO_SUBSCRIPTION_PREFIX, payment_id, signature, verify_subscription_signature
+    )
+    if is_demo and ok:
         log_security_event(
             "auto_debit.demo_enrolled", "Demo/test-mode auto-debit enrollment completed (no real mandate)",
             level="INFO", subscription_id=subscription_id,
         )
-    elif not verify_payment_signature(subscription_id, payment_id, signature):
-        log_security_event(
-            "auto_debit.signature_invalid", "Razorpay subscription-authorization signature verification failed",
-            level="ERROR", subscription_id=subscription_id,
-        )
-        return jsonify({"ok": False, "msg": "Authorization verification failed."}), 400
+    elif not ok:
+        if not is_demo:
+            log_security_event(
+                "auto_debit.signature_invalid", "Razorpay subscription-authorization signature verification failed",
+                level="ERROR", subscription_id=subscription_id,
+            )
+        return jsonify({"ok": False, "msg": error}), 400
 
     conn = get_master_db()
     cur = conn.cursor()
@@ -233,58 +229,49 @@ def cancel():
     return jsonify({"ok": True})
 
 
-@auto_debit_bp.route("/webhooks/razorpay", methods=["POST"])
-@limiter.limit("120 per minute")
-def razorpay_webhook():
-    """No @admin_required -- Razorpay's own servers call this directly with
-    no session/cookie, authenticated instead by the X-Razorpay-Signature
-    header (verify_webhook_signature). Deliberately never touches
-    g.tenant_db (this route has no tenant-prefixed URL, same posture as
-    blueprints/platform_admin.py's /super_admin/* per that module's own
-    docstring) -- everything it needs lives in the master-schema tables."""
-    raw_body = request.get_data()
-    signature = request.headers.get("X-Razorpay-Signature", "")
-    if not verify_webhook_signature(raw_body, signature):
-        log_security_event("auto_debit.webhook_signature_invalid",
-                            "Razorpay webhook signature verification failed", level="ERROR")
-        return jsonify({"ok": False}), 400
+def _handle_subscription_charged(payload):
+    sub_entity = payload.get("payload", {}).get("subscription", {}).get("entity", {})
+    payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    subscription_id = sub_entity.get("id")
+    amount_paise = payment_entity.get("amount")
+    payment_id = payment_entity.get("id")
+    if subscription_id:
+        _record_charge(subscription_id, amount_paise, payment_id, status="paid")
 
-    payload = request.get_json(silent=True) or {}
-    event = payload.get("event", "")
 
-    if event == "subscription.charged":
-        sub_entity = payload.get("payload", {}).get("subscription", {}).get("entity", {})
-        payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
-        subscription_id = sub_entity.get("id")
-        amount_paise = payment_entity.get("amount")
-        payment_id = payment_entity.get("id")
-        if subscription_id:
-            _record_charge(subscription_id, amount_paise, payment_id, status="paid")
+def _handle_subscription_cancelled(payload):
+    subscription_id = payload.get("payload", {}).get("subscription", {}).get("entity", {}).get("id")
+    if subscription_id:
+        conn = get_master_db()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE auto_debit_mandates SET status='cancelled', cancelled_at=NOW() "
+            "WHERE razorpay_subscription_id=%s", (subscription_id,)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    elif event == "subscription.cancelled":
-        subscription_id = payload.get("payload", {}).get("subscription", {}).get("entity", {}).get("id")
-        if subscription_id:
-            conn = get_master_db()
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE auto_debit_mandates SET status='cancelled', cancelled_at=NOW() "
-                "WHERE razorpay_subscription_id=%s", (subscription_id,)
-            )
-            conn.commit()
-            cur.close()
-            conn.close()
 
-    elif event in ("payment.failed", "subscription.pending"):
-        sub_entity = payload.get("payload", {}).get("subscription", {}).get("entity", {})
-        subscription_id = sub_entity.get("id")
-        payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
-        if subscription_id:
-            _record_charge(
-                subscription_id, payment_entity.get("amount"), payment_entity.get("id"),
-                status="failed", failure_reason=payment_entity.get("error_description"),
-            )
+def _handle_payment_failed_or_pending(payload):
+    sub_entity = payload.get("payload", {}).get("subscription", {}).get("entity", {})
+    subscription_id = sub_entity.get("id")
+    payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
+    if subscription_id:
+        _record_charge(
+            subscription_id, payment_entity.get("amount"), payment_entity.get("id"),
+            status="failed", failure_reason=payment_entity.get("error_description"),
+        )
 
-    return jsonify({"ok": True})
+
+# Registered at import time -- blueprints/webhooks.py's generic
+# /webhooks/razorpay route dispatches here once signature verification
+# passes. See that module's docstring for why the route itself doesn't
+# live in this file.
+register_webhook_handler("razorpay", "subscription.charged", _handle_subscription_charged)
+register_webhook_handler("razorpay", "subscription.cancelled", _handle_subscription_cancelled)
+register_webhook_handler("razorpay", "payment.failed", _handle_payment_failed_or_pending)
+register_webhook_handler("razorpay", "subscription.pending", _handle_payment_failed_or_pending)
 
 
 def _record_charge(subscription_id, amount_paise, payment_id, status, failure_reason=None):
@@ -358,8 +345,19 @@ def sync_and_bill_auto_debit():
             current_count = get_tenant_employee_count(tenant_schema)
             is_demo_sub = (subscription_id or "").startswith(_DEMO_SUBSCRIPTION_PREFIX)
 
-            if is_demo_sub:
+            if is_demo_sub and not razorpay_configured():
                 _maybe_simulate_demo_charge(tenant_schema, company_name, subscription_id, current_count, activated_at)
+            elif is_demo_sub:
+                # Real Razorpay keys were configured after this tenant
+                # enrolled in demo mode -- its subscription was never
+                # actually created with Razorpay, so there's nothing to
+                # bill (real or simulated) until they re-enroll. Keep
+                # skipping rather than fabricating further paid invoices
+                # for a subscription that was never real.
+                app_log.warning(
+                    "sync_and_bill_auto_debit: tenant %s has a stale demo subscription (%s) now that Razorpay "
+                    "is configured -- ask them to re-enroll in auto-debit.", tenant_schema, subscription_id
+                )
             elif current_count != quantity_synced:
                 ok, error = update_subscription_quantity(subscription_id, current_count or 1)
                 if not ok:
@@ -389,7 +387,7 @@ def _maybe_simulate_demo_charge(tenant_schema, company_name, subscription_id, em
         (tenant_schema,)
     )
     row = cur.fetchone()
-    last_charge = row[0] if row else activated_at
+    last_charge = coerce_datetime(row[0] if row else activated_at)
     due = (last_charge is None) or ((datetime.datetime.now() - last_charge) >= datetime.timedelta(days=30))
     if not due:
         cur.close()

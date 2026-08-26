@@ -543,6 +543,12 @@ def _enforce_csrf():
         return  # CSRF disabled in test mode; Bearer-token tests handle auth separately
     if request.path.startswith("/api/"):
         return  # API routes use Bearer-token auth -- no session/CSRF needed
+    if request.path.startswith("/webhooks/"):
+        # Server-to-server callbacks (Razorpay etc.) -- no session cookie
+        # exists to carry a CSRF token in the first place; authenticated by
+        # request signature instead (blueprints/webhooks.py's generic
+        # /webhooks/<provider> route).
+        return
     if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
@@ -1503,10 +1509,14 @@ def _init_core_tables(cursor, db):
         CREATE TABLE IF NOT EXISTS mobile_bridge_tokens (
             token_hash VARCHAR(64) PRIMARY KEY,
             admin_username VARCHAR(100) NOT NULL,
+            target_path VARCHAR(100) NOT NULL DEFAULT '/settings/seats',
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             expires_at TIMESTAMP NOT NULL
         )
     """)
+    # Pre-existing tables created before target_path existed --
+    # CREATE TABLE IF NOT EXISTS above is a no-op against them.
+    cursor.execute("ALTER TABLE mobile_bridge_tokens ADD COLUMN IF NOT EXISTS target_path VARCHAR(100) NOT NULL DEFAULT '/settings/seats'")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS mobile_biometric_proofs (
             employee_id VARCHAR(50) PRIMARY KEY,
@@ -3426,6 +3436,7 @@ if "core.home" not in app.view_functions:
     from blueprints.email_blast import email_blast_bp
     from blueprints.daily_report import daily_report_bp
     from blueprints.billing import billing_bp
+    from blueprints.webhooks import webhooks_bp
     from blueprints.seats import seats_bp
     from blueprints.auto_debit import auto_debit_bp
     from blueprints.platform_admin import platform_admin_bp
@@ -3433,7 +3444,7 @@ if "core.home" not in app.view_functions:
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
-                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, seats_bp, auto_debit_bp,
+                ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
                 platform_admin_bp, secops_bp):
         app.register_blueprint(_bp)
 

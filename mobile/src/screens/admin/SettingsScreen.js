@@ -10,6 +10,7 @@ import {
   Switch,
   Alert,
   Modal,
+  ActivityIndicator,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,7 +19,26 @@ import { LinearGradient } from "expo-linear-gradient";
 import AdminHeader from "../../components/admin/AdminHeader";
 import THEME from "../../constants/theme";
 import { useAuth } from "../../store/AuthContext";
-import { fetchShifts, createShift } from "../../api/client";
+import {
+  fetchShifts, createShift, fetchSettings, saveCompanySettings, saveGeoRadius,
+  toggleCompanyFeature, fetchAdminProfile, changeAdminPassword,
+} from "../../api/client";
+
+// company_settings.working_days is a free-form CSV of day abbreviations
+// (e.g. "Mon,Tue,Wed,Thu,Fri"), but this screen's UI is a simpler 3-chip
+// picker -- these two maps translate between them so the picker can stay
+// simple while still round-tripping the real column faithfully.
+const WORKING_DAYS_OPTIONS = {
+  "Mon - Fri": "Mon,Tue,Wed,Thu,Fri",
+  "Mon - Sat": "Mon,Tue,Wed,Thu,Fri,Sat",
+  "All 7 Days": "Mon,Tue,Wed,Thu,Fri,Sat,Sun",
+};
+const workingDaysCsvToLabel = (csv) => {
+  const set = new Set((csv || "").split(",").map((d) => d.trim()).filter(Boolean));
+  if (set.size === 7) return "All 7 Days";
+  if (set.size === 6 && set.has("Sat")) return "Mon - Sat";
+  return "Mon - Fri";
+};
 
 export default function SettingsScreen({ navigation, route }) {
   const { signOut } = useAuth();
@@ -33,13 +53,22 @@ export default function SettingsScreen({ navigation, route }) {
     }
   }, [route?.params?.tab]);
 
-  // Form States - Company
-  const [companyName, setCompanyName] = useState("HR Management System Inc.");
-  const [companyCode, setCompanyCode] = useState("HRMS-PRO-2026");
-  const [companyEmail, setCompanyEmail] = useState("support@company.com");
-  const [companyPhone, setCompanyPhone] = useState("+1 (555) 019-2834");
-  const [companyAddress, setCompanyAddress] = useState("123 Corporate Blvd, Suite 400");
+  // Form States - Company -- real values loaded from GET /api/settings
+  // below (empty/neutral until then, not fabricated placeholder text).
+  const [companyName, setCompanyName] = useState("");
+  const [companyCode, setCompanyCode] = useState("");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
   const [workingDays, setWorkingDays] = useState("Mon - Fri");
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [savingCompany, setSavingCompany] = useState(false);
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Admin Profile -- real values from GET /api/admin/profile.
+  const [profileUsername, setProfileUsername] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileRole, setProfileRole] = useState("admin");
+  const [profileCreatedAt, setProfileCreatedAt] = useState("");
 
   // Shifts -- real data from /api/shifts (Bearer-compatible), not the
   // hardcoded 3-shift list this used to show regardless of what actually
@@ -49,14 +78,18 @@ export default function SettingsScreen({ navigation, route }) {
   const [gracePeriod, setGracePeriod] = useState("15");
   const [halfDayHours, setHalfDayHours] = useState("4.0");
 
-  // Form States - Attendance & Geofence
-  const [geofenceEnabled, setGeofenceEnabled] = useState(true);
+  // Form States - Attendance & Geofence -- geofenceEnabled/faceRecog map to
+  // real company_settings.geo_enabled/face_auth_enabled columns (toggled
+  // instantly via /api/settings/toggle_feature, same as web); radius/lat/lon
+  // map to geo_radius/office_lat/office_lon, saved via /api/settings/geo_radius.
+  // livenessCheck/autoCheckout were removed -- neither has any backing
+  // column anywhere in this codebase (web doesn't have them either), so
+  // there was nothing for a Save button to actually persist.
+  const [geofenceEnabled, setGeofenceEnabled] = useState(false);
   const [geofenceRadius, setGeofenceRadius] = useState("200");
-  const [latitude, setLatitude] = useState("17.3850");
-  const [longitude, setLongitude] = useState("78.4867");
-  const [faceRecog, setFaceRecog] = useState(true);
-  const [livenessCheck, setLivenessCheck] = useState(true);
-  const [autoCheckout, setAutoCheckout] = useState(true);
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [faceRecog, setFaceRecog] = useState(false);
 
   // Form States - Security
   const [twoFactorActive, setTwoFactorActive] = useState(true);
@@ -66,12 +99,17 @@ export default function SettingsScreen({ navigation, route }) {
   const [newPass, setNewPass] = useState("");
   const [confirmPass, setConfirmPass] = useState("");
 
-  // Form States - Notifications
-  const [pushNotifs, setPushNotifs] = useState(true);
-  const [emailAlerts, setEmailAlerts] = useState(true);
-  const [dailyDigest, setDailyDigest] = useState(true);
-  const [lateAlerts, setLateAlerts] = useState(true);
-  const [payslipAlerts, setPayslipAlerts] = useState(true);
+  // Form States - Notifications -- match company_settings' real
+  // notify_leave/notify_payslip/notify_resignation/notify_doc_expiry
+  // columns exactly (same four events templates/settings.html's own
+  // "Notification Triggers" section exposes), toggled instantly via
+  // /api/settings/toggle_feature. The previous push/digest/late-alert
+  // framing here had no corresponding column anywhere -- there was
+  // nothing for those switches to actually turn on or off.
+  const [notifyLeave, setNotifyLeave] = useState(false);
+  const [notifyPayslip, setNotifyPayslip] = useState(false);
+  const [notifyResignation, setNotifyResignation] = useState(false);
+  const [notifyDocExpiry, setNotifyDocExpiry] = useState(false);
 
   // Form States - Payroll
   const [payDay, setPayDay] = useState("1");
@@ -96,12 +134,10 @@ export default function SettingsScreen({ navigation, route }) {
     { id: "profile", label: "Admin Profile", icon: "person" },
   ];
 
-  // Every one of these settings sections (Company Info, Geofence, Salary
-  // Rules, Notification prefs, etc.) is backed only by session-based web
-  // routes (/save_company_info, /save_geo_radius, /save_salary_rules, ...)
-  // -- none accept a Bearer token, so there's no way to actually persist
-  // any of this from mobile. This used to claim "settings updated
-  // successfully" unconditionally with zero API call for every section.
+  // Payroll Rules has no Bearer (or even session-JSON) backend anywhere in
+  // this codebase -- save_salary_rules is a much larger session-only form
+  // than what's modeled here, so there's genuinely nothing yet to wire
+  // this button to without inventing fields that don't exist.
   const handleSave = (sectionName) => {
     Alert.alert(
       "Not Available on Mobile Yet",
@@ -109,7 +145,108 @@ export default function SettingsScreen({ navigation, route }) {
     );
   };
 
-  const handleChangePassword = () => {
+  const loadSettingsAndProfile = async () => {
+    setSettingsLoading(true);
+    try {
+      const [settingsRes, profileRes] = await Promise.all([
+        fetchSettings().catch(() => null),
+        fetchAdminProfile().catch(() => null),
+      ]);
+      const s = settingsRes?.data?.ok ? settingsRes.data.settings : null;
+      if (s) {
+        setCompanyName(s.company_name || "");
+        setCompanyCode(s.company_code || "");
+        setTimezone(s.timezone || "Asia/Kolkata");
+        setWorkingDays(workingDaysCsvToLabel(s.working_days));
+        setGeofenceEnabled(!!s.geo_enabled);
+        setGeofenceRadius(s.geo_radius != null ? String(s.geo_radius) : "200");
+        setLatitude(s.office_lat != null ? String(s.office_lat) : "");
+        setLongitude(s.office_lon != null ? String(s.office_lon) : "");
+        setFaceRecog(!!s.face_auth_enabled);
+        setNotifyLeave(!!s.notify_leave);
+        setNotifyPayslip(!!s.notify_payslip);
+        setNotifyResignation(!!s.notify_resignation);
+        setNotifyDocExpiry(!!s.notify_doc_expiry);
+      }
+      const p = profileRes?.data?.ok ? profileRes.data : null;
+      if (p) {
+        setProfileUsername(p.username || "");
+        setProfileEmail(p.email || "");
+        setProfileRole(p.role || "admin");
+        setProfileCreatedAt(p.created_at || "");
+      }
+    } catch (_) {
+      // Fail quiet -- fields just stay at their neutral defaults.
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSettingsAndProfile();
+  }, []);
+
+  const handleSaveCompany = async () => {
+    if (!companyName.trim()) {
+      Alert.alert("Validation Error", "Company name is required.");
+      return;
+    }
+    setSavingCompany(true);
+    let res;
+    try {
+      res = await saveCompanySettings(
+        companyName.trim(), companyCode.trim(), timezone, WORKING_DAYS_OPTIONS[workingDays]
+      );
+    } catch (e) {
+      res = e?.response;
+    }
+    setSavingCompany(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Save Failed", res?.data?.msg || "Could not save company info.");
+      return;
+    }
+    Alert.alert("Saved", "Company info updated.");
+  };
+
+  // geo_enabled/face_auth_enabled/notify_* all save instantly on toggle,
+  // same as web's toggle_feature -- optimistic update with rollback on
+  // failure rather than a separate "Save" step for a single switch.
+  const handleToggleFeature = async (feature, value, setter) => {
+    setter(value);
+    let res;
+    try {
+      res = await toggleCompanyFeature(feature, value);
+    } catch (e) {
+      res = e?.response;
+    }
+    if (!res?.data?.ok) {
+      setter(!value);
+      Alert.alert("Update Failed", res?.data?.msg || "Could not update this setting.");
+    }
+  };
+
+  const handleSaveAttendance = async () => {
+    const radiusNum = parseInt(geofenceRadius, 10);
+    if (!radiusNum || radiusNum < 50 || radiusNum > 5000) {
+      Alert.alert("Validation Error", "Geofence radius must be between 50 and 5000 metres.");
+      return;
+    }
+    setSavingAttendance(true);
+    let res;
+    try {
+      res = await saveGeoRadius(radiusNum, latitude.trim(), longitude.trim());
+    } catch (e) {
+      res = e?.response;
+    }
+    setSavingAttendance(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Save Failed", res?.data?.msg || "Could not save attendance settings.");
+      return;
+    }
+    Alert.alert("Saved", "Attendance settings updated.");
+  };
+
+  const handleChangePassword = async () => {
     if (!currentPass || !newPass || !confirmPass) {
       Alert.alert("Validation Error", "Please fill in all password fields.");
       return;
@@ -118,15 +255,26 @@ export default function SettingsScreen({ navigation, route }) {
       Alert.alert("Error", "New password and confirmation do not match.");
       return;
     }
-    // No Bearer-token-compatible endpoint exists to change the admin
-    // password from mobile -- /change_admin_password is a session-based
-    // web route only. This used to claim "Admin password changed
-    // successfully" with zero API call, which is actively dangerous: an
-    // admin could believe their password changed when it never did.
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Changing the admin password is only available from the web admin dashboard for now."
-    );
+    if (newPass.length < 8) {
+      Alert.alert("Error", "New password must be at least 8 characters.");
+      return;
+    }
+    setChangingPassword(true);
+    let res;
+    try {
+      res = await changeAdminPassword(currentPass, newPass, confirmPass);
+    } catch (e) {
+      res = e?.response;
+    }
+    setChangingPassword(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Change Failed", res?.data?.msg || "Could not change password.");
+      return;
+    }
+    setCurrentPass("");
+    setNewPass("");
+    setConfirmPass("");
+    Alert.alert("Success", "Your password was changed.");
   };
 
   // Converts a "09:00 AM" / "6:30 PM" style string (what this form collects)
@@ -251,37 +399,6 @@ export default function SettingsScreen({ navigation, route }) {
                 />
               </View>
 
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>SUPPORT EMAIL</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={companyEmail}
-                    onChangeText={setCompanyEmail}
-                    keyboardType="email-address"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>SUPPORT PHONE</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={companyPhone}
-                    onChangeText={setCompanyPhone}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>HEADQUARTERS ADDRESS</Text>
-                <TextInput
-                  style={[styles.input, { height: 70 }]}
-                  multiline
-                  value={companyAddress}
-                  onChangeText={setCompanyAddress}
-                />
-              </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>WORKING DAYS POLICY</Text>
                 <View style={styles.daysToggleRow}>
@@ -310,10 +427,17 @@ export default function SettingsScreen({ navigation, route }) {
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
-                onPress={() => handleSave("Company")}
+                onPress={handleSaveCompany}
+                disabled={savingCompany}
               >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
-                <Text style={styles.saveButtonText}>Save Profile Settings</Text>
+                {savingCompany ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
+                    <Text style={styles.saveButtonText}>Save Profile Settings</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -401,7 +525,7 @@ export default function SettingsScreen({ navigation, route }) {
                 </View>
                 <Switch
                   value={geofenceEnabled}
-                  onValueChange={setGeofenceEnabled}
+                  onValueChange={(v) => handleToggleFeature("geo_enabled", v, setGeofenceEnabled)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
                   thumbColor={geofenceEnabled ? "#0B2253" : "#F1F5F9"}
                 />
@@ -449,45 +573,26 @@ export default function SettingsScreen({ navigation, route }) {
                 </View>
                 <Switch
                   value={faceRecog}
-                  onValueChange={setFaceRecog}
+                  onValueChange={(v) => handleToggleFeature("face_auth_enabled", v, setFaceRecog)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
                   thumbColor={faceRecog ? "#0B2253" : "#F1F5F9"}
-                />
-              </View>
-
-              <View style={styles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Liveness Detection</Text>
-                  <Text style={styles.settingRowSub}>Prevent spoofing using printed photos</Text>
-                </View>
-                <Switch
-                  value={livenessCheck}
-                  onValueChange={setLivenessCheck}
-                  trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={livenessCheck ? "#0B2253" : "#F1F5F9"}
-                />
-              </View>
-
-              <View style={styles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Auto Check-out (08:00 PM)</Text>
-                  <Text style={styles.settingRowSub}>Automatically check out unclosed sessions</Text>
-                </View>
-                <Switch
-                  value={autoCheckout}
-                  onValueChange={setAutoCheckout}
-                  trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={autoCheckout ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
-                onPress={() => handleSave("Attendance")}
+                onPress={handleSaveAttendance}
+                disabled={savingAttendance}
               >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
-                <Text style={styles.saveButtonText}>Save Attendance Rules</Text>
+                {savingAttendance ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
+                    <Text style={styles.saveButtonText}>Save Geofence Radius & Location</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -551,9 +656,16 @@ export default function SettingsScreen({ navigation, route }) {
                 style={styles.saveButton}
                 activeOpacity={0.8}
                 onPress={handleChangePassword}
+                disabled={changingPassword}
               >
-                <Ionicons name="key-outline" size={18} color="#FFF" />
-                <Text style={styles.saveButtonText}>Update Admin Password</Text>
+                {changingPassword ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="key-outline" size={18} color="#FFF" />
+                    <Text style={styles.saveButtonText}>Update Admin Password</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -566,79 +678,61 @@ export default function SettingsScreen({ navigation, route }) {
                 <Text style={styles.cardHeaderTitle}>Notification Preferences & Alerts</Text>
               </View>
 
+              <Text style={{ fontSize: 12, color: "#64748B", marginBottom: 4 }}>
+                Choose which events send an email to admins. Each toggle saves immediately.
+              </Text>
+
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Mobile Push Notifications</Text>
-                  <Text style={styles.settingRowSub}>Immediate alerts on pending approvals</Text>
+                  <Text style={styles.settingRowTitle}>New Leave Request</Text>
+                  <Text style={styles.settingRowSub}>When an employee submits a leave</Text>
                 </View>
                 <Switch
-                  value={pushNotifs}
-                  onValueChange={setPushNotifs}
+                  value={notifyLeave}
+                  onValueChange={(v) => handleToggleFeature("notify_leave", v, setNotifyLeave)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={pushNotifs ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyLeave ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Security & Login Email Alerts</Text>
-                  <Text style={styles.settingRowSub}>Notify on new admin sessions</Text>
+                  <Text style={styles.settingRowTitle}>Payslip Sent</Text>
+                  <Text style={styles.settingRowSub}>Confirmation when payslip is emailed</Text>
                 </View>
                 <Switch
-                  value={emailAlerts}
-                  onValueChange={setEmailAlerts}
+                  value={notifyPayslip}
+                  onValueChange={(v) => handleToggleFeature("notify_payslip", v, setNotifyPayslip)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={emailAlerts ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyPayslip ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Daily Attendance Summary Digest</Text>
-                  <Text style={styles.settingRowSub}>Receive daily PDF report at 7:00 PM</Text>
+                  <Text style={styles.settingRowTitle}>Resignation Submitted</Text>
+                  <Text style={styles.settingRowSub}>New resignation request received</Text>
                 </View>
                 <Switch
-                  value={dailyDigest}
-                  onValueChange={setDailyDigest}
+                  value={notifyResignation}
+                  onValueChange={(v) => handleToggleFeature("notify_resignation", v, setNotifyResignation)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={dailyDigest ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyResignation ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Late Arrival & Absentee Alerts</Text>
-                  <Text style={styles.settingRowSub}>Alert HR when employees check in late</Text>
+                  <Text style={styles.settingRowTitle}>Document Expiry Alert</Text>
+                  <Text style={styles.settingRowSub}>Before employee documents expire</Text>
                 </View>
                 <Switch
-                  value={lateAlerts}
-                  onValueChange={setLateAlerts}
+                  value={notifyDocExpiry}
+                  onValueChange={(v) => handleToggleFeature("notify_doc_expiry", v, setNotifyDocExpiry)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={lateAlerts ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyDocExpiry ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
-
-              <View style={styles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Payslip Issuance Notifications</Text>
-                  <Text style={styles.settingRowSub}>Notify staff when payslips are published</Text>
-                </View>
-                <Switch
-                  value={payslipAlerts}
-                  onValueChange={setPayslipAlerts}
-                  trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={payslipAlerts ? "#0B2253" : "#F1F5F9"}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                activeOpacity={0.8}
-                onPress={() => handleSave("Notifications")}
-              >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
-                <Text style={styles.saveButtonText}>Save Notification Settings</Text>
-              </TouchableOpacity>
             </View>
           )}
 
@@ -733,36 +827,28 @@ export default function SettingsScreen({ navigation, route }) {
                 </LinearGradient>
 
                 <View style={styles.profileBody}>
-                  <Text style={styles.profileName}>Administrator</Text>
-                  <Text style={styles.profileEmail}>admin@company.com</Text>
+                  <Text style={styles.profileName}>{profileUsername || "..."}</Text>
+                  <Text style={styles.profileEmail}>{profileEmail || "No email set"}</Text>
 
                   <View style={styles.roleBadgeRow}>
                     <View style={styles.roleBadge}>
                       <Ionicons name="star" size={12} color="#0B2253" />
-                      <Text style={styles.roleText}>SUPER ADMIN</Text>
+                      <Text style={styles.roleText}>{profileRole === "hr" ? "HR" : profileRole.toUpperCase()}</Text>
                     </View>
                     <View style={styles.verifiedBadge}>
                       <Ionicons name="checkmark-circle" size={12} color="#10B981" />
-                      <Text style={styles.verifiedText}>SYSTEM ACTIVE</Text>
+                      <Text style={styles.verifiedText}>ACTIVE</Text>
                     </View>
                   </View>
 
-                  <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                      <Text style={styles.statVal}>100%</Text>
-                      <Text style={styles.statLbl}>Security Level</Text>
+                  {!!profileCreatedAt && (
+                    <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                        <Text style={styles.statVal}>{profileCreatedAt.split(" ")[0]}</Text>
+                        <Text style={styles.statLbl}>Account Created</Text>
+                      </View>
                     </View>
-                    <View style={styles.statSep} />
-                    <View style={styles.statItem}>
-                      <Text style={styles.statVal}>Active</Text>
-                      <Text style={styles.statLbl}>Auth Status</Text>
-                    </View>
-                    <View style={styles.statSep} />
-                    <View style={styles.statItem}>
-                      <Text style={styles.statVal}>FULL</Text>
-                      <Text style={styles.statLbl}>Permissions</Text>
-                    </View>
-                  </View>
+                  )}
                 </View>
               </View>
 

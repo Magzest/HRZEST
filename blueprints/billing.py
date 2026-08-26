@@ -26,7 +26,7 @@ from database import get_master_db
 from utils.plan_limits import PLAN_LABEL, calculate_price, format_price_inr
 from utils.razorpay_utils import (
     create_order as razorpay_create_order, verify_payment_signature,
-    key_id as razorpay_key_id, razorpay_configured,
+    key_id as razorpay_key_id, create_id_or_demo, verify_or_demo,
 )
 from utils.auth import turnstile_enabled, verify_turnstile
 
@@ -95,16 +95,13 @@ def create_order():
 
     amount_paise = calculate_price(employee_count)
 
-    is_demo = not razorpay_configured()
-    if is_demo:
-        # No real Razorpay call -- see _DEMO_ORDER_PREFIX comment above.
-        order_id = _DEMO_ORDER_PREFIX + secrets.token_hex(12)
-    else:
-        receipt_id = f"signup_{subdomain}_{int(datetime.datetime.now().timestamp())}"
-        order_id, error = razorpay_create_order(amount_paise, receipt_id)
-        if not order_id:
-            app_log.error("billing.create_order failed: %s", error)
-            return jsonify({"ok": False, "msg": error}), 502
+    receipt_id = f"signup_{subdomain}_{int(datetime.datetime.now().timestamp())}"
+    order_id, is_demo, error = create_id_or_demo(
+        _DEMO_ORDER_PREFIX, lambda: razorpay_create_order(amount_paise, receipt_id)
+    )
+    if error:
+        app_log.error("billing.create_order failed: %s", error)
+        return jsonify({"ok": False, "msg": error}), 502
 
     try:
         conn = get_master_db()
@@ -145,22 +142,21 @@ def verify_payment():
     razorpay_payment_id = (data.get("razorpay_payment_id") or "").strip()
     razorpay_signature = (data.get("razorpay_signature") or "").strip()
 
-    is_demo_order = razorpay_order_id.startswith(_DEMO_ORDER_PREFIX)
-    if is_demo_order:
-        if razorpay_configured():
-            # Real keys exist now but this order was minted before that --
-            # never honor the demo bypass once real payments are live.
-            return jsonify({"ok": False, "msg": "This was a demo order. Please start checkout again."}), 400
+    ok, is_demo, error = verify_or_demo(
+        razorpay_order_id, _DEMO_ORDER_PREFIX, razorpay_payment_id, razorpay_signature, verify_payment_signature
+    )
+    if is_demo and ok:
         log_security_event(
             "billing.demo_checkout_completed", "Demo/test-mode checkout completed (no real payment)",
             level="INFO", order_id=razorpay_order_id,
         )
-    elif not verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
-        log_security_event(
-            "billing.signature_invalid", "Razorpay payment signature verification failed",
-            level="ERROR", order_id=razorpay_order_id,
-        )
-        return jsonify({"ok": False, "msg": "Payment verification failed."}), 400
+    elif not ok:
+        if not is_demo:
+            log_security_event(
+                "billing.signature_invalid", "Razorpay payment signature verification failed",
+                level="ERROR", order_id=razorpay_order_id,
+            )
+        return jsonify({"ok": False, "msg": error}), 400
 
     conn = get_master_db()
     cur = conn.cursor(buffered=True)

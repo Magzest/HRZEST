@@ -26,7 +26,9 @@ RESERVED_PATH_SEGMENTS = frozenset({
     "login", "admin_login", "admin-login", "employee_login", "get-started", "create_org", "org_payment_success", "quick_admin_login",
     "mobile_bridge_login",
     # server-to-server callbacks (no tenant slug, no session -- authenticated
-    # by request signature instead; blueprints/auto_debit.py)
+    # by request signature instead; blueprints/webhooks.py's generic
+    # /webhooks/<provider>, dispatching to whichever feature registered
+    # for that provider/event)
     "webhooks",
     # operator consoles (excluded from this migration entirely)
     "super_admin", "superadmin", "sp_admin",

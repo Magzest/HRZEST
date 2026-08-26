@@ -14,18 +14,19 @@ the Platform Admin can see seat-purchase history the same way they already
 see signup payments via billing.py's payment_orders (see
 blueprints/platform_admin.py's _recent_payments()).
 """
-import secrets
 import datetime
-from flask import Blueprint, request, session, redirect, jsonify, render_template, flash, g
+from flask import Blueprint, request, session, jsonify, render_template, g
 
 from extensions import app_log, limiter, log_security_event
 from database import get_db_connection, get_master_db
 from utils.auth import admin_required
-from utils.helpers import tpath, get_company_settings, invalidate_settings_cache
-from utils.plan_limits import calculate_price, format_price_inr, PER_EMPLOYEE_PAISE
+from utils.helpers import get_company_settings, invalidate_settings_cache
+from utils.plan_limits import (
+    calculate_price, format_price_inr, PER_EMPLOYEE_PAISE, get_tenant_employee_count, get_billing_snapshot,
+)
 from utils.razorpay_utils import (
     create_order as razorpay_create_order, verify_payment_signature,
-    key_id as razorpay_key_id, razorpay_configured,
+    key_id as razorpay_key_id, razorpay_configured, create_id_or_demo, verify_or_demo,
 )
 
 seats_bp = Blueprint("seats", __name__)
@@ -40,42 +41,14 @@ _DEMO_ORDER_PREFIX = "demo_seat_order_"
 @admin_required
 def seats_page():
     co = get_company_settings()
-    try:
-        db = get_db_connection()
-        cur = db.cursor()
-        cur.execute("SELECT COUNT(*) FROM employees")
-        employee_count = cur.fetchone()[0]
-        cur.close()
-        db.close()
-    except Exception:
-        employee_count = 0
+    employee_count = get_tenant_employee_count(g.tenant_db)
 
-    auto_debit_status = None
-    invoices = []
-    try:
-        conn = get_master_db()
-        cur = conn.cursor(buffered=True)
-        cur.execute(
-            "SELECT status, quantity_synced, activated_at FROM auto_debit_mandates WHERE tenant_schema=%s",
-            (g.tenant_db,)
-        )
-        row = cur.fetchone()
-        if row:
-            auto_debit_status = {"status": row[0], "quantity_synced": row[1], "activated_at": row[2]}
-        cur.execute(
-            "SELECT billing_period, employee_count, amount_paise, status, created_at, failure_reason "
-            "FROM monthly_invoices WHERE tenant_schema=%s ORDER BY created_at DESC LIMIT 12",
-            (g.tenant_db,)
-        )
-        invoices = [
-            {"billing_period": r[0], "employee_count": r[1], "amount_display": format_price_inr(r[2]),
-             "status": r[3], "created_at": r[4], "failure_reason": r[5]}
-            for r in cur.fetchall()
-        ]
-        cur.close()
-        conn.close()
-    except Exception as exc:
-        app_log.warning("seats_page: auto-debit lookup failed: %s", exc)
+    snapshot = get_billing_snapshot(g.tenant_db)
+    auto_debit_status = snapshot["auto_debit"]
+    invoices = [
+        {**inv, "amount_display": format_price_inr(inv["amount_paise"])}
+        for inv in snapshot["invoices"]
+    ]
 
     return render_template(
         "seat_checkout.html",
@@ -112,15 +85,13 @@ def create_order():
 
     amount_paise = calculate_price(additional_seats)
 
-    is_demo = not razorpay_configured()
-    if is_demo:
-        order_id = _DEMO_ORDER_PREFIX + secrets.token_hex(12)
-    else:
-        receipt_id = f"seats_{g.tenant_db}_{int(datetime.datetime.now().timestamp())}"
-        order_id, error = razorpay_create_order(amount_paise, receipt_id)
-        if not order_id:
-            app_log.error("seats.create_order failed: %s", error)
-            return jsonify({"ok": False, "msg": error}), 502
+    receipt_id = f"seats_{g.tenant_db}_{int(datetime.datetime.now().timestamp())}"
+    order_id, is_demo, error = create_id_or_demo(
+        _DEMO_ORDER_PREFIX, lambda: razorpay_create_order(amount_paise, receipt_id)
+    )
+    if error:
+        app_log.error("seats.create_order failed: %s", error)
+        return jsonify({"ok": False, "msg": error}), 502
 
     try:
         conn = get_master_db()
@@ -159,52 +130,60 @@ def verify_payment():
     razorpay_payment_id = (data.get("razorpay_payment_id") or "").strip()
     razorpay_signature = (data.get("razorpay_signature") or "").strip()
 
-    is_demo_order = razorpay_order_id.startswith(_DEMO_ORDER_PREFIX)
-    if is_demo_order:
-        if razorpay_configured():
-            return jsonify({"ok": False, "msg": "This was a demo order. Please start checkout again."}), 400
+    ok, is_demo, error = verify_or_demo(
+        razorpay_order_id, _DEMO_ORDER_PREFIX, razorpay_payment_id, razorpay_signature, verify_payment_signature
+    )
+    if is_demo and ok:
         log_security_event(
             "seats.demo_checkout_completed", "Demo/test-mode seat top-up completed (no real payment)",
             level="INFO", order_id=razorpay_order_id,
         )
-    elif not verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature):
-        log_security_event(
-            "seats.signature_invalid", "Razorpay payment signature verification failed for a seat top-up",
-            level="ERROR", order_id=razorpay_order_id,
-        )
-        return jsonify({"ok": False, "msg": "Payment verification failed."}), 400
+    elif not ok:
+        if not is_demo:
+            log_security_event(
+                "seats.signature_invalid", "Razorpay payment signature verification failed for a seat top-up",
+                level="ERROR", order_id=razorpay_order_id,
+            )
+        return jsonify({"ok": False, "msg": error}), 400
 
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     # tenant_schema=%s scopes the lookup to THIS tenant -- an order created
     # by one company can never be redeemed against another's seat cap, even
     # if its razorpay_order_id were somehow guessed.
+    #
+    # The UPDATE's "AND status != 'paid'" is load-bearing, not decorative:
+    # two near-simultaneous requests for the same order (a flaky-network
+    # client retry, a double-tap) must not both pass a SELECT-then-UPDATE
+    # race and each credit seats once. Only the request whose UPDATE
+    # actually flips a row (cur.rowcount == 1) gets to credit seats below;
+    # the loser sees rowcount == 0 and falls through to the idempotent
+    # "already paid" response instead.
     cur.execute(
-        "SELECT seats_purchased, status FROM seat_topup_orders WHERE razorpay_order_id=%s AND tenant_schema=%s",
+        "UPDATE seat_topup_orders SET status='paid', razorpay_payment_id=%s, paid_at=NOW() "
+        "WHERE razorpay_order_id=%s AND tenant_schema=%s AND status != 'paid'",
+        (razorpay_payment_id, razorpay_order_id, g.tenant_db)
+    )
+    credited = cur.rowcount == 1
+    conn.commit()
+
+    cur.execute(
+        "SELECT seats_purchased FROM seat_topup_orders WHERE razorpay_order_id=%s AND tenant_schema=%s",
         (razorpay_order_id, g.tenant_db)
     )
     row = cur.fetchone()
-    if not row:
-        cur.close()
-        conn.close()
-        return jsonify({"ok": False, "msg": "Unknown order."}), 404
+    cur.close()
+    conn.close()
 
-    seats_purchased, status = row
-    if status == "paid":
-        # Idempotent: a retried/duplicate client POST must not credit seats twice.
-        cur.close()
-        conn.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "Unknown order."}), 404
+    if not credited:
+        # Already paid -- possibly by a concurrent request that won the
+        # race above. Idempotent: never credit seats twice for one order.
         co = get_company_settings()
         return jsonify({"ok": True, "already_paid": True, "paid_employee_slots": co.get("paid_employee_slots")})
 
-    cur.execute(
-        "UPDATE seat_topup_orders SET status='paid', razorpay_payment_id=%s, paid_at=NOW() "
-        "WHERE razorpay_order_id=%s AND tenant_schema=%s",
-        (razorpay_payment_id, razorpay_order_id, g.tenant_db)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    seats_purchased = row[0]
 
     try:
         db = get_db_connection()

@@ -19,6 +19,27 @@ def validate_emp_id(emp_id: str) -> bool:
     return bool(emp_id) and bool(_EMP_ID_RE.match(emp_id))
 
 
+def coerce_datetime(value):
+    """A TIMESTAMP column comes back as a real datetime from Postgres, but
+    as a plain str from the local-fallback SQLite path (database.py's
+    _SqliteConnWrapper opens sqlite3.connect() with no detect_types, so
+    declared column types aren't used to auto-convert query results).
+    Callers doing datetime arithmetic or comparison/sorting on a value that
+    might have come from either backend (e.g. blueprints/auto_debit.py's
+    monthly-charge-due check, blueprints/platform_admin.py's payment-feed
+    sort) should route it through this first rather than assume one type.
+    Returns a datetime unchanged, parses an ISO-ish string, or None for
+    anything else/unparseable -- never raises."""
+    if value is None or isinstance(value, datetime.datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.datetime.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 from flask import session, request
 from database import get_db_connection
 from extensions import app_log, log_security_event

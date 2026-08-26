@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Alert,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,13 +18,23 @@ import THEME from "../../constants/theme";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 
-import { fetchOnboarding } from "../../api/client";
+import { fetchOnboarding, fetchOnboardingTasks, updateOnboardingTaskStatus } from "../../api/client";
 
 export default function OnboardingScreen({ navigation }) {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [onboardings, setOnboardings] = useState([]);
+
+  // Task checklist modal -- real per-task view/toggle via
+  // /api/onboarding/<id>/tasks and /api/onboarding/task/<id>/update
+  // (blueprints/onboarding.py), where this screen used to show only a
+  // read-only progress bar with no way to see or complete individual tasks.
+  const [taskModalVisible, setTaskModalVisible] = useState(false);
+  const [taskModalOnboarding, setTaskModalOnboarding] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [updatingTaskId, setUpdatingTaskId] = useState(null);
 
   const loadData = async () => {
     try {
@@ -46,6 +58,41 @@ export default function OnboardingScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
+    loadData();
+  };
+
+  const openTaskModal = async (item) => {
+    setTaskModalOnboarding(item);
+    setTaskModalVisible(true);
+    setTasksLoading(true);
+    try {
+      const res = await fetchOnboardingTasks(item.id);
+      setTasks(res?.data?.ok && Array.isArray(res.data.tasks) ? res.data.tasks : []);
+    } catch (e) {
+      setTasks([]);
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  const toggleTask = async (task) => {
+    const nextStatus = task.status === "Done" ? "Pending" : "Done";
+    setUpdatingTaskId(task.id);
+    let res;
+    try {
+      res = await updateOnboardingTaskStatus(task.id, nextStatus);
+    } catch (e) {
+      res = e?.response;
+    }
+    setUpdatingTaskId(null);
+    if (!res?.data?.ok) {
+      Alert.alert("Update Failed", res?.data?.msg || "Could not update this task.");
+      return;
+    }
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t)));
+    if (res.data.onboarding_completed) {
+      Alert.alert("Onboarding Complete", `All tasks done for ${taskModalOnboarding?.employeeName}.`);
+    }
     loadData();
   };
 
@@ -134,7 +181,7 @@ export default function OnboardingScreen({ navigation }) {
               const progress = (item.tasksCompleted / item.totalTasks) * 100;
 
               return (
-                <View key={item.id} style={styles.card}>
+                <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.85} onPress={() => openTaskModal(item)}>
                   <View style={styles.cardHeader}>
                     <View style={styles.iconCircle}>
                       <Ionicons name="person-add-outline" size={20} color="#173B8C" />
@@ -191,13 +238,69 @@ export default function OnboardingScreen({ navigation }) {
                       Join Date: {item.startDate}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
+
+        {/* Task Checklist Modal */}
+        <Modal visible={taskModalVisible} transparent animationType="slide" onRequestClose={() => setTaskModalVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
+            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
+                  {taskModalOnboarding?.employeeName}'s Tasks
+                </Text>
+                <TouchableOpacity onPress={() => setTaskModalVisible(false)}>
+                  <Ionicons name="close-circle" size={26} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {tasksLoading ? (
+                <ActivityIndicator size="large" color="#173B8C" style={{ marginVertical: 30 }} />
+              ) : tasks.length === 0 ? (
+                <Text style={{ textAlign: "center", color: "#64748B", marginVertical: 30 }}>No tasks assigned.</Text>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {tasks.map((task) => (
+                    <View key={task.id} style={{ flexDirection: "row", alignItems: "flex-start", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                      <TouchableOpacity
+                        onPress={() => toggleTask(task)}
+                        disabled={updatingTaskId === task.id}
+                        style={{
+                          width: 26, height: 26, borderRadius: 8, marginRight: 12, marginTop: 2,
+                          alignItems: "center", justifyContent: "center",
+                          backgroundColor: task.status === "Done" ? "#16A34A" : "#F1F5F9",
+                          borderWidth: task.status === "Done" ? 0 : 1, borderColor: "#CBD5E1",
+                        }}
+                      >
+                        {updatingTaskId === task.id ? (
+                          <ActivityIndicator size="small" color={task.status === "Done" ? "#FFFFFF" : "#173B8C"} />
+                        ) : task.status === "Done" ? (
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                        ) : null}
+                      </TouchableOpacity>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", textDecorationLine: task.status === "Done" ? "line-through" : "none" }}>
+                          {task.title}
+                        </Text>
+                        {!!task.description && (
+                          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>{task.description}</Text>
+                        )}
+                        {task.requires_document && (
+                          <Text style={{ fontSize: 11, color: "#B45309", marginTop: 4, fontWeight: "700" }}>Requires document upload</Text>
+                        )}
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </LinearGradient>
   );

@@ -41,13 +41,13 @@ const CARDS = [
   },
 
   {
-    key: "performance",
-    title: "Performance",
-    subtitle: "Overall",
+    key: "attendanceGrade",
+    title: "Attendance Grade",
+    subtitle: "This Month",
     icon: "trending-up-outline",
     color: "#7C3AED",
     bg: "#F5F3FF",
-    screen: "Performance",
+    screen: "Attendance",
   },
 
 ];
@@ -56,7 +56,7 @@ export default function EmployeeSummaryCards({
   hours = "0h 00m",
   attendance = "0%",
   leaveBalance = "0",
-  performance = "N/A",
+  attendanceGrade = "N/A",
   navigation,
 }) {
 
@@ -68,7 +68,7 @@ export default function EmployeeSummaryCards({
 
     leave: leaveBalance,
 
-    performance,
+    attendanceGrade,
 
   };
 

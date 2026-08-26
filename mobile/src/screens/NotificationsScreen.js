@@ -25,12 +25,18 @@ import {
   fetchEmployeeNotifications,
   markNotificationsRead,
   markEmployeeNotificationsRead,
+  broadcastNotification,
 } from "../api/client";
 import { notificationFilters } from "../data/notificationsData";
 
 export default function NotificationsScreen() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  // Broadcast is admin-only on web too (role_required("admin") on
+  // /announcements) -- isAdmin above is really "admin-panel session"
+  // (true for HR accounts too, since both share role:'admin' for
+  // top-level app routing), so this needs the separate adminRole field.
+  const canBroadcast = user?.adminRole === "admin";
 
   const [notificationsList, setNotificationsList] = useState([]);
   const [selectedFilter, setSelectedFilter] = useState("All");
@@ -86,15 +92,29 @@ export default function NotificationsScreen() {
   };
 
   const handleSendBroadcast = async () => {
-    // No broadcast endpoint exists anywhere in the backend -- not a Bearer
-    // API, not even a session-based web route -- so this call was always
-    // guaranteed to fail, and the old catch block claimed success anyway
-    // ("Announcement Queued... broadcasted locally") on every single
-    // attempt. Staying honest about this instead.
-    Alert.alert(
-      "Not Available Yet",
-      "Broadcasting an announcement to all staff isn't implemented yet on either web or mobile."
-    );
+    const titleTrim = broadcastTitle.trim();
+    const messageTrim = broadcastMessage.trim();
+    if (!titleTrim || !messageTrim) {
+      Alert.alert("Input Required", "Title and message are both required.");
+      return;
+    }
+    setBroadcasting(true);
+    let res;
+    try {
+      res = await broadcastNotification(titleTrim, messageTrim, "all");
+    } catch (e) {
+      res = e?.response;
+    }
+    setBroadcasting(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Broadcast Failed", res?.data?.msg || "Could not send this announcement. Please try again.");
+      return;
+    }
+    setBroadcastVisible(false);
+    setBroadcastTitle("");
+    setBroadcastMessage("");
+    Alert.alert("Sent", "Your announcement was broadcast to all active employees.");
+    loadNotifications();
   };
 
   const filteredNotifications = useMemo(() => {
@@ -145,7 +165,7 @@ export default function NotificationsScreen() {
             </TouchableOpacity>
           )}
 
-          {isAdmin && (
+          {canBroadcast && (
             <TouchableOpacity style={styles.broadcastBtn} onPress={() => setBroadcastVisible(true)}>
               <Ionicons name="mega-phone-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.broadcastBtnText}>Send Broadcast</Text>

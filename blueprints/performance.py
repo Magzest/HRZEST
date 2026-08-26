@@ -92,6 +92,72 @@ def api_performance():
         return jsonify({"ok": True, "reviews": reviews})
 
 
+@performance_bp.route("/api/performance/review", methods=["POST"])
+def api_submit_performance_review():
+    """Bearer-token twin of performance_save_review() below -- same
+    upsert-by-(employee_id, quarter, year) and overall_rating recompute
+    from any existing KPI rows, so a review saved from mobile behaves
+    identically to one saved from web. Same hybrid session-or-Bearer check
+    as api_performance() above, for the same reason (Performance page can
+    call this without a token when the admin is already logged in)."""
+    if not session.get("admin_logged_in"):
+        auth = request.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+        from utils.auth import _hash_token
+        token_hash = _hash_token(auth[7:])
+        with _db() as (cursor, _conn):
+            cursor.execute(
+                "SELECT identity FROM api_tokens WHERE token=%s AND token_type='admin' AND expires_at > NOW()",
+                (token_hash,)
+            )
+            if not cursor.fetchone():
+                return jsonify({"ok": False, "msg": "Invalid or expired token"}), 401
+
+    data = request.get_json(silent=True) or {}
+    emp_id = (data.get("employee_id") or "").strip()
+    try:
+        q = int(data.get("quarter"))
+        yr = int(data.get("year"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "msg": "quarter and year are required."}), 400
+    if not emp_id or q not in (1, 2, 3, 4):
+        return jsonify({"ok": False, "msg": "employee_id and a valid quarter (1-4) are required."}), 400
+    feedback = (data.get("reviewer_feedback") or "").strip()
+    status = (data.get("status") or "Draft").strip()
+    try:
+        potential = max(0, min(5, float(data.get("potential_rating") or 0)))
+    except (TypeError, ValueError):
+        potential = 0
+
+    with _db() as (cursor, conn):
+        cursor.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
+        if not cursor.fetchone():
+            return jsonify({"ok": False, "msg": f"Unknown employee_id '{emp_id}'."}), 400
+
+        cursor.execute("""
+            INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status, potential_rating)
+            VALUES (%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, potential_rating=%s, updated_at=NOW()
+        """, (emp_id, q, yr, feedback, status, potential, feedback, status, potential))
+        conn.commit()
+
+        cursor.execute("SELECT id FROM performance_reviews WHERE employee_id=%s AND quarter=%s AND year=%s", (emp_id, q, yr))
+        rev = cursor.fetchone()
+        overall_rating = 0
+        if rev:
+            cursor.execute("SELECT weight, rating FROM performance_kpis WHERE review_id=%s AND rating > 0", (rev[0],))
+            kpi_rows = cursor.fetchall()
+            if kpi_rows:
+                total_weight = sum(r[0] for r in kpi_rows)
+                weighted_sum = sum(r[0] * r[1] for r in kpi_rows)
+                overall_rating = round(weighted_sum / total_weight, 1) if total_weight > 0 else 0
+                cursor.execute("UPDATE performance_reviews SET overall_rating=%s WHERE id=%s", (overall_rating, rev[0]))
+                conn.commit()
+
+    return jsonify({"ok": True, "msg": "Review saved.", "overall_rating": overall_rating})
+
+
 @performance_bp.route("/performance")
 @admin_required
 def performance():

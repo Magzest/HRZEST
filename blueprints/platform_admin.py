@@ -26,6 +26,7 @@ from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
 from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
+from utils.helpers import coerce_datetime
 from utils.analytics import get_traffic_stats
 from utils.device_utils import (
     get_or_create_device_token, set_device_cookie, record_login_device,
@@ -299,7 +300,12 @@ def _recent_payments(limit=20):
             {
                 "company_name": r[0] or r[8], "subdomain": r[1] or "—", "employee_count": r[2],
                 "amount_display": format_price_inr(r[3]), "status": r[4],
-                "is_demo": (r[6] or "") == "demo_payment",
+                # Prefix-based, same convention as the signup/seat-topup
+                # sources above -- checking the subscription_id (not
+                # payment_id, which is a hardcoded "demo_payment" literal in
+                # blueprints/auto_debit.py's _maybe_simulate_demo_charge and
+                # has no structural relationship to the subscription itself).
+                "is_demo": (r[5] or "").startswith("demo_sub_"),
                 "order_id": r[5], "payment_id": r[6], "created_at": r[7], "paid_at": r[7],
                 "admin_username": "—", "admin_email": "—", "kind": "Auto-Debit",
             }
@@ -309,7 +315,15 @@ def _recent_payments(limit=20):
         conn.close()
 
         merged = signup_payments + seat_payments + auto_debit_payments
-        merged.sort(key=lambda p: p["paid_at"] or p["created_at"] or datetime.datetime.min, reverse=True)
+        # coerce_datetime: created_at/paid_at come back as real datetimes
+        # from Postgres but as plain strings under the local SQLite
+        # fallback (see its docstring) -- sorting a mix of the two raises
+        # TypeError and this whole feed goes blank (caught by the except
+        # below), so every value is normalized before comparison.
+        merged.sort(
+            key=lambda p: coerce_datetime(p["paid_at"]) or coerce_datetime(p["created_at"]) or datetime.datetime.min,
+            reverse=True,
+        )
         return merged[:limit]
     except Exception as exc:
         app_log.warning("platform_admin: payment history lookup failed: %s", exc)

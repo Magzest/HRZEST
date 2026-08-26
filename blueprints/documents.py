@@ -3,11 +3,11 @@
 import os
 import uuid
 import datetime
-from flask import Blueprint, request, session, redirect, render_template, flash, send_from_directory
+from flask import Blueprint, request, session, redirect, render_template, flash, send_from_directory, jsonify, g as _g
 from extensions import app
 from database import get_db_connection
 from werkzeug.utils import secure_filename
-from utils.auth import admin_required, enforce_ownership
+from utils.auth import admin_required, enforce_ownership, api_required, api_role_required, employee_api_required
 from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect, get_company_settings, get_pending_action_counts
 
 documents_bp = Blueprint("documents", __name__)
@@ -210,3 +210,183 @@ def delete_my_document(did):
     db.close()
     flash("Document deleted.", "success")
     return redirect(tpath("/employee_portal#documents"))
+
+
+def _fmt_doc(row):
+    doc_id, employee_id, name, doc_type, original_name, uploaded_by, uploaded_at, expiry_date = row
+    return {
+        "id": doc_id, "employee_id": employee_id, "employee_name": name,
+        "doc_type": doc_type, "original_name": original_name, "uploaded_by": uploaded_by,
+        "uploaded_at": str(uploaded_at) if uploaded_at else None,
+        "expiry_date": str(expiry_date) if expiry_date else None,
+    }
+
+
+# ── Documents (Bearer-token API) ─────────────────────────────────────────────
+# Bearer twins of the session-only routes above. Real download (streaming
+# a file back through axios/react-native) isn't wired on mobile yet --
+# these cover list/upload/delete, the actions mobile/src/screens/employee/
+# DocumentsScreen.js's own comments already flagged as missing entirely.
+
+@documents_bp.route("/api/documents", methods=["GET"])
+@api_required
+@api_role_required("admin")
+def api_documents_list():
+    emp_id = request.args.get("emp_id", "").strip()
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    if emp_id:
+        cursor.execute("""
+            SELECT d.id, d.employee_id, e.name, d.doc_type, d.original_name,
+                   d.uploaded_by, d.uploaded_at, d.expiry_date
+            FROM employee_documents d JOIN employees e ON e.employee_id=d.employee_id
+            WHERE d.employee_id=%s ORDER BY d.uploaded_at DESC
+        """, (emp_id,))
+    else:
+        cursor.execute("""
+            SELECT d.id, d.employee_id, e.name, d.doc_type, d.original_name,
+                   d.uploaded_by, d.uploaded_at, d.expiry_date
+            FROM employee_documents d JOIN employees e ON e.employee_id=d.employee_id
+            ORDER BY d.uploaded_at DESC
+        """)
+    docs = [_fmt_doc(r) for r in cursor.fetchall()]
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "documents": docs})
+
+
+@documents_bp.route("/api/documents/upload", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_documents_upload():
+    emp_id = (request.form.get("employee_id") or "").strip()
+    doc_type = (request.form.get("doc_type") or "").strip()
+    f = request.files.get("document")
+    if not emp_id or not doc_type or not f or not f.filename:
+        return jsonify({"ok": False, "msg": "employee_id, doc_type, and a file are all required."}), 400
+    ok, err = _validate_upload(f, _DOC_ALLOWED_EXT)
+    if not ok:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
+    if not cursor.fetchone():
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": f"Unknown employee_id '{emp_id}'."}), 400
+
+    folder = os.path.join(app.root_path, "static", "employee_docs", emp_id)
+    os.makedirs(folder, exist_ok=True)
+    orig_name = f.filename
+    stored_name = str(uuid.uuid4()) + "_" + secure_filename(orig_name)
+    f.save(os.path.join(folder, stored_name))
+    expiry_raw = (request.form.get("expiry_date") or "").strip()
+    cursor.execute(
+        "INSERT INTO employee_documents (employee_id, doc_type, original_name, stored_name, uploaded_by, expiry_date) "
+        "VALUES (%s,%s,%s,%s,'admin',%s)",
+        (emp_id, doc_type, orig_name, stored_name, expiry_raw or None)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("upload_document", "employee_documents", emp_id,
+           f"doc_type={doc_type} file={orig_name} expiry={expiry_raw or 'none'} (via mobile)")
+    return jsonify({"ok": True, "msg": "Document uploaded."})
+
+
+@documents_bp.route("/api/documents/<int:did>", methods=["DELETE"])
+@api_required
+@api_role_required("admin")
+def api_documents_delete(did):
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT employee_id, stored_name FROM employee_documents WHERE id=%s", (did,))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "Document not found."}), 404
+    emp_id, stored_name = row
+    fpath = os.path.join(app.root_path, "static", "employee_docs", emp_id, stored_name)
+    try:
+        os.remove(fpath)
+    except Exception:
+        pass
+    cursor.execute("DELETE FROM employee_documents WHERE id=%s", (did,))
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Document deleted."})
+
+
+@documents_bp.route("/api/employee/documents", methods=["GET"])
+@employee_api_required
+def api_my_documents_list():
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        SELECT d.id, d.employee_id, e.name, d.doc_type, d.original_name,
+               d.uploaded_by, d.uploaded_at, d.expiry_date
+        FROM employee_documents d JOIN employees e ON e.employee_id=d.employee_id
+        WHERE d.employee_id=%s ORDER BY d.uploaded_at DESC
+    """, (emp_id,))
+    docs = [_fmt_doc(r) for r in cursor.fetchall()]
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "documents": docs})
+
+
+@documents_bp.route("/api/employee/documents/upload", methods=["POST"])
+@employee_api_required
+def api_my_documents_upload():
+    emp_id = _g.api_emp_id
+    doc_type = (request.form.get("doc_type") or "").strip()
+    f = request.files.get("document")
+    if not doc_type or not f or not f.filename:
+        return jsonify({"ok": False, "msg": "doc_type and a file are both required."}), 400
+    ok, err = _validate_upload(f, _DOC_ALLOWED_EXT)
+    if not ok:
+        return jsonify({"ok": False, "msg": err}), 400
+
+    folder = os.path.join(app.root_path, "static", "employee_docs", emp_id)
+    os.makedirs(folder, exist_ok=True)
+    orig_name = f.filename
+    stored_name = str(uuid.uuid4()) + "_" + secure_filename(orig_name)
+    f.save(os.path.join(folder, stored_name))
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "INSERT INTO employee_documents (employee_id, doc_type, original_name, stored_name, uploaded_by) "
+        "VALUES (%s,%s,%s,%s,'employee')",
+        (emp_id, doc_type, orig_name, stored_name)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Document uploaded."})
+
+
+@documents_bp.route("/api/employee/documents/<int:did>", methods=["DELETE"])
+@employee_api_required
+def api_my_documents_delete(did):
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT stored_name FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
+    row = cursor.fetchone()
+    if not row:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "Document not found."}), 404
+    fpath = os.path.join(app.root_path, "static", "employee_docs", emp_id, row[0])
+    try:
+        os.remove(fpath)
+    except Exception:
+        pass
+    cursor.execute("DELETE FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Document deleted."})

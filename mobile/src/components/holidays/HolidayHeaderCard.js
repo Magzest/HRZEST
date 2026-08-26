@@ -6,12 +6,16 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+// The holidays table (app.py's init_db) only has date + name -- no
+// public/company/optional type classification exists anywhere on the
+// backend (web's own admin holiday management has the same limitation),
+// so this card shows the one real number available -- total holidays --
+// rather than a fabricated 3-way breakdown that used to be hardcoded
+// 12/4/2 regardless of what was actually in the database.
 export default function HolidayHeaderCard({
   year = "2026",
-  totalHolidays = 18,
-  publicHolidays = 12,
-  optionalHolidays = 4,
-  companyHolidays = 2,
+  totalHolidays = 0,
+  upcomingCount = 0,
 }) {
   return (
     <View style={styles.container}>
@@ -70,43 +74,11 @@ export default function HolidayHeaderCard({
           />
 
           <Text style={styles.statNumber}>
-            {publicHolidays}
+            {upcomingCount}
           </Text>
 
           <Text style={styles.statLabel}>
-            Public
-          </Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Ionicons
-            name="business-outline"
-            size={22}
-            color="#F59E0B"
-          />
-
-          <Text style={styles.statNumber}>
-            {companyHolidays}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Company
-          </Text>
-        </View>
-
-        <View style={styles.statCard}>
-          <Ionicons
-            name="star-outline"
-            size={22}
-            color="#7C3AED"
-          />
-
-          <Text style={styles.statNumber}>
-            {optionalHolidays}
-          </Text>
-
-          <Text style={styles.statLabel}>
-            Optional
+            Upcoming
           </Text>
         </View>
       </View>

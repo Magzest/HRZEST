@@ -30,6 +30,7 @@ from utils.auth import (
     email_settings_step_up_refresh, email_settings_step_up_clear,
     security_settings_step_up_clear,
     check_password_hash, generate_password_hash, HR_ROLE,
+    api_required, api_role_required,
 )
 from utils.device_utils import (
     get_or_create_device_token, list_devices, rename_device,
@@ -41,7 +42,7 @@ from utils.helpers import (
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
-    _validate_image_file, get_pending_action_counts, _audit,
+    _validate_image_file, get_pending_action_counts, _audit, invalidate_settings_cache,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
@@ -1149,6 +1150,126 @@ def save_geo_radius():
         db.close()
     flash("Attendance settings saved.", "success")
     return redirect(tpath("/settings?tab=attendance"))
+
+
+# ── Settings (Bearer-token API) ──────────────────────────────────────────────
+# Bearer twins of the session-only settings routes above -- mobile's
+# SettingsScreen used to show hardcoded fallback text for all of this (no
+# fetch at all) and every Save button was a no-op alert. These make that
+# real. Company/geofence/feature-toggle writes are admin-only, matching
+# role_required("admin") on their web equivalents; company_id-scoped
+# multi-company support (active_cid in save_geo_radius/toggle_feature
+# above) is intentionally not replicated here since mobile has no company
+# switcher to begin with -- these always act on the schema-wide row.
+
+@admin_views_bp.route("/api/settings", methods=["GET"])
+@api_required
+def api_settings_get():
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT * FROM company_settings LIMIT 1")
+    row = cursor.fetchone()
+    settings = {}
+    if row and cursor.description:
+        cols = [d[0].lower() for d in cursor.description]
+        for col, val in zip(cols, row):
+            if col in ("id", "company_logo"):
+                continue
+            settings[col] = str(val) if hasattr(val, "isoformat") else val
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "settings": settings})
+
+
+@admin_views_bp.route("/api/settings/company", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_settings_save_company():
+    import pytz as _pytz
+    _VALID_DAYS = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+    data = request.get_json(silent=True) or {}
+    name = (data.get("company_name") or "").strip()[:200]
+    code = (data.get("company_code") or "").strip().upper()[:10]
+    timezone = (data.get("timezone") or "Asia/Kolkata").strip()
+    w_days_raw = data.get("working_days") or []
+    if not isinstance(w_days_raw, list):
+        w_days_raw = [d.strip() for d in str(w_days_raw).split(",") if d.strip()]
+    if timezone not in _pytz.all_timezones_set:
+        return jsonify({"ok": False, "msg": "Invalid timezone selected."}), 400
+    w_days_set = set(w_days_raw)
+    if w_days_set and not w_days_set.issubset(_VALID_DAYS):
+        return jsonify({"ok": False, "msg": "Invalid working days selected."}), 400
+    w_days = ",".join(d for d in w_days_raw if d in _VALID_DAYS)
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "UPDATE company_settings SET company_name=%s, company_code=%s, timezone=%s, working_days=%s",
+        (name, code, timezone, w_days or "Mon,Tue,Wed,Thu,Fri")
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    invalidate_settings_cache()
+    return jsonify({"ok": True, "msg": "Company info saved."})
+
+
+@admin_views_bp.route("/api/settings/geo_radius", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_settings_save_geo_radius():
+    data = request.get_json(silent=True) or {}
+    try:
+        radius = int(data.get("geo_radius", 100))
+        if not (50 <= radius <= 5000):
+            raise ValueError
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "msg": "Geo radius must be between 50 and 5000 metres."}), 400
+
+    office_lat = office_lon = None
+    lat_raw = str(data.get("office_lat") or "").strip()
+    lon_raw = str(data.get("office_lon") or "").strip()
+    if lat_raw or lon_raw:
+        try:
+            office_lat = float(lat_raw)
+            office_lon = float(lon_raw)
+            if not (-90 <= office_lat <= 90 and -180 <= office_lon <= 180):
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify({"ok": False, "msg": "Office location must be a valid latitude/longitude pair."}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("UPDATE company_settings SET geo_radius=%s", (radius,))
+    if lat_raw or lon_raw:
+        cursor.execute("UPDATE company_settings SET office_lat=%s, office_lon=%s", (office_lat, office_lon))
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Attendance settings saved."})
+
+
+@admin_views_bp.route("/api/settings/toggle_feature", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_settings_toggle_feature():
+    allowed = {
+        "face_auth_enabled", "geo_enabled", "qr_enabled", "pin_enabled",
+        "fingerprint_enabled", "biometric_enabled",
+        "notify_leave", "notify_payslip", "notify_resignation", "notify_doc_expiry",
+    }
+    data = request.get_json(silent=True) or {}
+    feature = data.get("feature", "")
+    value = 1 if data.get("value") else 0
+    if feature not in allowed:
+        return jsonify({"ok": False, "msg": "Unknown feature."}), 400
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(f"UPDATE company_settings SET {feature}=%s", (value,))  # nosec B608 -- feature is allowlist-checked above, never interpolated from an unchecked value
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True})
 
 
 # save_security_settings retired: the Security tab is now the MFA-gated
@@ -2434,6 +2555,103 @@ def api_hr_accounts_history(username):
     cursor.close()
     db.close()
     return jsonify({"ok": True, "events": events})
+
+
+# ── HR Accounts (Bearer-token API) ──────────────────────────────────────────
+# Bearer twins of the four session-only (@role_required("admin")) routes
+# just above -- same table, same audit/security-event trail, so creating or
+# deactivating an HR account from mobile is indistinguishable from doing it
+# on web. Distinct paths (not the same /api/hr_accounts* paths reusing a
+# hybrid decorator) since those are already claimed by the session-guarded
+# view functions above and Flask can't register two view functions on one
+# (path, method) pair.
+
+@admin_views_bp.route("/api/hr/accounts", methods=["GET"])
+@api_required
+@api_role_required("admin")
+def api_hr_accounts_list():
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT username, email, is_active, created_at FROM admin_users WHERE role=%s ORDER BY created_at DESC",
+        (HR_ROLE,)
+    )
+    accounts = [
+        {"username": r[0], "email": r[1] or "", "is_active": bool(r[2]), "created_at": str(r[3]) if r[3] else ""}
+        for r in cursor.fetchall()
+    ]
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "accounts": accounts})
+
+
+@admin_views_bp.route("/api/hr/accounts", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_hr_accounts_create_bearer():
+    from flask import g as _g
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not re.match(r"^[a-zA-Z0-9_.-]{3,40}$", username):
+        return jsonify({"ok": False, "msg": "Username must be 3-40 characters (letters, numbers, . _ - only)."}), 400
+    if len(password) < 8:
+        return jsonify({"ok": False, "msg": "Password must be at least 8 characters."}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT 1 FROM admin_users WHERE username=%s", (username,))
+    if cursor.fetchone():
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "That username is already taken."}), 409
+
+    cursor.execute(
+        "INSERT INTO admin_users (username, password, email, role, is_active) VALUES (%s,%s,%s,%s,1)",
+        (username, generate_password_hash(password), email or None, HR_ROLE)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("create_hr_account", "admin_users", username, f"Created HR account '{username}'")
+    log_security_event(
+        "admin.hr_account_created", f"HR account '{username}' created by '{_g.api_user}'",
+        level="INFO", identifier=username,
+    )
+    return jsonify({"ok": True, "msg": f"HR account '{username}' created."})
+
+
+@admin_views_bp.route("/api/hr/accounts/<username>/status", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_hr_accounts_set_status_bearer(username):
+    from flask import g as _g
+    data = request.get_json(silent=True) or {}
+    active = bool(data.get("active"))
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT role FROM admin_users WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row or row[0] != HR_ROLE:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "HR account not found."}), 404
+
+    cursor.execute("UPDATE admin_users SET is_active=%s WHERE username=%s", (1 if active else 0, username))
+    db.commit()
+    cursor.close()
+    db.close()
+    action = "activate_hr_account" if active else "terminate_hr_account"
+    _audit(action, "admin_users", username, f"{'Activated' if active else 'Terminated'} HR account '{username}'")
+    log_security_event(
+        "admin.hr_account_status_changed",
+        f"HR account '{username}' {'activated' if active else 'terminated'} by '{_g.api_user}'",
+        level="INFO", identifier=username,
+    )
+    return jsonify({"ok": True, "msg": f"HR account '{username}' {'activated' if active else 'terminated'}."})
 
 
 # ── Self-service device management (utils/device_utils.py) ─────────────────

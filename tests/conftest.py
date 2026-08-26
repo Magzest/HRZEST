@@ -50,6 +50,7 @@ from blueprints.ai_hrms import ai_hrms_bp
 from blueprints.email_blast import email_blast_bp
 from blueprints.daily_report import daily_report_bp
 from blueprints.billing import billing_bp
+from blueprints.webhooks import webhooks_bp
 from blueprints.seats import seats_bp
 from blueprints.auto_debit import auto_debit_bp
 from blueprints.platform_admin import platform_admin_bp
@@ -73,6 +74,7 @@ flask_app.register_blueprint(ai_hrms_bp)
 flask_app.register_blueprint(email_blast_bp)
 flask_app.register_blueprint(daily_report_bp)
 flask_app.register_blueprint(billing_bp)
+flask_app.register_blueprint(webhooks_bp)
 flask_app.register_blueprint(seats_bp)
 flask_app.register_blueprint(auto_debit_bp)
 flask_app.register_blueprint(platform_admin_bp)

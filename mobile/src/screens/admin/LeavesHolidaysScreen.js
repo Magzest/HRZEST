@@ -21,7 +21,6 @@ import {
   fetchLeaveRequests,
   leaveAction,
   fetchCompOff,
-  compoffAction,
   fetchHolidays,
 } from "../../api/client";
 import THEME from "../../constants/theme";
@@ -52,9 +51,11 @@ export default function LeavesHolidaysScreen({ navigation }) {
         if (res?.data?.requests) setLeaves(res.data.requests);
         else if (Array.isArray(res?.data)) setLeaves(res.data);
       } else if (activeTab === "compoff") {
+        // blueprints/leave.py's /api/compoff returns {"ok": true, "balances": [...]}
+        // -- comp-off is credited automatically from approved overtime, not a
+        // manual approve/reject workflow, so this is a read-only balance list.
         const res = await fetchCompOff();
-        if (res?.data?.compoffs) setCompoffs(res.data.compoffs);
-        else if (Array.isArray(res?.data)) setCompoffs(res.data);
+        if (Array.isArray(res?.data?.balances)) setCompoffs(res.data.balances);
       } else if (activeTab === "holidays") {
         const res = await fetchHolidays();
         if (res?.data?.holidays) setHolidays(res.data.holidays);
@@ -90,20 +91,6 @@ export default function LeavesHolidaysScreen({ navigation }) {
       }
     } catch (e) {
       Alert.alert("Error", e?.response?.data?.msg || "Failed to update leave request.");
-    }
-  };
-
-  const handleCompoffAction = async (cid, action) => {
-    try {
-      const res = await compoffAction(cid, action);
-      if (res?.data?.ok) {
-        Alert.alert("Success", `Comp-off request ${action}d.`);
-        loadData();
-      } else {
-        Alert.alert("Failed", res?.data?.msg || "Could not update comp-off.");
-      }
-    } catch (e) {
-      Alert.alert("Error", e?.response?.data?.msg || "Action failed.");
     }
   };
 
@@ -212,29 +199,24 @@ export default function LeavesHolidaysScreen({ navigation }) {
             </View>
           ) : activeTab === "compoff" ? (
             <View>
-              <Text style={styles.sectionHeader}>Comp-Off Requests ({compoffs.length})</Text>
+              <Text style={styles.sectionHeader}>Comp-Off Balances ({compoffs.length})</Text>
               {compoffs.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Ionicons name="time-outline" size={44} color="#64748B" />
-                  <Text style={styles.emptyTitle}>No Requests</Text>
-                  <Text style={styles.emptySub}>There are no pending comp-off requests.</Text>
+                  <Text style={styles.emptyTitle}>No Balances</Text>
+                  <Text style={styles.emptySub}>Comp-off is credited automatically from approved overtime -- there's no manual approval step.</Text>
                 </View>
               ) : (
                 compoffs.map((co, idx) => (
                   <View key={co.id || idx} style={styles.card}>
                     <View style={styles.cardHeader}>
-                      <Text style={styles.empName}>{co.employee_name || `Employee #${co.employee_id}`}</Text>
-                      <Text style={styles.leaveType}>{co.date} ({co.hours || 8} Hours Worked)</Text>
+                      <Text style={styles.empName}>{co.name || `Employee #${co.employee_id}`}</Text>
+                      <Text style={styles.leaveType}>{co.department || "General"}</Text>
                     </View>
-                    <Text style={styles.reasonText}>"{co.reason || "Worked weekend"}"</Text>
-
-                    <View style={styles.actionRow}>
-                      <TouchableOpacity style={[styles.btn, styles.btnReject]} onPress={() => handleCompoffAction(co.id, "reject")}>
-                        <Text style={styles.rejectText}>Decline</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.btn, styles.btnApprove]} onPress={() => handleCompoffAction(co.id, "approve")}>
-                        <Text style={styles.approveText}>Grant Credit</Text>
-                      </TouchableOpacity>
+                    <View style={{ flexDirection: "row", gap: 18, marginTop: 6 }}>
+                      <Text style={styles.reasonText}>Earned: {co.earned_days ?? 0}d</Text>
+                      <Text style={styles.reasonText}>Used: {co.used_days ?? 0}d</Text>
+                      <Text style={[styles.reasonText, { fontWeight: "800", color: "#173B8C" }]}>Balance: {co.balance_days ?? 0}d</Text>
                     </View>
                   </View>
                 ))

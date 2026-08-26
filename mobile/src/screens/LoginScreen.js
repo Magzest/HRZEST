@@ -50,6 +50,13 @@ export default function LoginScreen() {
       if (res?.data?.ok && res?.data?.token) {
         await signIn(res.data.token, {
           role: "admin",
+          // adminRole distinguishes an Admin account from an HR account
+          // within the admin panel (both share role:'admin' for
+          // top-level app routing) -- /api/login now actually returns
+          // this (blueprints/core.py); defaults to 'admin' only as a
+          // fallback for a server that hasn't been redeployed with that
+          // fix yet, not as a guess about who's really logging in.
+          adminRole: res.data.role || "admin",
           name: res.data.username || trimmedUser,
         });
         setLoading(false);

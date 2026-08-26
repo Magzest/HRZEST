@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -101,6 +101,10 @@ export default function SeatsBillingScreen() {
   const pct = isUnlimited ? 0 : cap > 0 ? Math.min(100, (employeeCount / cap) * 100) : 100;
   const autoDebit = status?.auto_debit;
   const autoDebitActive = autoDebit?.status === "active";
+  // Memoized so an unrelated re-render (e.g. `refreshing` toggling from a
+  // background pull-to-refresh) doesn't hand the WebView a new `source`
+  // object reference and risk it reloading /settings/seats mid-checkout.
+  const webviewSource = useMemo(() => (webviewUrl ? { uri: webviewUrl } : null), [webviewUrl]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -234,8 +238,8 @@ export default function SeatsBillingScreen() {
               <Ionicons name="close" size={24} color={colors.text} />
             </TouchableOpacity>
           </View>
-          {webviewUrl && (
-            <WebView source={{ uri: webviewUrl }} startInLoadingState renderLoading={() => (
+          {webviewSource && (
+            <WebView source={webviewSource} startInLoadingState renderLoading={() => (
               <View style={styles.centerFill}>
                 <ActivityIndicator size="large" color={colors.primary} />
               </View>

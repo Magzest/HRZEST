@@ -13,45 +13,32 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import THEME from "../../constants/theme";
 import AdminHeader from "../../components/admin/AdminHeader";
-import { fetchDepartments, fetchEmployees, fetchDashboard } from "../../api/client";
+import { fetchOrgChart, fetchDashboard } from "../../api/client";
 
-// /api/org_chart_data exists but is session-cookie-only (@admin_required),
-// not reachable with a mobile Bearer token. Rather than show the invented
-// "Sarah Jenkins (VP Eng)" / fake team tags this screen used to, it builds
-// a real (if simpler) org view from /api/departments + /api/employees,
-// which are both genuinely Bearer-compatible.
+// Real manager_id-based reporting hierarchy via /api/org_chart (Bearer
+// twin of blueprints/admin_views.py's session-only /api/org_chart_data),
+// not the flattened department grouping this screen used to fall back to.
 export default function OrgChartScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [departments, setDepartments] = useState([]);
-  const [employeesByDept, setEmployeesByDept] = useState({});
+  const [tree, setTree] = useState([]);
+  const [total, setTotal] = useState(0);
   const [companyName, setCompanyName] = useState("");
-  const [totalStaff, setTotalStaff] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [deptRes, empRes, dashRes] = await Promise.all([
-        fetchDepartments(),
-        fetchEmployees(),
+      const [chartRes, dashRes] = await Promise.all([
+        fetchOrgChart(),
         fetchDashboard().catch(() => null),
       ]);
-      const depts = deptRes?.data?.ok ? deptRes.data.departments : [];
-      setDepartments(depts);
-
-      const employees = empRes?.data?.employees || [];
-      setTotalStaff(employees.length);
-      const grouped = {};
-      employees.forEach((e) => {
-        const dept = e.department || "Unassigned";
-        if (!grouped[dept]) grouped[dept] = [];
-        grouped[dept].push(e.name || e.employee_id);
-      });
-      setEmployeesByDept(grouped);
-
+      if (chartRes?.data?.ok) {
+        setTree(chartRes.data.tree || []);
+        setTotal(chartRes.data.total || 0);
+      }
       setCompanyName(dashRes?.data?.company_name || "");
     } catch (_) {
-      setDepartments([]);
-      setEmployeesByDept({});
+      setTree([]);
+      setTotal(0);
     }
   }, []);
 
@@ -96,68 +83,58 @@ export default function OrgChartScreen({ navigation }) {
             <Text style={styles.execName}>{companyName || "Your Company"}</Text>
             <View style={styles.execStats}>
               <Text style={styles.execStatsText}>
-                {totalStaff} Total Staff • {departments.length} Departments
+                {total} Total Staff • {tree.length} Reporting Root{tree.length !== 1 ? "s" : ""}
               </Text>
             </View>
           </View>
 
           <View style={styles.treeConnector} />
 
-          {/* Department List */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Departments</Text>
+            <Text style={styles.sectionTitle}>Reporting Hierarchy</Text>
           </View>
 
           {loading ? (
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 20 }} />
-          ) : departments.length === 0 ? (
+          ) : tree.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="business-outline" size={40} color="#94A3B8" />
-              <Text style={styles.emptyText}>No departments found yet.</Text>
+              <Ionicons name="git-network-outline" size={40} color="#94A3B8" />
+              <Text style={styles.emptyText}>No employees found yet.</Text>
             </View>
           ) : (
-            departments.map((dept, index) => (
-              <View key={index} style={styles.deptCard}>
-                <View style={styles.deptHeader}>
-                  <View style={styles.deptIconBadge}>
-                    <Ionicons name="briefcase-outline" size={20} color="#173B8C" />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.deptName}>{dept.name}</Text>
-                  </View>
-                  <View style={styles.countBadge}>
-                    <Text style={styles.countText}>{dept.count} Staff</Text>
-                  </View>
-                </View>
-
-                {employeesByDept[dept.name]?.length > 0 && (
-                  <>
-                    <View style={styles.divider} />
-                    <Text style={styles.teamsLabel}>Team Members</Text>
-                    <View style={styles.teamsWrap}>
-                      {employeesByDept[dept.name].slice(0, 8).map((name, idx) => (
-                        <View key={idx} style={styles.teamTag}>
-                          <Text style={styles.teamTagText}>{name}</Text>
-                        </View>
-                      ))}
-                      {employeesByDept[dept.name].length > 8 && (
-                        <View style={styles.teamTag}>
-                          <Text style={styles.teamTagText}>
-                            +{employeesByDept[dept.name].length - 8} more
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </>
-                )}
-              </View>
-            ))
+            tree.map((node) => <OrgNode key={node.id} node={node} depth={0} />)
           )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
+  );
+}
+
+function OrgNode({ node, depth }) {
+  return (
+    <View style={{ marginLeft: depth * 18 }}>
+      <View style={styles.nodeCard}>
+        <View style={styles.nodeIconBadge}>
+          <Ionicons name="person" size={18} color="#173B8C" />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={styles.nodeName}>{node.name}</Text>
+          <Text style={styles.nodeRole}>
+            {node.role}{node.department ? ` • ${node.department}` : ""}
+          </Text>
+        </View>
+        {node.children?.length > 0 && (
+          <View style={styles.countBadge}>
+            <Text style={styles.countText}>{node.children.length} report{node.children.length !== 1 ? "s" : ""}</Text>
+          </View>
+        )}
+      </View>
+      {node.children?.map((child) => (
+        <OrgNode key={child.id} node={child} depth={depth + 1} />
+      ))}
+    </View>
   );
 }
 
@@ -200,42 +177,31 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
   },
   emptyText: { marginTop: 10, fontSize: 13, color: "#64748B", fontWeight: "600" },
-  deptCard: {
+  nodeCard: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
-    elevation: 2,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
-  deptHeader: { flexDirection: "row", alignItems: "center" },
-  deptIconBadge: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  nodeIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: "#EEF4FF",
     justifyContent: "center",
     alignItems: "center",
   },
-  deptName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  nodeName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  nodeRole: { fontSize: 11, color: "#64748B", marginTop: 2, fontWeight: "600" },
   countBadge: {
     backgroundColor: "#F1F5F9",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
   },
-  countText: { fontSize: 12, fontWeight: "700", color: "#334155" },
-  divider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 12 },
-  teamsLabel: { fontSize: 11, fontWeight: "700", color: "#94A3B8", letterSpacing: 0.5 },
-  teamsWrap: { flexDirection: "row", flexWrap: "wrap", marginTop: 8 },
-  teamTag: {
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  teamTagText: { fontSize: 12, fontWeight: "600", color: "#1D4ED8" },
+  countText: { fontSize: 11, fontWeight: "700", color: "#334155" },
 });

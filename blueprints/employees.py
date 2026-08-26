@@ -1963,3 +1963,63 @@ def api_delete_employee(emp_id):
     cursor.close()
     db.close()
     return jsonify({"ok": True, "msg": f"Employee '{emp_id}' deleted."})
+
+
+@employees_bp.route("/api/org_chart", methods=["GET"])
+@api_required
+def api_org_chart():
+    """Bearer-token twin of blueprints/admin_views.py's api_org_chart_data()
+    -- same manager_id-based tree, same shape -- so mobile's Organization
+    Chart screen can show real reporting lines instead of falling back to a
+    flat department grouping (the only option before this existed). Kept
+    as its own route/name (not a second decorator on api_org_chart_data
+    itself) since that route is session-only (@admin_required) and already
+    serves the web org-chart page at that exact path."""
+    dept_filter = request.args.get("dept", "")
+    db = get_db_connection()
+    cursor = db.cursor()
+    query = """
+        SELECT e.employee_id, e.name, e.role, e.department,
+               e.manager_id, e.face_image
+        FROM employees e
+        WHERE COALESCE(e.is_active, 1) = 1
+    """
+    params = []
+    if dept_filter:
+        query += " AND e.department = %s"
+        params.append(dept_filter)
+    query += " ORDER BY e.name"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    emp_map = {}
+    for r in rows:
+        emp_map[r[0]] = {
+            "id": r[0],
+            "name": r[1],
+            "role": r[2] or "Employee",
+            "department": r[3] or "",
+            "manager_id": r[4],
+            "has_photo": bool(r[5] and os.path.exists(r[5])),
+            "children": [],
+        }
+
+    roots = []
+    for emp in emp_map.values():
+        mid = emp["manager_id"]
+        if mid and mid in emp_map and mid != emp["id"]:
+            emp_map[mid]["children"].append(emp)
+        else:
+            roots.append(emp)
+
+    def sort_tree(node):
+        node["children"].sort(key=lambda x: x["name"])
+        for child in node["children"]:
+            sort_tree(child)
+        return node
+
+    roots.sort(key=lambda x: x["name"])
+    tree = [sort_tree(r) for r in roots]
+    return jsonify({"ok": True, "tree": tree, "total": len(emp_map)})

@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -17,7 +20,11 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
-import { fetchPerformance } from "../../api/client";
+import { fetchPerformance, submitPerformanceReview } from "../../api/client";
+
+const today = new Date();
+const CURRENT_QUARTER = Math.floor(today.getMonth() / 3) + 1;
+const CURRENT_YEAR = today.getFullYear();
 
 export default function PerformanceScreen({ navigation }) {
   const [search, setSearch] = useState("");
@@ -27,6 +34,16 @@ export default function PerformanceScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState([]);
+
+  // Review submission modal -- fields match what
+  // blueprints/performance.py's api_submit_performance_review() actually
+  // stores (quarter/year upsert + reviewer feedback + potential rating),
+  // not a rating/comments/hike/bonus shape that never had a backend.
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState(null);
+  const [reviewFeedback, setReviewFeedback] = useState("");
+  const [reviewPotential, setReviewPotential] = useState("3");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const loadData = async () => {
     try {
@@ -50,6 +67,35 @@ export default function PerformanceScreen({ navigation }) {
 
   const onRefresh = () => {
     setRefreshing(true);
+    loadData();
+  };
+
+  const openReviewModal = (item) => {
+    setReviewTarget(item);
+    setReviewFeedback("");
+    setReviewPotential("3");
+    setReviewModalVisible(true);
+  };
+
+  const handleSubmitReview = async (status) => {
+    if (!reviewTarget) return;
+    setSubmittingReview(true);
+    let res;
+    try {
+      res = await submitPerformanceReview(
+        reviewTarget.employee_id, CURRENT_QUARTER, CURRENT_YEAR,
+        reviewFeedback.trim(), Number(reviewPotential) || 0, status
+      );
+    } catch (e) {
+      res = e?.response;
+    }
+    setSubmittingReview(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Save Failed", res?.data?.msg || "Could not save this review. Please try again.");
+      return;
+    }
+    setReviewModalVisible(false);
+    Alert.alert(status === "Draft" ? "Draft Saved" : "Review Finalized", `Q${CURRENT_QUARTER} ${CURRENT_YEAR} review for ${reviewTarget.employeeName} saved.`);
     loadData();
   };
 
@@ -154,7 +200,7 @@ export default function PerformanceScreen({ navigation }) {
 
           {/* Review List */}
           {filteredReviews.map((item) => (
-            <View key={item.id} style={styles.reviewCard}>
+            <TouchableOpacity key={item.id} style={styles.reviewCard} activeOpacity={0.85} onPress={() => openReviewModal(item)}>
               <View style={styles.cardTop}>
                 <View style={styles.avatarCircle}>
                   <Text style={styles.avatarText}>
@@ -205,7 +251,7 @@ export default function PerformanceScreen({ navigation }) {
                   </View>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
 
           <View style={{ height: 100 }} />
@@ -228,6 +274,74 @@ export default function PerformanceScreen({ navigation }) {
           }}
           onClose={() => setFilterModalVisible(false)}
         />
+
+        {/* Review Submission Modal */}
+        <Modal visible={reviewModalVisible} transparent animationType="slide" onRequestClose={() => setReviewModalVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
+            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
+                  Q{CURRENT_QUARTER} {CURRENT_YEAR} Review -- {reviewTarget?.employeeName}
+                </Text>
+                <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
+                  <Ionicons name="close-circle" size={26} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>REVIEWER FEEDBACK</Text>
+                <TextInput
+                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4, minHeight: 90, textAlignVertical: "top" }}
+                  placeholder="Summarize this quarter's performance..."
+                  value={reviewFeedback}
+                  onChangeText={setReviewFeedback}
+                  multiline
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 14 }}>POTENTIAL RATING (0-5, MANAGER JUDGMENT)</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                  {[0, 1, 2, 3, 4, 5].map((n) => (
+                    <TouchableOpacity
+                      key={n}
+                      onPress={() => setReviewPotential(String(n))}
+                      style={{
+                        width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center",
+                        backgroundColor: reviewPotential === String(n) ? "#173B8C" : "#F1F5F9",
+                      }}
+                    >
+                      <Text style={{ fontWeight: "800", color: reviewPotential === String(n) ? "#FFFFFF" : "#334155" }}>{n}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 10 }}>
+                  Overall rating is computed automatically from this employee's rated KPIs, same as on web.
+                </Text>
+
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 22, marginBottom: 10 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: "#F1F5F9", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+                    onPress={() => handleSubmitReview("Draft")}
+                    disabled={submittingReview}
+                  >
+                    <Text style={{ fontWeight: "800", color: "#334155" }}>Save Draft</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1, backgroundColor: "#173B8C", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+                    onPress={() => handleSubmitReview("Completed")}
+                    disabled={submittingReview}
+                  >
+                    {submittingReview ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <Text style={{ fontWeight: "800", color: "#FFFFFF" }}>Finalize Review</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </LinearGradient>
   );

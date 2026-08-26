@@ -49,7 +49,7 @@ export default function EmployeeDashboard({ navigation }) {
   const [refreshing, setRefreshing]   = useState(false);
   const [checking, setChecking]       = useState(false);
   const [data, setData]               = useState(null);
-  const [metrics, setMetrics]         = useState({ hours: "0h 00m", attendance: "0%", leaveBalance: "0", performance: "N/A" });
+  const [metrics, setMetrics]         = useState({ hours: "0h 00m", attendance: "0%", leaveBalance: "0", attendanceGrade: "N/A" });
   const [showScanner, setShowScanner] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing]         = useState(false);
@@ -77,7 +77,11 @@ export default function EmployeeDashboard({ navigation }) {
       ]);
 
       let calculatedAttendance = "0%";
-      let performanceGrade = "A";
+      // This is a grade derived purely from attendance percentage, not a
+      // real performance review score (no employee-facing performance API
+      // exists on the backend -- see PerformanceScreen.js). Labeled
+      // "Attendance Grade" on the dashboard to avoid implying otherwise.
+      let attendanceGrade = "A";
       if (attRes?.data?.ok) {
         const summary = attRes.data.summary || {};
         const records = attRes.data.records || [];
@@ -85,10 +89,10 @@ export default function EmployeeDashboard({ navigation }) {
         const workingDays = 26;
         const pct = Math.min(100, Math.round((presentCount / workingDays) * 100));
         calculatedAttendance = `${pct}%`;
-        if (pct >= 95) performanceGrade = "A+";
-        else if (pct >= 85) performanceGrade = "A";
-        else if (pct >= 75) performanceGrade = "B";
-        else performanceGrade = "C";
+        if (pct >= 95) attendanceGrade = "A+";
+        else if (pct >= 85) attendanceGrade = "A";
+        else if (pct >= 75) attendanceGrade = "B";
+        else attendanceGrade = "C";
       }
 
       let calculatedLeave = "0";
@@ -124,7 +128,7 @@ export default function EmployeeDashboard({ navigation }) {
         hours: calculatedHours,
         attendance: calculatedAttendance,
         leaveBalance: calculatedLeave,
-        performance: performanceGrade
+        attendanceGrade: attendanceGrade
       });
 
       const pendingPunches = await getPendingPunches();
@@ -349,7 +353,7 @@ export default function EmployeeDashboard({ navigation }) {
           hours={metrics.hours}
           attendance={metrics.attendance}
           leaveBalance={metrics.leaveBalance}
-          performance={metrics.performance}
+          attendanceGrade={metrics.attendanceGrade}
           navigation={navigation}
         />
 

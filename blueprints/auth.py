@@ -20,6 +20,7 @@ from utils.auth import (
     admin_required, role_required, employee_required, employee_api_required,
     _get_failed_count, verify_turnstile, turnstile_enabled,
     CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE, HR_ROLE,
+    api_required,
 )
 from utils.helpers import tpath, get_company_settings, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
@@ -378,6 +379,47 @@ def change_admin_password():
     cursor.close()
     db.close()
     return redirect(tpath("/admin?pwd_ok=1"))
+
+
+@auth_bp.route("/api/admin/password", methods=["POST"])
+@api_required
+def api_change_admin_password():
+    """Bearer-token twin of change_admin_password() above -- same
+    own-account-only scoping (the Bearer token's identity, not a
+    caller-supplied username, so this can't be used to change a different
+    account's password) and no role restriction, matching @admin_required
+    above (any admin-panel role, not just Admin, can change their own
+    password on web)."""
+    from flask import g as _g
+    data = request.get_json(silent=True) or {}
+    current_pw = data.get("current_password") or ""
+    new_pw = data.get("new_password") or ""
+    confirm_pw = data.get("confirm_password") or ""
+    username = _g.api_user
+
+    if not new_pw or new_pw != confirm_pw:
+        return jsonify({"ok": False, "msg": "New password and confirmation must match."}), 400
+    if len(new_pw) < 8:
+        return jsonify({"ok": False, "msg": "New password must be at least 8 characters."}), 400
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT password FROM admin_users WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    if not row or not check_password_hash(row[0], current_pw):
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "Current password is incorrect."}), 400
+    cursor.execute(
+        "UPDATE admin_users SET password=%s WHERE username=%s",
+        (generate_password_hash(new_pw), username)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    log_security_event("auth.password_changed", f"Password changed for '{username}' via mobile app",
+                        level="INFO", identifier=username)
+    return jsonify({"ok": True, "msg": "Password updated."})
 
 
 @auth_bp.route("/admin_set_recovery_email", methods=["POST"])

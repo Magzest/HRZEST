@@ -15,7 +15,6 @@ import TicketCategoryPicker from "../../components/tickets/TicketCategoryPicker"
 import PrioritySelector from "../../components/tickets/PrioritySelector";
 import SubjectInput from "../../components/tickets/SubjectInput";
 import DescriptionInput from "../../components/tickets/DescriptionInput";
-import AttachmentCard from "../../components/tickets/AttachmentCard";
 import RaiseTicketButton from "../../components/tickets/RaiseTicketButton";
 import TicketStatsCard from "../../components/tickets/TicketStatsCard";
 import TicketCard from "../../components/tickets/TicketCard";
@@ -27,7 +26,10 @@ export default function TicketsScreen() {
   const [priority, setPriority] = useState("Medium");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
-  const [attachment, setAttachment] = useState("");
+  // No attachment field here anymore -- blueprints/tickets.py's
+  // /api/employee/raise_ticket doesn't accept a file/attachment param at
+  // all, so the old "upload" button just hardcoded a fake filename into
+  // state and submitted a ticket with no real attachment ever sent.
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [ticketList, setTicketList] = useState([]);
@@ -67,7 +69,6 @@ export default function TicketsScreen() {
         Alert.alert("Ticket Submitted 🎉", "Your support request has been created.");
         setSubject("");
         setDescription("");
-        setAttachment("");
         // Reload from the server rather than fabricate a local entry --
         // the create endpoint doesn't return the new ticket's real id.
         await loadTickets();
@@ -128,11 +129,6 @@ export default function TicketsScreen() {
         <SubjectInput value={subject} onChangeText={setSubject} />
 
         <DescriptionInput value={description} onChangeText={setDescription} />
-
-        <AttachmentCard
-          fileName={attachment}
-          onUpload={() => setAttachment("Document_Attachment.png")}
-        />
 
         <RaiseTicketButton loading={submitting} onPress={handleRaiseTicket} />
 

@@ -54,6 +54,72 @@ def api_onboarding():
         return jsonify({"ok": True, "onboardings": records})
 
 
+@onboarding_bp.route("/api/onboarding/<int:ob_id>/tasks", methods=["GET"])
+@api_required
+def api_onboarding_tasks(ob_id):
+    """Bearer-token twin of the task list half of onboarding_detail() below
+    -- lets mobile show and update an individual onboarding's checklist,
+    which api_onboarding() above (the list view) deliberately only
+    summarizes as tasksCompleted/totalTasks counts."""
+    with _db() as (cursor, conn):
+        cursor.execute("""
+            SELECT id, task_title, task_description, requires_document, due_days,
+                   status, completed_at, admin_notes, employee_note
+            FROM employee_onboarding_tasks WHERE onboarding_id=%s ORDER BY id
+        """, (ob_id,))
+        rows = cursor.fetchall()
+    tasks = [
+        {
+            "id": r[0], "title": r[1], "description": r[2] or "",
+            "requires_document": bool(r[3]), "due_days": r[4],
+            "status": r[5] or "Pending",
+            "completed_at": str(r[6]) if r[6] else None,
+            "admin_notes": r[7] or "", "employee_note": r[8] or "",
+        }
+        for r in rows
+    ]
+    return jsonify({"ok": True, "tasks": tasks})
+
+
+@onboarding_bp.route("/api/onboarding/task/<int:task_id>/update", methods=["POST"])
+@api_required
+def api_onboarding_task_update(task_id):
+    """Bearer-token twin of onboarding_admin_task_update() below -- same
+    two effects (set the task's status/notes, and auto-complete the parent
+    onboarding once every task is Done) so marking a task done from mobile
+    behaves identically to doing it on web. ob_id is looked up from the
+    task row itself rather than required from the caller, since it's not
+    something the caller needs to already know."""
+    data = request.get_json(silent=True) or {}
+    new_status = (data.get("status") or "").strip()
+    notes = (data.get("admin_notes") or "").strip()
+    if new_status not in ("Pending", "Done", "Skipped"):
+        return jsonify({"ok": False, "msg": "status must be 'Pending', 'Done', or 'Skipped'."}), 400
+
+    with _db() as (cursor, conn):
+        cursor.execute("SELECT onboarding_id FROM employee_onboarding_tasks WHERE id=%s", (task_id,))
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"ok": False, "msg": "Task not found."}), 404
+        ob_id = row[0]
+
+        completed = datetime.datetime.now() if new_status == "Done" else None
+        cursor.execute(
+            "UPDATE employee_onboarding_tasks SET status=%s, completed_at=%s, admin_notes=%s WHERE id=%s",
+            (new_status, completed, notes, task_id)
+        )
+        cursor.execute(
+            "SELECT COUNT(*) FROM employee_onboarding_tasks WHERE onboarding_id=%s AND status!='Done'", (ob_id,)
+        )
+        remaining = cursor.fetchone()[0]
+        onboarding_completed = remaining == 0
+        if onboarding_completed:
+            cursor.execute("UPDATE employee_onboarding SET status='Completed' WHERE id=%s", (ob_id,))
+        conn.commit()
+
+    return jsonify({"ok": True, "onboarding_completed": onboarding_completed})
+
+
 @onboarding_bp.route("/onboarding")
 @admin_required
 def onboarding():

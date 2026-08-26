@@ -16,6 +16,18 @@ export const saveLocalEmployee = async (employeeObj) => {
   }
 };
 
+export const deleteLocalEmployee = async (empId) => {
+  try {
+    const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
+    let list = existingStr ? JSON.parse(existingStr) : [];
+    list = list.filter((e) => (e.employee_id || e.id) !== empId);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    return list;
+  } catch (e) {
+    return [];
+  }
+};
+
 export const getLocalEmployees = async () => {
   try {
     const existingStr = await AsyncStorage.getItem(STORAGE_KEY);

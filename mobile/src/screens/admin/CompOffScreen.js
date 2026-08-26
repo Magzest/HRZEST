@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   View,
+  Alert,
 } from "react-native";
 
 import AdminHeader from "../../components/admin/AdminHeader";
@@ -30,7 +31,7 @@ import CompOffBottomSheet from "../../components/admin/CompOffBottomSheet";
 import CompOffEmptyState from "../../components/admin/CompOffEmptyState";
 
 import COMPOFF_THEME from "../../constants/compOffTheme";
-import { fetchOvertime, fetchCompOff } from "../../api/client";
+import { fetchOvertime, fetchCompOff, overtimeAction } from "../../api/client";
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -66,6 +67,7 @@ export default function CompOffScreen({
   const [balancesData, setBalancesData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const loadData = async () => {
     try {
@@ -156,6 +158,28 @@ export default function CompOffScreen({
   const openRecord = (item) => {
     setSelectedRecord(item);
     setDetailsVisible(true);
+  };
+
+  const handleOvertimeAction = async (action) => {
+    if (!selectedRecord) return;
+    setActionLoading(true);
+    let res;
+    try {
+      res = await overtimeAction(selectedRecord.id, action);
+    } catch (e) {
+      res = e?.response;
+    }
+    setActionLoading(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Action Failed", res?.data?.msg || "Could not update this overtime request.");
+      return;
+    }
+    setDetailsVisible(false);
+    setSelectedRecord(null);
+    if (res.data.compoff_minutes_credited) {
+      Alert.alert("Approved", `Overtime approved -- ${Math.round(res.data.compoff_minutes_credited / 60)} hour(s) credited to comp-off balance.`);
+    }
+    loadData();
   };
 
   return (
@@ -372,6 +396,9 @@ export default function CompOffScreen({
       <CompOffBottomSheet
         visible={detailsVisible}
         record={selectedRecord}
+        actionLoading={actionLoading}
+        onApprove={() => handleOvertimeAction("approve")}
+        onReject={() => handleOvertimeAction("reject")}
         onClose={() => {
           setDetailsVisible(false);
           setSelectedRecord(null);

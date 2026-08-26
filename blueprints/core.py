@@ -7,7 +7,7 @@ last routes drained out of app.py, which now holds only shared setup
 import time
 import secrets
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, redirect, Response
+from flask import Blueprint, request, session, jsonify, render_template, redirect, Response, g
 from extensions import limiter, app_log, log_security_event
 from database import get_db_connection
 from utils.auth import (
@@ -17,11 +17,24 @@ from utils.auth import (
 from utils.helpers import (
     _db, get_auth_config, validate_employee_email_domain,
     employee_login_url, get_pending_counts, tpath, add_employee_seat_cap_check,
+    get_company_settings, _safe_app_url,
 )
+from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, get_billing_snapshot
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.session_risk import is_session_compromised, ensure_session_id
 
 core_bp = Blueprint("core", __name__)
+
+# Web-only pages the mobile app is allowed to bridge a WebView into (see
+# api_mobile_web_session_link()/mobile_bridge_login() below) -- deliberately
+# a closed allowlist rather than an arbitrary caller-supplied path, since
+# redeeming a bridge token creates a real admin session with no further
+# authorization check of its own. Add a path here (and to the mobile app's
+# own allowed targets) the next time a web-only feature needs this same
+# WebView-bridge treatment; nothing else needs to change in this pair of
+# routes.
+_BRIDGE_DEFAULT_TARGET = "/settings/seats"
+_BRIDGE_TARGET_ALLOWLIST = {"/settings/seats"}
 
 
 @core_bp.route("/csp-report", methods=["POST"])
@@ -133,9 +146,22 @@ def api_login():
     if "\x00" in username or "\x00" in password:
         return jsonify({"ok": False, "msg": "Invalid credentials"}), 401
     with _db() as (cursor, conn):
-        cursor.execute("SELECT password FROM admin_users WHERE username=%s", (username,))
+        # role + is_active added: this never checked either before, so a
+        # terminated HR account (blueprints/admin_views.py's
+        # api_hr_accounts_set_status_bearer -- the very deactivate action
+        # the mobile HR Accounts screen now exposes) could still log in on
+        # mobile after being deactivated, and the client had no way to
+        # know it was talking to an HR account rather than an admin one
+        # (mobile/src/store/AuthContext.js's user.role has always been a
+        # hardcoded 'admin' for any successful admin-panel login).
+        cursor.execute(
+            "SELECT password, COALESCE(role,'admin'), COALESCE(is_active,1) FROM admin_users WHERE username=%s",
+            (username,)
+        )
         row = cursor.fetchone()
         if row and check_password_hash(row[0], password):
+            if not row[2]:
+                return jsonify({"ok": False, "msg": "This account has been deactivated. Contact your administrator."}), 403
             token = secrets.token_hex(32)
             cursor.execute(
                 "INSERT INTO api_tokens (token, token_type, identity, expires_at) "
@@ -143,7 +169,7 @@ def api_login():
                 (_hash_token(token), username)
             )
             conn.commit()
-            return jsonify({"ok": True, "token": token, "username": username})
+            return jsonify({"ok": True, "token": token, "username": username, "role": row[1]})
     return jsonify({"ok": False, "msg": "Invalid credentials"}), 401
 
 
@@ -220,54 +246,26 @@ def api_billing_status():
     (templates/employees.html) and Seats & Billing page
     (templates/seat_checkout.html) -- same underlying data, same tables,
     just JSON instead of server-rendered HTML."""
-    from utils.helpers import get_company_settings
-    from utils.plan_limits import calculate_price, format_price_inr
-    from database import get_master_db
-
     co = get_company_settings()
-    try:
-        db = get_db_connection()
-        cursor = db.cursor(buffered=True)
-        cursor.execute("SELECT COUNT(*) FROM employees")
-        employee_count = cursor.fetchone()[0]
-        cursor.close()
-        db.close()
-    except Exception:
-        employee_count = 0
+    employee_count = get_tenant_employee_count(g.tenant_db)
 
+    snapshot = get_billing_snapshot(g.tenant_db)
     auto_debit_status = None
-    invoices = []
-    try:
-        from flask import g as _g
-        conn = get_master_db()
-        cur = conn.cursor(buffered=True)
-        cur.execute(
-            "SELECT status, quantity_synced, activated_at FROM auto_debit_mandates WHERE tenant_schema=%s",
-            (_g.tenant_db,)
-        )
-        row = cur.fetchone()
-        if row:
-            auto_debit_status = {
-                "status": row[0], "quantity_synced": row[1],
-                "activated_at": row[2].isoformat() if row[2] else None,
-            }
-        cur.execute(
-            "SELECT billing_period, employee_count, amount_paise, status, created_at "
-            "FROM monthly_invoices WHERE tenant_schema=%s ORDER BY created_at DESC LIMIT 12",
-            (_g.tenant_db,)
-        )
-        invoices = [
-            {
-                "billing_period": r[0].isoformat() if r[0] else None, "employee_count": r[1],
-                "amount_display": format_price_inr(r[2]), "status": r[3],
-                "created_at": r[4].isoformat() if r[4] else None,
-            }
-            for r in cur.fetchall()
-        ]
-        cur.close()
-        conn.close()
-    except Exception as exc:
-        app_log.warning("api_billing_status: auto-debit lookup failed: %s", exc)
+    if snapshot["auto_debit"]:
+        ad = snapshot["auto_debit"]
+        auto_debit_status = {
+            "status": ad["status"], "quantity_synced": ad["quantity_synced"],
+            "activated_at": ad["activated_at"].isoformat() if ad["activated_at"] else None,
+        }
+    invoices = [
+        {
+            "billing_period": inv["billing_period"].isoformat() if inv["billing_period"] else None,
+            "employee_count": inv["employee_count"],
+            "amount_display": format_price_inr(inv["amount_paise"]), "status": inv["status"],
+            "created_at": inv["created_at"].isoformat() if inv["created_at"] else None,
+        }
+        for inv in snapshot["invoices"]
+    ]
 
     return jsonify({
         "ok": True,
@@ -285,25 +283,46 @@ def api_billing_status():
 def api_mobile_web_session_link():
     """Bridges the mobile app's Bearer-token session into a one-time,
     short-lived link that establishes a normal session-cookie admin login
-    when opened -- lets the mobile app open /settings/seats (Razorpay
-    Checkout for seat top-ups / auto-debit enrollment) in an in-app WebView
-    without reimplementing that payment UI natively. See
-    /mobile_bridge_login/<token> below for the redemption side."""
-    from flask import g as _g
+    when opened -- lets the mobile app open a web-only page (currently just
+    /settings/seats, for Razorpay Checkout on seat top-ups/auto-debit
+    enrollment) in an in-app WebView without reimplementing that UI
+    natively. Accepts an optional {"target": "/some/path"} body, checked
+    against _BRIDGE_TARGET_ALLOWLIST below -- an unrecognized or omitted
+    target silently falls back to the default rather than erroring, since
+    this is a convenience parameter, not a caller-facing contract. See
+    /mobile_bridge_login/<token> below for the redemption side.
 
-    username = _g.api_user
+    Tenant isolation here rides entirely on mobile_bridge_tokens being a
+    TENANT-SCHEMA table, not a master one: this route and
+    /mobile_bridge_login/<token> are both bare, unprefixed paths, so
+    _resolve_tenant() resolves both to the exact same schema (today,
+    always the single-tenant DB_NAME fallback -- see utils/tenant_routing.py
+    module docstring on the mobile app carrying no tenant slug at all).
+    Mint and redeem are therefore guaranteed to hit the same schema's
+    mobile_bridge_tokens/admin_users tables, so a token minted for one
+    tenant is structurally invisible to another regardless of what
+    _resolve_tenant()'s fallback logic happens to pick. If /api/* routes
+    ever become genuinely per-tenant (a URL-based slug, a tenant claim on
+    the Bearer token, etc.), this invariant would need re-verifying rather
+    than assumed."""
+    data = request.get_json(silent=True) or {}
+    target = data.get("target")
+    if target not in _BRIDGE_TARGET_ALLOWLIST:
+        target = _BRIDGE_DEFAULT_TARGET
+
+    username = g.api_user
     raw_token = secrets.token_hex(32)
     token_hash = _hash_token(raw_token)
     expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
     with _db() as (cursor, conn):
         cursor.execute("DELETE FROM mobile_bridge_tokens WHERE expires_at < NOW()")
         cursor.execute(
-            "INSERT INTO mobile_bridge_tokens (token_hash, admin_username, expires_at) VALUES (%s, %s, %s)",
-            (token_hash, username, expires_at)
+            "INSERT INTO mobile_bridge_tokens (token_hash, admin_username, target_path, expires_at) "
+            "VALUES (%s, %s, %s, %s)",
+            (token_hash, username, target, expires_at)
         )
         conn.commit()
 
-    from utils.helpers import _safe_app_url
     url = f"{_safe_app_url()}{tpath('/mobile_bridge_login/' + raw_token)}"
     return jsonify({"ok": True, "url": url})
 
@@ -330,15 +349,17 @@ def _bridge_link_expired_response():
 def mobile_bridge_login(token):
     """Redeems a one-time bridge token (see /api/mobile/web_session_link
     above) into a real admin session-cookie login, then sends the browser
-    (an in-app WebView on mobile) straight into /settings/seats -- the only
-    page this bridge exists for today. No @admin_required here on purpose:
-    this route's whole job is to CREATE a session, not require one already
-    existing. Single-use (deleted immediately on redemption) and expires in
-    5 minutes, same hash-and-expire shape as admin_users.reset_token."""
+    (an in-app WebView on mobile) into whichever page was requested at mint
+    time (target_path, re-checked against _BRIDGE_TARGET_ALLOWLIST here too
+    since a row is only ever trustworthy as far as what was validated when
+    it was written). No @admin_required here on purpose: this route's whole
+    job is to CREATE a session, not require one already existing.
+    Single-use (deleted immediately on redemption) and expires in 5
+    minutes, same hash-and-expire shape as admin_users.reset_token."""
     token_hash = _hash_token(token)
     with _db() as (cursor, conn):
         cursor.execute(
-            "SELECT admin_username FROM mobile_bridge_tokens WHERE token_hash=%s AND expires_at > NOW()",
+            "SELECT admin_username, target_path FROM mobile_bridge_tokens WHERE token_hash=%s AND expires_at > NOW()",
             (token_hash,)
         )
         row = cursor.fetchone()
@@ -346,7 +367,9 @@ def mobile_bridge_login(token):
             cursor.close()
             conn.close()
             return _bridge_link_expired_response()
-        username = row[0]
+        username, target_path = row
+        if target_path not in _BRIDGE_TARGET_ALLOWLIST:
+            target_path = _BRIDGE_DEFAULT_TARGET
         cursor.execute("DELETE FROM mobile_bridge_tokens WHERE token_hash=%s", (token_hash,))
         cursor.execute("SELECT COALESCE(role,'admin') FROM admin_users WHERE username=%s", (username,))
         role_row = cursor.fetchone()
@@ -368,10 +391,10 @@ def mobile_bridge_login(token):
     ensure_session_id(session)
 
     log_security_event(
-        "auth.mobile_bridge_login", f"Mobile app bridged into a web session for '{username}'",
+        "auth.mobile_bridge_login", f"Mobile app bridged into a web session for '{username}' -> {target_path}",
         level="INFO", identifier=username,
     )
-    return redirect(tpath("/settings/seats"))
+    return redirect(tpath(target_path))
 
 
 @core_bp.route("/api/settings/update", methods=["POST"])
@@ -379,6 +402,31 @@ def mobile_bridge_login(token):
 def api_settings_update():
     data = request.get_json() or {}
     return jsonify({"ok": True, "msg": "System settings updated successfully.", "settings": data})
+
+
+@core_bp.route("/api/admin/profile", methods=["GET"])
+@api_required
+def api_admin_profile():
+    """The logged-in admin/HR account's own real username/email/role --
+    mobile/src/screens/admin/SettingsScreen.js's Admin Profile tab used to
+    hardcode "Administrator"/"admin@company.com" for every account
+    regardless of who was actually logged in."""
+    username = g.api_user
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT email, COALESCE(role,'admin'), created_at FROM admin_users WHERE username=%s", (username,))
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "Account not found."}), 404
+    return jsonify({
+        "ok": True,
+        "username": username,
+        "email": row[0] or "",
+        "role": row[1],
+        "created_at": str(row[2]) if row[2] else "",
+    })
 
 
 @core_bp.route("/api/employee/login", methods=["POST"])

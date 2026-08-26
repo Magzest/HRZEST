@@ -12,6 +12,7 @@ import json
 import base64
 import hmac
 import hashlib
+import secrets
 import urllib.request
 import urllib.error
 
@@ -87,16 +88,36 @@ def create_order(amount_paise: int, receipt_id: str):
 
 def verify_payment_signature(order_id: str, payment_id: str, signature: str) -> bool:
     """HMAC-SHA256 of "order_id|payment_id" with the key secret -- Razorpay's
-    documented Checkout success-callback verification contract for BOTH a
-    one-time Order and a Subscription (the subscription's id stands in for
-    order_id in that case; Razorpay uses the identical HMAC scheme for
-    both). Constant-time compare (hmac.compare_digest), never a plain ==
+    documented Checkout success-callback verification contract for a
+    one-time Order (blueprints/billing.py, blueprints/seats.py). NOT valid
+    for a Subscription authorization callback -- see
+    verify_subscription_signature() below, which uses a different field
+    order. Constant-time compare (hmac.compare_digest), never a plain ==
     on a MAC."""
     if not razorpay_configured() or not (order_id and payment_id and signature):
         return False
     expected = hmac.new(
         _KEY_SECRET.encode("utf-8"),
         f"{order_id}|{payment_id}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def verify_subscription_signature(subscription_id: str, payment_id: str, signature: str) -> bool:
+    """HMAC-SHA256 of "payment_id|subscription_id" -- Razorpay's documented
+    verification contract for a Subscription authorization callback
+    (blueprints/auto_debit.py's confirm()). Deliberately NOT the same field
+    order as verify_payment_signature()'s "order_id|payment_id" for a
+    one-time Order -- Razorpay swaps the order for subscriptions, and using
+    the Order formula here would make every real (non-demo) auto-debit
+    enrollment fail verification even though the mandate was genuinely
+    authorized. Constant-time compare, same as verify_payment_signature."""
+    if not razorpay_configured() or not (subscription_id and payment_id and signature):
+        return False
+    expected = hmac.new(
+        _KEY_SECRET.encode("utf-8"),
+        f"{payment_id}|{subscription_id}".encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
@@ -182,6 +203,50 @@ def cancel_subscription(subscription_id: str, cancel_at_cycle_end: bool = False)
     if error:
         return False, error
     return True, None
+
+
+def create_id_or_demo(demo_prefix: str, create_fn):
+    """Shared "demo vs. live" branch for minting a Razorpay object id.
+    blueprints/billing.py (Orders), blueprints/seats.py (Orders), and
+    blueprints/auto_debit.py (Subscriptions) each independently
+    reimplemented this exact branch -- "if Razorpay isn't configured, mint
+    a demo_prefix-tagged random id instead of calling the real API" --
+    with only the prefix and the real creation call differing. That
+    triplication is exactly how utils/razorpay_utils.py ended up with an
+    inconsistent demo-detection rule in one caller (fixed separately) --
+    consolidating here means there's only one place left to get it right.
+
+    create_fn: a zero-arg callable returning (real_id, error) -- callers
+    close over whatever real-mode-only arguments (amount, receipt id, plan
+    id, customer id, ...) they need. Never called at all when Razorpay
+    isn't configured.
+    Returns (id, is_demo, error) -- error is None on success."""
+    if not razorpay_configured():
+        return demo_prefix + secrets.token_hex(12), True, None
+    real_id, error = create_fn()
+    if error:
+        return None, False, error
+    return real_id, False, None
+
+
+def verify_or_demo(id_value: str, demo_prefix: str, payment_id: str, signature: str, verify_fn):
+    """Shared "demo vs. live" branch for the verify/confirm side, mirroring
+    create_id_or_demo above. If id_value carries demo_prefix, honors it as
+    a demo completion UNLESS real Razorpay keys are configured NOW -- a
+    demo id minted before configuration can never be honored once real
+    payments are live, so that this never becomes a bypass in production.
+    Otherwise runs verify_fn(id_value, payment_id, signature) (either
+    verify_payment_signature for an Order, or verify_subscription_signature
+    for a Subscription -- callers pass whichever applies).
+    Returns (ok, is_demo, error_msg) -- error_msg is None when ok is True."""
+    is_demo = (id_value or "").startswith(demo_prefix)
+    if is_demo:
+        if razorpay_configured():
+            return False, True, "This was created in demo/test mode. Please start again."
+        return True, True, None
+    if not verify_fn(id_value, payment_id, signature):
+        return False, False, "Payment verification failed."
+    return True, False, None
 
 
 def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:

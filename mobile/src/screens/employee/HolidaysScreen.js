@@ -7,7 +7,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import HolidayHeaderCard from "../../components/holidays/HolidayHeaderCard";
@@ -19,10 +21,19 @@ import HolidayList from "../../components/holidays/HolidayList";
 import EmptyHolidayCard from "../../components/holidays/EmptyHolidayCard";
 import { fetchEmployeeHolidays } from "../../api/client";
 
+const MONTH_NOW = new Date().getMonth() + 1;
+const YEAR_NOW = new Date().getFullYear();
+
 export default function HolidaysScreen() {
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(YEAR_NOW);
+  const [month, setMonth] = useState(MONTH_NOW);
   const [selectedDate, setSelectedDate] = useState(null);
-  const [holidays, setHolidays] = useState([]);
+  // allHolidays is the full, unfiltered fetch -- /api/employee/holidays
+  // (blueprints/leave.py's api_employee_holidays) has no year parameter
+  // and returns every holiday ever entered, so the Year Selector filters
+  // client-side against this rather than re-fetching (there's nothing
+  // server-side to filter by).
+  const [allHolidays, setAllHolidays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -30,14 +41,14 @@ export default function HolidaysScreen() {
     try {
       const res = await fetchEmployeeHolidays();
       if (res?.data?.holidays && Array.isArray(res.data.holidays)) {
-        setHolidays(res.data.holidays);
+        setAllHolidays(res.data.holidays);
       } else if (Array.isArray(res?.data)) {
-        setHolidays(res.data);
+        setAllHolidays(res.data);
       } else {
-        setHolidays([]);
+        setAllHolidays([]);
       }
     } catch (_) {
-      setHolidays([]);
+      setAllHolidays([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -47,6 +58,16 @@ export default function HolidaysScreen() {
   useEffect(() => {
     loadHolidays();
   }, []);
+
+  const holidays = allHolidays.filter((h) => h.date && new Date(h.date).getFullYear() === year);
+
+  const upcoming = holidays
+    .filter((h) => !h.passed)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const nextHoliday = upcoming[0];
+  const remainingDays = nextHoliday
+    ? Math.max(0, Math.round((new Date(nextHoliday.date) - new Date()) / (1000 * 60 * 60 * 24)))
+    : 0;
   return (
     <SafeAreaView style={styles.container}>
       <ProfileHeader
@@ -62,19 +83,16 @@ export default function HolidaysScreen() {
 
         <HolidayHeaderCard
           year={year}
-          totalHolidays={18}
-          publicHolidays={12}
-          optionalHolidays={4}
-          companyHolidays={2}
+          totalHolidays={holidays.length}
+          upcomingCount={upcoming.length}
         />
 
         {/* Upcoming */}
 
         <HolidaySummaryCard
-          upcomingHoliday="Independence Day"
-          holidayDate="15 August 2026"
-          remainingDays={46}
-          holidayType="Public Holiday"
+          upcomingHoliday={nextHoliday?.name || "No upcoming holiday"}
+          holidayDate={nextHoliday ? new Date(nextHoliday.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : ""}
+          remainingDays={remainingDays}
         />
 
         {/* Year */}
@@ -93,10 +111,35 @@ export default function HolidaysScreen() {
 
         <HolidayLegend />
 
-        {/* Calendar */}
+        {/* Calendar -- was permanently stuck showing June regardless of
+            year/actual date; now defaults to the real current month and
+            has its own prev/next since HolidayCalendar has no built-in
+            month navigation. */}
+
+        <View style={styles.monthNavRow}>
+          <TouchableOpacity
+            onPress={() => {
+              if (month === 1) { setMonth(12); setYear(year - 1); } else { setMonth(month - 1); }
+            }}
+            style={styles.monthNavBtn}
+          >
+            <Ionicons name="chevron-back" size={18} color="#173B8C" />
+          </TouchableOpacity>
+          <Text style={styles.monthNavLabel}>
+            {new Date(year, month - 1).toLocaleString("en-IN", { month: "long", year: "numeric" })}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              if (month === 12) { setMonth(1); setYear(year + 1); } else { setMonth(month + 1); }
+            }}
+            style={styles.monthNavBtn}
+          >
+            <Ionicons name="chevron-forward" size={18} color="#173B8C" />
+          </TouchableOpacity>
+        </View>
 
         <HolidayCalendar
-          month={5}
+          month={month - 1}
           year={year}
           holidays={holidays}
           selectedDate={selectedDate}
@@ -139,6 +182,26 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
 
+  monthNavRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  monthNavBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#EEF4FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  monthNavLabel: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
   sectionTitle: {
     marginTop: 26,
     marginBottom: 16,

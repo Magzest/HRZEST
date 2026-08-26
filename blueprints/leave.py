@@ -1222,14 +1222,24 @@ def api_employee_holidays():
 @leave_bp.route("/api/overtime", methods=["GET"])
 @api_required
 def api_overtime():
-    """API endpoint for fetching real overtime records from database."""
+    """API endpoint for fetching real overtime records from database.
+
+    Was querying a nonexistent `overtime_requests` table with columns
+    (`ot_date`, `hours`, `reason`) that don't exist on the real table
+    either -- every call unconditionally raised. The real table is
+    `overtime_records` (app.py's init_db, columns: date, shift_end,
+    actual_logout, ot_minutes, ot_pay, status, notes), the same one
+    overtime_action() below and the session-only /overtime page
+    (blueprints/leave.py's overtime()) both use. Fixed to match."""
     db = get_db_connection()
-    cursor = db.cursor()
+    cursor = db.cursor(buffered=True)
     cursor.execute("""
-        SELECT o.id, o.employee_id, e.name, e.department, o.ot_date, o.hours, o.reason, o.status, o.created_at
-        FROM overtime_requests o
+        SELECT o.id, o.employee_id, e.name, e.department, o.date, o.shift_end,
+               o.actual_logout, o.ot_minutes, o.ot_pay, o.status, o.notes, o.created_at
+        FROM overtime_records o
         LEFT JOIN employees e ON o.employee_id = e.employee_id
         ORDER BY o.created_at DESC
+        LIMIT 200
     """)
     rows = cursor.fetchall()
     cursor.close()
@@ -1242,65 +1252,112 @@ def api_overtime():
             "name": r[2] or r[1],
             "department": r[3] or "General",
             "date": str(r[4]) if r[4] else "",
-            "hours": float(r[5]) if r[5] else 0.0,
-            "reason": r[6] or "",
-            "status": r[7] or "Pending",
-            "created_at": str(r[8]) if r[8] else "",
+            "shift_end": str(r[5]) if r[5] else "",
+            "actual_logout": str(r[6]) if r[6] else "",
+            "ot_minutes": r[7] or 0,
+            "hours": round((r[7] or 0) / 60, 2),
+            "ot_pay": float(r[8]) if r[8] else 0.0,
+            "status": r[9] or "Pending",
+            "notes": r[10] or "",
+            "created_at": str(r[11]) if r[11] else "",
         })
     return jsonify({"ok": True, "overtime": records})
+
+
+@leave_bp.route("/api/overtime/<int:oid>/action", methods=["POST"])
+@api_required
+def api_overtime_action(oid):
+    """Bearer-token twin of overtime_action() below -- same two effects
+    (set the record's status, and credit compoff_balance when approving
+    for the first time) so an OT request approved from mobile is
+    indistinguishable from one approved on web, not a second, lesser
+    approval path."""
+    data = request.get_json(silent=True) or {}
+    action = (data.get("action") or "").strip().lower()
+    notes = (data.get("notes") or "").strip()
+    if action not in ("approve", "reject"):
+        return jsonify({"ok": False, "msg": "action must be 'approve' or 'reject'."}), 400
+    status = "Approved" if action == "approve" else "Rejected"
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT employee_id, ot_minutes, status FROM overtime_records WHERE id=%s", (oid,))
+    ot_row = cursor.fetchone()
+    if not ot_row:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "Overtime record not found."}), 404
+
+    cursor.execute(
+        "UPDATE overtime_records SET status=%s, notes=%s WHERE id=%s",
+        (status, notes or None, oid)
+    )
+    db.commit()
+
+    credited_minutes = 0
+    if status == "Approved" and ot_row[2] != "Approved":
+        emp_id, ot_minutes = ot_row[0], ot_row[1]
+        cursor.execute("SELECT COALESCE(compoff_min_ot_minutes,120) FROM company_settings LIMIT 1")
+        min_row = cursor.fetchone()
+        min_ot = int(min_row[0]) if min_row else 120
+        if ot_minutes >= min_ot:
+            cursor.execute("""
+                INSERT INTO compoff_balance (employee_id, earned_minutes, used_minutes)
+                VALUES (%s, %s, 0)
+                ON CONFLICT (employee_id) DO UPDATE SET
+                    earned_minutes = compoff_balance.earned_minutes + %s
+            """, (emp_id, ot_minutes, ot_minutes))
+            db.commit()
+            credited_minutes = ot_minutes
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "status": status, "compoff_minutes_credited": credited_minutes})
 
 
 @leave_bp.route("/api/compoff", methods=["GET"])
 @api_required
 def api_compoff():
-    """API endpoint for fetching real comp-off balances and summary from database."""
+    """API endpoint for fetching real comp-off balances from the database.
+
+    Was querying a `compoff_balances` (plural) table that is never created
+    anywhere in this codebase's schema (only the real, actively-credited
+    `compoff_balance` singular table exists -- see overtime_action() above,
+    which is what actually writes to it on OT approval) -- every call to
+    this route unconditionally raised (relation does not exist). Fixed to
+    query the real table and apply the same minutes -> days conversion the
+    session-only /overtime page uses (company_settings.compoff_minutes_per_day),
+    so mobile and web show identical numbers for the same employee."""
     db = get_db_connection()
-    cursor = db.cursor()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT COALESCE(compoff_minutes_per_day,480) FROM company_settings LIMIT 1")
+    cfg_row = cursor.fetchone()
+    minutes_per_day = int(cfg_row[0]) if cfg_row else 480
+
     cursor.execute("""
-        SELECT c.id, c.employee_id, e.name, e.department, c.earned_days, c.used_days, c.balance_days
-        FROM compoff_balances c
-        LEFT JOIN employees e ON c.employee_id = e.employee_id
+        SELECT e.employee_id, e.name, COALESCE(e.department,''),
+               COALESCE(cb.earned_minutes,0), COALESCE(cb.used_minutes,0)
+        FROM employees e
+        LEFT JOIN compoff_balance cb ON cb.employee_id = e.employee_id
+        WHERE e.is_active=1
         ORDER BY e.name ASC
     """)
     rows = cursor.fetchall()
     cursor.close()
     db.close()
     balances = []
-    for r in rows:
+    for employee_id, name, department, earned_minutes, used_minutes in rows:
+        earned_days = round(earned_minutes / minutes_per_day, 2) if minutes_per_day else 0.0
+        used_days = round(used_minutes / minutes_per_day, 2) if minutes_per_day else 0.0
         balances.append({
-            "id": r[0],
-            "employee_id": r[1],
-            "name": r[2] or r[1],
-            "department": r[3] or "General",
-            "earned_days": float(r[4]) if r[4] else 0.0,
-            "used_days": float(r[5]) if r[5] else 0.0,
-            "balance_days": float(r[6]) if r[6] else 0.0,
+            "employee_id": employee_id,
+            "name": name or employee_id,
+            "department": department or "General",
+            "earned_days": earned_days,
+            "used_days": used_days,
+            "balance_days": max(0.0, round(earned_days - used_days, 2)),
         })
     return jsonify({"ok": True, "balances": balances})
-
-
-@leave_bp.route("/api/compoff/<int:cid>/action", methods=["POST"])
-@api_required
-def api_compoff_action(cid):
-    data = request.get_json(silent=True) or {}
-    raw_action = data.get("action", "").strip().lower()
-    if raw_action in ("approved", "approve", "accepted", "accept"):
-        status = "Approved"
-    elif raw_action in ("declined", "decline", "rejected", "reject"):
-        status = "Rejected"
-    else:
-        status = "Approved"
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    try:
-        cursor.execute("UPDATE compoff_balances SET status=%s WHERE id=%s", (status, cid))
-        db.commit()
-    except Exception:
-        pass
-    finally:
-        cursor.close()
-        db.close()
-    return jsonify({"ok": True, "status": status})
 
 
 

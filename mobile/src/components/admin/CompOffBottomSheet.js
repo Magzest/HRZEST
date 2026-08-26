@@ -18,8 +18,12 @@ export default function CompOffBottomSheet({
   visible,
   record,
   onClose,
+  onApprove,
+  onReject,
+  actionLoading,
 }) {
   if (!record) return null;
+  const isPending = record.status === "Pending";
 
   return (
     <Modal
@@ -85,7 +89,7 @@ export default function CompOffBottomSheet({
               <View style={{ flex: 1 }}>
 
                 <Text style={styles.employeeName}>
-                  {record.employeeName}
+                  {record.name}
                 </Text>
 
                 <Text style={styles.department}>
@@ -113,50 +117,38 @@ export default function CompOffBottomSheet({
               <InfoRow
                 icon="time-outline"
                 label="Working Hours"
-                value={`${record.checkIn} - ${record.checkOut}`}
+                value={`${record.shift_end || "--"} - ${record.actual_logout || "--"}`}
               />
 
               <InfoRow
                 icon="hourglass-outline"
                 label="OT Hours"
-                value={`${record.overtimeHours} Hours`}
+                value={`${record.hours} Hours`}
               />
 
               <InfoRow
                 icon="cash-outline"
                 label="OT Pay"
-                value={`₹${record.overtimePay}`}
-              />
-
-              <InfoRow
-                icon="calendar-clear-outline"
-                label="Comp-Off Earned"
-                value={`${record.compOffEarned} Day`}
-              />
-
-              <InfoRow
-                icon="person-outline"
-                label="Approved By"
-                value={
-                  record.approver || "Pending"
-                }
+                value={`₹${record.ot_pay}`}
               />
 
             </View>
 
-            {/* Reason */}
+            {/* Notes */}
 
-            <View style={styles.reasonCard}>
+            {!!record.notes && (
+              <View style={styles.reasonCard}>
 
-              <Text style={styles.sectionTitle}>
-                Reason
-              </Text>
+                <Text style={styles.sectionTitle}>
+                  Notes
+                </Text>
 
-              <Text style={styles.reason}>
-                {record.reason}
-              </Text>
+                <Text style={styles.reason}>
+                  {record.notes}
+                </Text>
 
-            </View>
+              </View>
+            )}
 
           </ScrollView>
 
@@ -165,8 +157,9 @@ export default function CompOffBottomSheet({
           <View style={styles.footer}>
 
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={isPending ? styles.secondaryButton : styles.wideSecondaryButton}
               onPress={onClose}
+              disabled={actionLoading}
             >
 
               <Text style={styles.secondaryText}>
@@ -175,21 +168,34 @@ export default function CompOffBottomSheet({
 
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.primaryButton}
-            >
+            {isPending && (
+              <>
+                <TouchableOpacity
+                  style={styles.rejectButton}
+                  onPress={onReject}
+                  disabled={actionLoading}
+                >
+                  <Text style={styles.rejectText}>
+                    Reject
+                  </Text>
+                </TouchableOpacity>
 
-              <Ionicons
-                name="download-outline"
-                size={18}
-                color="#FFFFFF"
-              />
-
-              <Text style={styles.primaryText}>
-                Export
-              </Text>
-
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={onApprove}
+                  disabled={actionLoading}
+                >
+                  <Ionicons
+                    name="checkmark-circle-outline"
+                    size={18}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.primaryText}>
+                    Approve
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
 
           </View>
 
@@ -368,11 +374,21 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: "row",
     justifyContent: "space-between",
+    gap: 10,
     marginTop: 10,
   },
 
   secondaryButton: {
-    width: "32%",
+    flex: 1,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  wideSecondaryButton: {
+    flex: 1,
     height: 54,
     borderRadius: 16,
     backgroundColor: "#F1F5F9",
@@ -385,8 +401,22 @@ const styles = StyleSheet.create({
     color: COMPOFF_THEME.colors.textPrimary,
   },
 
+  rejectButton: {
+    flex: 1,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: "#FEE2E2",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  rejectText: {
+    fontWeight: "700",
+    color: "#DC2626",
+  },
+
   primaryButton: {
-    width: "64%",
+    flex: 1.4,
     height: 54,
     borderRadius: 16,
     backgroundColor: COMPOFF_THEME.colors.primary,

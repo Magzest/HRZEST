@@ -23,7 +23,7 @@ import {
   requestNotificationPermission, scheduleDailyCheckinReminder, cancelDailyCheckinReminder,
 } from "../../utils/localNotifications";
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
   const { signOut } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [biometric, setBiometric] = useState(true);
@@ -212,6 +212,7 @@ export default function SettingsScreen() {
           icon="lock-closed-outline"
           title="Change Password"
           subtitle="Update your account password"
+          onPress={() => navigation.navigate("Security")}
           right={
             <Ionicons
               name="chevron-forward"
@@ -229,6 +230,7 @@ export default function SettingsScreen() {
           icon="information-circle-outline"
           title="About Application"
           subtitle="Version 1.0.0"
+          onPress={() => Alert.alert("Employee Attendance", "Enterprise Workforce Platform\nVersion 1.0.0")}
           right={
             <Ionicons
               name="chevron-forward"
@@ -242,6 +244,7 @@ export default function SettingsScreen() {
           icon="document-text-outline"
           title="Privacy Policy"
           subtitle="Read our privacy policy"
+          onPress={() => navigation.navigate("Policies")}
           right={
             <Ionicons
               name="chevron-forward"
@@ -255,6 +258,7 @@ export default function SettingsScreen() {
           icon="shield-checkmark-outline"
           title="Terms & Conditions"
           subtitle="View terms of service"
+          onPress={() => navigation.navigate("Policies")}
           right={
             <Ionicons
               name="chevron-forward"

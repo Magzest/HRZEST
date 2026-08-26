@@ -38,6 +38,13 @@ export default function AdminDrawerContent(props) {
       badgeBg: "#E0F2FE",
       badgeColor: "#0369A1",
     },
+    {
+      title: "Notifications & Broadcast",
+      icon: "notifications-outline",
+      iconFocused: "notifications",
+      route: "Notifications",
+      section: "ANALYTICS & REPORTS",
+    },
 
     // HR OPERATIONS & MANAGEMENT
     {
@@ -96,6 +103,25 @@ export default function AdminDrawerContent(props) {
       route: "OrgChart",
       section: "HR OPERATIONS",
     },
+    // @admin_required on web (blueprints/documents.py) -- both Admin and
+    // HR can manage documents, unlike HR Accounts below.
+    {
+      title: "Employee Documents",
+      icon: "document-text-outline",
+      iconFocused: "document-text",
+      route: "Documents",
+      section: "HR OPERATIONS",
+    },
+    // Admin-only, matching the web's role_required("admin") on /hr_accounts
+    // -- an HR-role user tapping this would just get a 403 from the
+    // backend, so it's hidden rather than shown-then-rejected.
+    ...(user?.adminRole === "admin" ? [{
+      title: "HR Accounts",
+      icon: "shield-outline",
+      iconFocused: "shield",
+      route: "HrAccounts",
+      section: "HR OPERATIONS",
+    }] : []),
 
     // PAYROLL & COMPENSATION
     {

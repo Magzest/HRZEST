@@ -22,6 +22,9 @@ import OrgChartScreen from "../screens/admin/OrgChartScreen";
 import DepartmentsScreen from "../screens/admin/DepartmentsScreen";
 import LeavesHolidaysScreen from "../screens/admin/LeavesHolidaysScreen";
 import SeatsBillingScreen from "../screens/admin/SeatsBillingScreen";
+import NotificationsScreen from "../screens/NotificationsScreen";
+import HrAccountsScreen from "../screens/admin/HrAccountsScreen";
+import DocumentsScreen from "../screens/admin/DocumentsScreen";
 
 const Tab = createBottomTabNavigator();
 
@@ -204,6 +207,24 @@ export default function AdminBottomNavigator() {
       <Tab.Screen
         name="SeatsBilling"
         component={SeatsBillingScreen}
+        options={{ tabBarItemStyle: { display: "none" } }}
+      />
+
+      <Tab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ tabBarItemStyle: { display: "none" } }}
+      />
+
+      <Tab.Screen
+        name="HrAccounts"
+        component={HrAccountsScreen}
+        options={{ tabBarItemStyle: { display: "none" } }}
+      />
+
+      <Tab.Screen
+        name="Documents"
+        component={DocumentsScreen}
         options={{ tabBarItemStyle: { display: "none" } }}
       />
     </Tab.Navigator>

@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 
 import HeaderCard from "../../components/earnings/HeaderCard";
@@ -21,6 +22,7 @@ import { StyleSheet } from "react-native";
 import { fetchEmployeeSalary } from "../../api/client";
 
 export default function EarningsScreen() {
+  const navigation = useNavigation();
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
