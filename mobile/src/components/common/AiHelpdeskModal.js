@@ -35,11 +35,16 @@ export default function AiHelpdeskModal({ visible, onClose }) {
 
     try {
       const res = await fetchAiHelpdeskResponse(queryText);
-      const botText =
-        res?.data?.answer ||
-        res?.data?.response ||
-        res?.data?.msg ||
+      // Backend shape is { ok, data: { answer, escalated, ticket_id, ... } }
+      // (blueprints/ai_hrms.py's api_hr_helpdesk) -- none of the top-level
+      // res.data.* keys below ever existed, so this always fell through to
+      // the canned line regardless of whether the call actually succeeded.
+      let botText =
+        res?.data?.data?.answer ||
         "I have registered your query. You can view your leave balances under the Leave tab or request payslips in the Payslips section.";
+      if (res?.data?.data?.escalated && res?.data?.data?.ticket_id) {
+        botText += `\n\nThis has been escalated to HR Ticket #${res.data.data.ticket_id}.`;
+      }
       setMessages((prev) => [
         ...prev,
         { id: (Date.now() + 1).toString(), sender: "bot", text: botText },

@@ -6,9 +6,32 @@ from utils.ai_resume_parser import parse_resume, match_candidate_job
 from utils.ai_helpdesk import process_helpdesk_query
 from utils.ai_interview_evaluator import evaluate_interview_notes
 from utils.ai_attrition_analytics import compute_attrition_and_burnout_analytics
-from utils.auth import admin_required
+from utils.auth import admin_required, _hash_token
+from utils.helpers import _db
 
 ai_hrms_bp = Blueprint("ai_hrms", __name__)
+
+
+def _resolve_bearer_identity():
+    """Bearer-token counterpart of the session.get(...) check below -- the
+    helpdesk is usable by both employees and admins (no single
+    api_required/employee_api_required decorator covers both personas), so
+    this looks the token up against api_tokens directly for either type.
+    Mobile has no Flask session cookie at all, so without this every mobile
+    helpdesk request silently fell through to the client's canned
+    error-fallback text instead of a real AI answer.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token_hash = _hash_token(auth[7:])
+    with _db() as (cursor, _conn):
+        cursor.execute(
+            "SELECT identity FROM api_tokens WHERE token=%s AND token_type IN ('employee','admin') AND expires_at > NOW()",
+            (token_hash,)
+        )
+        row = cursor.fetchone()
+    return row[0] if row else None
 
 
 @ai_hrms_bp.route("/recruitment")
@@ -62,7 +85,7 @@ def api_screen_candidate():
 @ai_hrms_bp.route("/api/ai/hr-helpdesk", methods=["POST"])
 def api_hr_helpdesk():
     """API Endpoint: Conversational HR Helpdesk Q&A with automatic ticket escalation."""
-    emp_id = session.get("employee_id") or session.get("admin_username")
+    emp_id = session.get("employee_id") or session.get("admin_username") or _resolve_bearer_identity()
     if not emp_id:
         return jsonify({"ok": False, "msg": "Login required."}), 401
 

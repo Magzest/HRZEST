@@ -44,10 +44,16 @@ export default function AiChatModal({ visible, onClose }) {
 
     try {
       const res = await fetchAiHelpdeskResponse(text);
-      const botResponse =
-        res?.data?.response ||
-        res?.data?.reply ||
+      // Backend shape is { ok, data: { answer, escalated, ticket_id, ... } }
+      // (blueprints/ai_hrms.py's api_hr_helpdesk) -- res.data.response/reply
+      // never existed, so this always fell through to the canned line below
+      // regardless of whether the call actually succeeded.
+      let botResponse =
+        res?.data?.data?.answer ||
         "I'm here to assist you with HR policies, leave balances, and company guidelines. Please feel free to rephrase your query!";
+      if (res?.data?.data?.escalated && res?.data?.data?.ticket_id) {
+        botResponse += `\n\nThis has been escalated to HR Ticket #${res.data.data.ticket_id}.`;
+      }
       setMessages((prev) => [
         ...prev,
         { id: (Date.now() + 1).toString(), sender: "bot", text: botResponse },

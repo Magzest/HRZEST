@@ -87,3 +87,35 @@ def test_ai_hrms_api_endpoints(client, seed_admin):
     res = client.get("/api/ai/attrition-analytics")
     assert res.status_code == 200
     assert res.get_json()["ok"] is True
+
+
+def test_hr_helpdesk_bearer_token_employee(client, seed_employee):
+    """Mobile has no Flask session cookie -- the helpdesk must also accept
+    an employee Bearer token (this is what mobile/src/components/common/
+    AiHelpdeskModal.js actually calls)."""
+    token = client.post("/api/employee/login", json={
+        "employee_id": seed_employee["employee_id"], "password": seed_employee["password"],
+    }).get_json()["token"]
+
+    res = client.post("/api/ai/hr-helpdesk", json={"query": "How many sick days do I get?"},
+                       headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.get_json()["data"]["answer"] is not None
+
+
+def test_hr_helpdesk_bearer_token_admin(client, seed_admin):
+    """Same Bearer support for an admin token (mobile/src/components/
+    AiChatModal.js, used from AdminDashboard)."""
+    token = client.post("/api/login", json={
+        "username": seed_admin["username"], "password": seed_admin["password"],
+    }).get_json()["token"]
+
+    res = client.post("/api/ai/hr-helpdesk", json={"query": "What is the payroll schedule?"},
+                       headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.get_json()["data"]["answer"] is not None
+
+
+def test_hr_helpdesk_rejects_missing_auth(client):
+    res = client.post("/api/ai/hr-helpdesk", json={"query": "Anything?"})
+    assert res.status_code == 401
