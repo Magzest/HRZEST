@@ -15,7 +15,7 @@
       "distribution": "internal",
       "channel": "preview",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://yourdomain.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://hrzest.in",
         "EXPO_PUBLIC_SENTRY_DSN": ""
       }
     },
@@ -23,7 +23,7 @@
       "channel": "production",
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://yourdomain.com",
+        "EXPO_PUBLIC_API_BASE_URL": "https://hrzest.in",
         "EXPO_PUBLIC_SENTRY_DSN": ""
       }
     }
