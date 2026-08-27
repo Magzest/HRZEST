@@ -105,6 +105,7 @@ def get_billing_snapshot(schema_name: str) -> dict:
         ]
         cur.close()
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        from extensions import app_log
+        app_log.warning("get_billing_snapshot(%s): auto-debit/invoice lookup failed: %s", schema_name, exc)
     return {"auto_debit": auto_debit, "invoices": invoices}

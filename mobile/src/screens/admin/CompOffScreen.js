@@ -176,8 +176,18 @@ export default function CompOffScreen({
     }
     setDetailsVisible(false);
     setSelectedRecord(null);
-    if (res.data.compoff_minutes_credited) {
-      Alert.alert("Approved", `Overtime approved -- ${Math.round(res.data.compoff_minutes_credited / 60)} hour(s) credited to comp-off balance.`);
+    // compoff_minutes_credited is legitimately 0 when approved OT falls
+    // below the configured minimum threshold -- that's still a successful
+    // approval, not a no-op, so it needs its own message rather than no
+    // alert at all.
+    if (action === "approve") {
+      if (res.data.compoff_minutes_credited) {
+        Alert.alert("Approved", `Overtime approved -- ${Math.round(res.data.compoff_minutes_credited / 60)} hour(s) credited to comp-off balance.`);
+      } else {
+        Alert.alert("Approved", "Overtime approved.");
+      }
+    } else {
+      Alert.alert("Rejected", "Overtime request rejected.");
     }
     loadData();
   };
@@ -316,7 +326,7 @@ export default function CompOffScreen({
               balancesData.map((balance) => (
 
                 <CompOffBalanceCard
-                  key={balance.id}
+                  key={balance.employee_id}
                   employeeName={balance.name}
                   department={balance.department}
                   availableDays={

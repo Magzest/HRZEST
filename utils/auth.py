@@ -364,7 +364,12 @@ def api_required(f):
             cursor.execute("DELETE FROM api_tokens WHERE expires_at < NOW()")
             _conn.commit()
             cursor.execute(
-                "SELECT identity FROM api_tokens WHERE token=%s AND token_type='admin' AND expires_at > NOW()",
+                """
+                SELECT t.identity, COALESCE(u.is_active, 1)
+                FROM api_tokens t
+                LEFT JOIN admin_users u ON u.username = t.identity
+                WHERE t.token=%s AND t.token_type='admin' AND t.expires_at > NOW()
+                """,
                 (token_hash,)
             )
             row = cursor.fetchone()
@@ -372,6 +377,13 @@ def api_required(f):
             log_security_event("access.denied", "API request with invalid or expired admin token",
                                level="WARNING", required="admin_api")
             return jsonify({"ok": False, "msg": "Invalid or expired token"}), 401
+        # Re-checked on every request (not just at login) so that
+        # deactivating an account revokes its existing tokens immediately,
+        # instead of leaving them valid until natural expiry.
+        if not row[1]:
+            log_security_event("access.denied", "API request from deactivated admin account",
+                               level="WARNING", required="admin_api", identifier=row[0])
+            return jsonify({"ok": False, "msg": "This account has been deactivated. Contact your administrator."}), 403
         _flask_g.api_user = row[0]
         return f(*args, **kwargs)
     return wrapper

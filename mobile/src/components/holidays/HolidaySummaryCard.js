@@ -14,6 +14,7 @@ export default function HolidaySummaryCard({
   holidayDate = "",
   remainingDays = 0,
   holidayType = "Holiday",
+  hasUpcoming = true,
 }) {
   return (
     <View style={styles.container}>
@@ -76,11 +77,11 @@ export default function HolidaySummaryCard({
 
         <View style={styles.daysContent}>
           <Text style={styles.daysNumber}>
-            {remainingDays}
+            {hasUpcoming ? remainingDays : "--"}
           </Text>
 
           <Text style={styles.daysLabel}>
-            Days Remaining
+            {hasUpcoming ? "Days Remaining" : "No holiday scheduled"}
           </Text>
         </View>
       </View>

@@ -93,6 +93,7 @@ export default function HolidaysScreen() {
           upcomingHoliday={nextHoliday?.name || "No upcoming holiday"}
           holidayDate={nextHoliday ? new Date(nextHoliday.date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }) : ""}
           remainingDays={remainingDays}
+          hasUpcoming={!!nextHoliday}
         />
 
         {/* Year */}

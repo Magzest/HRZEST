@@ -288,6 +288,19 @@ def _record_charge(subscription_id, amount_paise, payment_id, status, failure_re
         app_log.warning("auto_debit._record_charge: unknown subscription_id %s", subscription_id)
         return
     tenant_schema, company_name = row
+    # Razorpay explicitly redelivers webhooks on timeout/non-2xx/network
+    # retry, and this table has no unique constraint on razorpay_payment_id
+    # -- without this guard a redelivered subscription.charged event would
+    # insert a second invoice row for the same payment, double-counting
+    # revenue in both this tenant's billing history and Platform Admin's
+    # payments feed.
+    if payment_id:
+        cur.execute("SELECT 1 FROM monthly_invoices WHERE razorpay_payment_id=%s", (payment_id,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            app_log.info("auto_debit._record_charge: duplicate webhook delivery for payment_id %s, skipping", payment_id)
+            return
     employee_count = get_tenant_employee_count(tenant_schema)
     billing_period = datetime.date.today().replace(day=1)
     cur.execute(

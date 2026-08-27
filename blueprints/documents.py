@@ -230,7 +230,7 @@ def _fmt_doc(row):
 
 @documents_bp.route("/api/documents", methods=["GET"])
 @api_required
-@api_role_required("admin")
+@api_role_required("admin", "hr")
 def api_documents_list():
     emp_id = request.args.get("emp_id", "").strip()
     db = get_db_connection()
@@ -257,7 +257,7 @@ def api_documents_list():
 
 @documents_bp.route("/api/documents/upload", methods=["POST"])
 @api_required
-@api_role_required("admin")
+@api_role_required("admin", "hr")
 def api_documents_upload():
     emp_id = (request.form.get("employee_id") or "").strip()
     doc_type = (request.form.get("doc_type") or "").strip()
@@ -297,7 +297,7 @@ def api_documents_upload():
 
 @documents_bp.route("/api/documents/<int:did>", methods=["DELETE"])
 @api_required
-@api_role_required("admin")
+@api_role_required("admin", "hr")
 def api_documents_delete(did):
     db = get_db_connection()
     cursor = db.cursor(buffered=True)

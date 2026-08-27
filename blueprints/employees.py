@@ -1890,7 +1890,7 @@ def api_register_employee():
 
 @employees_bp.route("/api/employees/<emp_id>", methods=["GET"])
 @api_required
-@api_role_required("admin")
+@api_role_required("admin", "hr")
 @limiter.limit("30 per minute")
 def api_employee_detail(emp_id):
     db = get_db_connection()
@@ -1938,6 +1938,7 @@ def api_edit_employee(emp_id):
 
 @employees_bp.route("/api/employees/<emp_id>", methods=["DELETE"])
 @api_required
+@api_role_required("admin")
 def api_delete_employee(emp_id):
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1976,6 +1977,7 @@ def api_org_chart():
     itself) since that route is session-only (@admin_required) and already
     serves the web org-chart page at that exact path."""
     dept_filter = request.args.get("dept", "")
+    company_id_raw = request.args.get("company_id", "").strip()
     db = get_db_connection()
     cursor = db.cursor()
     query = """
@@ -1985,6 +1987,13 @@ def api_org_chart():
         WHERE COALESCE(e.is_active, 1) = 1
     """
     params = []
+    # Mobile has no company switcher yet, so this mirrors the web route's
+    # own "no active company selected" case (session.get("active_company_id")
+    # falsy -> unscoped) rather than guessing a company. Once mobile gains a
+    # switcher it can pass ?company_id= to scope the tree the same way web does.
+    if company_id_raw.isdigit():
+        query += " AND e.company_id = %s"
+        params.append(int(company_id_raw))
     if dept_filter:
         query += " AND e.department = %s"
         params.append(dept_filter)

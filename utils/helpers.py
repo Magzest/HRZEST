@@ -32,6 +32,11 @@ def coerce_datetime(value):
     anything else/unparseable -- never raises."""
     if value is None or isinstance(value, datetime.datetime):
         return value
+    # A DATE column (e.g. monthly_invoices.billing_period) comes back from
+    # psycopg2 as a plain datetime.date, not datetime.datetime -- must be
+    # checked before the str branch since date isn't a datetime subclass.
+    if isinstance(value, datetime.date):
+        return datetime.datetime(value.year, value.month, value.day)
     if isinstance(value, str):
         try:
             return datetime.datetime.fromisoformat(value)
