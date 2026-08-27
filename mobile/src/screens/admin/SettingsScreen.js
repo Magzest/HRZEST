@@ -21,7 +21,7 @@ import THEME from "../../constants/theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   fetchShifts, createShift, fetchSettings, saveCompanySettings, saveGeoRadius,
-  toggleCompanyFeature, fetchAdminProfile, changeAdminPassword,
+  toggleCompanyFeature, fetchAdminProfile, changeAdminPassword, saveSalaryRules,
 } from "../../api/client";
 
 // company_settings.working_days is a free-form CSV of day abbreviations
@@ -76,7 +76,7 @@ export default function SettingsScreen({ navigation, route }) {
   const [shifts, setShifts] = useState([]);
   const [shiftsLoading, setShiftsLoading] = useState(false);
   const [gracePeriod, setGracePeriod] = useState("15");
-  const [halfDayHours, setHalfDayHours] = useState("4.0");
+  const [savingShiftRules, setSavingShiftRules] = useState(false);
 
   // Form States - Attendance & Geofence -- geofenceEnabled/faceRecog map to
   // real company_settings.geo_enabled/face_auth_enabled columns (toggled
@@ -111,12 +111,17 @@ export default function SettingsScreen({ navigation, route }) {
   const [notifyResignation, setNotifyResignation] = useState(false);
   const [notifyDocExpiry, setNotifyDocExpiry] = useState(false);
 
-  // Form States - Payroll
-  const [payDay, setPayDay] = useState("1");
-  const [overtimeRate, setOvertimeRate] = useState("1.5");
-  const [standardWorkingDays, setStandardWorkingDays] = useState("26");
-  const [autoTax, setAutoTax] = useState(true);
-  const [autoEmailPayslip, setAutoEmailPayslip] = useState(true);
+  // Form States - Payroll -- real company_settings.late_deduction_pct /
+  // half_day_deduction_pct / holiday_pay / leave_pay columns (same fields
+  // templates/settings.html's "salary" tab saves via save_salary_rules).
+  // The previous payDay/overtimeRate/standardWorkingDays/autoTax/
+  // autoEmailPayslip fields had no backing column anywhere -- Save was a
+  // permanent no-op alert.
+  const [lateDeductionPct, setLateDeductionPct] = useState("10");
+  const [halfDayDeductionPct, setHalfDayDeductionPct] = useState("50");
+  const [holidayPay, setHolidayPay] = useState("paid");
+  const [leavePay, setLeavePay] = useState("exclude");
+  const [savingPayrollRules, setSavingPayrollRules] = useState(false);
 
   // Modal State for Adding Shift
   const [addShiftModal, setAddShiftModal] = useState(false);
@@ -134,15 +139,29 @@ export default function SettingsScreen({ navigation, route }) {
     { id: "profile", label: "Admin Profile", icon: "person" },
   ];
 
-  // Payroll Rules has no Bearer (or even session-JSON) backend anywhere in
-  // this codebase -- save_salary_rules is a much larger session-only form
-  // than what's modeled here, so there's genuinely nothing yet to wire
-  // this button to without inventing fields that don't exist.
-  const handleSave = (sectionName) => {
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      `Saving ${sectionName.toLowerCase()} is only available from the web admin dashboard for now.`
-    );
+  // Grace minutes (Shifts tab) and late/half-day deduction % + holiday/leave
+  // pay (Payroll tab) all live on the same company_settings row and save
+  // together via one call, same as web's single "salary" tab form.
+  const handleSaveSalaryRules = async (setSavingFlag) => {
+    setSavingFlag(true);
+    let res;
+    try {
+      res = await saveSalaryRules(
+        parseFloat(lateDeductionPct) || 0,
+        parseFloat(halfDayDeductionPct) || 0,
+        parseInt(gracePeriod, 10) || 0,
+        holidayPay,
+        leavePay
+      );
+    } catch (e) {
+      res = e?.response;
+    }
+    setSavingFlag(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Save Failed", res?.data?.msg || "Could not save salary rules.");
+      return;
+    }
+    Alert.alert("Saved", "Salary rules updated.");
   };
 
   const loadSettingsAndProfile = async () => {
@@ -167,6 +186,11 @@ export default function SettingsScreen({ navigation, route }) {
         setNotifyPayslip(!!s.notify_payslip);
         setNotifyResignation(!!s.notify_resignation);
         setNotifyDocExpiry(!!s.notify_doc_expiry);
+        setGracePeriod(s.grace_minutes != null ? String(s.grace_minutes) : "15");
+        setLateDeductionPct(s.late_deduction_pct != null ? String(s.late_deduction_pct) : "10");
+        setHalfDayDeductionPct(s.half_day_deduction_pct != null ? String(s.half_day_deduction_pct) : "50");
+        setHolidayPay(s.holiday_pay === "unpaid" ? "unpaid" : "paid");
+        setLeavePay(s.leave_pay === "absent" ? "absent" : "exclude");
       }
       const p = profileRes?.data?.ok ? profileRes.data : null;
       if (p) {
@@ -459,25 +483,14 @@ export default function SettingsScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>GRACE MINUTES</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={gracePeriod}
-                    onChangeText={setGracePeriod}
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>HALF-DAY HOURS</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={halfDayHours}
-                    onChangeText={setHalfDayHours}
-                    keyboardType="numeric"
-                  />
-                </View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>GRACE MINUTES</Text>
+                <TextInput
+                  style={styles.input}
+                  value={gracePeriod}
+                  onChangeText={setGracePeriod}
+                  keyboardType="numeric"
+                />
               </View>
 
               <Text style={[styles.label, { marginTop: 12, marginBottom: 10 }]}>ACTIVE SHIFTS SCHEDULE</Text>
@@ -502,10 +515,17 @@ export default function SettingsScreen({ navigation, route }) {
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
-                onPress={() => handleSave("Shifts & Timings")}
+                onPress={() => handleSaveSalaryRules(setSavingShiftRules)}
+                disabled={savingShiftRules}
               >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
-                <Text style={styles.saveButtonText}>Update Shift Rules</Text>
+                {savingShiftRules ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
+                    <Text style={styles.saveButtonText}>Update Shift Rules</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -746,68 +766,65 @@ export default function SettingsScreen({ navigation, route }) {
 
               <View style={styles.twoCol}>
                 <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-                  <Text style={styles.label}>MONTHLY PAY DAY</Text>
+                  <Text style={styles.label}>LATE DEDUCTION %</Text>
                   <TextInput
                     style={styles.input}
-                    value={payDay}
-                    onChangeText={setPayDay}
+                    value={lateDeductionPct}
+                    onChangeText={setLateDeductionPct}
                     keyboardType="numeric"
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-                  <Text style={styles.label}>OT MULTIPLIER</Text>
+                  <Text style={styles.label}>HALF-DAY DEDUCTION %</Text>
                   <TextInput
                     style={styles.input}
-                    value={overtimeRate}
-                    onChangeText={setOvertimeRate}
+                    value={halfDayDeductionPct}
+                    onChangeText={setHalfDayDeductionPct}
                     keyboardType="numeric"
                   />
                 </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>STANDARD MONTHLY WORKING DAYS</Text>
-                <TextInput
-                  style={styles.input}
-                  value={standardWorkingDays}
-                  onChangeText={setStandardWorkingDays}
-                  keyboardType="numeric"
+              <View style={styles.settingRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.settingRowTitle}>Pay for Holidays</Text>
+                  <Text style={styles.settingRowSub}>Treat company holidays as paid days</Text>
+                </View>
+                <Switch
+                  value={holidayPay === "paid"}
+                  onValueChange={(v) => setHolidayPay(v ? "paid" : "unpaid")}
+                  trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
+                  thumbColor={holidayPay === "paid" ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
               <View style={styles.settingRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Auto Tax & PF Deduction</Text>
-                  <Text style={styles.settingRowSub}>Calculate statutory deductions on gross salary</Text>
+                  <Text style={styles.settingRowTitle}>Exclude Approved Leave</Text>
+                  <Text style={styles.settingRowSub}>Off: mark approved leave days as absent</Text>
                 </View>
                 <Switch
-                  value={autoTax}
-                  onValueChange={setAutoTax}
+                  value={leavePay === "exclude"}
+                  onValueChange={(v) => setLeavePay(v ? "exclude" : "absent")}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={autoTax ? "#0B2253" : "#F1F5F9"}
-                />
-              </View>
-
-              <View style={styles.settingRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.settingRowTitle}>Auto Email PDF Payslips</Text>
-                  <Text style={styles.settingRowSub}>Email generated payslips directly to staff</Text>
-                </View>
-                <Switch
-                  value={autoEmailPayslip}
-                  onValueChange={setAutoEmailPayslip}
-                  trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={autoEmailPayslip ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={leavePay === "exclude" ? "#0B2253" : "#F1F5F9"}
                 />
               </View>
 
               <TouchableOpacity
                 style={styles.saveButton}
                 activeOpacity={0.8}
-                onPress={() => handleSave("Payroll Rules")}
+                onPress={() => handleSaveSalaryRules(setSavingPayrollRules)}
+                disabled={savingPayrollRules}
               >
-                <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
-                <Text style={styles.saveButtonText}>Save Payroll Rules</Text>
+                {savingPayrollRules ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#FFF" />
+                    <Text style={styles.saveButtonText}>Save Payroll Rules</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}

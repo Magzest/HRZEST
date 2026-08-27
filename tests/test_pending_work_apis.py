@@ -372,3 +372,80 @@ class TestHolidayDeleteApi:
         token = _admin_token(client, seed_admin)
         resp = client.delete("/api/holidays/999999999", headers=_auth(token))
         assert resp.status_code == 404
+
+
+class TestSalaryRulesApi:
+    def test_save_salary_rules_round_trips(self, client, seed_admin, db_engine):
+        token = _admin_token(client, seed_admin)
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT late_deduction_pct, half_day_deduction_pct, grace_minutes, holiday_pay, leave_pay "
+            "FROM company_settings LIMIT 1"
+        )
+        original = cur.fetchone()
+        cur.close()
+        try:
+            resp = client.post("/api/settings/salary_rules", json={
+                "late_deduction_pct": 15, "half_day_deduction_pct": 60,
+                "grace_minutes": 20, "holiday_pay": "unpaid", "leave_pay": "absent",
+            }, headers=_auth(token))
+            assert resp.status_code == 200
+            assert resp.get_json()["ok"] is True
+
+            settings = client.get("/api/settings", headers=_auth(token)).get_json()["settings"]
+            assert float(settings["late_deduction_pct"]) == 15
+            assert float(settings["half_day_deduction_pct"]) == 60
+            assert int(settings["grace_minutes"]) == 20
+            assert settings["holiday_pay"] == "unpaid"
+            assert settings["leave_pay"] == "absent"
+        finally:
+            if original:
+                cur = db_engine.cursor()
+                cur.execute(
+                    "UPDATE company_settings SET late_deduction_pct=%s, half_day_deduction_pct=%s, "
+                    "grace_minutes=%s, holiday_pay=%s, leave_pay=%s",
+                    original,
+                )
+                cur.close()
+
+    def test_save_salary_rules_clamps_out_of_range_percentages(self, client, seed_admin, db_engine):
+        token = _admin_token(client, seed_admin)
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT late_deduction_pct, half_day_deduction_pct, grace_minutes, holiday_pay, leave_pay "
+            "FROM company_settings LIMIT 1"
+        )
+        original = cur.fetchone()
+        cur.close()
+        try:
+            resp = client.post("/api/settings/salary_rules", json={
+                "late_deduction_pct": 500, "half_day_deduction_pct": -10,
+                "grace_minutes": 999, "holiday_pay": "bogus", "leave_pay": "bogus",
+            }, headers=_auth(token))
+            assert resp.status_code == 200
+            settings = client.get("/api/settings", headers=_auth(token)).get_json()["settings"]
+            assert float(settings["late_deduction_pct"]) == 100
+            assert float(settings["half_day_deduction_pct"]) == 0
+            assert int(settings["grace_minutes"]) == 120
+            assert settings["holiday_pay"] == "paid"
+            assert settings["leave_pay"] == "exclude"
+        finally:
+            if original:
+                cur = db_engine.cursor()
+                cur.execute(
+                    "UPDATE company_settings SET late_deduction_pct=%s, half_day_deduction_pct=%s, "
+                    "grace_minutes=%s, holiday_pay=%s, leave_pay=%s",
+                    original,
+                )
+                cur.close()
+
+    def test_save_salary_rules_requires_admin_token(self, client, seed_employee):
+        # An employee Bearer token isn't a valid admin token at all here
+        # (api_required, not employee_api_required) -- rejected at 401
+        # before role is even checked, same as the other admin-only routes.
+        token = _emp_token(client, seed_employee)
+        resp = client.post("/api/settings/salary_rules", json={
+            "late_deduction_pct": 15, "half_day_deduction_pct": 60,
+            "grace_minutes": 20, "holiday_pay": "unpaid", "leave_pay": "absent",
+        }, headers=_auth(token))
+        assert resp.status_code == 401

@@ -1272,6 +1272,38 @@ def api_settings_toggle_feature():
     return jsonify({"ok": True})
 
 
+@admin_views_bp.route("/api/settings/salary_rules", methods=["POST"])
+@api_required
+@api_role_required("admin")
+def api_settings_save_salary_rules():
+    data = request.get_json(silent=True) or {}
+    try:
+        late_pct = max(0.0, min(100.0, float(data.get("late_deduction_pct", 10))))
+        half_pct = max(0.0, min(100.0, float(data.get("half_day_deduction_pct", 50))))
+        grace_min = max(0, min(120, int(data.get("grace_minutes", 15))))
+    except (ValueError, TypeError):
+        return jsonify({"ok": False, "msg": "Invalid values."}), 400
+    holiday_pay = data.get("holiday_pay", "paid")
+    leave_pay = data.get("leave_pay", "exclude")
+    if holiday_pay not in ("paid", "unpaid"):
+        holiday_pay = "paid"
+    if leave_pay not in ("exclude", "absent"):
+        leave_pay = "exclude"
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "UPDATE company_settings SET late_deduction_pct=%s, half_day_deduction_pct=%s, "
+        "grace_minutes=%s, holiday_pay=%s, leave_pay=%s",
+        (late_pct, half_pct, grace_min, holiday_pay, leave_pay)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    cfg.load_salary_rules()
+    return jsonify({"ok": True, "msg": "Salary rules saved."})
+
+
 # save_security_settings retired: the Security tab is now the MFA-gated
 # hub above (api_security_settings_session_timeout does the same DB write,
 # JSON-based, reachable only after the step-up gate reveals the row).

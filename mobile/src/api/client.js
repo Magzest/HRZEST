@@ -389,6 +389,12 @@ export const saveGeoRadius = (geoRadius, officeLat, officeLon) =>
 export const toggleCompanyFeature = (feature, value) =>
   client.post('/api/settings/toggle_feature', { feature, value });
 
+export const saveSalaryRules = (lateDeductionPct, halfDayDeductionPct, graceMinutes, holidayPay, leavePay) =>
+  client.post('/api/settings/salary_rules', {
+    late_deduction_pct: lateDeductionPct, half_day_deduction_pct: halfDayDeductionPct,
+    grace_minutes: graceMinutes, holiday_pay: holidayPay, leave_pay: leavePay,
+  });
+
 export const fetchAdminProfile = () => client.get('/api/admin/profile');
 
 export const changeAdminPassword = (currentPassword, newPassword, confirmPassword) =>
