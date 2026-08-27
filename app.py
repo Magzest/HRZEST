@@ -549,6 +549,11 @@ def _enforce_csrf():
         # request signature instead (blueprints/webhooks.py's generic
         # /webhooks/<provider> route).
         return
+    if request.path.startswith("/iclock/"):
+        # Physical biometric terminal push (blueprints/biometric.py) -- a
+        # device pushing attendance logs has no browser session/CSRF token
+        # to carry, same posture as /webhooks/ above.
+        return
     if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
@@ -1525,6 +1530,42 @@ def _init_core_tables(cursor, db):
             verified_at TIMESTAMP DEFAULT NULL
         )
     """)
+    # Maps a physical biometric terminal's own internal user number
+    # (device_pin -- the device knows nothing about employee_id) to a real
+    # employee, set up once via the admin "Enroll Device" flow
+    # (blueprints/biometric.py). Scoped per (device_serial, device_pin)
+    # since two different terminals both number their own users starting
+    # from 1.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS device_pin_map (
+            id SERIAL PRIMARY KEY,
+            device_serial VARCHAR(50) NOT NULL,
+            device_pin VARCHAR(20) NOT NULL,
+            employee_id VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(device_serial, device_pin)
+        )
+    """)
+    # Dedup guard for device punch pushes. Biometric terminals commonly
+    # resend already-delivered logs (queued retry after a dropped
+    # connection, or a manual "re-upload attendance" on the device) -- since
+    # process_punch()'s login/logout/relogin state machine is a toggle, not
+    # an idempotent action, replaying the same punch twice would wrongly
+    # flip a login into a logout. Keyed on (device_serial, device_pin,
+    # punch_time) -- the same triple the device itself uses to identify a
+    # single punch record -- and checked via INSERT ... ON CONFLICT DO
+    # NOTHING before process_punch() ever runs for a given line.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS device_punch_log (
+            id SERIAL PRIMARY KEY,
+            device_serial VARCHAR(50) NOT NULL,
+            device_pin VARCHAR(20) NOT NULL,
+            punch_time TIMESTAMP NOT NULL,
+            employee_id VARCHAR(50) NOT NULL,
+            processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(device_serial, device_pin, punch_time)
+        )
+    """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS regularization_requests (
             id SERIAL PRIMARY KEY,
@@ -2423,6 +2464,26 @@ def init_master_db():
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_monthly_invoices_tenant ON monthly_invoices (tenant_schema, billing_period)")
+        # Which tenant a physical biometric terminal (fingerprint/face
+        # attendance device) belongs to -- looked up by device_serial, the
+        # only identifier the device itself sends. Lives in the master
+        # schema (not per-tenant) because blueprints/biometric.py's device
+        # push endpoint has no session/URL slug to resolve a tenant from
+        # the normal way (see utils/tenant_routing.py); this is that
+        # resolution's single source of truth. api_key_hash is checked the
+        # same way admin_users.password is (never store the raw key).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS biometric_devices (
+                id SERIAL PRIMARY KEY,
+                device_serial VARCHAR(50) UNIQUE NOT NULL,
+                tenant_schema VARCHAR(100) NOT NULL,
+                api_key_hash VARCHAR(64) NOT NULL,
+                location_name VARCHAR(200) DEFAULT NULL,
+                registered_by VARCHAR(100) DEFAULT NULL,
+                last_seen_at TIMESTAMP DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         # Lightweight traffic counter for the public marketing pages
         # (landing page, get-started, create_org) -- one row per
         # (path, day), incremented via ON CONFLICT below rather than one
@@ -3441,11 +3502,12 @@ if "core.home" not in app.view_functions:
     from blueprints.auto_debit import auto_debit_bp
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.secops import secops_bp
+    from blueprints.biometric import biometric_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                platform_admin_bp, secops_bp):
+                platform_admin_bp, secops_bp, biometric_bp):
         app.register_blueprint(_bp)
 
 

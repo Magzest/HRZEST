@@ -17,6 +17,20 @@ def _admin_session(client, seed_admin):
         "identifier": seed_admin["username"],
         "password":   seed_admin["password"],
     })
+    with client.session_transaction() as sess:
+        logged_in = sess.get("admin_logged_in")
+    if not logged_in:
+        # A one-off transient failure here (rather than a real credential
+        # problem -- seed_admin just created this row) used to surface many
+        # steps later as a confusing, unrelated assertion failure deep in
+        # the test body. Retry once before giving up loudly.
+        client.post("/login", data={
+            "identifier": seed_admin["username"],
+            "password":   seed_admin["password"],
+        })
+        with client.session_transaction() as sess:
+            logged_in = sess.get("admin_logged_in")
+    assert logged_in, f"Admin login failed for {seed_admin['username']!r} -- check for stale admin_users.role state from another test."
     return client
 
 

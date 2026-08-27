@@ -16,6 +16,21 @@ def _admin_session(client, seed_admin):
         "password": seed_admin["password"],
     }, follow_redirects=True)
     assert resp.status_code == 200
+    with client.session_transaction() as sess:
+        logged_in = sess.get("admin_logged_in")
+    if not logged_in:
+        # status_code==200 alone doesn't distinguish success (redirected-
+        # then-followed to /admin) from failure (the login page re-rendered
+        # with an error, also 200) -- check the actual session state, and
+        # retry once in case of a one-off transient hiccup rather than
+        # letting a wrong-session test fail confusingly several steps later.
+        resp = client.post("/login", data={
+            "identifier": seed_admin["username"],
+            "password": seed_admin["password"],
+        }, follow_redirects=True)
+        with client.session_transaction() as sess:
+            logged_in = sess.get("admin_logged_in")
+    assert logged_in, f"Admin login failed for {seed_admin['username']!r} -- check for stale admin_users.role state from another test."
     return resp
 
 

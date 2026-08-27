@@ -1421,6 +1421,79 @@ def attendance():
                         "work_mode": emp_work_mode})
 
 
+def process_punch(cursor, db, emp_id, employee_name, punch_dt=None):
+    """Core login/logout/relogin state machine, shared by every punch
+    source (mobile Bearer check-in, and blueprints/biometric.py's device
+    push ingestion). Caller owns the cursor/db connection -- already
+    pointed at the right tenant schema, whether that's via the normal
+    g.tenant_db path (api_checkin below) or an explicit
+    get_tenant_db(schema_name) for a source with no session (a biometric
+    device push). Returns a plain dict rather than a Response so callers
+    can add their own fields (e.g. a device's raw PIN) before jsonifying.
+
+    punch_dt defaults to now() for a live human tap; a device push passes
+    the device's own punch timestamp instead, since it may be delivered
+    slightly after the fact."""
+    now = punch_dt or datetime.datetime.now()
+    today = now.date()
+    current_time = now.time()
+    cursor.execute(
+        "SELECT login_time, logout_time, status, worked_minutes, last_relogin "
+        "FROM attendance WHERE employee_id=%s AND date=%s",
+        (emp_id, today)
+    )
+    record = cursor.fetchone()
+    login_time = record[0] if record else None
+    logout_time = record[1] if record else None
+    login_status_stored = record[2] if record else None
+    worked_mins_stored = (record[3] or 0) if record else 0
+    last_relogin_stored = record[4] if record else None
+    if not login_time:
+        grace_time = (datetime.datetime.combine(today, cfg.SHIFT_START) +
+                      datetime.timedelta(minutes=cfg.GRACE_MINUTES)).time()
+        if current_time <= grace_time:
+            login_status = "Full Day Login"
+        elif current_time <= cfg.SHIFT_HALF:
+            login_status = "Late Login"
+        else:
+            login_status = "Half Day Login"
+        cursor.execute(
+            "INSERT INTO attendance (employee_id, date, login_time, status) VALUES (%s,%s,%s,%s)",
+            (emp_id, today, current_time, login_status)
+        )
+        db.commit()
+        return {"ok": True, "type": "login", "name": employee_name,
+                "status": login_status, "time": current_time.strftime("%H:%M:%S")}
+    elif not logout_time:
+        total_m = compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored)
+        if current_time < cfg.SHIFT_HALF:
+            logout_status = "Half Day Logout"
+        elif current_time < cfg.SHIFT_END:
+            logout_status = "Early Logout"
+        else:
+            logout_status = "Completed"
+        att_type = classify_by_worked_minutes(login_status_stored, total_m, cfg.SHIFT_START, cfg.SHIFT_END)
+        cursor.execute(
+            "UPDATE attendance SET logout_time=%s, logout_status=%s, attendance_type=%s, worked_minutes=%s "
+            "WHERE employee_id=%s AND date=%s",
+            (current_time, logout_status, att_type, total_m, emp_id, today)
+        )
+        db.commit()
+        detect_overtime(emp_id, today, current_time)
+        return {"ok": True, "type": "logout", "name": employee_name,
+                "status": logout_status, "att_type": att_type,
+                "time": current_time.strftime("%H:%M:%S")}
+    else:
+        cursor.execute(
+            "UPDATE attendance SET logout_time=NULL, last_relogin=%s "
+            "WHERE employee_id=%s AND date=%s",
+            (current_time, emp_id, today)
+        )
+        db.commit()
+        return {"ok": True, "type": "relogin", "name": employee_name,
+                "status": "Re-Login", "time": current_time.strftime("%H:%M:%S")}
+
+
 @attendance_bp.route("/api/attendance/checkin", methods=["POST"])
 @api_required
 def api_checkin():
@@ -1449,70 +1522,10 @@ def api_checkin():
             cursor.close()
             db.close()
             return jsonify({"ok": False, "msg": geofence_err})
-    now = datetime.datetime.now()
-    today = now.date()
-    current_time = now.time()
-    cursor.execute(
-        "SELECT login_time, logout_time, status, worked_minutes, last_relogin "
-        "FROM attendance WHERE employee_id=%s AND date=%s",
-        (emp_id, today)
-    )
-    record = cursor.fetchone()
-    login_time = record[0] if record else None
-    logout_time = record[1] if record else None
-    login_status_stored = record[2] if record else None
-    worked_mins_stored = (record[3] or 0) if record else 0
-    last_relogin_stored = record[4] if record else None
-    if not login_time:
-        grace_time = (datetime.datetime.combine(today, cfg.SHIFT_START) +
-                      datetime.timedelta(minutes=cfg.GRACE_MINUTES)).time()
-        if current_time <= grace_time:
-            login_status = "Full Day Login"
-        elif current_time <= cfg.SHIFT_HALF:
-            login_status = "Late Login"
-        else:
-            login_status = "Half Day Login"
-        cursor.execute(
-            "INSERT INTO attendance (employee_id, date, login_time, status) VALUES (%s,%s,%s,%s)",
-            (emp_id, today, current_time, login_status)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
-        return jsonify({"ok": True, "type": "login", "name": employee_name,
-                        "status": login_status, "time": current_time.strftime("%H:%M:%S")})
-    elif not logout_time:
-        total_m = compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored)
-        if current_time < cfg.SHIFT_HALF:
-            logout_status = "Half Day Logout"
-        elif current_time < cfg.SHIFT_END:
-            logout_status = "Early Logout"
-        else:
-            logout_status = "Completed"
-        att_type = classify_by_worked_minutes(login_status_stored, total_m, cfg.SHIFT_START, cfg.SHIFT_END)
-        cursor.execute(
-            "UPDATE attendance SET logout_time=%s, logout_status=%s, attendance_type=%s, worked_minutes=%s "
-            "WHERE employee_id=%s AND date=%s",
-            (current_time, logout_status, att_type, total_m, emp_id, today)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
-        detect_overtime(emp_id, today, current_time)
-        return jsonify({"ok": True, "type": "logout", "name": employee_name,
-                        "status": logout_status, "att_type": att_type,
-                        "time": current_time.strftime("%H:%M:%S")})
-    else:
-        cursor.execute(
-            "UPDATE attendance SET logout_time=NULL, last_relogin=%s "
-            "WHERE employee_id=%s AND date=%s",
-            (current_time, emp_id, today)
-        )
-        db.commit()
-        cursor.close()
-        db.close()
-        return jsonify({"ok": True, "type": "relogin", "name": employee_name,
-                        "status": "Re-Login", "time": current_time.strftime("%H:%M:%S")})
+    result = process_punch(cursor, db, emp_id, employee_name)
+    cursor.close()
+    db.close()
+    return jsonify(result)
 
 
 @attendance_bp.route("/api/shifts", methods=["GET"])

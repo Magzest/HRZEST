@@ -76,12 +76,20 @@ class TestAdminLoginMfa:
         never let through the general admin login."""
         db_engine.cursor().execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
         db_engine.commit()
-        resp = client.post("/login", data={
-            "identifier": seed_admin["username"], "password": seed_admin["password"],
-        })
-        assert b"Invalid credentials" in resp.data
-        db_engine.cursor().execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
-        db_engine.commit()
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_admin["username"], "password": seed_admin["password"],
+            })
+            assert b"Invalid credentials" in resp.data
+        finally:
+            # Without try/finally, a failed assertion above would leave
+            # 'test_admin' stuck on role='soc_analyst' for the rest of the
+            # run -- admin_login() explicitly rejects that role even with
+            # the correct password, so every later test doing a plain
+            # admin login for this shared identifier would then fail with
+            # a spurious "Invalid credentials" of its own.
+            db_engine.cursor().execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
 
     def test_hr_role_can_use_admin_login_and_completes_mfa(self, client, seed_admin, db_engine, mandatory_login_mfa_enabled):
         """HR accounts (blueprints/admin_views.py's /hr_accounts management

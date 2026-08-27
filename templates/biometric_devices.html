@@ -1,0 +1,298 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Biometric Devices{% endblock %}
+
+{% block page_css %}
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    html,body{height:100%}
+    body{background:#eff6ff;display:flex;min-height:100vh}
+    .main{flex:1;padding:28px 30px;overflow-y:auto;min-width:0}
+    .page-header{margin-bottom:24px}
+    .page-header h1{font-size:22px;font-weight:800;color:#1e293b}
+    .page-header p{font-size:13px;color:#64748b;margin-top:4px}
+    .content-grid{display:grid;grid-template-columns:320px 1fr;gap:20px;align-items:start}
+    .panel{background:#fff;border:1px solid #dbeafe;border-radius:14px;padding:20px}
+    .panel-title{font-size:14px;font-weight:700;color:#1e293b;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+    label{display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+    input[type=text]{width:100%;padding:9px 12px;border:1px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:13px;outline:none;margin-bottom:14px;font-family:inherit}
+    select{width:100%;padding:9px 12px;border:1px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:13px;outline:none;margin-bottom:14px;font-family:inherit}
+    input:focus,select:focus{border-color:#3b82f6;background:#fff}
+    .hint{font-size:11px;color:#94a3b8;margin-top:-10px;margin-bottom:14px}
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.18s;text-decoration:none}
+    .btn-primary{background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff}
+    .btn-primary:hover{opacity:.9}
+    .btn-sm{padding:5px 11px;font-size:12px;border-radius:7px}
+    .btn-danger{background:#fef2f2;color:#ef4444;border:1px solid #fecaca}
+    .btn-danger:hover{background:#fee2e2}
+    .btn-ghost{background:#f8fafc;color:#64748b;border:1px solid #e2e8f0}
+    .btn-ghost:hover{background:#f1f5f9}
+    table{width:100%;border-collapse:collapse}
+    th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#64748b;padding:8px 12px;text-align:left;border-bottom:2px solid #e2e8f0;background:#f8fafc}
+    td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:13px;color:#374151;vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+    .badge-online{background:#f0fdf4;color:#16a34a}
+    .badge-offline{background:#fef2f2;color:#94a3b8}
+    .empty-state{text-align:center;padding:48px 20px;color:#94a3b8}
+    .empty-state i{font-size:48px;margin-bottom:12px;display:block}
+    .msg{padding:10px 16px;border-radius:10px;margin-bottom:18px;font-size:13px;font-weight:600;display:none}
+    .msg-success{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
+    .msg-danger{background:#fef2f2;color:#ef4444;border:1px solid #fecaca}
+    .mappings-row{display:none;background:#f8fafc}
+    .mappings-row td{padding:16px}
+    .mapping-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid #e2e8f0;font-size:12.5px}
+    .mapping-item:last-child{border-bottom:none}
+    .mapping-empty{font-size:12px;color:#94a3b8;padding:6px 0}
+    .enroll-row{display:flex;gap:8px;margin-top:12px;align-items:flex-end}
+    .enroll-row > div{flex:1}
+    .enroll-row label{margin-bottom:5px}
+    .enroll-row input,.enroll-row select{margin-bottom:0}
+    .setup-note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;font-size:12px;color:#92400e;margin-bottom:18px;line-height:1.6}
+    .setup-note code{background:#fff7ed;padding:1px 6px;border-radius:5px;font-size:11.5px}
+    .apikey-box{background:#0f172a;color:#a7f3d0;font-family:"Consolas",monospace;font-size:12px;padding:10px 12px;border-radius:8px;word-break:break-all;margin-bottom:8px}
+    body.dark-mode{background:#0d1117!important}
+    body.dark-mode .main{background:#0d1117!important;color:#cdd9e5!important}
+    body.dark-mode .page-header h1{color:#f1f5f9!important}
+    body.dark-mode .panel{background:#161b22!important;border-color:#30363d!important}
+    body.dark-mode .panel-title{color:#cdd9e5!important}
+    body.dark-mode label{color:#768390!important}
+    body.dark-mode input,body.dark-mode select{background:#0d1117!important;border-color:#30363d!important;color:#cdd9e5!important}
+    body.dark-mode th{background:#1c2128!important;color:#768390!important;border-color:#30363d!important}
+    body.dark-mode td{color:#cdd9e5!important;border-color:#30363d!important}
+    body.dark-mode .mappings-row{background:#1c2128!important}
+    body.dark-mode .mapping-item{border-color:#30363d!important}
+    body.dark-mode .setup-note{background:#1c2128!important;border-color:#3a2e1a!important;color:#f0c674!important}
+  </style>
+{% endblock %}
+
+{% block main %}
+  <div class="page-header">
+    <h1><i class="ti ti-fingerprint u-c-3b82f6"></i> Biometric Devices</h1>
+    <p>Connect physical fingerprint/face attendance terminals and map each terminal's user PIN to a real employee</p>
+  </div>
+
+  <div id="bioMsg" class="msg"></div>
+
+  <div class="setup-note">
+    <strong><i class="ti ti-info-circle"></i> Device setup:</strong> after registering a device below, open its
+    <em>Comm &gt; Cloud Server Setting</em> menu and point the Server Address at this system, so it pushes logs to
+    <code>{{ request.url_root }}iclock/cdata</code>. Compatible with ZKTeco and most OEM terminals (eSSL, Realtime,
+    Matrix, iFace) that share the same push protocol. The exact menu wording varies by device model.
+  </div>
+
+  <div class="content-grid">
+    <!-- REGISTER -->
+    <div class="panel">
+      <div class="panel-title"><i class="ti ti-device-desktop-plus u-c-22c55e"></i> Register Device</div>
+      <form id="bioRegisterForm">
+        <label>Device Serial Number</label>
+        <input type="text" id="bioSerial" required placeholder="e.g. AB1234567890" />
+        <div class="hint">Printed on the unit, or shown under its Comm/Network menu</div>
+
+        <label>Location <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+        <input type="text" id="bioLocation" placeholder="e.g. Main Entrance" />
+
+        <button type="submit" class="btn btn-primary u-w-100pct u-jc-center">
+          <i class="ti ti-plus"></i> Register Device
+        </button>
+      </form>
+      <div id="bioNewKeyBox" style="display:none;margin-top:16px;">
+        <div class="hint u-mb-6" style="margin-top:0;">Device registered. This key is shown once:</div>
+        <div class="apikey-box" id="bioNewKeyValue"></div>
+      </div>
+    </div>
+
+    <!-- LIST -->
+    <div class="panel">
+      <div class="panel-title">
+        <i class="ti ti-list u-c-6366f1"></i> Registered Devices
+        <span class="u-ml-auto u-fs-12 u-c-94a3b8 u-fw-400">{{ devices|length }} device(s)</span>
+      </div>
+      {% if devices %}
+      <div class="u-ovx-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Serial</th>
+              <th>Location</th>
+              <th>Last Connected</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in devices %}
+            <tr>
+              <td class="u-fw-600">{{ d[0] }}</td>
+              <td>{{ d[1] or '—' }}</td>
+              <td>
+                {% if d[2] %}
+                  <span class="badge badge-online">{{ d[2].strftime('%d %b %Y, %H:%M') }}</span>
+                {% else %}
+                  <span class="badge badge-offline">Never connected</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="u-d-flex u-gap-6 u-ai-center">
+                  <button class="btn btn-sm btn-ghost" onclick="bioToggleMappings('{{ d[0] }}')">
+                    <i class="ti ti-fingerprint"></i> Enrollments
+                  </button>
+                  <button class="btn btn-sm btn-danger" onclick="bioRemoveDevice('{{ d[0] }}', this)">
+                    <i class="ti ti-trash"></i> Remove
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr class="mappings-row" id="bioMap-{{ d[0] }}">
+              <td colspan="4">
+                <div class="u-fs-11 u-fw-700 u-c-64748b u-mb-8 u-ttr-uppercase u-ls-0d4">Enrolled Employees</div>
+                <div id="bioMapBody-{{ d[0] }}"><div class="mapping-empty">Loading…</div></div>
+                <div class="enroll-row">
+                  <div>
+                    <label>Device PIN</label>
+                    <input type="text" id="bioPin-{{ d[0] }}" placeholder="e.g. 7" />
+                  </div>
+                  <div>
+                    <label>Employee</label>
+                    <select id="bioEmp-{{ d[0] }}">
+                      <option value="">Select employee…</option>
+                      {% for e in employees %}
+                      <option value="{{ e[0] }}">{{ e[1] }} ({{ e[0] }})</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <button class="btn btn-sm btn-primary" onclick="bioEnroll('{{ d[0] }}', this)">
+                    <i class="ti ti-link"></i> Enroll
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <i class="ti ti-fingerprint"></i>
+        No biometric devices registered yet. Register one on the left.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    function bioShowMsg(text, ok) {
+      var el = document.getElementById('bioMsg');
+      el.textContent = text;
+      el.className = 'msg ' + (ok ? 'msg-success' : 'msg-danger');
+      el.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    document.getElementById('bioRegisterForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      try {
+        var resp = await fetch("{{ tpath('/api/biometric/devices') }}", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            device_serial: document.getElementById('bioSerial').value.trim(),
+            location_name: document.getElementById('bioLocation').value.trim(),
+          }),
+        });
+        var result = await resp.json();
+        if (!result.ok) { bioShowMsg(result.msg || 'Could not register device.', false); return; }
+        document.getElementById('bioNewKeyValue').textContent = result.api_key;
+        document.getElementById('bioNewKeyBox').style.display = 'block';
+        bioShowMsg(result.msg, true);
+        setTimeout(function() { location.reload(); }, 2500);
+      } catch (err) {
+        bioShowMsg('Something went wrong. Please try again.', false);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    async function bioRemoveDevice(serial, btn) {
+      if (!confirm('Remove device "' + serial + '"? Its employee enrollments will also be removed.')) return;
+      btn.disabled = true;
+      try {
+        var resp = await fetch("{{ tpath('/api/biometric/devices/') }}" + encodeURIComponent(serial), { method: 'DELETE' });
+        var result = await resp.json();
+        if (!result.ok) { bioShowMsg(result.msg || 'Could not remove device.', false); btn.disabled = false; return; }
+        bioShowMsg(result.msg, true);
+        setTimeout(function() { location.reload(); }, 700);
+      } catch (err) {
+        bioShowMsg('Something went wrong. Please try again.', false);
+        btn.disabled = false;
+      }
+    }
+
+    var bioMapLoaded = {};
+    async function bioLoadMappings(serial) {
+      var body = document.getElementById('bioMapBody-' + serial);
+      try {
+        var resp = await fetch("{{ tpath('/api/biometric/devices/') }}" + encodeURIComponent(serial) + "/mappings");
+        var result = await resp.json();
+        if (!result.ok || !result.mappings.length) {
+          body.innerHTML = '<div class="mapping-empty">No employees enrolled on this device yet.</div>';
+          return;
+        }
+        body.innerHTML = result.mappings.map(function(m) {
+          return '<div class="mapping-item">' +
+            '<span>PIN <strong>' + m.device_pin + '</strong> &rarr; ' + m.name + ' (' + m.employee_id + ')</span>' +
+            '<button class="btn btn-sm btn-danger" onclick="bioRemoveMapping(\'' + serial + '\', \'' + m.device_pin + '\', this)"><i class="ti ti-x"></i></button>' +
+          '</div>';
+        }).join('');
+      } catch (err) {
+        body.innerHTML = '<div class="mapping-empty">Couldn\'t load enrollments right now.</div>';
+      }
+    }
+
+    function bioToggleMappings(serial) {
+      var row = document.getElementById('bioMap-' + serial);
+      var isOpen = row.style.display === 'table-row';
+      row.style.display = isOpen ? 'none' : 'table-row';
+      if (!isOpen) bioLoadMappings(serial);
+    }
+
+    async function bioEnroll(serial, btn) {
+      var pin = document.getElementById('bioPin-' + serial).value.trim();
+      var empId = document.getElementById('bioEmp-' + serial).value;
+      if (!pin || !empId) { bioShowMsg('Pick an employee and enter the device PIN.', false); return; }
+      btn.disabled = true;
+      try {
+        var resp = await fetch("{{ tpath('/api/biometric/devices/') }}" + encodeURIComponent(serial) + "/enroll", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_pin: pin, employee_id: empId }),
+        });
+        var result = await resp.json();
+        if (!result.ok) { bioShowMsg(result.msg || 'Could not enroll employee.', false); return; }
+        document.getElementById('bioPin-' + serial).value = '';
+        document.getElementById('bioEmp-' + serial).value = '';
+        bioLoadMappings(serial);
+        bioShowMsg('Enrolled.', true);
+      } catch (err) {
+        bioShowMsg('Something went wrong. Please try again.', false);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function bioRemoveMapping(serial, pin, btn) {
+      btn.disabled = true;
+      try {
+        var resp = await fetch("{{ tpath('/api/biometric/devices/') }}" + encodeURIComponent(serial) + "/mappings/" + encodeURIComponent(pin), { method: 'DELETE' });
+        var result = await resp.json();
+        if (!result.ok) { bioShowMsg(result.msg || 'Could not remove enrollment.', false); btn.disabled = false; return; }
+        bioLoadMappings(serial);
+      } catch (err) {
+        bioShowMsg('Something went wrong. Please try again.', false);
+        btn.disabled = false;
+      }
+    }
+  </script>
+{% endblock %}

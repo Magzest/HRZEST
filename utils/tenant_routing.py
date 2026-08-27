@@ -30,6 +30,12 @@ RESERVED_PATH_SEGMENTS = frozenset({
     # /webhooks/<provider>, dispatching to whichever feature registered
     # for that provider/event)
     "webhooks",
+    # physical biometric terminal push protocol (blueprints/biometric.py) --
+    # same posture as "webhooks" above: the device identifies itself via
+    # SN=<serial> in the query string, not a tenant URL slug, and a tenant
+    # naming their subdomain "iclock" would otherwise silently break every
+    # registered terminal by having this segment rewritten out from under it.
+    "iclock",
     # operator consoles (excluded from this migration entirely)
     "super_admin", "superadmin", "sp_admin",
     # legacy reserved words carried over from the subdomain era

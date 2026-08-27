@@ -75,17 +75,25 @@ class TestEmployeeDetailMasking:
         cur.execute("UPDATE admin_users SET role='manager' WHERE username=%s", (seed_admin["username"],))
         db_engine.commit()
         cur.close()
-        _admin_session(client, seed_admin["username"], role="manager")
-        resp = client.get(f"/employee_detail/{pii_employee}")
-        assert resp.status_code == 200
-        assert b"123456789012" not in resp.data
-        assert b"ABCDE1234F" not in resp.data
-        assert b"9012" in resp.data  # last 4 digits still shown
-        assert b"Restricted" in resp.data  # salary hidden message
-        cur = db_engine.cursor()
-        cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
-        db_engine.commit()
-        cur.close()
+        try:
+            _admin_session(client, seed_admin["username"], role="manager")
+            resp = client.get(f"/employee_detail/{pii_employee}")
+            assert resp.status_code == 200
+            assert b"123456789012" not in resp.data
+            assert b"ABCDE1234F" not in resp.data
+            assert b"9012" in resp.data  # last 4 digits still shown
+            assert b"Restricted" in resp.data  # salary hidden message
+        finally:
+            # Not wrapping this in try/finally used to mean any assertion
+            # failure above left 'test_admin' permanently stuck on role
+            # 'manager' for the rest of the test session -- every later
+            # test assuming a plain admin login (seed_admin + a normal
+            # /login POST) would then silently get a degraded session
+            # instead of failing loudly at the point of corruption.
+            cur = db_engine.cursor()
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
 
     def test_soc_analyst_sees_masked_pii(self, client, soc_role_admin, pii_employee):
         _admin_session(client, soc_role_admin["username"], role="soc_analyst")
@@ -114,14 +122,16 @@ class TestEmployeeProfileMasking:
         cur.execute("UPDATE admin_users SET role='manager' WHERE username=%s", (seed_admin["username"],))
         db_engine.commit()
         cur.close()
-        _admin_session(client, seed_admin["username"], role="manager")
-        resp = client.get(f"/employee_profile/{pii_employee}")
-        assert resp.status_code == 200
-        assert b"Restricted" in resp.data
-        cur = db_engine.cursor()
-        cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
-        db_engine.commit()
-        cur.close()
+        try:
+            _admin_session(client, seed_admin["username"], role="manager")
+            resp = client.get(f"/employee_profile/{pii_employee}")
+            assert resp.status_code == 200
+            assert b"Restricted" in resp.data
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
 
 
 class TestPayrollBulkRoutesAdminOnly:
