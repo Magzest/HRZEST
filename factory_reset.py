@@ -39,7 +39,7 @@ _WIPE_TABLES = [
     "security_events", "login_attempts", "api_tokens", "known_login_ips",
     "audit_logs", "session_risk", "mobile_biometric_proofs",
     # Core people data
-    "attendance", "employees", "admin_users", "regularization_requests",
+    "attendance", "employees", "admin_users",
     "compoff_balance",
     # Payroll
     "salary_config", "payroll_config", "payroll_runs", "employee_incentives",

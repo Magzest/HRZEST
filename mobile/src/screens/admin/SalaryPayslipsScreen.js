@@ -22,7 +22,7 @@ import SalaryStatsGrid from "../../components/admin/salary/SalaryStatsGrid";
 import PayrollActionButtons from "../../components/admin/salary/PayrollActionButtons";
 import EmployeeSalaryList from "../../components/admin/salary/EmployeeSalaryList";
 import SALARY_THEME from "../../constants/salaryTheme";
-import { fetchSalaryReport, fetchEmployees, sendPayslipEmail } from "../../api/client";
+import { fetchSalaryReport, fetchEmployees, sendPayslipEmail, fetchPayrollStatus, lockPayroll, unlockPayroll } from "../../api/client";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
 const MONTHS = [
@@ -53,6 +53,8 @@ export default function SalaryPayslipsScreen({ navigation }) {
   });
 
   const [employees, setEmployees] = useState([]);
+  const [payrollLocked, setPayrollLocked] = useState(false);
+  const [payrollLoading, setPayrollLoading] = useState(false);
 
   useEffect(() => {
     loadSalaryData();
@@ -61,10 +63,12 @@ export default function SalaryPayslipsScreen({ navigation }) {
   const loadSalaryData = async () => {
     try {
       const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
-      const [salaryRes, empRes] = await Promise.all([
+      const [salaryRes, empRes, statusRes] = await Promise.all([
         fetchSalaryReport(selectedYear, monthIdx),
         fetchEmployees().catch(() => null),
+        fetchPayrollStatus(selectedYear, monthIdx).catch(() => null),
       ]);
+      setPayrollLocked(!!statusRes?.data?.locked);
       if (salaryRes?.data?.ok && Array.isArray(salaryRes.data.salary_data)) {
         const deptByEmpId = {};
         const roleByEmpId = {};
@@ -109,11 +113,64 @@ export default function SalaryPayslipsScreen({ navigation }) {
   };
 
   const handleGeneratePayroll = () => {
-    // No Bearer-token-compatible endpoint exists to generate/lock a payroll
-    // run from mobile yet -- only a session-based web route does this.
+    if (payrollLoading) return;
+    const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+    const yearNum = Number(selectedYear);
+
+    if (payrollLocked) {
+      Alert.alert(
+        "Payroll Locked",
+        `Payroll for ${selectedMonth} ${selectedYear} is already locked. Unlock it to allow further changes?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Unlock",
+            style: "destructive",
+            onPress: async () => {
+              setPayrollLoading(true);
+              try {
+                const res = await unlockPayroll(yearNum, monthIdx);
+                if (res?.data?.ok) {
+                  setPayrollLocked(false);
+                  Alert.alert("Unlocked", res.data.msg);
+                } else {
+                  Alert.alert("Failed", res?.data?.msg || "Could not unlock payroll.");
+                }
+              } catch (e) {
+                Alert.alert("Failed", e?.response?.data?.msg || "Could not unlock payroll.");
+              }
+              setPayrollLoading(false);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
-      "Not Available on Mobile Yet",
-      "Generating and locking a payroll run is only available from the web admin dashboard for now."
+      "Lock Payroll",
+      `Lock payroll for ${selectedMonth} ${selectedYear}? This finalizes the month's payroll run.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Lock",
+          onPress: async () => {
+            setPayrollLoading(true);
+            try {
+              const res = await lockPayroll(yearNum, monthIdx);
+              if (res?.data?.ok) {
+                setPayrollLocked(true);
+                Alert.alert("Locked", res.data.msg);
+              } else {
+                Alert.alert("Failed", res?.data?.msg || "Could not lock payroll.");
+              }
+            } catch (e) {
+              Alert.alert("Failed", e?.response?.data?.msg || "Could not lock payroll.");
+            }
+            setPayrollLoading(false);
+          },
+        },
+      ]
     );
   };
 

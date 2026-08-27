@@ -9,7 +9,7 @@ values are always %s-bound params.
 import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
-from utils.auth import admin_required, employee_required
+from utils.auth import admin_required, employee_required, employee_api_required
 from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings
 from extensions import limiter
 
@@ -551,6 +551,80 @@ def performance_employee_comment():
     db.close()
     flash("Comment submitted.", "success")
     return redirect(tpath("/my_performance"))
+
+
+@performance_bp.route("/api/employee/performance", methods=["GET"])
+@employee_api_required
+def api_my_performance():
+    """Bearer-token twin of my_performance() -- same query shape, JSON
+    instead of a rendered template."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+
+    cursor.execute("""
+        SELECT pr.id, pr.quarter, pr.year, pr.overall_rating, pr.reviewer_feedback,
+               pr.employee_comment, pr.status, pr.updated_at
+        FROM performance_reviews pr
+        WHERE pr.employee_id=%s ORDER BY pr.year DESC, pr.quarter DESC
+    """, (emp_id,))
+    reviews = cursor.fetchall()
+
+    review_ids = [rev[0] for rev in reviews]
+    kpis_by_review = {rid: [] for rid in review_ids}
+    if review_ids:
+        cursor.execute("""
+            SELECT review_id, kpi_title, target, achievement, weight, rating, comments
+            FROM performance_kpis WHERE review_id = ANY(%s) ORDER BY id
+        """, (review_ids,))
+        for row in cursor.fetchall():
+            kpis_by_review[row[0]].append({
+                "kpi_title": row[1], "target": row[2], "achievement": row[3],
+                "weight": row[4], "rating": row[5], "comments": row[6],
+            })
+    cursor.close()
+    db.close()
+
+    return jsonify({
+        "ok": True,
+        "rating_labels": RATING_LABELS,
+        "reviews": [
+            {
+                "id": rev[0], "quarter": rev[1], "year": rev[2],
+                "overall_rating": rev[3], "overall_rating_label": RATING_LABELS.get(rev[3], "Not Rated"),
+                "reviewer_feedback": rev[4], "employee_comment": rev[5],
+                "status": rev[6], "updated_at": rev[7].isoformat() if rev[7] else None,
+                "kpis": kpis_by_review[rev[0]],
+            }
+            for rev in reviews
+        ],
+    })
+
+
+@performance_bp.route("/api/employee/performance/comment", methods=["POST"])
+@employee_api_required
+def api_my_performance_comment():
+    """Bearer-token twin of performance_employee_comment()."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    rev_id = data.get("review_id")
+    comment = (data.get("comment") or "").strip()
+    if not rev_id:
+        return jsonify({"ok": False, "msg": "review_id is required."}), 400
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    # Only allow comment on own review
+    cursor.execute("UPDATE performance_reviews SET employee_comment=%s WHERE id=%s AND employee_id=%s",
+                   (comment, rev_id, emp_id))
+    updated = cursor.rowcount
+    db.commit()
+    cursor.close()
+    db.close()
+    if not updated:
+        return jsonify({"ok": False, "msg": "Review not found."}), 404
+    return jsonify({"ok": True, "msg": "Comment submitted."})
 
 
 @performance_bp.route("/performance_export")

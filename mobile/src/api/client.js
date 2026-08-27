@@ -63,6 +63,10 @@ export const markAttendance = (date, records) =>
 
 export const fetchHolidays = () => client.get('/api/holidays');
 
+export const addHoliday = (date, name) => client.post('/api/holidays', { date, name });
+
+export const deleteHoliday = (holidayId) => client.delete(`/api/holidays/${holidayId}`);
+
 export const fetchShifts = () => client.get('/api/shifts');
 
 export const createShift = (name, start_time, half_time, end_time) =>
@@ -186,6 +190,39 @@ export const fetchEmployeeHolidays = () => client.get('/api/employee/holidays');
 
 export const fetchEmployeeProfile = () => client.get('/api/employee/profile');
 
+export const updateMyProfile = (fields) => client.post('/api/employee/profile', fields);
+
+export const updateMyBankDetails = (fields) => client.post('/api/employee/bank_details', fields);
+
+export const fetchMyExperience = () => client.get('/api/employee/experience');
+
+export const addMyExperience = (entry) => client.post('/api/employee/experience', entry);
+
+export const deleteMyExperience = (entryId) => client.delete(`/api/employee/experience/${entryId}`);
+
+export const fetchMyEducation = () => client.get('/api/employee/education');
+
+export const addMyEducation = (entry) => client.post('/api/employee/education', entry);
+
+export const deleteMyEducation = (entryId) => client.delete(`/api/employee/education/${entryId}`);
+
+export const fetchMyOnboarding = (obId) =>
+  client.get('/api/employee/onboarding', { params: obId ? { ob_id: obId } : {} });
+
+export const completeMyOnboardingTask = (taskId, obId, employeeNote = '') => {
+  const form = new FormData();
+  form.append('ob_id', obId);
+  form.append('employee_note', employeeNote);
+  return client.post(`/api/employee/onboarding/task/${taskId}/done`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const fetchMyPerformance = () => client.get('/api/employee/performance');
+
+export const submitMyPerformanceComment = (reviewId, comment) =>
+  client.post('/api/employee/performance/comment', { review_id: reviewId, comment });
+
 // ── Notifications ──────────────────────────────────────────────────
 export const fetchNotifications = () => client.get('/api/notifications');
 export const markNotificationsRead = () => client.post('/api/notifications/mark_read');
@@ -242,6 +279,13 @@ export const updateSettings = (settingsData) => client.post('/api/settings/updat
 // ── Additional Parity APIs ──────────────────────────────────────────
 export const sendPayslipEmail = (empId, year, month) =>
   client.post('/api/send_salary_email', { emp_id: empId, year, month });
+
+export const fetchPayrollStatus = (year, month) =>
+  client.get('/api/payroll/status', { params: { year, month } });
+
+export const lockPayroll = (year, month) => client.post('/api/payroll/lock', { year, month });
+
+export const unlockPayroll = (year, month) => client.post('/api/payroll/unlock', { year, month });
 
 // Field names match what blueprints/performance.py's api_submit_performance_review()
 // (and the web's performance_save_review()) actually store -- quarter/year
@@ -306,11 +350,6 @@ export const deleteDocument = (docId) => client.delete(`/api/documents/${docId}`
 export const broadcastNotification = (title, message, audience = 'all') =>
   client.post('/api/notifications/broadcast', { title, message, audience });
 
-// submitAttendanceRegularization removed -- /api/employee/regularization
-// doesn't exist anywhere in the backend (Bearer or session-based). The
-// regularization_requests table (app.py) is scaffolded but no route was
-// ever built against it on either web or mobile, and no screen called
-// this export. A real feature here needs a backend route first.
 export const addDepartment = (name, code = '') =>
   client.post('/api/departments/add', { name, code });
 

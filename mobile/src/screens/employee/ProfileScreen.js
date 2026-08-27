@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../store/AuthContext";
 import * as ImagePicker from "expo-image-picker";
-import { fetchEmployeeProfile, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
+import { fetchEmployeeProfile, updateMyProfile, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import ProfileImageCard from "../../components/profile/ProfileImageCard";
@@ -150,12 +150,30 @@ export default function ProfileScreen() {
   );
 
   const handleSaveProfile = async () => {
-    // No Bearer-token-compatible endpoint exists to update profile details
-    // from mobile yet -- only a session-based web route does this.
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Editing profile details is only available from the web employee portal for now."
-    );
+    // profileData already carries every field from the last fetch (see the
+    // `...p` spread in loadProfile above) -- name/email aren't part of
+    // what this endpoint accepts (the backend only ever writes the fields
+    // below, same as the web portal's own form), so they're edited here
+    // for display continuity but not sent.
+    setSubmitting(true);
+    try {
+      const res = await updateMyProfile({
+        ...profileData,
+        phone: editPhone,
+        address: editAddress,
+        emergency_contact_phone: editEmergency,
+      });
+      if (res?.data?.ok) {
+        setEditModalVisible(false);
+        await loadProfile();
+        Alert.alert("Saved", "Profile updated.");
+      } else {
+        Alert.alert("Save Failed", res?.data?.msg || "Could not update your profile.");
+      }
+    } catch (e) {
+      Alert.alert("Save Failed", e?.response?.data?.msg || "Could not update your profile.");
+    }
+    setSubmitting(false);
   };
 
   const handleChangePhoto = async () => {

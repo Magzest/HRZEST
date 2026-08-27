@@ -13,14 +13,19 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../store/AuthContext";
-import { fetchEmployeeProfile } from "../../api/client";
+import { fetchEmployeeProfile, updateMyProfile } from "../../api/client";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import DetailCard from "../../components/profile/DetailCard";
 
 export default function ContactScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  // See PersonalInfoScreen.js's rawProfile comment -- the update endpoint
+  // replaces the whole profile row, so unedited fields have to be
+  // round-tripped from the last fetch rather than omitted.
+  const [rawProfile, setRawProfile] = useState({});
 
   const [contactInfo, setContactInfo] = useState({
     workEmail: user?.email || "",
@@ -44,6 +49,7 @@ export default function ContactScreen() {
       .then((res) => {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
+          setRawProfile(p);
           const updated = {
             workEmail: p.email || user?.email || "",
             phone: p.phone || user?.phone || "Not Provided",
@@ -66,13 +72,33 @@ export default function ContactScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = () => {
-    // No Bearer-token-compatible endpoint exists to update contact details
-    // from mobile yet -- only a session-based web route does this.
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Updating contact details is only available from the web employee portal for now."
-    );
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await updateMyProfile({
+        ...rawProfile,
+        phone: editPhone,
+        address: editAddress,
+        city: editCity,
+        state: editState,
+        pincode: editPincode,
+      });
+      if (res?.data?.ok) {
+        setContactInfo((prev) => ({
+          ...prev, phone: editPhone, address: editAddress, city: editCity, state: editState, pincode: editPincode,
+        }));
+        setRawProfile((prev) => ({
+          ...prev, phone: editPhone, address: editAddress, city: editCity, state: editState, pincode: editPincode,
+        }));
+        setModalVisible(false);
+        Alert.alert("Saved", "Contact details updated.");
+      } else {
+        Alert.alert("Save Failed", res?.data?.msg || "Could not update contact details.");
+      }
+    } catch (e) {
+      Alert.alert("Save Failed", e?.response?.data?.msg || "Could not update contact details.");
+    }
+    setSaving(false);
   };
 
   return (
@@ -137,8 +163,12 @@ export default function ContactScreen() {
             <Text style={styles.inputLabel}>PINCODE</Text>
             <TextInput style={styles.input} value={editPincode} onChangeText={setEditPincode} keyboardType="number-pad" />
 
-            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave}>
-              <Text style={styles.saveModalBtnText}>Save Contact Details</Text>
+            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveModalBtnText}>Save Contact Details</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

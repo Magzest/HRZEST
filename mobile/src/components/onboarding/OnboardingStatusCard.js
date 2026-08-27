@@ -12,7 +12,9 @@ export default function OnboardingStatusCard({
   employeeName,
   employeeId,
   status,
-  progress = 72,
+  progress = 0,
+  department = "—",
+  joinedDate = "—",
 }) {
   const statusColor =
     status === "Completed"
@@ -96,23 +98,7 @@ export default function OnboardingStatusCard({
           </Text>
 
           <Text style={styles.itemValue}>
-            Engineering
-          </Text>
-        </View>
-
-        <View style={styles.item}>
-          <Ionicons
-            name="person-outline"
-            size={18}
-            color="#BFD6FF"
-          />
-
-          <Text style={styles.itemTitle}>
-            Manager
-          </Text>
-
-          <Text style={styles.itemValue}>
-            Rakesh Sharma
+            {department}
           </Text>
         </View>
 
@@ -128,7 +114,7 @@ export default function OnboardingStatusCard({
           </Text>
 
           <Text style={styles.itemValue}>
-            15 Jun 2026
+            {joinedDate}
           </Text>
         </View>
       </View>

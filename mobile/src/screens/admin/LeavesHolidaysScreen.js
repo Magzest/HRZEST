@@ -22,6 +22,8 @@ import {
   leaveAction,
   fetchCompOff,
   fetchHolidays,
+  addHoliday,
+  deleteHoliday,
 } from "../../api/client";
 import THEME from "../../constants/theme";
 
@@ -94,22 +96,50 @@ export default function LeavesHolidaysScreen({ navigation }) {
     }
   };
 
-  // No Bearer-token-compatible endpoint exists to add/delete holidays from
-  // mobile -- /api/holidays/add and /api/holidays/<id>/delete don't exist
-  // anywhere in the backend. These calls were guaranteed to fail every
-  // time; staying honest about that instead of attempting them.
-  const handleAddHoliday = () => {
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Adding a company holiday is only available from the web admin dashboard for now."
-    );
+  const [savingHoliday, setSavingHoliday] = useState(false);
+
+  const handleAddHoliday = async () => {
+    if (!holidayName.trim() || !holidayDate.trim()) {
+      Alert.alert("Missing Details", "Holiday name and date are both required.");
+      return;
+    }
+    setSavingHoliday(true);
+    try {
+      const res = await addHoliday(holidayDate.trim(), holidayName.trim());
+      if (res?.data?.ok) {
+        setAddHolidayModalVisible(false);
+        setHolidayName("");
+        setHolidayDate("");
+        loadData();
+      } else {
+        Alert.alert("Could Not Add", res?.data?.msg || "Please check the date and try again.");
+      }
+    } catch (e) {
+      Alert.alert("Could Not Add", e?.response?.data?.msg || "Please check the date and try again.");
+    }
+    setSavingHoliday(false);
   };
 
-  const handleDeleteHoliday = () => {
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Removing a company holiday is only available from the web admin dashboard for now."
-    );
+  const handleDeleteHoliday = (holiday) => {
+    Alert.alert("Remove Holiday", `Remove "${holiday.name}" from the company calendar?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const res = await deleteHoliday(holiday.id);
+            if (res?.data?.ok) {
+              setHolidays((prev) => prev.filter((h) => h.id !== holiday.id));
+            } else {
+              Alert.alert("Could Not Remove", res?.data?.msg || "Please try again.");
+            }
+          } catch (e) {
+            Alert.alert("Could Not Remove", e?.response?.data?.msg || "Please try again.");
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -252,7 +282,7 @@ export default function LeavesHolidaysScreen({ navigation }) {
                         </View>
                       </View>
 
-                      <TouchableOpacity onPress={() => handleDeleteHoliday(h.id)}>
+                      <TouchableOpacity onPress={() => handleDeleteHoliday(h)}>
                         <Ionicons name="trash-outline" size={20} color="#EF4444" />
                       </TouchableOpacity>
                     </View>
@@ -290,8 +320,12 @@ export default function LeavesHolidaysScreen({ navigation }) {
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleAddHoliday}>
-                  <Text style={styles.modalSubmitText}>Add Holiday</Text>
+                <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleAddHoliday} disabled={savingHoliday}>
+                  {savingHoliday ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.modalSubmitText}>Add Holiday</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

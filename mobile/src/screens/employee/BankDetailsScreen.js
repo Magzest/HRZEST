@@ -13,14 +13,20 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../store/AuthContext";
-import { fetchEmployeeProfile } from "../../api/client";
+import { fetchEmployeeProfile, updateMyBankDetails } from "../../api/client";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import DetailCard from "../../components/profile/DetailCard";
 
 export default function BankDetailsScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  // The bank-details endpoint replaces aadhar/pan/bank_name/bank_account/
+  // bank_ifsc/uan_number together in one call -- uan_number has no field
+  // in this screen's UI, so it's round-tripped from the last fetch rather
+  // than silently nulled out on every save.
+  const [rawProfile, setRawProfile] = useState({});
 
   const [bankInfo, setBankInfo] = useState({
     accountName: user?.name || "",
@@ -43,6 +49,7 @@ export default function BankDetailsScreen() {
       .then((res) => {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
+          setRawProfile(p);
           const updated = {
             accountName: p.name || user?.name || "",
             bankName: p.bank_name || user?.bank_name || "Not Provided",
@@ -64,16 +71,31 @@ export default function BankDetailsScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = () => {
-    // No Bearer-token-compatible endpoint exists to update bank/PAN/Aadhar
-    // details from mobile yet -- only a session-based web route does this.
-    // Given how sensitive this data is, silently discarding the edit while
-    // claiming success (the previous behavior) would be actively harmful,
-    // so this stays an honest "not yet" instead.
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Updating bank and identity details is only available from the web employee portal for now."
-    );
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await updateMyBankDetails({
+        aadhar_number: editAadharNumber,
+        pan_number: editPanNumber,
+        bank_name: editBankName,
+        bank_account: editAccountNumber,
+        bank_ifsc: editIfscCode,
+        uan_number: rawProfile.uan_number,
+      });
+      if (res?.data?.ok) {
+        setBankInfo((prev) => ({
+          ...prev, bankName: editBankName, accountNumber: editAccountNumber,
+          ifscCode: editIfscCode, panNumber: editPanNumber, aadharNumber: editAadharNumber,
+        }));
+        setModalVisible(false);
+        Alert.alert("Saved", "Bank and identity details updated.");
+      } else {
+        Alert.alert("Save Failed", res?.data?.msg || "Could not update bank details.");
+      }
+    } catch (e) {
+      Alert.alert("Save Failed", e?.response?.data?.msg || "Could not update bank details.");
+    }
+    setSaving(false);
   };
 
   return (
@@ -141,8 +163,12 @@ export default function BankDetailsScreen() {
             <Text style={styles.inputLabel}>AADHAR NUMBER</Text>
             <TextInput style={styles.input} value={editAadharNumber} onChangeText={setEditAadharNumber} keyboardType="number-pad" />
 
-            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave}>
-              <Text style={styles.saveModalBtnText}>Save Bank Details</Text>
+            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveModalBtnText}>Save Bank Details</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

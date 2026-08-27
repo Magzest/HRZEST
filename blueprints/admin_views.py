@@ -1510,7 +1510,7 @@ def edit_company(cid):
                     "resignation_requests", "tickets", "employee_incentives",
                     "employee_experience", "employee_education", "leave_balances",
                     "employee_documents", "performance_reviews", "overtime_records",
-                    "regularization_requests", "compoff_balance", "employee_onboarding",
+                    "compoff_balance", "employee_onboarding",
                 ]
 
                 # One UPDATE per related table for the whole renamed batch (via a

@@ -13,14 +13,21 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../store/AuthContext";
-import { fetchEmployeeProfile } from "../../api/client";
+import { fetchEmployeeProfile, updateMyProfile } from "../../api/client";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import DetailCard from "../../components/profile/DetailCard";
 
 export default function PersonalInfoScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  // The update endpoint replaces every profile field in one call (it
+  // mirrors the web form, which submits the whole section at once), so
+  // the raw fetch response is kept here and merged with this screen's own
+  // edits at save time -- otherwise saving gender/dob/blood group here
+  // would silently null out phone/address/bank details/etc.
+  const [rawProfile, setRawProfile] = useState({});
 
   // marital_status, nationality and father_name aren't tracked anywhere in
   // this database (no such columns on the employees table), so they've
@@ -43,6 +50,7 @@ export default function PersonalInfoScreen() {
       .then((res) => {
         if (res?.data?.ok && res?.data?.profile) {
           const p = res.data.profile;
+          setRawProfile(p);
           const updated = {
             employeeId: p.employee_id || user?.employeeId || "",
             fullName: p.name || user?.name || "",
@@ -60,14 +68,27 @@ export default function PersonalInfoScreen() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleSave = () => {
-    // No Bearer-token-compatible endpoint exists to update personal
-    // information from mobile yet -- only a session-based web route does
-    // this.
-    Alert.alert(
-      "Not Available on Mobile Yet",
-      "Updating personal information is only available from the web employee portal for now."
-    );
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await updateMyProfile({
+        ...rawProfile,
+        gender: editGender,
+        dob: editDob,
+        blood_group: editBloodGroup,
+      });
+      if (res?.data?.ok) {
+        setProfile((prev) => ({ ...prev, gender: editGender, dob: editDob, bloodGroup: editBloodGroup }));
+        setRawProfile((prev) => ({ ...prev, gender: editGender, dob: editDob, blood_group: editBloodGroup }));
+        setModalVisible(false);
+        Alert.alert("Saved", "Personal information updated.");
+      } else {
+        Alert.alert("Save Failed", res?.data?.msg || "Could not update personal information.");
+      }
+    } catch (e) {
+      Alert.alert("Save Failed", e?.response?.data?.msg || "Could not update personal information.");
+    }
+    setSaving(false);
   };
 
   return (
@@ -127,8 +148,12 @@ export default function PersonalInfoScreen() {
             <Text style={styles.inputLabel}>BLOOD GROUP</Text>
             <TextInput style={styles.input} value={editBloodGroup} onChangeText={setEditBloodGroup} placeholder="e.g. O+" />
 
-            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave}>
-              <Text style={styles.saveModalBtnText}>Save Personal Details</Text>
+            <TouchableOpacity style={styles.saveModalBtn} onPress={handleSave} disabled={saving}>
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveModalBtnText}>Save Personal Details</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

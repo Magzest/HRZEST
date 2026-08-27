@@ -8,7 +8,7 @@ import psycopg2
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from werkzeug.utils import secure_filename
-from utils.auth import admin_required, employee_required, api_required
+from utils.auth import admin_required, employee_required, api_required, employee_api_required
 from utils.helpers import tpath, get_company_settings, _safe_app_url, _db
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async
 from extensions import limiter
@@ -1409,3 +1409,129 @@ def my_onboarding_task_done():
     db.close()
     flash("Task marked as done!", "success")
     return redirect(tpath(f"/my_onboarding?ob_id={ob_id}"))
+
+
+@onboarding_bp.route("/api/employee/onboarding", methods=["GET"])
+@employee_api_required
+def api_my_onboarding():
+    """Bearer-token twin of my_onboarding() -- same query shape, JSON
+    instead of a rendered template. Optional ?ob_id= selects a specific
+    onboarding record's tasks; defaults to the most recent one, matching
+    the web page's own default."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor()
+    cursor.execute("""
+        SELECT eo.id, ot.name, eo.assigned_date, eo.due_date, eo.status,
+               COUNT(eot.id) AS total, SUM(CASE WHEN eot.status='Done' THEN 1 ELSE 0 END) AS done
+        FROM employee_onboarding eo
+        JOIN onboarding_templates ot ON ot.id=eo.template_id
+        LEFT JOIN employee_onboarding_tasks eot ON eot.onboarding_id=eo.id
+        WHERE eo.employee_id=%s
+        GROUP BY eo.id, ot.name, eo.assigned_date, eo.due_date, eo.status ORDER BY eo.assigned_date DESC
+    """, (emp_id,))
+    onboardings = cursor.fetchall()
+
+    selected_ob_id = request.args.get("ob_id")
+    if not selected_ob_id and onboardings:
+        selected_ob_id = onboardings[0][0]
+
+    tasks = []
+    if selected_ob_id:
+        cursor.execute("""SELECT id, task_title, task_description, requires_document,
+                                 due_days, status, completed_at, document_path, employee_note
+                          FROM employee_onboarding_tasks
+                          WHERE onboarding_id=%s AND employee_id=%s ORDER BY id""",
+                       (selected_ob_id, emp_id))
+        tasks = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    return jsonify({
+        "ok": True,
+        "onboardings": [
+            {"id": ob[0], "template_name": ob[1],
+             "assigned_date": str(ob[2]) if ob[2] else None,
+             "due_date": str(ob[3]) if ob[3] else None,
+             "status": ob[4], "total_tasks": ob[5], "done_tasks": int(ob[6] or 0)}
+            for ob in onboardings
+        ],
+        "selected_ob_id": int(selected_ob_id) if selected_ob_id else None,
+        "tasks": [
+            {"id": t[0], "task_title": t[1], "task_description": t[2],
+             "requires_document": bool(t[3]), "due_days": t[4], "status": t[5],
+             "completed_at": t[6].isoformat() if t[6] else None,
+             "document_path": t[7], "employee_note": t[8]}
+            for t in tasks
+        ],
+    })
+
+
+@onboarding_bp.route("/api/employee/onboarding/task/<int:task_id>/done", methods=["POST"])
+@employee_api_required
+def api_my_onboarding_task_done(task_id):
+    """Bearer-token twin of my_onboarding_task_done() -- same auto-complete
+    and admin-notification-email side effects, form-data POST (so mobile
+    can attach a document the same way the web form does)."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor()
+    ob_id = request.form.get("ob_id")
+    employee_note = request.form.get("employee_note", "").strip()[:500]
+
+    cursor.execute("SELECT employee_id, requires_document FROM employee_onboarding_tasks WHERE id=%s", (task_id,))
+    row = cursor.fetchone()
+    if not row or row[0] != emp_id:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": "Not authorised."}), 403
+
+    doc_path = None
+    if 'document' in request.files:
+        f = request.files['document']
+        if f and f.filename:
+            import os as _os
+            upload_dir = _os.path.join("static", "onboarding_docs")
+            _os.makedirs(upload_dir, exist_ok=True)
+            safe_name = f"{emp_id}_{task_id}_{f.filename.replace(' ','_')}"
+            f.save(_os.path.join(upload_dir, safe_name))
+            doc_path = safe_name
+
+    if doc_path:
+        cursor.execute("UPDATE employee_onboarding_tasks SET status='Done', completed_at=%s, document_path=%s, employee_note=%s WHERE id=%s",
+                       (datetime.datetime.now(), doc_path, employee_note or None, task_id))
+    else:
+        cursor.execute("UPDATE employee_onboarding_tasks SET status='Done', completed_at=%s, employee_note=%s WHERE id=%s",
+                       (datetime.datetime.now(), employee_note or None, task_id))
+
+    cursor.execute("SELECT COUNT(*) FROM employee_onboarding_tasks WHERE onboarding_id=%s AND status!='Done'", (ob_id,))
+    remaining = cursor.fetchone()[0]
+    if remaining == 0:
+        cursor.execute("UPDATE employee_onboarding SET status='Completed' WHERE id=%s", (ob_id,))
+    db.commit()
+
+    try:
+        cursor.execute("SELECT task_title FROM employee_onboarding_tasks WHERE id=%s", (task_id,))
+        _tt = cursor.fetchone()
+        task_title = _tt[0] if _tt else "Task"
+        cursor.execute("SELECT name FROM employees WHERE employee_id=%s", (emp_id,))
+        _en = cursor.fetchone()
+        emp_name_ob = _en[0] if _en else emp_id
+        _ecfg = get_email_config()
+        admin_email = _ecfg.get("from_email") if _ecfg else None
+        if admin_email and _ecfg:
+            _msg = (f"<p><strong>{emp_name_ob}</strong> has completed the onboarding task (via mobile):</p>"
+                    f"<p style='background:#f0fdf4;padding:10px;border-radius:8px;'><strong>{task_title}</strong></p>")
+            if remaining == 0:
+                _msg += "<p style='color:#16a34a;font-weight:700;'>🎉 All tasks completed -- onboarding marked as Complete!</p>"
+            else:
+                _msg += f"<p>{remaining} task(s) remaining.</p>"
+            send_email_async(admin_email, f"Onboarding Task Done -- {emp_name_ob}", _msg, _ecfg)
+    except Exception:
+        pass
+
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Task marked as done.", "remaining": remaining})

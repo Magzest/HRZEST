@@ -1516,7 +1516,8 @@ def api_employee_profile():
                e.pincode, e.about_me, e.emergency_contact_name, e.emergency_contact_phone,
                e.bank_name, e.bank_account, e.bank_ifsc, e.pan_number, e.aadhar_number,
                COALESCE(s.salary_per_day, 0), COALESCE(e.joining_date, e.date_of_joining),
-               COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), '')
+               COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), ''),
+               e.emergency_contact_relation, e.uan_number
         FROM employees e
         LEFT JOIN salary_config s ON e.employee_id = s.employee_id
         LEFT JOIN companies c ON e.company_id = c.id
@@ -1539,14 +1540,214 @@ def api_employee_profile():
             "state": decrypt_pii(row[11]), "pincode": decrypt_pii(row[12]),
             "about_me": row[13],
             "emergency_contact_name": decrypt_pii(row[14]), "emergency_contact_phone": decrypt_pii(row[15]),
+            "emergency_contact_relation": decrypt_pii(row[24]),
             "bank_name": decrypt_pii(row[16]), "bank_account": decrypt_pii(row[17]), "bank_ifsc": decrypt_pii(row[18]),
             "pan_number": decrypt_pii(row[19]), "aadhar_number": decrypt_pii(row[20]),
+            "uan_number": decrypt_pii(row[25]),
             "salary_per_day": float(row[21]),
             "join_date": str(row[22]) if row[22] else None,
             "company_name": row[23],
             "photo_url": f"/dataset/{row[0]}.jpg",
         },
     })
+
+
+@employee_portal_bp.route("/api/employee/profile", methods=["POST"])
+@employee_api_required
+def api_update_my_profile():
+    """Bearer-token twin of update_my_profile() -- same fields, same
+    encrypt-before-store behavior, JSON body instead of a form POST."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    fields = {
+        "phone": (data.get("phone") or "").strip() or None,
+        "gender": encrypt_pii((data.get("gender") or "").strip() or None),
+        "dob": encrypt_pii((data.get("dob") or "").strip() or None),
+        "blood_group": encrypt_pii((data.get("blood_group") or "").strip() or None),
+        "address": encrypt_pii((data.get("address") or "").strip() or None),
+        "city": encrypt_pii((data.get("city") or "").strip() or None),
+        "state": encrypt_pii((data.get("state") or "").strip() or None),
+        "pincode": encrypt_pii((data.get("pincode") or "").strip() or None),
+        "emergency_contact_name": encrypt_pii((data.get("emergency_contact_name") or "").strip() or None),
+        "emergency_contact_phone": encrypt_pii((data.get("emergency_contact_phone") or "").strip() or None),
+        "emergency_contact_relation": encrypt_pii((data.get("emergency_contact_relation") or "").strip() or None),
+        "about_me": (data.get("about_me") or "").strip() or None,
+    }
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        UPDATE employees SET
+            phone=%s, gender=%s, dob=%s, blood_group=%s,
+            address=%s, city=%s, state=%s, pincode=%s,
+            emergency_contact_name=%s, emergency_contact_phone=%s, emergency_contact_relation=%s,
+            about_me=%s
+        WHERE employee_id=%s
+    """, (*fields.values(), emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("update_profile", "employees", emp_id, "Updated via mobile")
+    return jsonify({"ok": True, "msg": "Profile updated."})
+
+
+@employee_portal_bp.route("/api/employee/bank_details", methods=["POST"])
+@employee_api_required
+def api_update_my_bank_details():
+    """Bearer-token twin of update_my_bank_details()."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    fields = {
+        "aadhar_number": encrypt_pii((data.get("aadhar_number") or "").strip() or None),
+        "pan_number": encrypt_pii((data.get("pan_number") or "").upper().strip() or None),
+        "bank_name": encrypt_pii((data.get("bank_name") or "").strip() or None),
+        "bank_account": encrypt_pii((data.get("bank_account") or "").strip() or None),
+        "bank_ifsc": encrypt_pii((data.get("bank_ifsc") or "").upper().strip() or None),
+        "uan_number": encrypt_pii((data.get("uan_number") or "").strip() or None),
+    }
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("""
+        UPDATE employees SET
+            aadhar_number=%s, pan_number=%s, bank_name=%s,
+            bank_account=%s, bank_ifsc=%s, uan_number=%s
+        WHERE employee_id=%s
+    """, (*fields.values(), emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("update_bank_details", "employees", emp_id, "Updated via mobile")
+    return jsonify({"ok": True, "msg": "Bank details updated."})
+
+
+@employee_portal_bp.route("/api/employee/experience", methods=["GET"])
+@employee_api_required
+def api_list_my_experience():
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT id, company, designation, from_year, to_year, is_current, description "
+        "FROM employee_experience WHERE employee_id=%s ORDER BY is_current DESC, from_year DESC",
+        (emp_id,)
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "experience": [
+        {"id": r[0], "company": r[1], "designation": r[2], "from_year": r[3],
+         "to_year": r[4], "is_current": bool(r[5]), "description": r[6]}
+        for r in rows
+    ]})
+
+
+@employee_portal_bp.route("/api/employee/experience", methods=["POST"])
+@employee_api_required
+def api_add_my_experience():
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    company = (data.get("company") or "").strip()
+    designation = (data.get("designation") or "").strip()
+    from_year = (data.get("from_year") or "").strip()
+    to_year = (data.get("to_year") or "").strip() or None
+    is_current = 1 if data.get("is_current") else 0
+    description = (data.get("description") or "").strip() or None
+    if not company or not designation or not from_year:
+        return jsonify({"ok": False, "msg": "company, designation, and from_year are required."}), 400
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "INSERT INTO employee_experience (employee_id, company, designation, from_year, to_year, is_current, description) "
+        "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        (emp_id, company, designation, from_year, to_year, is_current, description)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Experience added."})
+
+
+@employee_portal_bp.route("/api/employee/experience/<int:entry_id>", methods=["DELETE"])
+@employee_api_required
+def api_delete_my_experience(entry_id):
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("DELETE FROM employee_experience WHERE id=%s AND employee_id=%s", (entry_id, emp_id))
+    deleted = cursor.rowcount
+    db.commit()
+    cursor.close()
+    db.close()
+    if not deleted:
+        return jsonify({"ok": False, "msg": "Entry not found."}), 404
+    return jsonify({"ok": True, "msg": "Experience removed."})
+
+
+@employee_portal_bp.route("/api/employee/education", methods=["GET"])
+@employee_api_required
+def api_list_my_education():
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT id, degree, institution, year_of_passing, percentage "
+        "FROM employee_education WHERE employee_id=%s ORDER BY year_of_passing DESC",
+        (emp_id,)
+    )
+    rows = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "education": [
+        {"id": r[0], "degree": r[1], "institution": r[2], "year_of_passing": r[3], "percentage": r[4]}
+        for r in rows
+    ]})
+
+
+@employee_portal_bp.route("/api/employee/education", methods=["POST"])
+@employee_api_required
+def api_add_my_education():
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    degree = (data.get("degree") or "").strip()
+    institution = (data.get("institution") or "").strip()
+    year_of_passing = (data.get("year_of_passing") or "").strip() or None
+    percentage = (data.get("percentage") or "").strip() or None
+    if not degree or not institution:
+        return jsonify({"ok": False, "msg": "degree and institution are required."}), 400
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "INSERT INTO employee_education (employee_id, degree, institution, year_of_passing, percentage) "
+        "VALUES (%s,%s,%s,%s,%s)",
+        (emp_id, degree, institution, year_of_passing, percentage)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "msg": "Education added."})
+
+
+@employee_portal_bp.route("/api/employee/education/<int:entry_id>", methods=["DELETE"])
+@employee_api_required
+def api_delete_my_education(entry_id):
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("DELETE FROM employee_education WHERE id=%s AND employee_id=%s", (entry_id, emp_id))
+    deleted = cursor.rowcount
+    db.commit()
+    cursor.close()
+    db.close()
+    if not deleted:
+        return jsonify({"ok": False, "msg": "Entry not found."}), 404
+    return jsonify({"ok": True, "msg": "Education removed."})
 
 
 @employee_portal_bp.route("/api/employee/photo", methods=["POST"])

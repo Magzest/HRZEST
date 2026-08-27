@@ -17,7 +17,7 @@ from flask import (
 
 from extensions import app_log
 from database import get_db_connection
-from utils.auth import admin_required, employee_required, api_required, employee_api_required
+from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
 from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
@@ -168,6 +168,24 @@ def delete_holiday(hid):
     cursor.close()
     db.close()
     return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
+
+
+@leave_bp.route("/api/holidays/<int:hid>", methods=["DELETE"])
+@api_required
+@api_role_required("admin", "hr")
+def api_delete_holiday(hid):
+    """Bearer-token twin of delete_holiday() -- adding one already exists
+    at POST /api/holidays (api_holidays() below), deleting one didn't."""
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("DELETE FROM holidays WHERE id=%s", (hid,))
+    deleted = cursor.rowcount
+    db.commit()
+    cursor.close()
+    db.close()
+    if not deleted:
+        return jsonify({"ok": False, "msg": "Holiday not found."}), 404
+    return jsonify({"ok": True, "msg": "Holiday removed."})
 
 
 @leave_bp.route("/request_leave", methods=["POST"])
@@ -851,11 +869,11 @@ def api_holidays():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT date, name FROM holidays ORDER BY date")
+    cursor.execute("SELECT id, date, name FROM holidays ORDER BY date")
     rows = cursor.fetchall()
     cursor.close()
     db.close()
-    return jsonify({"ok": True, "holidays": [{"date": str(r[0]), "name": r[1]} for r in rows]})
+    return jsonify({"ok": True, "holidays": [{"id": r[0], "date": str(r[1]), "name": r[2]} for r in rows]})
 
 
 

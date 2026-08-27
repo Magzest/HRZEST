@@ -2,43 +2,78 @@ import React, { useState, useCallback } from "react";
 import {
   SafeAreaView,
   ScrollView,
+  View,
+  Text,
   StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import EmptyState from "../../components/ui/EmptyState";
 import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
-
 import OnboardingStatusCard from "../../components/onboarding/OnboardingStatusCard";
 
 import { useAuth } from "../../store/AuthContext";
-import { fetchEmployeeProfile } from "../../api/client";
+import { fetchEmployeeProfile, fetchMyOnboarding, completeMyOnboardingTask } from "../../api/client";
 
-// No Bearer-token-compatible endpoint exposes an employee's own onboarding
-// progress/checklist/timeline (only a session-based web route, /my_onboarding,
-// does) -- so this screen shows the real employee identity and an honest
-// "not available" state instead of the fully hardcoded "John Doe / 72% /
-// Priya Sharma" content it used to have.
 export default function OnboardingScreen() {
   const { user } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [onboarding, setOnboarding] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [noteDrafts, setNoteDrafts] = useState({});
+  const [completingId, setCompletingId] = useState(null);
+
+  const load = async () => {
+    try {
+      const [profRes, obRes] = await Promise.all([fetchEmployeeProfile(), fetchMyOnboarding()]);
+      if (profRes?.data?.ok) setProfile(profRes.data.profile);
+      if (obRes?.data?.ok) {
+        const ob = (obRes.data.onboardings || []).find((o) => o.id === obRes.data.selected_ob_id) || null;
+        setOnboarding(ob);
+        setTasks(obRes.data.tasks || []);
+      } else {
+        setOnboarding(null);
+        setTasks([]);
+      }
+    } catch (_) {
+      setOnboarding(null);
+      setTasks([]);
+    }
+    setLoading(false);
+    setRefreshing(false);
+  };
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        setLoading(true);
-        try {
-          const res = await fetchEmployeeProfile();
-          if (!cancelled && res?.data?.ok) setProfile(res.data.profile);
-        } catch (_) {}
-        if (!cancelled) setLoading(false);
-      })();
-      return () => { cancelled = true; };
+      load();
     }, [])
   );
+
+  const handleCompleteTask = async (task) => {
+    if (!onboarding) return;
+    setCompletingId(task.id);
+    try {
+      const res = await completeMyOnboardingTask(task.id, onboarding.id, noteDrafts[task.id] || "");
+      if (res?.data?.ok) {
+        await load();
+      }
+    } catch (_) {
+      // stays pending -- the list simply won't reflect a change
+    }
+    setCompletingId(null);
+  };
+
+  const progress = onboarding && onboarding.total_tasks > 0
+    ? Math.round((onboarding.done_tasks / onboarding.total_tasks) * 100)
+    : 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -50,22 +85,78 @@ export default function OnboardingScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={["#173B8C"]} />
+        }
       >
         {loading ? (
           <LoadingSkeleton height={110} radius={24} />
+        ) : !onboarding ? (
+          <>
+            <EmptyState
+              icon="checkmark-done-circle-outline"
+              title="No onboarding assigned yet"
+              description="Your HR team hasn't assigned an onboarding checklist to your account. Check back later or reach out to HR."
+            />
+          </>
         ) : (
           <>
             <OnboardingStatusCard
               employeeName={profile?.name || user?.name || "Employee"}
               employeeId={profile?.employee_id || user?.employeeId || "-"}
-              status="Active"
+              status={onboarding.status}
+              progress={progress}
+              department={profile?.department || "—"}
+              joinedDate={profile?.join_date || "—"}
             />
 
-            <EmptyState
-              icon="checkmark-done-circle-outline"
-              title="Onboarding tracker isn't on mobile yet"
-              description="Your onboarding checklist, timeline and HR contact are managed on the web portal for now. Check there for your current progress."
-            />
+            <Text style={styles.sectionTitle}>
+              {onboarding.template_name} &middot; {onboarding.done_tasks}/{onboarding.total_tasks} done
+            </Text>
+
+            {tasks.map((task) => {
+              const isDone = task.status === "Done";
+              return (
+                <View key={task.id} style={[styles.taskCard, isDone && styles.taskCardDone]}>
+                  <View style={styles.taskHeader}>
+                    <Ionicons
+                      name={isDone ? "checkmark-circle" : "ellipse-outline"}
+                      size={22}
+                      color={isDone ? "#16A34A" : "#94A3B8"}
+                    />
+                    <Text style={[styles.taskTitle, isDone && styles.taskTitleDone]}>{task.task_title}</Text>
+                  </View>
+                  {!!task.task_description && <Text style={styles.taskDesc}>{task.task_description}</Text>}
+
+                  {isDone ? (
+                    <Text style={styles.completedAt}>
+                      Completed {task.completed_at ? new Date(task.completed_at).toLocaleDateString("en-IN") : ""}
+                      {task.employee_note ? ` — "${task.employee_note}"` : ""}
+                    </Text>
+                  ) : (
+                    <View style={styles.taskAction}>
+                      <TextInput
+                        style={styles.noteInput}
+                        placeholder="Add a note (optional)"
+                        value={noteDrafts[task.id] || ""}
+                        onChangeText={(t) => setNoteDrafts((prev) => ({ ...prev, [task.id]: t }))}
+                      />
+                      <TouchableOpacity
+                        style={styles.doneBtn}
+                        onPress={() => handleCompleteTask(task)}
+                        disabled={completingId === task.id}
+                      >
+                        {completingId === task.id ? (
+                          <ActivityIndicator color="#FFFFFF" size="small" />
+                        ) : (
+                          <Text style={styles.doneBtnText}>Mark Done</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </>
         )}
       </ScrollView>
@@ -83,4 +174,47 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
     paddingTop: 18,
   },
+
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#475569",
+    marginBottom: 12,
+  },
+
+  taskCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  taskCardDone: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+  },
+  taskHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  taskTitle: { fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 },
+  taskTitleDone: { color: "#166534", textDecorationLine: "line-through" },
+  taskDesc: { fontSize: 12.5, color: "#64748B", marginTop: 6, marginLeft: 32 },
+  completedAt: { fontSize: 11.5, color: "#16A34A", marginTop: 8, marginLeft: 32, fontWeight: "600" },
+  taskAction: { marginTop: 12, marginLeft: 32 },
+  noteInput: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    padding: 9,
+    fontSize: 13,
+    color: "#0F172A",
+    marginBottom: 8,
+  },
+  doneBtn: {
+    backgroundColor: "#173B8C",
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  doneBtnText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
 });

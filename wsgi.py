@@ -8,26 +8,10 @@ Usage:
 
 Migration status
 ----------------
-The blueprint split is in progress. Routes are being moved from app.py
-(monolith) into blueprints/ incrementally. Each blueprint file documents
-exactly which routes belong there and the imports each route needs.
-
-Current state:
-  ✅ extensions.py    -- Flask app + limiter (shared by all blueprints)
-  ✅ utils/config.py  -- shift/salary runtime constants
-  ✅ utils/helpers.py -- audit, cache, encryption, validation, notifications
-  ✅ utils/auth.py    -- decorators, lockout, password hashing
-  ✅ utils/email_utils.py     -- SMTP + DB-backed queue worker
-  ✅ utils/attendance_utils.py-- attendance calculations
-  🔄 blueprints/*.py  -- route stubs with full migration instructions
-  🔄 app.py           -- still contains all routes (being drained into blueprints)
-
-To migrate a route from app.py into its blueprint:
-  1. Copy the route function from app.py to the blueprint file
-  2. Change @app.route → @<name>_bp.route
-  3. Update imports at top of blueprint file (see each file's Key imports section)
-  4. Delete the route from app.py
-  5. Run: python -m py_compile app.py && python -m py_compile blueprints/<file>.py
+The blueprint split (app.py's routes moved into blueprints/) is complete --
+see the "Register blueprints" section below for the full list. app.py now
+holds only shared setup: init_db, error handlers, before/after_request
+hooks, and template filters.
 """
 import os
 import sys

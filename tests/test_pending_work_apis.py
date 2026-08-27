@@ -1,0 +1,374 @@
+"""
+Tests for the Bearer-token routes added to close out the "pending/incomplete
+work" inventory: employee self-service (profile/bank details/experience/
+education), employee-facing onboarding + performance views, and admin
+payroll lock/unlock + holiday delete.
+"""
+import datetime
+import pytest
+
+
+def _admin_session(client, seed_admin):
+    resp = client.post("/login", data={
+        "identifier": seed_admin["username"], "password": seed_admin["password"],
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    with client.session_transaction() as sess:
+        assert sess.get("admin_logged_in")
+    return resp
+
+
+def _admin_token(client, seed_admin):
+    return client.post("/api/login", json={
+        "username": seed_admin["username"], "password": seed_admin["password"],
+    }).get_json()["token"]
+
+
+def _emp_token(client, seed_employee):
+    return client.post("/api/employee/login", json={
+        "employee_id": seed_employee["employee_id"], "password": seed_employee["password"],
+    }).get_json()["token"]
+
+
+def _auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def other_employee(db_engine):
+    """A second real employee row -- employee_experience/employee_onboarding/
+    performance_reviews all carry a real FK to employees.employee_id now, so
+    an "ownership" test needs a genuine other row, not just an arbitrary
+    string."""
+    from utils.auth import generate_password_hash
+    cur = db_engine.cursor()
+    cur.execute(
+        "INSERT INTO employees (employee_id, name, email, password, force_pin_change) "
+        "VALUES ('OTHR001','Other Employee','other@test.local',%s,0) ON CONFLICT (employee_id) DO NOTHING",
+        (generate_password_hash("Other@1234"),),
+    )
+    cur.close()
+    yield "OTHR001"
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM employees WHERE employee_id='OTHR001'")
+    cur.close()
+
+
+# ── Employee self-service ────────────────────────────────────────────────────
+
+class TestEmployeeProfileApi:
+    def test_update_profile_round_trips_and_preserves_other_fields(self, client, seed_employee, db_engine):
+        token = _emp_token(client, seed_employee)
+        # Seed a bank field first -- the profile update must not wipe it.
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET bank_name='Preserve Bank' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        cur.close()
+
+        resp = client.post("/api/employee/profile", json={
+            "phone": "9998887777", "gender": "Female", "dob": "1995-05-05",
+            "blood_group": "O+", "address": "123 Test St", "city": "Chennai",
+            "state": "TN", "pincode": "600001",
+            "emergency_contact_name": "Jane Doe", "emergency_contact_phone": "9991112222",
+            "emergency_contact_relation": "Sister", "about_me": "Hello",
+        }, headers=_auth(token))
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+        prof = client.get("/api/employee/profile", headers=_auth(token)).get_json()["profile"]
+        assert prof["phone"] == "9998887777"
+        assert prof["city"] == "Chennai"
+        assert prof["emergency_contact_relation"] == "Sister"
+        assert prof["bank_name"] == "Preserve Bank"  # untouched by the profile update
+
+    def test_update_bank_details(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        resp = client.post("/api/employee/bank_details", json={
+            "aadhar_number": "123456789012", "pan_number": "abcde1234f",
+            "bank_name": "Test Bank", "bank_account": "000111222", "bank_ifsc": "test0001", "uan_number": "UAN123",
+        }, headers=_auth(token))
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+        prof = client.get("/api/employee/profile", headers=_auth(token)).get_json()["profile"]
+        assert prof["bank_name"] == "Test Bank"
+        assert prof["pan_number"] == "ABCDE1234F"  # uppercased
+        assert prof["uan_number"] == "UAN123"
+
+    def test_requires_bearer_token(self, client):
+        resp = client.get("/api/employee/experience")
+        assert resp.status_code == 401
+
+
+class TestEmployeeExperienceApi:
+    def test_add_list_delete_round_trip(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        add = client.post("/api/employee/experience", json={
+            "company": "Acme Corp", "designation": "Engineer",
+            "from_year": "2019", "to_year": "2022", "is_current": False, "description": "Built things",
+        }, headers=_auth(token))
+        assert add.status_code == 200 and add.get_json()["ok"] is True
+
+        listing = client.get("/api/employee/experience", headers=_auth(token)).get_json()
+        assert listing["ok"] is True
+        assert len(listing["experience"]) == 1
+        entry = listing["experience"][0]
+        assert entry["company"] == "Acme Corp"
+
+        delete = client.delete(f"/api/employee/experience/{entry['id']}", headers=_auth(token))
+        assert delete.status_code == 200 and delete.get_json()["ok"] is True
+
+        listing2 = client.get("/api/employee/experience", headers=_auth(token)).get_json()
+        assert listing2["experience"] == []
+
+    def test_add_requires_fields(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        resp = client.post("/api/employee/experience", json={"company": "Acme"}, headers=_auth(token))
+        assert resp.status_code == 400
+
+    def test_delete_someone_elses_entry_is_404(self, client, seed_employee, other_employee, db_engine):
+        token = _emp_token(client, seed_employee)
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO employee_experience (employee_id, company, designation, from_year) "
+            "VALUES (%s,'X','Y','2020') RETURNING id",
+            (other_employee,),
+        )
+        other_id = cur.fetchone()[0]
+        cur.close()
+        try:
+            resp = client.delete(f"/api/employee/experience/{other_id}", headers=_auth(token))
+            assert resp.status_code == 404
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM employee_experience WHERE id=%s", (other_id,))
+            cur.close()
+
+
+class TestEmployeeEducationApi:
+    def test_add_list_delete_round_trip(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        add = client.post("/api/employee/education", json={
+            "degree": "B.Tech", "institution": "Test University", "year_of_passing": "2018", "percentage": "82.5",
+        }, headers=_auth(token))
+        assert add.status_code == 200 and add.get_json()["ok"] is True
+
+        listing = client.get("/api/employee/education", headers=_auth(token)).get_json()
+        assert len(listing["education"]) == 1
+        entry = listing["education"][0]
+
+        delete = client.delete(f"/api/employee/education/{entry['id']}", headers=_auth(token))
+        assert delete.status_code == 200
+
+        listing2 = client.get("/api/employee/education", headers=_auth(token)).get_json()
+        assert listing2["education"] == []
+
+
+# ── Employee onboarding / performance views ──────────────────────────────────
+
+def _make_template(db_engine, name="Pending-Work Template"):
+    cur = db_engine.cursor()
+    cur.execute(
+        "INSERT INTO onboarding_templates (name, description, is_active) VALUES (%s,%s,1) RETURNING id",
+        (name, "test"),
+    )
+    tid = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO onboarding_template_tasks (template_id, task_title, task_description, requires_document, due_days, sort_order) "
+        "VALUES (%s,%s,%s,0,7,0) RETURNING id",
+        (tid, "Sign NDA", ""),
+    )
+    task_id = cur.fetchone()[0]
+    cur.close()
+    return tid, task_id
+
+
+def _assign_onboarding(db_engine, emp_id, template_id, task_id):
+    cur = db_engine.cursor()
+    today = datetime.date.today()
+    cur.execute(
+        "INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date, status) "
+        "VALUES (%s,%s,%s,%s,'In Progress') RETURNING id",
+        (emp_id, template_id, today, today + datetime.timedelta(days=30)),
+    )
+    ob_id = cur.fetchone()[0]
+    cur.execute(
+        "INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, "
+        "task_title, task_description, requires_document, due_days, status) "
+        "VALUES (%s,%s,%s,'Sign NDA','',0,7,'Pending') RETURNING id",
+        (ob_id, task_id, emp_id),
+    )
+    task_row_id = cur.fetchone()[0]
+    cur.close()
+    return ob_id, task_row_id
+
+
+def _cleanup_onboarding(db_engine, template_id, ob_id):
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM employee_onboarding_tasks WHERE onboarding_id=%s", (ob_id,))
+    cur.execute("DELETE FROM employee_onboarding WHERE id=%s", (ob_id,))
+    cur.execute("DELETE FROM onboarding_template_tasks WHERE template_id=%s", (template_id,))
+    cur.execute("DELETE FROM onboarding_templates WHERE id=%s", (template_id,))
+    cur.close()
+
+
+class TestEmployeeOnboardingApi:
+    def test_fetch_and_complete_task(self, client, seed_employee, db_engine):
+        template_id, task_id = _make_template(db_engine)
+        ob_id, task_row_id = _assign_onboarding(db_engine, seed_employee["employee_id"], template_id, task_id)
+        try:
+            token = _emp_token(client, seed_employee)
+            res = client.get("/api/employee/onboarding", headers=_auth(token)).get_json()
+            assert res["ok"] is True
+            assert res["selected_ob_id"] == ob_id
+            assert len(res["tasks"]) == 1
+            assert res["tasks"][0]["status"] == "Pending"
+
+            done = client.post(
+                f"/api/employee/onboarding/task/{task_row_id}/done",
+                data={"ob_id": str(ob_id), "employee_note": "done via test"},
+                headers=_auth(token),
+            )
+            assert done.status_code == 200
+            body = done.get_json()
+            assert body["ok"] is True
+            assert body["remaining"] == 0
+
+            res2 = client.get("/api/employee/onboarding", headers=_auth(token)).get_json()
+            assert res2["tasks"][0]["status"] == "Done"
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT status FROM employee_onboarding WHERE id=%s", (ob_id,))
+            assert cur.fetchone()[0] == "Completed"
+            cur.close()
+        finally:
+            _cleanup_onboarding(db_engine, template_id, ob_id)
+
+    def test_complete_someone_elses_task_is_forbidden(self, client, seed_employee, other_employee, db_engine):
+        template_id, task_id = _make_template(db_engine, "Other Emp Template")
+        ob_id, task_row_id = _assign_onboarding(db_engine, other_employee, template_id, task_id)
+        try:
+            token = _emp_token(client, seed_employee)
+            resp = client.post(
+                f"/api/employee/onboarding/task/{task_row_id}/done",
+                data={"ob_id": str(ob_id)},
+                headers=_auth(token),
+            )
+            assert resp.status_code == 403
+        finally:
+            _cleanup_onboarding(db_engine, template_id, ob_id)
+
+
+class TestEmployeePerformanceApi:
+    def test_fetch_own_reviews_and_submit_comment(self, client, seed_employee, db_engine):
+        emp_id = seed_employee["employee_id"]
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO performance_reviews (employee_id, quarter, year, overall_rating, reviewer_feedback, status) "
+            "VALUES (%s,1,2026,4,'Great work','Finalized') RETURNING id",
+            (emp_id,),
+        )
+        rev_id = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO performance_kpis (review_id, kpi_title, target, achievement, weight, rating) "
+            "VALUES (%s,'Delivery','10','12',1.0,5)",
+            (rev_id,),
+        )
+        cur.close()
+        try:
+            token = _emp_token(client, seed_employee)
+            res = client.get("/api/employee/performance", headers=_auth(token)).get_json()
+            assert res["ok"] is True
+            assert len(res["reviews"]) == 1
+            review = res["reviews"][0]
+            assert review["overall_rating_label"] == "Exceeds Expectations"
+            assert len(review["kpis"]) == 1
+
+            comment = client.post("/api/employee/performance/comment", json={
+                "review_id": rev_id, "comment": "Thanks!",
+            }, headers=_auth(token))
+            assert comment.status_code == 200 and comment.get_json()["ok"] is True
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT employee_comment FROM performance_reviews WHERE id=%s", (rev_id,))
+            assert cur.fetchone()[0] == "Thanks!"
+            cur.close()
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM performance_kpis WHERE review_id=%s", (rev_id,))
+            cur.execute("DELETE FROM performance_reviews WHERE id=%s", (rev_id,))
+            cur.close()
+
+    def test_cannot_comment_on_someone_elses_review(self, client, seed_employee, other_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO performance_reviews (employee_id, quarter, year, status) "
+            "VALUES (%s,1,2026,'Finalized') RETURNING id",
+            (other_employee,),
+        )
+        rev_id = cur.fetchone()[0]
+        cur.close()
+        try:
+            token = _emp_token(client, seed_employee)
+            resp = client.post("/api/employee/performance/comment", json={
+                "review_id": rev_id, "comment": "should not apply",
+            }, headers=_auth(token))
+            assert resp.status_code == 404
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM performance_reviews WHERE id=%s", (rev_id,))
+            cur.close()
+
+
+# ── Admin: payroll lock/unlock, holiday delete ───────────────────────────────
+
+class TestPayrollLockApi:
+    def test_lock_status_unlock_round_trip(self, client, seed_admin, db_engine):
+        token = _admin_token(client, seed_admin)
+        year, month = 2031, 6  # a month no other test touches
+        try:
+            status = client.get(f"/api/payroll/status?year={year}&month={month}", headers=_auth(token))
+            assert status.get_json()["locked"] is False
+
+            lock = client.post("/api/payroll/lock", json={"year": year, "month": month}, headers=_auth(token))
+            assert lock.status_code == 200 and lock.get_json()["ok"] is True
+
+            status2 = client.get(f"/api/payroll/status?year={year}&month={month}", headers=_auth(token))
+            assert status2.get_json()["locked"] is True
+
+            unlock = client.post("/api/payroll/unlock", json={"year": year, "month": month}, headers=_auth(token))
+            assert unlock.status_code == 200 and unlock.get_json()["ok"] is True
+
+            status3 = client.get(f"/api/payroll/status?year={year}&month={month}", headers=_auth(token))
+            assert status3.get_json()["locked"] is False
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM payroll_runs WHERE year=%s AND month=%s", (year, month))
+            cur.close()
+
+    def test_lock_requires_year_and_month(self, client, seed_admin):
+        token = _admin_token(client, seed_admin)
+        resp = client.post("/api/payroll/lock", json={}, headers=_auth(token))
+        assert resp.status_code == 400
+
+
+class TestHolidayDeleteApi:
+    def test_add_then_delete_holiday(self, client, seed_admin, db_engine):
+        token = _admin_token(client, seed_admin)
+        add = client.post("/api/holidays", json={"date": "2031-03-03", "name": "Pending-Work Test Holiday"}, headers=_auth(token))
+        assert add.status_code == 200 and add.get_json()["ok"] is True
+
+        listing = client.get("/api/holidays", headers=_auth(token)).get_json()
+        entry = next((h for h in listing["holidays"] if h["date"] == "2031-03-03"), None)
+        assert entry is not None
+        assert "id" in entry
+
+        delete = client.delete(f"/api/holidays/{entry['id']}", headers=_auth(token))
+        assert delete.status_code == 200 and delete.get_json()["ok"] is True
+
+        listing2 = client.get("/api/holidays", headers=_auth(token)).get_json()
+        assert all(h["date"] != "2031-03-03" for h in listing2["holidays"])
+
+    def test_delete_unknown_holiday_is_404(self, client, seed_admin):
+        token = _admin_token(client, seed_admin)
+        resp = client.delete("/api/holidays/999999999", headers=_auth(token))
+        assert resp.status_code == 404

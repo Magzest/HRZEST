@@ -191,6 +191,26 @@ def _reset_login_attempts(db_engine, _init_test_db):
     cur.close()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _reset_attendance_lockouts(db_engine, _init_test_db):
+    """Clear attendance_lockouts before the session starts -- same
+    persistent-database problem _reset_login_attempts (above) solves, for a
+    different table. utils/attendance_utils.py's record_attendance_failure()
+    accumulates failed_count per (employee_id, date) with no per-test
+    cleanup anywhere in this suite; tests/test_attendance_checkin.py's kiosk
+    fingerprint/face-mismatch tests call it against the shared TST001
+    identifier for *today's real calendar date*, so failed_count keeps
+    climbing across every run made on the same day until it crosses
+    ATTENDANCE_LOCKOUT_MAX_ATTEMPTS -- at which point every other test that
+    checks TST001 in for today (anything hitting /api/attendance/checkin or
+    the web /attendance route) starts failing with a stale lockout message
+    instead of exercising the behavior it's actually testing.
+    """
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM attendance_lockouts")
+    cur.close()
+
+
 @pytest.fixture
 def client():
     flask_app.config["TESTING"] = True   # disables CSRF check + rate limits

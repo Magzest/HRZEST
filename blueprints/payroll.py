@@ -581,6 +581,81 @@ def unlock_payroll():
     return jsonify({"ok": True, "msg": f"Payroll for {year}-{month:02d} unlocked."})
 
 
+@payroll_bp.route("/api/payroll/lock", methods=["POST"])
+@api_required
+@api_role_required("admin", "hr")
+def api_lock_payroll():
+    """Bearer-token twin of lock_payroll()."""
+    from flask import g as _g
+    data = request.get_json(silent=True) or {}
+    try:
+        year = int(data.get("year"))
+        month = int(data.get("month"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "msg": "year and month are required."}), 400
+    actor = _g.api_user
+    db = get_db_connection()
+    cursor = db.cursor()
+    cursor.execute("""
+        INSERT INTO payroll_runs (year, month, processed_by, email_count)
+        VALUES (%s, %s, %s, 0)
+        ON CONFLICT (year, month) DO UPDATE SET processed_at=NOW(), processed_by=%s
+    """, (year, month, actor, actor))
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("lock_payroll", "payroll_runs", f"{year}-{month:02d}", f"Locked by {actor} (via mobile)")
+    return jsonify({"ok": True, "msg": f"Payroll for {year}-{month:02d} locked."})
+
+
+@payroll_bp.route("/api/payroll/unlock", methods=["POST"])
+@api_required
+@api_role_required("admin", "hr")
+def api_unlock_payroll():
+    """Bearer-token twin of unlock_payroll()."""
+    from flask import g as _g
+    data = request.get_json(silent=True) or {}
+    try:
+        year = int(data.get("year"))
+        month = int(data.get("month"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "msg": "year and month are required."}), 400
+    actor = _g.api_user
+    db = get_db_connection()
+    cursor = db.cursor()
+    cursor.execute("DELETE FROM payroll_runs WHERE year=%s AND month=%s", (year, month))
+    db.commit()
+    cursor.close()
+    db.close()
+    _audit("unlock_payroll", "payroll_runs", f"{year}-{month:02d}", f"Unlocked by {actor} (via mobile)")
+    return jsonify({"ok": True, "msg": f"Payroll for {year}-{month:02d} unlocked."})
+
+
+@payroll_bp.route("/api/payroll/status", methods=["GET"])
+@api_required
+@api_role_required("admin", "hr")
+def api_payroll_status():
+    """Whether a given year/month's payroll run is locked -- lets mobile
+    show the same locked/unlocked state the web page's own query drives."""
+    try:
+        year = int(request.args.get("year"))
+        month = int(request.args.get("month"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "msg": "year and month are required."}), 400
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT processed_at, processed_by FROM payroll_runs WHERE year=%s AND month=%s", (year, month))
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+    return jsonify({
+        "ok": True,
+        "locked": bool(row),
+        "processed_at": row[0].isoformat() if row and row[0] else None,
+        "processed_by": row[1] if row else None,
+    })
+
+
 # ---------------- TEST EMAIL ----------------
 
 @payroll_bp.route("/my_payslip_summary/<int:year>/<int:month>")

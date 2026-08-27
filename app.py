@@ -1566,21 +1566,6 @@ def _init_core_tables(cursor, db):
             UNIQUE(device_serial, device_pin, punch_time)
         )
     """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS regularization_requests (
-            id SERIAL PRIMARY KEY,
-            employee_id VARCHAR(50) NOT NULL,
-            request_date DATE NOT NULL,
-            login_time TIME DEFAULT NULL,
-            logout_time TIME DEFAULT NULL,
-            reason TEXT NOT NULL,
-            status VARCHAR(20) DEFAULT 'Pending',
-            admin_note TEXT DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_at TIMESTAMP DEFAULT NULL,
-            UNIQUE (employee_id, request_date)
-        )
-    """)
     db.commit()
     # Seed default leave types if empty
     cursor.execute("SELECT COUNT(*) FROM leave_types")
@@ -2167,7 +2152,6 @@ def _run_fk_backstop_migration(cursor, db):
                 ("employee_documents", "employee_id", "employees", "employee_id", "CASCADE"),
                 ("performance_reviews", "employee_id", "employees", "employee_id", "CASCADE"),
                 ("overtime_records", "employee_id", "employees", "employee_id", "CASCADE"),
-                ("regularization_requests", "employee_id", "employees", "employee_id", "CASCADE"),
                 ("compoff_balance", "employee_id", "employees", "employee_id", "CASCADE"),
                 ("employee_onboarding", "employee_id", "employees", "employee_id", "CASCADE"),
                 ("employees", "company_id", "companies", "id", "SET NULL"),
