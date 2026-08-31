@@ -194,6 +194,9 @@ export const updateMyProfile = (fields) => client.post('/api/employee/profile', 
 
 export const updateMyBankDetails = (fields) => client.post('/api/employee/bank_details', fields);
 
+export const updateNotificationPreferences = (emailAlertsEnabled) =>
+  client.post('/api/employee/notification_preferences', { email_alerts_enabled: emailAlertsEnabled });
+
 export const fetchMyExperience = () => client.get('/api/employee/experience');
 
 export const addMyExperience = (entry) => client.post('/api/employee/experience', entry);
@@ -266,7 +269,24 @@ export const deleteEmployee = (empId) => client.delete(`/api/employees/${empId}`
 // Real manager_id-based reporting hierarchy -- Bearer twin of
 // blueprints/admin_views.py's session-only /api/org_chart_data.
 export const fetchOrgChart = () => client.get('/api/org_chart');
+
+// Bearer twin of blueprints/email_blast.py's api_email_blast -- targetType
+// is 'all' | 'department' | 'individual', targetValue is the department
+// name or employee_id (ignored for 'all').
+export const sendEmailBlast = (targetType, targetValue, subject, body) =>
+  client.post('/api/admin/email-blast', { target_type: targetType, target_value: targetValue, subject, body });
 export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai/hr-helpdesk', { query });
+
+// ── AI Recruitment (blueprints/ai_hrms.py, previously session-only/web-only) ─
+export const parseResumeText = (resumeText) => client.post('/api/ai/parse-resume', { resume_text: resumeText });
+
+export const screenCandidate = (parsedProfile, jobDescription) =>
+  client.post('/api/ai/screen-candidate', { parsed_profile: parsedProfile, job_description: jobDescription });
+
+export const evaluateInterview = (candidateName, position, notes) =>
+  client.post('/api/ai/evaluate-interview', { candidate_name: candidateName, position, notes });
+
+export const fetchAttritionAnalytics = () => client.get('/api/ai/attrition-analytics');
 // compoffAction/api_compoff_action removed together -- the backend route
 // referenced a compoff_balances (plural) table that is never created
 // anywhere in this codebase's schema, so it silently 500'd/no-op'd on
