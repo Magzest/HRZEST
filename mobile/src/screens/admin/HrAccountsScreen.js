@@ -16,7 +16,7 @@ import {
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import AdminHeader from "../../components/admin/AdminHeader";
 import { fetchHrAccounts, createHrAccount, setHrAccountStatus } from "../../api/client";
 
@@ -24,6 +24,8 @@ import { fetchHrAccounts, createHrAccount, setHrAccountStatus } from "../../api/
 // creating/disabling HR user accounts had zero mobile UI before this,
 // forcing admins to switch to the web dashboard for it.
 export default function HrAccountsScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -117,14 +119,14 @@ export default function HrAccountsScreen({ navigation }) {
   };
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader title="HR Accounts" onMenu={() => navigation.dispatch(DrawerActions.openDrawer())} />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
         >
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>HR Team Accounts ({accounts.length})</Text>
@@ -138,7 +140,7 @@ export default function HrAccountsScreen({ navigation }) {
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 24 }} />
           ) : accounts.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="people-outline" size={44} color="#94A3B8" />
+              <Ionicons name="people-outline" size={44} color={colors.textLight} />
               <Text style={styles.emptyTitle}>No HR Accounts Yet</Text>
               <Text style={styles.emptySub}>Add an HR account to let someone else manage employees for you.</Text>
             </View>
@@ -159,8 +161,8 @@ export default function HrAccountsScreen({ navigation }) {
                     <Switch
                       value={acc.is_active}
                       onValueChange={() => handleToggleActive(acc)}
-                      trackColor={{ false: "#E2E8F0", true: "#86EFAC" }}
-                      thumbColor={acc.is_active ? "#16A34A" : "#94A3B8"}
+                      trackColor={{ false: colors.border, true: "#86EFAC" }}
+                      thumbColor={acc.is_active ? "#16A34A" : colors.textLight}
                     />
                   )}
                 </View>
@@ -175,9 +177,9 @@ export default function HrAccountsScreen({ navigation }) {
         {/* Add HR Account Modal */}
         <Modal visible={addModalVisible} transparent animationType="slide" onRequestClose={() => setAddModalVisible(false)}>
           <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 }}>
+            <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-                <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Add HR Account</Text>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>Add HR Account</Text>
                 <TouchableOpacity onPress={() => setAddModalVisible(false)}>
                   <Ionicons name="close-circle" size={26} color="#64748B" />
                 </TouchableOpacity>
@@ -185,7 +187,7 @@ export default function HrAccountsScreen({ navigation }) {
 
               <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>USERNAME *</Text>
               <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                 placeholder="hr.jane"
                 value={newUsername}
                 onChangeText={setNewUsername}
@@ -194,7 +196,7 @@ export default function HrAccountsScreen({ navigation }) {
 
               <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMAIL</Text>
               <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                 placeholder="jane@company.com"
                 value={newEmail}
                 onChangeText={setNewEmail}
@@ -204,7 +206,7 @@ export default function HrAccountsScreen({ navigation }) {
 
               <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>PASSWORD * (MIN 8 CHARS)</Text>
               <TextInput
-                style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                 value={newPassword}
                 onChangeText={setNewPassword}
                 secureTextEntry
@@ -225,21 +227,21 @@ export default function HrAccountsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  sectionTitle: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
+  sectionTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
   addBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "#173B8C", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   addBtnText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12, marginLeft: 4 },
-  emptyCard: { backgroundColor: "#FFFFFF", borderRadius: 20, padding: 32, alignItems: "center", borderWidth: 1, borderColor: "#E2E8F0" },
+  emptyCard: { backgroundColor: colors.card, borderRadius: 20, padding: 32, alignItems: "center", borderWidth: 1, borderColor: colors.border },
   emptyTitle: { fontSize: 15, fontWeight: "700", color: "#334155", marginTop: 10 },
   emptySub: { fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 4 },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 18, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#E2E8F0" },
+  card: { backgroundColor: colors.card, borderRadius: 18, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: colors.border },
   cardRow: { flexDirection: "row", alignItems: "center" },
-  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#EEF4FF", justifyContent: "center", alignItems: "center" },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.primaryLight, justifyContent: "center", alignItems: "center" },
   avatarText: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
-  username: { fontSize: 14, fontWeight: "700", color: "#0F172A" },
+  username: { fontSize: 14, fontWeight: "700", color: colors.text },
   email: { fontSize: 12, color: "#64748B", marginTop: 2 },
-  created: { fontSize: 11, color: "#94A3B8", marginTop: 10 },
+  created: { fontSize: 11, color: colors.textLight, marginTop: 10 },
 });

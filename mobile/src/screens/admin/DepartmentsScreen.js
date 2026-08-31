@@ -13,9 +13,12 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import DashboardStatCard from "../../components/admin/DashboardStatCard";
 import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchDepartments } from "../../api/client";
 
 export default function DepartmentsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,8 +77,8 @@ export default function DepartmentsScreen() {
             value={String(departments.length)}
             subtitle="Total Departments"
             icon="business-outline"
-            iconColor={THEME.colors.primary}
-            iconBackground={THEME.colors.blueBg}
+            iconColor={colors.primary}
+            iconBackground={colors.blueBg}
           />
 
           <DashboardStatCard
@@ -83,13 +86,13 @@ export default function DepartmentsScreen() {
             value={String(totalEmployees)}
             subtitle="Across Departments"
             icon="people-outline"
-            iconColor={THEME.colors.success}
-            iconBackground={THEME.colors.greenBg}
+            iconColor={colors.success}
+            iconBackground={colors.greenBg}
           />
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={THEME.colors.primary} style={{ marginTop: 40 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 40 }} />
         ) : filteredDepts.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No departments found.</Text>
@@ -103,8 +106,8 @@ export default function DepartmentsScreen() {
               </View>
 
               <View style={styles.rightSection}>
-                <View style={[styles.statusBadge, { backgroundColor: THEME.colors.greenBg }]}>
-                  <Text style={[styles.statusText, { color: THEME.colors.success }]}>Active</Text>
+                <View style={[styles.statusBadge, { backgroundColor: colors.greenBg }]}>
+                  <Text style={[styles.statusText, { color: colors.success }]}>Active</Text>
                 </View>
               </View>
             </View>
@@ -116,10 +119,10 @@ export default function DepartmentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.colors.background,
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -140,7 +143,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
 
-    backgroundColor: THEME.colors.card,
+    backgroundColor: colors.card,
 
     borderRadius: THEME.radius.card,
 
@@ -149,7 +152,7 @@ const styles = StyleSheet.create({
     marginBottom: THEME.spacing.cardGap,
 
     borderWidth: 1,
-    borderColor: THEME.colors.border,
+    borderColor: colors.border,
 
     ...THEME.shadows.sm,
   },
@@ -160,25 +163,25 @@ const styles = StyleSheet.create({
 
   departmentName: {
     ...THEME.typography.cardTitle,
-    color: THEME.colors.text,
+    color: colors.text,
   },
 
   departmentHead: {
     marginTop: 6,
     ...THEME.typography.body,
-    color: THEME.colors.textSecondary,
+    color: colors.textSecondary,
   },
 
   departmentDetails: {
     marginTop: 4,
     ...THEME.typography.caption,
-    color: THEME.colors.textSecondary,
+    color: colors.textSecondary,
   },
 
   departmentBudget: {
     marginTop: 8,
     ...THEME.typography.bodyMedium,
-    color: THEME.colors.primary,
+    color: colors.primary,
     fontWeight: "700",
   },
 

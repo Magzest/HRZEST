@@ -20,11 +20,14 @@ import HolidayCalendar from "../../components/holidays/HolidayCalendar";
 import HolidayList from "../../components/holidays/HolidayList";
 import EmptyHolidayCard from "../../components/holidays/EmptyHolidayCard";
 import { fetchEmployeeHolidays } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 const MONTH_NOW = new Date().getMonth() + 1;
 const YEAR_NOW = new Date().getFullYear();
 
 export default function HolidaysScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [year, setYear] = useState(YEAR_NOW);
   const [month, setMonth] = useState(MONTH_NOW);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -124,7 +127,7 @@ export default function HolidaysScreen() {
             }}
             style={styles.monthNavBtn}
           >
-            <Ionicons name="chevron-back" size={18} color="#173B8C" />
+            <Ionicons name="chevron-back" size={18} color={colors.primary} />
           </TouchableOpacity>
           <Text style={styles.monthNavLabel}>
             {new Date(year, month - 1).toLocaleString("en-IN", { month: "long", year: "numeric" })}
@@ -135,7 +138,7 @@ export default function HolidaysScreen() {
             }}
             style={styles.monthNavBtn}
           >
-            <Ionicons name="chevron-forward" size={18} color="#173B8C" />
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -172,10 +175,10 @@ export default function HolidaysScreen() {
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -194,14 +197,14 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   monthNavLabel: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   sectionTitle: {
     marginTop: 26,
@@ -211,13 +214,13 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#0F172A",
+    color: colors.text,
 
     letterSpacing: -0.4,
   },
 
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     borderRadius: 22,
 
@@ -227,7 +230,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
 
     shadowColor: "#0F172A",
     shadowOpacity: 0.05,
@@ -252,7 +255,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
 
     justifyContent: "center",
     alignItems: "center",
@@ -271,7 +274,7 @@ const styles = StyleSheet.create({
 
     borderBottomWidth: 1,
 
-    borderBottomColor: "#EEF2F7",
+    borderBottomColor: colors.border,
   },
 
   rowLeft: {
@@ -292,7 +295,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
 
     justifyContent: "center",
     alignItems: "center",
@@ -305,7 +308,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#0F172A",
+    color: colors.text,
   },
 
   subtitle: {
@@ -313,7 +316,7 @@ const styles = StyleSheet.create({
 
     fontSize: 12,
 
-    color: "#64748B",
+    color: colors.textSecondary,
   },
 
   value: {
@@ -321,7 +324,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#173B8C",
+    color: colors.primary,
   },
 
   badge: {
@@ -333,11 +336,11 @@ const styles = StyleSheet.create({
 
     borderRadius: 16,
 
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
   },
 
   badgeText: {
-    color: "#173B8C",
+    color: colors.primary,
 
     fontWeight: "700",
 
@@ -347,11 +350,11 @@ const styles = StyleSheet.create({
   infoCard: {
     marginTop: 20,
 
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
 
     borderLeftWidth: 4,
 
-    borderLeftColor: "#173B8C",
+    borderLeftColor: colors.primary,
 
     borderRadius: 18,
 
@@ -363,13 +366,13 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#173B8C",
+    color: colors.primary,
 
     marginBottom: 8,
   },
 
   infoText: {
-    color: "#475569",
+    color: colors.textSecondary,
 
     fontSize: 12,
 
@@ -381,7 +384,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
 
-    backgroundColor: "#EEF2F7",
+    backgroundColor: colors.border,
 
     marginVertical: 20,
   },
@@ -389,7 +392,7 @@ const styles = StyleSheet.create({
   footerCard: {
     marginTop: 20,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     borderRadius: 22,
 
@@ -397,7 +400,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
 
     shadowColor: "#0F172A",
     shadowOpacity: 0.05,
@@ -415,7 +418,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#0F172A",
+    color: colors.text,
 
     marginBottom: 10,
   },
@@ -425,7 +428,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 18,
 
-    color: "#64748B",
+    color: colors.textSecondary,
   },
 
   statsRow: {
@@ -439,7 +442,7 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     borderRadius: 18,
 
@@ -451,7 +454,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
 
     shadowColor: "#0F172A",
     shadowOpacity: 0.03,
@@ -471,7 +474,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#173B8C",
+    color: colors.primary,
   },
 
   statLabel: {
@@ -479,7 +482,7 @@ const styles = StyleSheet.create({
 
     fontSize: 12,
 
-    color: "#64748B",
+    color: colors.textSecondary,
 
     fontWeight: "600",
 

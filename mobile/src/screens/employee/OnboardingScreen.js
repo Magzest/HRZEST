@@ -19,10 +19,13 @@ import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
 import OnboardingStatusCard from "../../components/onboarding/OnboardingStatusCard";
 
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchEmployeeProfile, fetchMyOnboarding, completeMyOnboardingTask } from "../../api/client";
 
 export default function OnboardingScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,7 +89,7 @@ export default function OnboardingScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={["#173B8C"]} />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[colors.primary]} />
         }
       >
         {loading ? (
@@ -122,7 +125,7 @@ export default function OnboardingScreen() {
                     <Ionicons
                       name={isDone ? "checkmark-circle" : "ellipse-outline"}
                       size={22}
-                      color={isDone ? "#16A34A" : "#94A3B8"}
+                      color={isDone ? "#16A34A" : colors.textLight}
                     />
                     <Text style={[styles.taskTitle, isDone && styles.taskTitleDone]}>{task.task_title}</Text>
                   </View>
@@ -163,10 +166,10 @@ export default function OnboardingScreen() {
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -178,40 +181,40 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#475569",
+    color: colors.textSecondary,
     marginBottom: 12,
   },
 
   taskCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   taskCardDone: {
     backgroundColor: "#F0FDF4",
     borderColor: "#BBF7D0",
   },
   taskHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
-  taskTitle: { fontSize: 14, fontWeight: "700", color: "#0F172A", flex: 1 },
+  taskTitle: { fontSize: 14, fontWeight: "700", color: colors.text, flex: 1 },
   taskTitleDone: { color: "#166534", textDecorationLine: "line-through" },
-  taskDesc: { fontSize: 12.5, color: "#64748B", marginTop: 6, marginLeft: 32 },
+  taskDesc: { fontSize: 12.5, color: colors.textSecondary, marginTop: 6, marginLeft: 32 },
   completedAt: { fontSize: 11.5, color: "#16A34A", marginTop: 8, marginLeft: 32, fontWeight: "600" },
   taskAction: { marginTop: 12, marginLeft: 32 },
   noteInput: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 9,
     fontSize: 13,
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 8,
   },
   doneBtn: {
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: "center",

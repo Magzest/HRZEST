@@ -20,6 +20,7 @@ import NotificationCard from "../components/notifications/NotificationCard";
 import NotificationEmpty from "../components/notifications/NotificationEmpty";
 
 import { useAuth } from "../store/AuthContext";
+import { useTheme } from "../store/ThemeContext";
 import {
   fetchNotifications,
   fetchEmployeeNotifications,
@@ -30,6 +31,8 @@ import {
 import { notificationFilters } from "../data/notificationsData";
 
 export default function NotificationsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   // Broadcast is admin-only on web too (role_required("admin") on
@@ -201,7 +204,7 @@ export default function NotificationsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Ionicons name="megaphone" size={22} color="#0B2253" style={{ marginRight: 8 }} />
+              <Ionicons name="megaphone" size={22} color={colors.primary} style={{ marginRight: 8 }} />
               <Text style={styles.modalTitle}>Broadcast Announcement</Text>
             </View>
 
@@ -249,7 +252,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F7FB",
@@ -281,7 +284,7 @@ const styles = StyleSheet.create({
   broadcastBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0B2253",
+    backgroundColor: colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 14,
@@ -301,7 +304,7 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 20,
     elevation: 8,
@@ -314,23 +317,23 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   inputLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: colors.textSecondary,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: "#CBD5E1",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 14,
   },
   modalBtnRow: {
@@ -354,7 +357,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "#0B2253",
+    backgroundColor: colors.primary,
   },
   submitBtnText: {
     fontSize: 14,

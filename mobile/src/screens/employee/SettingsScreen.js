@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import {
   getBiometricLockEnabled, setBiometricLockEnabled,
   getNotificationsEnabled, setNotificationsEnabled,
@@ -22,18 +23,37 @@ import {
 import {
   requestNotificationPermission, scheduleDailyCheckinReminder, cancelDailyCheckinReminder,
 } from "../../utils/localNotifications";
+import { fetchEmployeeProfile, updateNotificationPreferences } from "../../api/client";
 
 export default function SettingsScreen({ navigation }) {
   const { signOut } = useAuth();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [notifications, setNotifications] = useState(true);
   const [biometric, setBiometric] = useState(true);
+  const [emailAlerts, setEmailAlerts] = useState(true);
 
   useEffect(() => {
     (async () => {
       setBiometric(await getBiometricLockEnabled());
       setNotifications(await getNotificationsEnabled());
+      try {
+        const res = await fetchEmployeeProfile();
+        if (res?.data?.ok) setEmailAlerts(!!res.data.profile.email_alerts_enabled);
+      } catch (_) {}
     })();
   }, []);
+
+  const handleToggleEmailAlerts = async (value) => {
+    setEmailAlerts(value);
+    try {
+      const res = await updateNotificationPreferences(value);
+      if (!res?.data?.ok) throw new Error("failed");
+    } catch (e) {
+      setEmailAlerts(!value);
+      Alert.alert("Update Failed", "Could not update your email alert preference.");
+    }
+  };
 
   const handleToggleNotifications = async (value) => {
     if (value) {
@@ -93,13 +113,13 @@ export default function SettingsScreen({ navigation }) {
         <View
           style={[
             styles.iconContainer,
-            danger && { backgroundColor: "#FEF2F2" },
+            danger && { backgroundColor: colors.redBg },
           ]}
         >
           <Ionicons
             name={icon}
             size={22}
-            color={danger ? "#DC2626" : "#173B8C"}
+            color={danger ? colors.danger : colors.primary}
           />
         </View>
 
@@ -107,7 +127,7 @@ export default function SettingsScreen({ navigation }) {
           <Text
             style={[
               styles.title,
-              danger && { color: "#DC2626" },
+              danger && { color: colors.danger },
             ]}
           >
             {title}
@@ -149,8 +169,8 @@ export default function SettingsScreen({ navigation }) {
               value={notifications}
               onValueChange={handleToggleNotifications}
               trackColor={{
-                false: "#CBD5E1",
-                true: "#173B8C",
+                false: colors.border,
+                true: colors.primary,
               }}
             />
           }
@@ -159,14 +179,14 @@ export default function SettingsScreen({ navigation }) {
         <SettingItem
           icon="mail-outline"
           title="Email Alerts"
-          subtitle="Coming soon"
+          subtitle="Leave & resignation status emails"
           right={
             <Switch
-              value={false}
-              disabled
+              value={emailAlerts}
+              onValueChange={handleToggleEmailAlerts}
               trackColor={{
-                false: "#CBD5E1",
-                true: "#173B8C",
+                false: colors.border,
+                true: colors.primary,
               }}
             />
           }
@@ -175,14 +195,14 @@ export default function SettingsScreen({ navigation }) {
         <SettingItem
           icon="moon-outline"
           title="Dark Mode"
-          subtitle="Coming soon"
+          subtitle={isDark ? "On" : "Off"}
           right={
             <Switch
-              value={false}
-              disabled
+              value={isDark}
+              onValueChange={toggleTheme}
               trackColor={{
-                false: "#CBD5E1",
-                true: "#173B8C",
+                false: colors.border,
+                true: colors.primary,
               }}
             />
           }
@@ -201,8 +221,8 @@ export default function SettingsScreen({ navigation }) {
               value={biometric}
               onValueChange={handleToggleBiometric}
               trackColor={{
-                false: "#CBD5E1",
-                true: "#173B8C",
+                false: colors.border,
+                true: colors.primary,
               }}
             />
           }
@@ -217,7 +237,7 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons
               name="chevron-forward"
               size={20}
-              color="#94A3B8"
+              color={colors.textLight}
             />
           }
         />
@@ -235,7 +255,7 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons
               name="chevron-forward"
               size={20}
-              color="#94A3B8"
+              color={colors.textLight}
             />
           }
         />
@@ -249,7 +269,7 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons
               name="chevron-forward"
               size={20}
-              color="#94A3B8"
+              color={colors.textLight}
             />
           }
         />
@@ -263,7 +283,7 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons
               name="chevron-forward"
               size={20}
-              color="#94A3B8"
+              color={colors.textLight}
             />
           }
         />
@@ -282,7 +302,7 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons
               name="chevron-forward"
               size={20}
-              color="#DC2626"
+              color={colors.danger}
             />
           }
         />
@@ -293,10 +313,10 @@ export default function SettingsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -307,18 +327,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 14,
     marginTop: 10,
   },
 
   settingCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -343,7 +363,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.blueBg,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
@@ -352,13 +372,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
 
   subtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: "#64748B",
+    color: colors.textSecondary,
     fontWeight: "500",
   },
 });

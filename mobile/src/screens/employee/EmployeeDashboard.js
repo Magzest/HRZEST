@@ -25,6 +25,7 @@ import {
 import { queuePunch, getPendingPunches, clearQueue } from "../../utils/offlineQueue";
 
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 
 import { Ionicons } from "@expo/vector-icons";
 import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
@@ -44,6 +45,8 @@ import DigitalIdCardModal from "../../components/employee/DigitalIdCardModal";
 export default function EmployeeDashboard({ navigation }) {
 
   const { user, signOut, updateUser } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
 
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
@@ -264,7 +267,7 @@ export default function EmployeeDashboard({ navigation }) {
   if (loading) {
     return (
       <LinearGradient
-        colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]}
+        colors={colors.screenGradient}
         style={styles.loadingContainer}
       >
         <LoadingSkeleton />
@@ -407,7 +410,7 @@ export default function EmployeeDashboard({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -415,7 +418,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
   content: {
     paddingHorizontal: 20,

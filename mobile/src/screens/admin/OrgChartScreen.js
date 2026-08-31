@@ -11,7 +11,7 @@ import {
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import AdminHeader from "../../components/admin/AdminHeader";
 import { fetchOrgChart, fetchDashboard } from "../../api/client";
 
@@ -19,6 +19,8 @@ import { fetchOrgChart, fetchDashboard } from "../../api/client";
 // twin of blueprints/admin_views.py's session-only /api/org_chart_data),
 // not the flattened department grouping this screen used to fall back to.
 export default function OrgChartScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [tree, setTree] = useState([]);
@@ -55,7 +57,7 @@ export default function OrgChartScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]}
+      colors={colors.screenGradient}
       style={styles.container}
     >
       <SafeAreaView style={{ flex: 1 }}>
@@ -71,7 +73,7 @@ export default function OrgChartScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[THEME.colors.primary]}
+              colors={[colors.primary]}
             />
           }
         >
@@ -98,11 +100,11 @@ export default function OrgChartScreen({ navigation }) {
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 20 }} />
           ) : tree.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="git-network-outline" size={40} color="#94A3B8" />
+              <Ionicons name="git-network-outline" size={40} color={colors.textLight} />
               <Text style={styles.emptyText}>No employees found yet.</Text>
             </View>
           ) : (
-            tree.map((node) => <OrgNode key={node.id} node={node} depth={0} />)
+            tree.map((node) => <OrgNode key={node.id} node={node} depth={0} styles={styles} colors={colors} />)
           )}
 
           <View style={{ height: 100 }} />
@@ -112,7 +114,7 @@ export default function OrgChartScreen({ navigation }) {
   );
 }
 
-function OrgNode({ node, depth }) {
+function OrgNode({ node, depth, styles, colors }) {
   return (
     <View style={{ marginLeft: depth * 18 }}>
       <View style={styles.nodeCard}>
@@ -132,13 +134,13 @@ function OrgNode({ node, depth }) {
         )}
       </View>
       {node.children?.map((child) => (
-        <OrgNode key={child.id} node={child} depth={depth + 1} />
+        <OrgNode key={child.id} node={child} depth={depth + 1} styles={styles} colors={colors} />
       ))}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   execCard: {
@@ -167,35 +169,35 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   sectionHeader: { marginBottom: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   emptyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 32,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   emptyText: { marginTop: 10, fontSize: 13, color: "#64748B", fontWeight: "600" },
   nodeCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   nodeIconBadge: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
-  nodeName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  nodeName: { fontSize: 13, fontWeight: "700", color: colors.text },
   nodeRole: { fontSize: 11, color: "#64748B", marginTop: 2, fontWeight: "600" },
   countBadge: {
     backgroundColor: "#F1F5F9",

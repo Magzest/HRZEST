@@ -19,10 +19,13 @@ import {
   employeeLogin,
 } from "../api/client";
 import { useAuth } from "../store/AuthContext";
+import { useTheme } from "../store/ThemeContext";
 import QRScannerModal from "./QRScannerModal";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [tab, setTab] = useState("admin"); // 'admin' | 'employee'
 
   // Admin login states
@@ -194,7 +197,7 @@ export default function LoginScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="Enter admin username"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textLight}
                     value={username}
                     onChangeText={setUsername}
                     autoCapitalize="none"
@@ -207,7 +210,7 @@ export default function LoginScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="Enter password"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textLight}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPass}
@@ -281,7 +284,7 @@ export default function LoginScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="Enter employee ID"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textLight}
                     value={empId}
                     onChangeText={setEmpId}
                     autoCapitalize="characters"
@@ -295,7 +298,7 @@ export default function LoginScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder="Enter password"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={colors.textLight}
                     value={empPassword}
                     onChangeText={setEmpPassword}
                     secureTextEntry={!showPass}
@@ -382,7 +385,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   bg: { flex: 1 },
   scroll: {
     flexGrow: 1,
@@ -467,7 +470,7 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 22,
     shadowColor: "#0F172A",
@@ -482,7 +485,7 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     letterSpacing: -0.3,
   },
   formSubtitle: {
@@ -502,9 +505,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     height: 48,
     borderRadius: 14,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     paddingHorizontal: 14,
     marginBottom: 16,
   },
@@ -515,7 +518,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     fontSize: 13,
-    color: "#0F172A",
+    color: colors.text,
     fontWeight: "600",
   },
   eyeBtn: {
@@ -543,18 +546,18 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: colors.border,
   },
   dividerText: {
     fontSize: 10,
     fontWeight: "800",
-    color: "#94A3B8",
+    color: colors.textLight,
     paddingHorizontal: 10,
   },
   scanBtn: {
     height: 48,
     borderRadius: 14,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",

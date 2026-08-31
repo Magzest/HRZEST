@@ -12,10 +12,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function AdminDrawerContent(props) {
   const { navigation, state } = props;
   const { user, signOut } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   const drawerRoute = state.routes[state.index];
@@ -81,6 +84,16 @@ export default function AdminDrawerContent(props) {
       iconFocused: "briefcase",
       route: "Onboarding",
       section: "HR OPERATIONS",
+    },
+    {
+      title: "AI Recruitment",
+      icon: "sparkles-outline",
+      iconFocused: "sparkles",
+      route: "Recruitment",
+      section: "HR OPERATIONS",
+      badge: "AI",
+      badgeBg: "#F5F3FF",
+      badgeColor: "#7C3AED",
     },
     {
       title: "Departments & Units",
@@ -168,7 +181,7 @@ export default function AdminDrawerContent(props) {
           <Ionicons
             name={active ? item.iconFocused : item.icon}
             size={18}
-            color={active ? "#FFFFFF" : "#0B2253"}
+            color={active ? "#FFFFFF" : colors.primary}
           />
         </View>
 
@@ -188,7 +201,7 @@ export default function AdminDrawerContent(props) {
           <Ionicons
             name={active ? "checkmark-circle" : "chevron-forward"}
             size={16}
-            color={active ? "#22C55E" : "#94A3B8"}
+            color={active ? colors.success : colors.textLight}
           />
         </View>
       </TouchableOpacity>
@@ -226,7 +239,7 @@ export default function AdminDrawerContent(props) {
               />
             ) : (
               <View style={[styles.avatar, { backgroundColor: "#FFFFFF" }]}>
-                <Text style={{ fontSize: 22, fontWeight: "900", color: "#0B2253" }}>
+                <Text style={{ fontSize: 22, fontWeight: "900", color: colors.primary }}>
                   {(user?.company || user?.name || "A").charAt(0).toUpperCase()}
                 </Text>
               </View>
@@ -243,7 +256,7 @@ export default function AdminDrawerContent(props) {
             </Text>
             <View style={styles.roleBadgeRow}>
               <View style={styles.roleBadge}>
-                <Ionicons name="shield-checkmark" size={12} color="#F59E0B" style={{ marginRight: 4 }} />
+                <Ionicons name="shield-checkmark" size={12} color={colors.warning} style={{ marginRight: 4 }} />
                 <Text style={styles.roleText}>Verified Organisation</Text>
               </View>
             </View>
@@ -270,7 +283,7 @@ export default function AdminDrawerContent(props) {
           style={styles.logoutButton}
           onPress={handleLogout}
         >
-          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Ionicons name="log-out-outline" size={20} color={colors.danger} />
           <Text style={styles.logoutText}>Sign Out Account</Text>
         </TouchableOpacity>
 
@@ -280,10 +293,10 @@ export default function AdminDrawerContent(props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: 20,
@@ -326,7 +339,7 @@ const styles = StyleSheet.create({
     width: 15,
     height: 15,
     borderRadius: 7.5,
-    backgroundColor: "#22C55E",
+    backgroundColor: colors.success,
     borderWidth: 2.5,
     borderColor: "#FFFFFF",
   },
@@ -387,11 +400,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     marginBottom: 6,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.04,
@@ -399,8 +412,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   activeMenuItem: {
-    backgroundColor: "#0B2253",
-    borderColor: "#0B2253",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
     elevation: 6,
     shadowColor: "#0B2253",
     shadowOpacity: 0.35,
@@ -411,7 +424,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -421,7 +434,7 @@ const styles = StyleSheet.create({
   menuText: {
     flex: 1,
     marginLeft: 12,
-    color: "#0F172A",
+    color: colors.text,
     fontWeight: "700",
     fontSize: 13,
   },
@@ -451,14 +464,14 @@ const styles = StyleSheet.create({
   bottomContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: colors.border,
   },
   logoutButton: {
     height: 48,
     borderRadius: 14,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: colors.redBg,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -467,14 +480,14 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     marginLeft: 8,
-    color: "#EF4444",
+    color: colors.danger,
     fontWeight: "700",
     fontSize: 13,
   },
   version: {
     marginTop: 10,
     textAlign: "center",
-    color: "#94A3B8",
+    color: colors.textLight,
     fontSize: 11,
     fontWeight: "600",
   },

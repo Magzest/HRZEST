@@ -13,12 +13,15 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchEmployeeProfile, updateMyProfile } from "../../api/client";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import DetailCard from "../../components/profile/DetailCard";
 
 export default function ContactScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -107,7 +110,7 @@ export default function ContactScreen() {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color="#173B8C" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -123,7 +126,7 @@ export default function ContactScreen() {
             </View>
 
             <TouchableOpacity style={styles.editBtn} onPress={() => setModalVisible(true)}>
-              <Ionicons name="create-outline" size={20} color="#173B8C" />
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -144,7 +147,7 @@ export default function ContactScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Contact Details</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close-circle" size={24} color="#64748B" />
+                <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -177,56 +180,56 @@ export default function ContactScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+const makeStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 18, paddingBottom: 130 },
   summaryCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
   },
   summaryText: { flex: 1 },
-  name: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
-  subText: { fontSize: 13, fontWeight: "600", color: "#64748B", marginTop: 2 },
+  name: { fontSize: 15, fontWeight: "800", color: colors.text },
+  subText: { fontSize: 13, fontWeight: "600", color: colors.textSecondary, marginTop: 2 },
   editBtn: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.75)", justifyContent: "center", padding: 20 },
-  modalContent: { backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24 },
+  modalContent: { backgroundColor: colors.card, borderRadius: 24, padding: 24 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  modalTitle: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
-  inputLabel: { fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  inputLabel: { fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginTop: 10 },
   input: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 10,
     marginTop: 4,
     fontSize: 14,
-    color: "#0F172A",
+    color: colors.text,
   },
   saveModalBtn: {
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",

@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import { fetchEmployeeProfile, updateMyProfile, uploadEmployeePhoto, getPhotoUrl } from "../../api/client";
 
@@ -27,6 +28,8 @@ import DigitalIdCardModal from "../../components/employee/DigitalIdCardModal";
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const { user, updateUser } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -287,7 +290,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F6F9FE", "#EEF4FF"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <ProfileHeader title="My Profile" showBack={false} />
 
       <ScrollView
@@ -300,7 +303,7 @@ export default function ProfileScreen() {
               setRefreshing(true);
               loadProfile();
             }}
-            colors={["#173B8C"]}
+            colors={[colors.primary]}
           />
         }
       >
@@ -332,21 +335,21 @@ export default function ProfileScreen() {
 
           <View style={styles.quickCard}>
             <View style={styles.quickRow}>
-              <Ionicons name="mail-outline" size={18} color="#173B8C" />
+              <Ionicons name="mail-outline" size={18} color={colors.primary} />
               <Text style={styles.quickText}>{profileData.email}</Text>
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.quickRow}>
-              <Ionicons name="call-outline" size={18} color="#173B8C" />
+              <Ionicons name="call-outline" size={18} color={colors.primary} />
               <Text style={styles.quickText}>{profileData.phone}</Text>
             </View>
 
             <View style={styles.divider} />
 
             <View style={styles.quickRow}>
-              <Ionicons name="location-outline" size={18} color="#173B8C" />
+              <Ionicons name="location-outline" size={18} color={colors.primary} />
               <Text style={styles.quickText}>{profileData.address}</Text>
             </View>
           </View>
@@ -380,22 +383,22 @@ export default function ProfileScreen() {
       {/* Edit Profile Modal */}
       <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.75)", justifyContent: "center", padding: 20 }}>
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 24, padding: 24 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <Text style={{ fontSize: 15, fontWeight: "800", color: "#0F172A" }}>Edit Profile Details</Text>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: colors.text }}>Edit Profile Details</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Ionicons name="close-circle" size={24} color="#64748B" />
+                <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 8 }}>FULL NAME</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginTop: 8 }}>FULL NAME</Text>
             <TextInput
               style={styles.modalInput}
               value={editName}
               onChangeText={setEditName}
             />
 
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMAIL ADDRESS</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginTop: 10 }}>EMAIL ADDRESS</Text>
             <TextInput
               style={styles.modalInput}
               value={editEmail}
@@ -403,7 +406,7 @@ export default function ProfileScreen() {
               keyboardType="email-address"
             />
 
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>PHONE NUMBER</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginTop: 10 }}>PHONE NUMBER</Text>
             <TextInput
               style={styles.modalInput}
               value={editPhone}
@@ -411,7 +414,7 @@ export default function ProfileScreen() {
               keyboardType="phone-pad"
             />
 
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>ADDRESS</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginTop: 10 }}>ADDRESS</Text>
             <TextInput
               style={styles.modalInput}
               value={editAddress}
@@ -436,7 +439,7 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -451,16 +454,16 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 12,
     letterSpacing: -0.2,
   },
   quickCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
     shadowColor: "#000",
     shadowOpacity: 0.04,
     shadowRadius: 10,
@@ -479,25 +482,25 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "600",
-    color: "#334155",
+    color: colors.textSecondary,
   },
   divider: {
     height: 1,
-    backgroundColor: "#EEF2F7",
+    backgroundColor: colors.border,
     marginVertical: 12,
   },
   modalInput: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 10,
     marginTop: 4,
     fontSize: 14,
-    color: "#0F172A",
+    color: colors.text,
   },
   saveBtn: {
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",

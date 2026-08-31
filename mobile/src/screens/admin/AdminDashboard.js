@@ -26,10 +26,13 @@ import AiChatModal from "../../components/AiChatModal";
 
 import { fetchDashboard } from "../../api/client";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import { mergeEmployeesWithLocal } from "../../utils/employeeStore";
 
 export default function AdminDashboard({ navigation }) {
   const { user, updateUser } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [dashboardData, setDashboardData] = useState(null);
   const [totalEmpsCount, setTotalEmpsCount] = useState(0);
@@ -70,7 +73,7 @@ export default function AdminDashboard({ navigation }) {
   const payrollFormatted = dashboardData?.total_payroll ? "₹" + (dashboardData.total_payroll / 100000).toFixed(1) + "L" : "₹0";
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9"]} style={styles.container}>
+    <LinearGradient colors={[colors.screenGradient[0], colors.screenGradient[1]]} style={styles.container}>
       <SafeAreaView style={styles.container}>
         <AdminHeader title="Admin Dashboard" navigation={navigation} />
 
@@ -115,7 +118,7 @@ export default function AdminDashboard({ navigation }) {
             pending={pendingLeaves}
             subtitle={pendingLeaves > 0 ? "Requires your approval" : "No pending approvals"}
             icon="document-text-outline"
-            color="#F59E0B"
+            color={colors.warning}
             background="#FEF3C7"
             onPress={() => navigation.navigate("LeaveRequests")}
           />
@@ -156,14 +159,14 @@ export default function AdminDashboard({ navigation }) {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="megaphone" size={22} color="#0B2253" />
+                  <Ionicons name="megaphone" size={22} color={colors.primary} />
                   <Text style={styles.modalTitle}>Company Announcements</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.closeBtn}
                   onPress={() => setAnnouncementModalVisible(false)}
                 >
-                  <Ionicons name="close" size={20} color="#0F172A" />
+                  <Ionicons name="close" size={20} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
@@ -173,7 +176,7 @@ export default function AdminDashboard({ navigation }) {
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                   <View style={{ padding: 24, alignItems: "center" }}>
-                    <Ionicons name="notifications-off-outline" size={36} color="#94A3B8" />
+                    <Ionicons name="notifications-off-outline" size={36} color={colors.textLight} />
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
                       No Company Announcements Yet
                     </Text>
@@ -181,14 +184,14 @@ export default function AdminDashboard({ navigation }) {
                 }
                 renderItem={({ item }) => (
                   <View style={styles.announcementItem}>
-                    <View style={[styles.itemIconBox, { backgroundColor: item.bg || "#EFF6FF" }]}>
+                    <View style={[styles.itemIconBox, { backgroundColor: item.bg || colors.blueBg }]}>
                       <Ionicons name={item.icon || "megaphone-outline"} size={22} color={item.color || "#173B8C"} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 14 }}>
                       <View style={styles.itemMetaRow}>
                         <Text style={styles.itemTitle}>{item.title}</Text>
                         {item.category ? (
-                          <View style={[styles.categoryBadge, { backgroundColor: item.bg || "#EFF6FF" }]}>
+                          <View style={[styles.categoryBadge, { backgroundColor: item.bg || colors.blueBg }]}>
                             <Text style={[styles.categoryText, { color: item.color || "#173B8C" }]}>
                               {item.category}
                             </Text>
@@ -216,14 +219,14 @@ export default function AdminDashboard({ navigation }) {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="time" size={22} color="#0B2253" />
+                  <Ionicons name="time" size={22} color={colors.primary} />
                   <Text style={styles.modalTitle}>System Activity & Audit Logs</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.closeBtn}
                   onPress={() => setActivityModalVisible(false)}
                 >
-                  <Ionicons name="close" size={20} color="#0F172A" />
+                  <Ionicons name="close" size={20} color={colors.text} />
                 </TouchableOpacity>
               </View>
 
@@ -233,7 +236,7 @@ export default function AdminDashboard({ navigation }) {
                 showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                   <View style={{ padding: 24, alignItems: "center" }}>
-                    <Ionicons name="time-outline" size={36} color="#94A3B8" />
+                    <Ionicons name="time-outline" size={36} color={colors.textLight} />
                     <Text style={{ fontSize: 14, fontWeight: "600", color: "#64748B", marginTop: 8 }}>
                       No System Activities Logged Yet
                     </Text>
@@ -266,7 +269,7 @@ export default function AdminDashboard({ navigation }) {
             width: 54,
             height: 54,
             borderRadius: 27,
-            backgroundColor: "#0B2253",
+            backgroundColor: colors.primary,
             justifyContent: "center",
             alignItems: "center",
             elevation: 8,
@@ -287,7 +290,7 @@ export default function AdminDashboard({ navigation }) {
 }
 
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -307,7 +310,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     maxHeight: "82%",
@@ -320,12 +323,12 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginLeft: 10,
   },
   closeBtn: {
@@ -338,12 +341,12 @@ const styles = StyleSheet.create({
   },
   announcementItem: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   itemIconBox: {
     width: 44,
@@ -361,7 +364,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
     marginRight: 6,
   },
   categoryBadge: {
@@ -376,13 +379,13 @@ const styles = StyleSheet.create({
   itemMsg: {
     marginTop: 6,
     fontSize: 12,
-    color: "#475569",
+    color: colors.textSecondary,
     lineHeight: 17,
   },
   itemDate: {
     marginTop: 8,
     fontSize: 11,
-    color: "#94A3B8",
+    color: colors.textLight,
     fontWeight: "600",
   },
 });

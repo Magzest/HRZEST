@@ -15,10 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 
 import AdminHeader from "../../components/admin/AdminHeader";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchBillingStatus, getWebSessionLink } from "../../api/client";
-
-const { colors } = THEME;
 
 // Same data/limits the web app shows on templates/employees.html (the
 // seat-usage banner) and templates/seat_checkout.html (Seats & Billing
@@ -30,6 +28,8 @@ const { colors } = THEME;
 // bridged in via a one-time login link (getWebSessionLink()) so the user
 // never has to log in twice.
 export default function SeatsBillingScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -251,7 +251,7 @@ export default function SeatsBillingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centerFill: { flex: 1, alignItems: "center", justifyContent: "center" },
   scrollContent: { padding: 16, paddingBottom: 32 },

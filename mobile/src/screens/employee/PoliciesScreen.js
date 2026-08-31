@@ -21,8 +21,11 @@ import {
   policyTabs,
   policies,
 } from "../../data/policiesData";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function PoliciesScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [selectedTab, setSelectedTab] = useState("terms");
 
   const selectedPolicy = policies[selectedTab];
@@ -117,10 +120,10 @@ export default function PoliciesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: colors.background,
   },
 
   content: {

@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // session/credential data here, use secureStorage.js for that.
 const BIOMETRIC_LOCK_KEY = '@pref_biometric_lock_enabled';
 const NOTIFICATIONS_KEY = '@pref_notifications_enabled';
+const DARK_MODE_KEY = '@pref_dark_mode_enabled';
 
 export const getBiometricLockEnabled = async () => {
   const v = await AsyncStorage.getItem(BIOMETRIC_LOCK_KEY);
@@ -20,3 +21,11 @@ export const getNotificationsEnabled = async () => {
 
 export const setNotificationsEnabled = (enabled) =>
   AsyncStorage.setItem(NOTIFICATIONS_KEY, enabled ? 'true' : 'false');
+
+export const getDarkModeEnabled = async () => {
+  const v = await AsyncStorage.getItem(DARK_MODE_KEY);
+  return v === 'true'; // opt-in, defaults to light
+};
+
+export const setDarkModeEnabled = (enabled) =>
+  AsyncStorage.setItem(DARK_MODE_KEY, enabled ? 'true' : 'false');

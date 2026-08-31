@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AdminHeader from "../../components/admin/AdminHeader";
 import THEME from "../../constants/theme";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import {
   fetchShifts, createShift, fetchSettings, saveCompanySettings, saveGeoRadius,
   toggleCompanyFeature, fetchAdminProfile, changeAdminPassword, saveSalaryRules,
@@ -42,6 +43,8 @@ const workingDaysCsvToLabel = (csv) => {
 
 export default function SettingsScreen({ navigation, route }) {
   const { signOut } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
 
   // Tab State: 'company' | 'shifts' | 'attendance' | 'security' | 'notifications' | 'payroll' | 'profile'
   const initialTab = route?.params?.tab || "company";
@@ -355,7 +358,7 @@ export default function SettingsScreen({ navigation, route }) {
   };
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
           title="System Settings"
@@ -401,7 +404,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "company" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="business" size={22} color="#0B2253" />
+                <Ionicons name="business" size={22} color={colors.primary} />
                 <Text style={styles.cardHeaderTitle}>Company & Organization Profile</Text>
               </View>
 
@@ -471,14 +474,14 @@ export default function SettingsScreen({ navigation, route }) {
             <View style={styles.card}>
               <View style={styles.cardHeaderBetween}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Ionicons name="time" size={22} color="#0B2253" />
+                  <Ionicons name="time" size={22} color={colors.primary} />
                   <Text style={[styles.cardHeaderTitle, { marginLeft: 8 }]}>Work Shifts & Grace Timings</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.smallAddBtn}
                   onPress={() => setAddShiftModal(true)}
                 >
-                  <Ionicons name="add-circle" size={16} color="#0B2253" />
+                  <Ionicons name="add-circle" size={16} color={colors.primary} />
                   <Text style={styles.smallAddBtnText}>Add Shift</Text>
                 </TouchableOpacity>
               </View>
@@ -498,7 +501,7 @@ export default function SettingsScreen({ navigation, route }) {
               {shifts.map((s) => (
                 <View key={s.id} style={styles.shiftCardItem}>
                   <View style={styles.shiftIconBox}>
-                    <Ionicons name="alarm-outline" size={20} color="#0B2253" />
+                    <Ionicons name="alarm-outline" size={20} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.shiftName}>{s.name}</Text>
@@ -534,7 +537,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "attendance" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="location" size={22} color="#0B2253" />
+                <Ionicons name="location" size={22} color={colors.primary} />
                 <Text style={styles.cardHeaderTitle}>GPS Geofence & Facial Verification</Text>
               </View>
 
@@ -547,7 +550,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={geofenceEnabled}
                   onValueChange={(v) => handleToggleFeature("geo_enabled", v, setGeofenceEnabled)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={geofenceEnabled ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={geofenceEnabled ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -595,7 +598,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={faceRecog}
                   onValueChange={(v) => handleToggleFeature("face_auth_enabled", v, setFaceRecog)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={faceRecog ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={faceRecog ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -621,7 +624,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "security" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="shield-checkmark" size={22} color="#0B2253" />
+                <Ionicons name="shield-checkmark" size={22} color={colors.primary} />
                 <Text style={styles.cardHeaderTitle}>Security & Access Control</Text>
               </View>
 
@@ -694,7 +697,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "notifications" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="notifications" size={22} color="#0B2253" />
+                <Ionicons name="notifications" size={22} color={colors.primary} />
                 <Text style={styles.cardHeaderTitle}>Notification Preferences & Alerts</Text>
               </View>
 
@@ -711,7 +714,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={notifyLeave}
                   onValueChange={(v) => handleToggleFeature("notify_leave", v, setNotifyLeave)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={notifyLeave ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyLeave ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -724,7 +727,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={notifyPayslip}
                   onValueChange={(v) => handleToggleFeature("notify_payslip", v, setNotifyPayslip)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={notifyPayslip ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyPayslip ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -737,7 +740,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={notifyResignation}
                   onValueChange={(v) => handleToggleFeature("notify_resignation", v, setNotifyResignation)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={notifyResignation ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyResignation ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -750,7 +753,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={notifyDocExpiry}
                   onValueChange={(v) => handleToggleFeature("notify_doc_expiry", v, setNotifyDocExpiry)}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={notifyDocExpiry ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={notifyDocExpiry ? colors.primary : "#F1F5F9"}
                 />
               </View>
             </View>
@@ -760,7 +763,7 @@ export default function SettingsScreen({ navigation, route }) {
           {activeTab === "payroll" && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Ionicons name="wallet" size={22} color="#0B2253" />
+                <Ionicons name="wallet" size={22} color={colors.primary} />
                 <Text style={styles.cardHeaderTitle}>Payroll & Compensation Rules</Text>
               </View>
 
@@ -794,7 +797,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={holidayPay === "paid"}
                   onValueChange={(v) => setHolidayPay(v ? "paid" : "unpaid")}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={holidayPay === "paid" ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={holidayPay === "paid" ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -807,7 +810,7 @@ export default function SettingsScreen({ navigation, route }) {
                   value={leavePay === "exclude"}
                   onValueChange={(v) => setLeavePay(v ? "exclude" : "absent")}
                   trackColor={{ false: "#CBD5E1", true: "#93C5FD" }}
-                  thumbColor={leavePay === "exclude" ? "#0B2253" : "#F1F5F9"}
+                  thumbColor={leavePay === "exclude" ? colors.primary : "#F1F5F9"}
                 />
               </View>
 
@@ -849,7 +852,7 @@ export default function SettingsScreen({ navigation, route }) {
 
                   <View style={styles.roleBadgeRow}>
                     <View style={styles.roleBadge}>
-                      <Ionicons name="star" size={12} color="#0B2253" />
+                      <Ionicons name="star" size={12} color={colors.primary} />
                       <Text style={styles.roleText}>{profileRole === "hr" ? "HR" : profileRole.toUpperCase()}</Text>
                     </View>
                     <View style={styles.verifiedBadge}>
@@ -879,13 +882,13 @@ export default function SettingsScreen({ navigation, route }) {
                   onPress={() => setActiveTab("security")}
                 >
                   <View style={styles.actionIconBox}>
-                    <Ionicons name="key-outline" size={20} color="#0B2253" />
+                    <Ionicons name="key-outline" size={20} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.actionTitle}>Change Password</Text>
                     <Text style={styles.actionSub}>Update system access password</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -894,13 +897,13 @@ export default function SettingsScreen({ navigation, route }) {
                   onPress={() => setActiveTab("company")}
                 >
                   <View style={styles.actionIconBox}>
-                    <Ionicons name="business-outline" size={20} color="#0B2253" />
+                    <Ionicons name="business-outline" size={20} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.actionTitle}>Organization Info</Text>
                     <Text style={styles.actionSub}>Manage company profile & details</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -909,13 +912,13 @@ export default function SettingsScreen({ navigation, route }) {
                   onPress={() => setActiveTab("notifications")}
                 >
                   <View style={styles.actionIconBox}>
-                    <Ionicons name="notifications-outline" size={20} color="#0B2253" />
+                    <Ionicons name="notifications-outline" size={20} color={colors.primary} />
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
                     <Text style={styles.actionTitle}>Alert Preferences</Text>
                     <Text style={styles.actionSub}>Manage system notifications</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -923,7 +926,7 @@ export default function SettingsScreen({ navigation, route }) {
                   activeOpacity={0.8}
                   onPress={signOut}
                 >
-                  <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+                  <Ionicons name="log-out-outline" size={18} color={colors.danger} />
                   <Text style={styles.logoutBtnText}>Sign Out of Admin Portal</Text>
                 </TouchableOpacity>
               </View>
@@ -993,14 +996,14 @@ export default function SettingsScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
 
   // Horizontal Tab Bar
   tabBarContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
     paddingVertical: 10,
     elevation: 2,
   },
@@ -1019,7 +1022,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   tabButtonActive: {
-    backgroundColor: "#0B2253",
+    backgroundColor: colors.primary,
   },
   tabText: {
     fontSize: 12,
@@ -1038,12 +1041,12 @@ const styles = StyleSheet.create({
 
   // Base Card
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 3,
     shadowColor: "#0F172A",
     shadowOpacity: 0.06,
@@ -1064,7 +1067,7 @@ const styles = StyleSheet.create({
   cardHeaderTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginLeft: 8,
   },
 
@@ -1080,15 +1083,15 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   input: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: colors.text,
   },
   twoCol: {
     flexDirection: "row",
@@ -1108,13 +1111,13 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
   },
   chipBtnActive: {
-    backgroundColor: "#0B2253",
-    borderColor: "#0B2253",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   chipText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: colors.textSecondary,
   },
   chipTextActive: {
     color: "#FFFFFF",
@@ -1122,7 +1125,7 @@ const styles = StyleSheet.create({
 
   // Buttons
   saveButton: {
-    backgroundColor: "#0B2253",
+    backgroundColor: colors.primary,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
@@ -1150,7 +1153,7 @@ const styles = StyleSheet.create({
   settingRowTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   settingRowSub: {
     fontSize: 12,
@@ -1159,7 +1162,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: colors.border,
     marginVertical: 14,
   },
 
@@ -1167,13 +1170,13 @@ const styles = StyleSheet.create({
   smallAddBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 12,
   },
   smallAddBtnText: {
-    color: "#0B2253",
+    color: colors.primary,
     fontSize: 12,
     fontWeight: "700",
     marginLeft: 4,
@@ -1181,9 +1184,9 @@ const styles = StyleSheet.create({
   shiftCardItem: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 14,
     padding: 12,
     marginBottom: 10,
@@ -1192,14 +1195,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   shiftName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   shiftTiming: {
     fontSize: 12,
@@ -1250,11 +1253,11 @@ const styles = StyleSheet.create({
 
   // Admin Profile Tab
   profileCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 24,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     overflow: "hidden",
     elevation: 3,
   },
@@ -1268,7 +1271,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: "#0B2253",
+    backgroundColor: colors.primary,
     borderWidth: 4,
     borderColor: "#FFFFFF",
     justifyContent: "center",
@@ -1285,7 +1288,7 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   profileEmail: {
     fontSize: 13,
@@ -1300,13 +1303,13 @@ const styles = StyleSheet.create({
   roleBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 14,
   },
   roleText: {
-    color: "#0B2253",
+    color: colors.primary,
     fontSize: 11,
     fontWeight: "800",
     marginLeft: 4,
@@ -1328,9 +1331,9 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -1344,7 +1347,7 @@ const styles = StyleSheet.create({
   statVal: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0B2253",
+    color: colors.primary,
   },
   statLbl: {
     fontSize: 11,
@@ -1367,14 +1370,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   actionTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   actionSub: {
     fontSize: 12,
@@ -1385,7 +1388,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FEF2F2",
+    backgroundColor: colors.redBg,
     borderWidth: 1,
     borderColor: "#FECACA",
     paddingVertical: 14,
@@ -1393,7 +1396,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   logoutBtnText: {
-    color: "#EF4444",
+    color: colors.danger,
     fontSize: 14,
     fontWeight: "800",
     marginLeft: 8,
@@ -1407,7 +1410,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   modalCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 20,
     elevation: 10,
@@ -1421,6 +1424,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
 });

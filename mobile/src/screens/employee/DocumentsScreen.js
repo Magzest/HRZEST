@@ -18,6 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import EmptyState from "../../components/ui/EmptyState";
 import { fetchEmployeeDocuments, uploadDocument, deleteMyDocument } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 const DOC_TYPES = ["Aadhaar Card", "PAN Card", "Passport", "Degree Certificate", "Offer Letter", "Other"];
 
@@ -27,6 +28,8 @@ const DOC_TYPES = ["Aadhaar Card", "PAN Card", "Passport", "Degree Certificate",
 // dependency for PDFs; a photo of the document covers the common case for
 // compliance docs like Aadhaar/PAN, and PDF/doc upload still needs web.
 export default function DocumentsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,7 +143,7 @@ export default function DocumentsScreen() {
         showBack
         rightAction={
           <TouchableOpacity onPress={openUploadModal} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="add-circle" size={26} color="#173B8C" />
+            <Ionicons name="add-circle" size={26} color={colors.primary} />
           </TouchableOpacity>
         }
       />
@@ -151,7 +154,7 @@ export default function DocumentsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {loading ? (
-          <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 30 }} />
+          <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 30 }} />
         ) : docs.length === 0 ? (
           <EmptyState
             icon="document-text-outline"
@@ -162,7 +165,7 @@ export default function DocumentsScreen() {
           docs.map((doc) => (
             <View key={doc.id} style={styles.docCard}>
               <View style={styles.docIcon}>
-                <Ionicons name="document-text" size={22} color="#173B8C" />
+                <Ionicons name="document-text" size={22} color={colors.primary} />
               </View>
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.docType}>{doc.doc_type}</Text>
@@ -174,9 +177,9 @@ export default function DocumentsScreen() {
               </View>
               <TouchableOpacity onPress={() => handleDelete(doc)} disabled={deletingId === doc.id} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 {deletingId === doc.id ? (
-                  <ActivityIndicator size="small" color="#EF4444" />
+                  <ActivityIndicator size="small" color={colors.danger} />
                 ) : (
-                  <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                  <Ionicons name="trash-outline" size={20} color={colors.danger} />
                 )}
               </TouchableOpacity>
             </View>
@@ -186,15 +189,15 @@ export default function DocumentsScreen() {
 
       <Modal visible={uploadModalVisible} transparent animationType="slide" onRequestClose={() => setUploadModalVisible(false)}>
         <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
-          <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Upload Document</Text>
+          <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>Upload Document</Text>
               <TouchableOpacity onPress={() => setUploadModalVisible(false)}>
-                <Ionicons name="close-circle" size={26} color="#64748B" />
+                <Ionicons name="close-circle" size={26} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginBottom: 6 }}>DOCUMENT TYPE</Text>
+            <Text style={{ fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginBottom: 6 }}>DOCUMENT TYPE</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
               {DOC_TYPES.map((t) => (
                 <TouchableOpacity
@@ -202,26 +205,26 @@ export default function DocumentsScreen() {
                   onPress={() => setDocType(t)}
                   style={{
                     paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
-                    backgroundColor: docType === t ? "#173B8C" : "#F1F5F9",
+                    backgroundColor: docType === t ? colors.primary : colors.background,
                   }}
                 >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: docType === t ? "#FFFFFF" : "#334155" }}>{t}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: docType === t ? "#FFFFFF" : colors.text }}>{t}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
             <TouchableOpacity
               onPress={handlePickPhoto}
-              style={{ backgroundColor: "#F8FAFC", borderWidth: 2, borderColor: "#BFDBFE", borderStyle: "dashed", borderRadius: 14, padding: 20, alignItems: "center", marginBottom: 16 }}
+              style={{ backgroundColor: colors.background, borderWidth: 2, borderColor: "#BFDBFE", borderStyle: "dashed", borderRadius: 14, padding: 20, alignItems: "center", marginBottom: 16 }}
             >
               <Ionicons name={photoUri ? "checkmark-circle" : "image-outline"} size={32} color={photoUri ? "#16A34A" : "#1D4ED8"} />
-              <Text style={{ fontSize: 12, fontWeight: "700", color: "#334155", marginTop: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: colors.text, marginTop: 8 }}>
                 {photoUri ? "Photo Attached — Tap to Change" : "Tap to Attach a Photo"}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={{ backgroundColor: "#173B8C", borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
+              style={{ backgroundColor: colors.primary, borderRadius: 14, paddingVertical: 14, alignItems: "center" }}
               onPress={handleUpload}
               disabled={uploading}
             >
@@ -234,15 +237,15 @@ export default function DocumentsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+const makeStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { paddingHorizontal: 18, paddingBottom: 120, paddingTop: 18 },
   docCard: {
-    flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF",
-    borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: "#E2E8F0",
+    flexDirection: "row", alignItems: "center", backgroundColor: colors.card,
+    borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: colors.border,
   },
-  docIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#EEF4FF", justifyContent: "center", alignItems: "center" },
-  docType: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
-  docName: { fontSize: 12, color: "#475569", marginTop: 2 },
-  docMeta: { fontSize: 11, color: "#94A3B8", marginTop: 4 },
+  docIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryLight, justifyContent: "center", alignItems: "center" },
+  docType: { fontSize: 13, fontWeight: "700", color: colors.text },
+  docName: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  docMeta: { fontSize: 11, color: colors.textLight, marginTop: 4 },
 });

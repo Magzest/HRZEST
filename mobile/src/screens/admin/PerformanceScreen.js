@@ -16,6 +16,7 @@ import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
@@ -27,6 +28,8 @@ const CURRENT_QUARTER = Math.floor(today.getMonth() / 3) + 1;
 const CURRENT_YEAR = today.getFullYear();
 
 export default function PerformanceScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [selectedSort, setSelectedSort] = useState("Rating (High-Low)");
@@ -121,7 +124,7 @@ export default function PerformanceScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]}
+      colors={colors.screenGradient}
       style={styles.container}
     >
       <SafeAreaView style={{ flex: 1 }}>
@@ -187,8 +190,8 @@ export default function PerformanceScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 30 }} />
           ) : filteredReviews.length === 0 ? (
-            <View style={{ padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
-              <Ionicons name="ribbon-outline" size={48} color="#94A3B8" />
+            <View style={{ padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: colors.border }}>
+              <Ionicons name="ribbon-outline" size={48} color={colors.textLight} />
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 12 }}>
                 No Performance Reviews Found
               </Text>
@@ -278,9 +281,9 @@ export default function PerformanceScreen({ navigation }) {
         {/* Review Submission Modal */}
         <Modal visible={reviewModalVisible} transparent animationType="slide" onRequestClose={() => setReviewModalVisible(false)}>
           <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" }}>
+            <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: colors.text }}>
                   Q{CURRENT_QUARTER} {CURRENT_YEAR} Review -- {reviewTarget?.employeeName}
                 </Text>
                 <TouchableOpacity onPress={() => setReviewModalVisible(false)}>
@@ -291,7 +294,7 @@ export default function PerformanceScreen({ navigation }) {
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>REVIEWER FEEDBACK</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4, minHeight: 90, textAlignVertical: "top" }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4, minHeight: 90, textAlignVertical: "top" }}
                   placeholder="Summarize this quarter's performance..."
                   value={reviewFeedback}
                   onChangeText={setReviewFeedback}
@@ -314,7 +317,7 @@ export default function PerformanceScreen({ navigation }) {
                   ))}
                 </View>
 
-                <Text style={{ fontSize: 11, color: "#94A3B8", marginTop: 10 }}>
+                <Text style={{ fontSize: 11, color: colors.textLight, marginTop: 10 }}>
                   Overall rating is computed automatically from this employee's rated KPIs, same as on web.
                 </Text>
 
@@ -347,7 +350,7 @@ export default function PerformanceScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   heroCard: {
@@ -395,10 +398,10 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 12,
   },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   sectionBadge: { fontSize: 12, fontWeight: "700", color: "#173B8C" },
   reviewCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
@@ -407,19 +410,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   cardTop: { flexDirection: "row", alignItems: "center" },
   avatarCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
-  empName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  empName: { fontSize: 13, fontWeight: "700", color: colors.text },
   empRole: { fontSize: 12, color: "#64748B", marginTop: 2 },
   ratingBadge: {
     flexDirection: "row",
@@ -432,8 +435,8 @@ const styles = StyleSheet.create({
   ratingText: { marginLeft: 4, fontSize: 14, fontWeight: "800", color: "#B45309" },
   cardDivider: { height: 1, backgroundColor: "#F1F5F9", marginVertical: 12 },
   cardDetailsRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  detailLabel: { fontSize: 11, color: "#94A3B8", fontWeight: "600" },
-  detailValue: { fontSize: 14, fontWeight: "700", color: "#0F172A", marginTop: 2 },
+  detailLabel: { fontSize: 11, color: colors.textLight, fontWeight: "600" },
+  detailValue: { fontSize: 14, fontWeight: "700", color: colors.text, marginTop: 2 },
   statusTag: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 2 },
   statusCompleted: { backgroundColor: "#DCFCE7" },
   statusProgress: { backgroundColor: "#E0F2FE" },

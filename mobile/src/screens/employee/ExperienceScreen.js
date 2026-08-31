@@ -18,9 +18,12 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import EmptyState from "../../components/ui/EmptyState";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchMyExperience, addMyExperience, deleteMyExperience } from "../../api/client";
 
 export default function ExperienceScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [entries, setEntries] = useState([]);
@@ -117,21 +120,21 @@ export default function ExperienceScreen() {
         showBack
         rightAction={
           <TouchableOpacity onPress={() => setModalVisible(true)}>
-            <Ionicons name="add-circle-outline" size={26} color="#173B8C" />
+            <Ionicons name="add-circle-outline" size={26} color={colors.primary} />
           </TouchableOpacity>
         }
       />
 
       {loading ? (
         <View style={styles.centerFill}>
-          <ActivityIndicator size="large" color="#173B8C" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={["#173B8C"]} />
+            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[colors.primary]} />
           }
         >
           {entries.length === 0 ? (
@@ -144,7 +147,7 @@ export default function ExperienceScreen() {
             entries.map((entry) => (
               <View key={entry.id} style={styles.card}>
                 <View style={styles.cardIcon}>
-                  <Ionicons name="briefcase" size={20} color="#173B8C" />
+                  <Ionicons name="briefcase" size={20} color={colors.primary} />
                 </View>
                 <View style={styles.cardBody}>
                   <Text style={styles.cardTitle}>{entry.designation}</Text>
@@ -162,7 +165,7 @@ export default function ExperienceScreen() {
                   {!!entry.description && <Text style={styles.cardDesc}>{entry.description}</Text>}
                 </View>
                 <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(entry)}>
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
                 </TouchableOpacity>
               </View>
             ))
@@ -176,7 +179,7 @@ export default function ExperienceScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Experience</Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close-circle" size={24} color="#64748B" />
+                <Ionicons name="close-circle" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -191,7 +194,7 @@ export default function ExperienceScreen() {
 
             <View style={styles.currentRow}>
               <Text style={styles.inputLabel}>I CURRENTLY WORK HERE</Text>
-              <Switch value={isCurrent} onValueChange={setIsCurrent} trackColor={{ true: "#173B8C" }} />
+              <Switch value={isCurrent} onValueChange={setIsCurrent} trackColor={{ true: colors.primary }} />
             </View>
 
             {!isCurrent && (
@@ -220,36 +223,36 @@ export default function ExperienceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+const makeStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   centerFill: { flex: 1, justifyContent: "center", alignItems: "center" },
   content: { paddingHorizontal: 18, paddingBottom: 120, paddingTop: 18 },
   card: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   cardIcon: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
   },
   cardBody: { flex: 1 },
-  cardTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
-  cardSubtitle: { fontSize: 12.5, fontWeight: "600", color: "#475569", marginTop: 2 },
+  cardTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
+  cardSubtitle: { fontSize: 12.5, fontWeight: "600", color: colors.textSecondary, marginTop: 2 },
   cardMetaRow: { flexDirection: "row", alignItems: "center", marginTop: 4, gap: 8 },
-  cardMeta: { fontSize: 11.5, color: "#94A3B8", fontWeight: "600" },
-  cardDesc: { fontSize: 12, color: "#64748B", marginTop: 6, lineHeight: 17 },
+  cardMeta: { fontSize: 11.5, color: colors.textLight, fontWeight: "600" },
+  cardDesc: { fontSize: 12, color: colors.textSecondary, marginTop: 6, lineHeight: 17 },
   currentBadge: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: colors.greenBg,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -259,30 +262,30 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: colors.redBg,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
     alignSelf: "flex-start",
   },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.75)", justifyContent: "center", padding: 20 },
-  modalContent: { backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24, maxHeight: "85%" },
+  modalContent: { backgroundColor: colors.card, borderRadius: 24, padding: 24, maxHeight: "85%" },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  modalTitle: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
-  inputLabel: { fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 },
+  modalTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  inputLabel: { fontSize: 11, fontWeight: "700", color: colors.textSecondary, marginTop: 10 },
   currentRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 14 },
   input: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 10,
     marginTop: 4,
     fontSize: 14,
-    color: "#0F172A",
+    color: colors.text,
   },
   saveModalBtn: {
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: "center",
