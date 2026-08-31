@@ -119,3 +119,49 @@ def test_hr_helpdesk_bearer_token_admin(client, seed_admin):
 def test_hr_helpdesk_rejects_missing_auth(client):
     res = client.post("/api/ai/hr-helpdesk", json={"query": "Anything?"})
     assert res.status_code == 401
+
+
+def _admin_bearer_token(client, seed_admin):
+    return client.post("/api/login", json={
+        "username": seed_admin["username"], "password": seed_admin["password"],
+    }).get_json()["token"]
+
+
+def test_recruitment_routes_accept_admin_bearer_token(client, seed_admin):
+    """parse-resume/screen-candidate/evaluate-interview/attrition-analytics
+    were admin_required (session-only, redirects on failure) -- mobile's
+    Recruitment screen needs these reachable with a Bearer token instead."""
+    token = _admin_bearer_token(client, seed_admin)
+    auth = {"Authorization": f"Bearer {token}"}
+
+    res = client.post("/api/ai/parse-resume", data={"resume_text": "Alex Dev\nEmail: alex@dev.io\nSkills: Python"},
+                       headers=auth)
+    assert res.status_code == 200 and res.get_json()["ok"] is True
+
+    res = client.post("/api/ai/screen-candidate", json={
+        "resume_text": "Alex Dev\nSkills: Python, React", "job_description": "Python developer",
+    }, headers=auth)
+    assert res.status_code == 200 and res.get_json()["ok"] is True
+
+    res = client.post("/api/ai/evaluate-interview", json={
+        "candidate_name": "Alex Dev", "position": "Engineer", "notes": "Strong technical performance.",
+    }, headers=auth)
+    assert res.status_code == 200 and res.get_json()["ok"] is True
+
+    res = client.get("/api/ai/attrition-analytics", headers=auth)
+    assert res.status_code == 200 and res.get_json()["ok"] is True
+
+
+def test_recruitment_routes_reject_missing_auth(client):
+    assert client.post("/api/ai/parse-resume", data={"resume_text": "x"}).status_code == 401
+    assert client.post("/api/ai/screen-candidate", json={"resume_text": "x"}).status_code == 401
+    assert client.post("/api/ai/evaluate-interview", json={"notes": "x"}).status_code == 401
+    assert client.get("/api/ai/attrition-analytics").status_code == 401
+
+
+def test_recruitment_routes_reject_employee_bearer_token(client, seed_employee):
+    token = client.post("/api/employee/login", json={
+        "employee_id": seed_employee["employee_id"], "password": seed_employee["password"],
+    }).get_json()["token"]
+    auth = {"Authorization": f"Bearer {token}"}
+    assert client.get("/api/ai/attrition-analytics", headers=auth).status_code == 401

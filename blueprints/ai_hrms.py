@@ -6,7 +6,7 @@ from utils.ai_resume_parser import parse_resume, match_candidate_job
 from utils.ai_helpdesk import process_helpdesk_query
 from utils.ai_interview_evaluator import evaluate_interview_notes
 from utils.ai_attrition_analytics import compute_attrition_and_burnout_analytics
-from utils.auth import admin_required, _hash_token
+from utils.auth import admin_required, resolve_admin_identity, _hash_token
 from utils.helpers import _db
 
 ai_hrms_bp = Blueprint("ai_hrms", __name__)
@@ -42,9 +42,10 @@ def recruitment_page():
 
 
 @ai_hrms_bp.route("/api/ai/parse-resume", methods=["POST"])
-@admin_required
 def api_parse_resume():
     """API Endpoint: Parse uploaded resume document or raw text."""
+    if not resolve_admin_identity():
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
     file = request.files.get("resume_file")
     if file:
         content = file.read()
@@ -59,9 +60,10 @@ def api_parse_resume():
 
 
 @ai_hrms_bp.route("/api/ai/screen-candidate", methods=["POST"])
-@admin_required
 def api_screen_candidate():
     """API Endpoint: Score and match parsed candidate profile against job description."""
+    if not resolve_admin_identity():
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
     data = request.get_json(silent=True) or {}
     parsed_candidate = data.get("parsed_profile")
     job_description = data.get("job_description", "")
@@ -100,9 +102,10 @@ def api_hr_helpdesk():
 
 
 @ai_hrms_bp.route("/api/ai/evaluate-interview", methods=["POST"])
-@admin_required
 def api_evaluate_interview():
     """API Endpoint: Synthesize interviewer notes into structured scorecard & sentiment analysis."""
+    if not resolve_admin_identity():
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
     data = request.get_json(silent=True) or {}
     candidate_name = data.get("candidate_name", "Candidate")
     position = data.get("position", "Software Engineer")
@@ -116,9 +119,10 @@ def api_evaluate_interview():
 
 
 @ai_hrms_bp.route("/api/ai/attrition-analytics")
-@admin_required
 def api_attrition_analytics():
     """API Endpoint: Predict turnover trends and burnout risk indicators."""
+    if not resolve_admin_identity():
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
     active_cid = session.get("active_company_id")
     analytics = compute_attrition_and_burnout_analytics(company_id=active_cid)
     return jsonify({"ok": True, "analytics": analytics})
