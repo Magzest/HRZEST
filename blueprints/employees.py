@@ -715,6 +715,7 @@ def add_employee_page():
     emp_id = request.form.get("emp_id", "").strip()
     email = request.form.get("email", "").strip() or None
     role = request.form.get("role", "").strip() or None
+    phone = request.form.get("phone", "").strip() or None
     date_of_joining = request.form.get("date_of_joining", "").strip() or None
     work_mode = request.form.get("work_mode", "office").strip() or "office"
     work_lat_raw = request.form.get("work_lat", "").strip()
@@ -834,15 +835,15 @@ def add_employee_page():
             _mgr_name = request.form.get("manager_name", "").strip() or None
             _dept = request.form.get("department", "").strip() or None
             cursor.execute(
-                "INSERT INTO employees (name, employee_id, email, role, face_image, qr_code, password, "
+                "INSERT INTO employees (name, employee_id, email, role, phone, face_image, qr_code, password, "
                 "date_of_joining, work_mode, work_lat, work_lon, company_id, manager_id, manager_name, department, "
                 "shift_id, gender, dob, blood_group, address, city, state, pincode, "
                 "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
                 "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
                 "force_pin_change) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
                 "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
-                (name, emp_id, email, role, filepath, qr_path, hashed_pwd,
+                (name, emp_id, email, role, phone, filepath, qr_path, hashed_pwd,
                  date_of_joining, work_mode, work_lat, work_lon, company_id,
                  _mgr_id, _mgr_name, _dept, shift_id,
                  gender, dob, blood_group, address, city, state, pincode,

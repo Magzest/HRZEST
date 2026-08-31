@@ -23,7 +23,7 @@ RESERVED_PATH_SEGMENTS = frozenset({
     # infra / static
     "static", "healthz", "favicon.ico", "csp-report", "api",
     # auth / tenant-picker pages (global, not company-scoped)
-    "login", "admin_login", "admin-login", "employee_login", "get-started", "create_org", "org_payment_success", "quick_admin_login",
+    "login", "admin_login", "admin-login", "employee_login", "get-started", "create_org", "org_payment_success",
     "mobile_bridge_login",
     # server-to-server callbacks (no tenant slug, no session -- authenticated
     # by request signature instead; blueprints/webhooks.py's generic
