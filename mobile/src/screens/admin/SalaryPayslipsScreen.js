@@ -22,7 +22,8 @@ import SalaryStatsGrid from "../../components/admin/salary/SalaryStatsGrid";
 import PayrollActionButtons from "../../components/admin/salary/PayrollActionButtons";
 import EmployeeSalaryList from "../../components/admin/salary/EmployeeSalaryList";
 import SALARY_THEME from "../../constants/salaryTheme";
-import { fetchSalaryReport, fetchEmployees, sendPayslipEmail, fetchPayrollStatus, lockPayroll, unlockPayroll } from "../../api/client";
+import { fetchSalaryReport, fetchEmployees, sendPayslipEmail, fetchPayrollStatus, lockPayroll, unlockPayroll, fetchSalaryReportExport } from "../../api/client";
+import { shareBase64File } from "../../utils/fileShare";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
 const MONTHS = [
@@ -55,6 +56,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
   const [employees, setEmployees] = useState([]);
   const [payrollLocked, setPayrollLocked] = useState(false);
   const [payrollLoading, setPayrollLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     loadSalaryData();
@@ -172,6 +174,24 @@ export default function SalaryPayslipsScreen({ navigation }) {
         },
       ]
     );
+  };
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const monthIdx = MONTHS.indexOf(selectedMonth) + 1;
+      const res = await fetchSalaryReportExport(selectedYear, monthIdx);
+      if (res?.data?.ok) {
+        await shareBase64File(res.data.filename, res.data.content_base64, res.data.mime_type);
+      } else {
+        Alert.alert("Export Failed", res?.data?.msg || "Could not generate the salary report.");
+      }
+    } catch (e) {
+      Alert.alert("Export Failed", e?.response?.data?.msg || "Could not generate the salary report.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleEmailPayslip = async (employee) => {
@@ -294,10 +314,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
 
         <PayrollActionButtons
           onGenerate={handleGeneratePayroll}
-          onExport={() => Alert.alert(
-            "Not Available on Mobile Yet",
-            "Exporting a salary report is only available from the web admin dashboard for now."
-          )}
+          onExport={handleExport}
           onEmail={handleBulkEmail}
           onMore={() => Alert.alert("Options", "Additional payroll rules available under Settings.")}
         />

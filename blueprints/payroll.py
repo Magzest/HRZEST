@@ -203,17 +203,13 @@ def salary_report():
                            )
 
 
-@payroll_bp.route("/salary_report_export")
-@role_required("admin")
-@limiter.limit("10 per minute")
-def salary_report_export():
-    from flask import send_file
-    year = int(request.args.get("year", datetime.date.today().year))
-    month = int(request.args.get("month", datetime.date.today().month))
-
+def _build_salary_report_workbook(year, month, active_cid=None):
+    """Shared by the session-only /salary_report_export (web, per-company
+    when a company is active) and the Bearer /api/payroll/salary_report_export
+    (mobile, always schema-wide -- no company switcher there). Returns
+    (BytesIO positioned at 0, filename)."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    active_cid = session.get("active_company_id")
     if active_cid:
         cursor.execute("""
             SELECT e.employee_id, e.name, e.email, COALESCE(s.salary_per_day, 0),
@@ -313,9 +309,35 @@ def salary_report_export():
     wb.save(buf)
     buf.seek(0)
     filename = f"Salary_Report_{month_name.replace(' ', '_')}.xlsx"
-    return send_file(buf, as_attachment=True,
-                     download_name=filename,
-                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    return buf, filename
+
+
+_SALARY_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+@payroll_bp.route("/salary_report_export")
+@role_required("admin")
+@limiter.limit("10 per minute")
+def salary_report_export():
+    from flask import send_file
+    year = int(request.args.get("year", datetime.date.today().year))
+    month = int(request.args.get("month", datetime.date.today().month))
+    buf, filename = _build_salary_report_workbook(year, month, session.get("active_company_id"))
+    return send_file(buf, as_attachment=True, download_name=filename, mimetype=_SALARY_XLSX_MIME)
+
+
+@payroll_bp.route("/api/payroll/salary_report_export", methods=["GET"])
+@api_required
+@api_role_required("admin")
+@limiter.limit("10 per minute")
+def api_salary_report_export():
+    import base64 as _base64
+    year = int(request.args.get("year", datetime.date.today().year))
+    month = int(request.args.get("month", datetime.date.today().month))
+    buf, filename = _build_salary_report_workbook(year, month)
+    content_b64 = _base64.b64encode(buf.read()).decode("ascii")
+    return jsonify({"ok": True, "filename": filename, "mime_type": _SALARY_XLSX_MIME,
+                     "content_base64": content_b64})
 
 
 # ---------------- EMAIL CONFIG ----------------

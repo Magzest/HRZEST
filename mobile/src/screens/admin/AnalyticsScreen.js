@@ -7,6 +7,7 @@ import {
   Text,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { DrawerActions } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AdminHeader from "../../components/admin/AdminHeader";
 import THEME from "../../constants/theme";
 import { fetchDashboard, fetchEmployees } from "../../api/client";
+import { shareTextFile } from "../../utils/fileShare";
 
 export default function AnalyticsScreen({ navigation }) {
   const [selectedPeriod, setSelectedPeriod] = useState("Month");
@@ -22,6 +24,7 @@ export default function AnalyticsScreen({ navigation }) {
   const [departments, setDepartments] = useState([]);
   const [performers, setPerformers] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [exporting, setExporting] = useState(false);
 
   React.useEffect(() => {
     loadAnalytics();
@@ -96,6 +99,42 @@ export default function AnalyticsScreen({ navigation }) {
     }
   };
 
+  // CSV built from the same overview/departments/performers state already
+  // on screen -- no separate backend export route to keep in sync with,
+  // since web's own Analytics page has never had an export feature either.
+  const csvEscape = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const lines = [
+        "HR Analytics Report", `Period,${selectedPeriod}`, "",
+        "Overview", "Metric,Value",
+        `Attendance %,${overview.attendance}`,
+        `Present,${overview.present}`,
+        `Absent,${overview.absent}`,
+        `Total Employees,${overview.employees}`,
+        `Late,${overview.late}`,
+        `On Leave,${overview.leave}`,
+        "",
+        "Departments", "Department,Employees,Share %",
+        ...departments.map((d) => `${csvEscape(d.name)},${d.employees},${d.share}`),
+        "",
+        "Active Staff", "Name,Department,Role",
+        ...performers.map((p) => `${csvEscape(p.name)},${csvEscape(p.department)},${csvEscape(p.role)}`),
+      ];
+      const filename = `Analytics_Report_${selectedPeriod}_${Date.now()}.csv`;
+      await shareTextFile(filename, lines.join("\n"));
+    } catch (e) {
+      Alert.alert("Export Failed", "Could not generate the analytics report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -131,13 +170,17 @@ export default function AnalyticsScreen({ navigation }) {
             <TouchableOpacity
               style={styles.exportBtn}
               activeOpacity={0.8}
-              onPress={() => Alert.alert(
-                "Not Available on Mobile Yet",
-                "Exporting analytics reports is only available from the web admin dashboard for now."
-              )}
+              onPress={handleExport}
+              disabled={exporting}
             >
-              <Ionicons name="download-outline" size={16} color="#173B8C" />
-              <Text style={styles.exportBtnText}>Export</Text>
+              {exporting ? (
+                <ActivityIndicator size="small" color="#173B8C" />
+              ) : (
+                <>
+                  <Ionicons name="download-outline" size={16} color="#173B8C" />
+                  <Text style={styles.exportBtnText}>Export</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
 

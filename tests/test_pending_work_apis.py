@@ -449,3 +449,27 @@ class TestSalaryRulesApi:
             "grace_minutes": 20, "holiday_pay": "unpaid", "leave_pay": "absent",
         }, headers=_auth(token))
         assert resp.status_code == 401
+
+
+class TestSalaryReportExportApi:
+    def test_export_returns_base64_xlsx(self, client, seed_admin):
+        import base64
+        import datetime as _dt
+        token = _admin_token(client, seed_admin)
+        today = _dt.date.today()
+        resp = client.get(
+            f"/api/payroll/salary_report_export?year={today.year}&month={today.month}",
+            headers=_auth(token),
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["filename"].endswith(".xlsx")
+        assert data["mime_type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        raw = base64.b64decode(data["content_base64"])
+        assert raw[:2] == b"PK"  # xlsx is a zip archive
+
+    def test_export_requires_admin_token(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        resp = client.get("/api/payroll/salary_report_export", headers=_auth(token))
+        assert resp.status_code == 401

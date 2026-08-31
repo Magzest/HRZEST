@@ -287,6 +287,13 @@ export const lockPayroll = (year, month) => client.post('/api/payroll/lock', { y
 
 export const unlockPayroll = (year, month) => client.post('/api/payroll/unlock', { year, month });
 
+// Returns the .xlsx as base64 JSON rather than a binary stream -- axios in
+// React Native has no reliable blob/arraybuffer download path, but a plain
+// JSON response decodes cleanly with expo-file-system's base64 file write
+// (see src/utils/fileShare.js's shareBase64File).
+export const fetchSalaryReportExport = (year, month) =>
+  client.get('/api/payroll/salary_report_export', { params: { year, month } });
+
 // Field names match what blueprints/performance.py's api_submit_performance_review()
 // (and the web's performance_save_review()) actually store -- quarter/year
 // upsert with reviewer feedback + a manager-set potential rating, not the
