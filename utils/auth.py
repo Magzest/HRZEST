@@ -445,6 +445,45 @@ def employee_api_required(f):
     return wrapper
 
 
+def resolve_admin_identity():
+    """Session (web) or Bearer admin token (mobile) -- for routes usable
+    from both without a route-level decorator, since admin_required
+    redirects to a login page rather than returning JSON, which breaks a
+    Bearer-token mobile client. Returns the admin username, or None if
+    neither proves a logged-in, active admin. Used by blueprints/ai_hrms.py
+    and blueprints/email_blast.py.
+
+    Mirrors admin_required's compromised-session check (a session flagged
+    mid-lifetime by utils/session_risk.py must not keep working just
+    because this helper skips the decorator) -- but only checks, doesn't
+    clear()/redirect like the decorator does, since callers here are JSON
+    sub-actions, not full page loads.
+    """
+    if session.get("admin_logged_in"):
+        sid = session.get("_sid")
+        if sid and is_session_compromised(sid):
+            return None
+        return session.get("admin_username", "admin")
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token_hash = _hash_token(auth[7:])
+    with _db() as (cursor, _conn):
+        cursor.execute(
+            """
+            SELECT t.identity, COALESCE(u.is_active, 1)
+            FROM api_tokens t
+            LEFT JOIN admin_users u ON u.username = t.identity
+            WHERE t.token=%s AND t.token_type='admin' AND t.expires_at > NOW()
+            """,
+            (token_hash,)
+        )
+        row = cursor.fetchone()
+    if not row or not row[1]:
+        return None
+    return row[0]
+
+
 # ── Email Settings 2FA step-up gate ───────────────────────────────────────────
 # Same time.time()-in-session idiom as the WebAuthn fingerprint window
 # (utils/webauthn_utils.py:_WA_FP_VERIFY_WINDOW_SEC), but NOT single-use/popped

@@ -1517,7 +1517,7 @@ def api_employee_profile():
                e.bank_name, e.bank_account, e.bank_ifsc, e.pan_number, e.aadhar_number,
                COALESCE(s.salary_per_day, 0), COALESCE(e.joining_date, e.date_of_joining),
                COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), ''),
-               e.emergency_contact_relation, e.uan_number
+               e.emergency_contact_relation, e.uan_number, COALESCE(e.email_alerts_enabled, 1)
         FROM employees e
         LEFT JOIN salary_config s ON e.employee_id = s.employee_id
         LEFT JOIN companies c ON e.company_id = c.id
@@ -1548,8 +1548,31 @@ def api_employee_profile():
             "join_date": str(row[22]) if row[22] else None,
             "company_name": row[23],
             "photo_url": f"/dataset/{row[0]}.jpg",
+            "email_alerts_enabled": bool(row[26]),
         },
     })
+
+
+@employee_portal_bp.route("/api/employee/notification_preferences", methods=["POST"])
+@employee_api_required
+def api_update_notification_preferences():
+    """Toggles whether this employee receives the status-change alert emails
+    gated in blueprints/leave.py (leave approved/declined, resignation
+    accepted/declined) -- a dedicated route rather than folding this into
+    api_update_my_profile, since that route replaces the whole employees
+    row and every existing caller of it would need updating to keep
+    round-tripping this field."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    enabled = 1 if data.get("email_alerts_enabled") else 0
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("UPDATE employees SET email_alerts_enabled=%s WHERE employee_id=%s", (enabled, emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "email_alerts_enabled": bool(enabled)})
 
 
 @employee_portal_bp.route("/api/employee/profile", methods=["POST"])

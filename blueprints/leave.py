@@ -458,7 +458,7 @@ def leave_action(lid):
     # Fetch leave + employee details before updating
     cursor.execute("""
         SELECT lr.employee_id, lr.leave_date, lr.reason,
-               e.name, e.email, COALESCE(lr.is_half_day, 0)
+               e.name, e.email, COALESCE(lr.is_half_day, 0), COALESCE(e.email_alerts_enabled, 1)
         FROM leave_requests lr
         JOIN employees e ON e.employee_id = lr.employee_id
         WHERE lr.id = %s
@@ -473,7 +473,7 @@ def leave_action(lid):
     cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (action, lid))
 
     if action == "Approved" and leave_row:
-        emp_id, leave_date, _, _, _, is_half = leave_row
+        emp_id, leave_date, _, _, _, is_half, _ = leave_row
         att_type = 'Half Day' if is_half else 'Approved Leave'
         cursor.execute("""
             INSERT INTO attendance (employee_id, date, attendance_type)
@@ -518,7 +518,7 @@ def leave_action(lid):
 
     # Send email + in-app notification to employee
     if leave_row:
-        emp_id, leave_date, reason, emp_name, emp_email, _ = leave_row
+        emp_id, leave_date, reason, emp_name, emp_email, _, email_alerts_enabled = leave_row
         icon = "✅" if action == "Approved" else "❌"
         _create_notification(
             'employee',
@@ -526,7 +526,9 @@ def leave_action(lid):
             f"Your leave request for {leave_date} has been {action.lower()}.",
             emp_id
         )
-        if not emp_email:
+        if not email_alerts_enabled:
+            flash(f"Leave {action} -- email alerts are disabled for {emp_name}, only in-app notification sent.", "success")
+        elif not emp_email:
             flash(f"Leave {action} but no email on record for {emp_name} -- notification not sent.", "warning")
         else:
             cfg_row = get_email_config()
@@ -724,7 +726,7 @@ def resignation_action(rid):
     cursor = db.cursor(buffered=True)
     cursor.execute("""
         SELECT rr.employee_id, rr.last_working_day, rr.reason,
-               e.name, e.email
+               e.name, e.email, COALESCE(e.email_alerts_enabled, 1)
         FROM resignation_requests rr
         JOIN employees e ON e.employee_id = rr.employee_id
         WHERE rr.id = %s
@@ -739,7 +741,7 @@ def resignation_action(rid):
                f"Employee {resign_row[0]} resignation {action}")
 
     if resign_row:
-        emp_id, lwd, reason, emp_name, emp_email = resign_row
+        emp_id, lwd, reason, emp_name, emp_email, email_alerts_enabled = resign_row
         icon = "✅" if action == "Accepted" else "❌"
         _create_notification(
             'employee',
@@ -747,7 +749,7 @@ def resignation_action(rid):
             f"Your resignation request has been {action.lower()}.",
             emp_id
         )
-        if emp_email:
+        if emp_email and email_alerts_enabled:
             cfg_row = get_email_config()
             if cfg_row:
                 color = "#16a34a" if action == "Accepted" else "#dc2626"
@@ -801,7 +803,7 @@ def bulk_leave_action():
 
     for lid in ids:
         cursor.execute("""
-            SELECT lr.employee_id, lr.leave_date, lr.reason, e.name, e.email
+            SELECT lr.employee_id, lr.leave_date, lr.reason, e.name, e.email, COALESCE(e.email_alerts_enabled, 1)
             FROM leave_requests lr
             JOIN employees e ON e.employee_id = lr.employee_id
             WHERE lr.id = %s AND lr.status = 'Pending'
@@ -809,7 +811,7 @@ def bulk_leave_action():
         row = cursor.fetchone()
         if not row:
             continue
-        emp_id, leave_date, reason, emp_name, emp_email = row
+        emp_id, leave_date, reason, emp_name, emp_email, email_alerts_enabled = row
         cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (action, lid))
         if action == "Approved":
             cursor.execute("""
@@ -818,7 +820,7 @@ def bulk_leave_action():
                 ON CONFLICT (employee_id, date) DO UPDATE SET attendance_type='Approved Leave'
             """, (emp_id, leave_date))
         done += 1
-        if emp_email and cfg_row:
+        if emp_email and cfg_row and email_alerts_enabled:
             color = "#16a34a" if action == "Approved" else "#dc2626"
             icon = "✅" if action == "Approved" else "❌"
             date_str = leave_date.strftime('%d %b %Y') if hasattr(leave_date, 'strftime') else str(leave_date)
