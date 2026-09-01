@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Email sending -- SMTP + DB-backed queue with retry worker."""
 import os
+import re
 import ssl
 import html as _html
 import base64
@@ -12,6 +13,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
+from email.utils import formatdate, make_msgid
 from database import get_db_connection
 from extensions import app_log
 from utils.helpers import decrypt_pii
@@ -85,6 +87,18 @@ def get_admin_emails():
     return emails
 
 
+def _html_to_plain_text(html_body):
+    """Best-effort plain-text fallback for the multipart/alternative part
+    below -- not meant to be a faithful rendering, just enough text that
+    the message isn't HTML-only, which spam filters penalize on its own."""
+    text = re.sub(r"(?i)<(br|/p|/div|/tr|/li)\s*/?>", "\n", html_body)
+    text = re.sub(r"(?s)<[^>]+>", "", text)
+    text = _html.unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    return text.strip()
+
+
 def send_email_smtp(to_email, subject, html_body, config,
                     attachment_bytes=None, attachment_filename=None):
     from_addr = config.get("from_email") or config["user"]
@@ -92,7 +106,16 @@ def send_email_smtp(to_email, subject, html_body, config,
     msg["Subject"] = subject
     msg["From"] = f"{config['from_name']} <{from_addr}>"
     msg["To"] = to_email
+    # Both missing on every email this app sent before -- legitimate mail
+    # essentially always carries these, so their absence is itself a spam
+    # signal on top of whatever else a filter scores the content on.
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=from_addr.split("@")[-1])
     alt = MIMEMultipart("alternative")
+    # Plain-text part must come first: multipart/alternative order is
+    # least-to-most preferred, and an HTML-only message (no text/plain
+    # sibling at all) is another common spam-filter penalty.
+    alt.attach(MIMEText(_html_to_plain_text(html_body), "plain", "utf-8"))
     alt.attach(MIMEText(html_body, "html", "utf-8"))
     msg.attach(alt)
     if attachment_bytes and attachment_filename:
