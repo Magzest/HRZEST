@@ -629,6 +629,8 @@
           <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> Current password is incorrect.</div>
         {% elif request.args.get('pwd_error') == 'mismatch' %}
           <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> New passwords do not match.</div>
+        {% elif request.args.get('pwd_error') == 'weak' %}
+          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> Password must be at least 8 characters.</div>
         {% endif %}
 
         <div class="u-d-grid u-gtc-1fr-1fr u-gap-24 u-ai-start">

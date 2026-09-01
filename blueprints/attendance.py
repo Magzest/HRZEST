@@ -25,7 +25,7 @@ from utils.attendance_utils import (
     fetch_holidays_set, get_employee_shift, _td_to_time, infer_type_legacy,
     is_within_range, is_within_office_range,
     check_attendance_lockout, record_attendance_failure, clear_attendance_lockout,
-    geofence_check_error, compute_session_worked_minutes,
+    geofence_check_error, compute_session_worked_minutes, fetch_employee_work_location,
 )
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified
@@ -1515,9 +1515,7 @@ def api_checkin():
         return jsonify({"ok": False, "msg": _lock_msg}), 403
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT name, work_mode, work_lat, work_lon FROM employees WHERE employee_id=%s", (emp_id,))
-    result = cursor.fetchone()
+    result = fetch_employee_work_location(cursor, emp_id)
     if not result:
         cursor.close()
         db.close()

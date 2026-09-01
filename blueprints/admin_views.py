@@ -30,7 +30,7 @@ from utils.auth import (
     email_settings_step_up_refresh, email_settings_step_up_clear,
     security_settings_step_up_clear,
     check_password_hash, generate_password_hash, HR_ROLE,
-    api_required, api_role_required,
+    api_required, api_role_required, validate_new_password,
 )
 from utils.device_utils import (
     get_or_create_device_token, list_devices, rename_device,
@@ -41,8 +41,9 @@ from utils.helpers import (
     tpath,
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
-    _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
+    encrypt_pii, decrypt_pii, invalidate_companies_cache,
     _validate_image_file, get_pending_action_counts, _audit, invalidate_settings_cache,
+    post_announcement,
 )
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.totp import (
@@ -1866,28 +1867,8 @@ def announcements_admin():
                 target_emp = None
             title = request.form["title"]
             content = request.form.get("content", "")
-            cursor.execute(
-                "INSERT INTO announcements (title, content, priority, visibility, target_employee_id) VALUES (%s,%s,%s,%s,%s)",
-                (title, content, request.form.get("priority", "Normal"), visibility, target_emp)
-            )
-            db.commit()
-            snippet = (content[:117] + "...") if len(content) > 120 else content
-            if visibility == "private":
-                _create_notification('employee', f"📢 {title}", snippet, target_emp)
-            else:
-                # Batched on the connection already open in this handler,
-                # rather than _create_notification's one-connection-per-call
-                # pattern, which previously opened/committed/closed a
-                # separate pooled connection per active employee.
-                cursor.execute("SELECT employee_id FROM employees WHERE is_active=1")
-                emp_ids = [eid for (eid,) in cursor.fetchall()]
-                if emp_ids:
-                    cursor.executemany(
-                        "INSERT INTO notifications (recipient_type, employee_id, title, message) "
-                        "VALUES ('employee', %s, %s, %s)",
-                        [(eid, f"📢 {title}", snippet) for eid in emp_ids]
-                    )
-                    db.commit()
+            post_announcement(cursor, db, title, content, request.form.get("priority", "Normal"),
+                               visibility, target_emp)
             flash("Announcement posted.", "success")
         elif action == "delete":
             cursor.execute("DELETE FROM announcements WHERE id=%s", (request.form["ann_id"],))
@@ -2518,8 +2499,9 @@ def api_hr_accounts_create():
 
     if not username or not re.match(r"^[a-zA-Z0-9_.-]{3,40}$", username):
         return jsonify({"ok": False, "msg": "Username must be 3-40 characters (letters, numbers, . _ - only)."}), 400
-    if len(password) < 8:
-        return jsonify({"ok": False, "msg": "Password must be at least 8 characters."}), 400
+    _pw_ok, _pw_err = validate_new_password(password)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -2638,8 +2620,9 @@ def api_hr_accounts_create_bearer():
 
     if not username or not re.match(r"^[a-zA-Z0-9_.-]{3,40}$", username):
         return jsonify({"ok": False, "msg": "Username must be 3-40 characters (letters, numbers, . _ - only)."}), 400
-    if len(password) < 8:
-        return jsonify({"ok": False, "msg": "Password must be at least 8 characters."}), 400
+    _pw_ok, _pw_err = validate_new_password(password)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)

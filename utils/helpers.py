@@ -609,6 +609,47 @@ def invalidate_settings_cache():
         _auth_cache["data"] = None
 
 
+def post_announcement(cursor, db, title, content, priority, visibility, target_emp=None):
+    """Insert an `announcements` row and fan out the matching `notifications`
+    row(s) -- shared by the web admin form (blueprints/admin_views.py's
+    announcements_admin) and the Bearer-token API twin (blueprints/
+    notifications.py's api_broadcast_notification), which previously each
+    hand-rolled this identical insert-then-fan-out sequence. Uses the
+    caller's own open cursor/connection so the public-audience fan-out stays
+    one batched executemany() round-trip rather than _create_notification's
+    one-connection-per-call pattern (deliberate -- see the perf note this
+    replaced in announcements_admin)."""
+    cursor.execute(
+        "INSERT INTO announcements (title, content, priority, visibility, target_employee_id) VALUES (%s,%s,%s,%s,%s)",
+        (title, content, priority, visibility, target_emp)
+    )
+    db.commit()
+    snippet = (content[:117] + "...") if len(content) > 120 else content
+    if visibility == "private":
+        _create_notification('employee', f"📢 {title}", snippet, target_emp)
+    else:
+        cursor.execute("SELECT employee_id FROM employees WHERE is_active=1")
+        emp_ids = [eid for (eid,) in cursor.fetchall()]
+        if emp_ids:
+            cursor.executemany(
+                "INSERT INTO notifications (recipient_type, employee_id, title, message) "
+                "VALUES ('employee', %s, %s, %s)",
+                [(eid, f"📢 {title}", snippet) for eid in emp_ids]
+            )
+            db.commit()
+
+
+def get_employee_sidebar_info(cursor, emp_id):
+    """(name, role, department, face_image) for the employee-portal sidebar
+    -- byte-identical query previously duplicated in blueprints/performance.py
+    (my_performance) and blueprints/leave.py (my_compoff)."""
+    cursor.execute(
+        "SELECT name, COALESCE(role,''), COALESCE(department,''), face_image FROM employees WHERE employee_id=%s",
+        (emp_id,)
+    )
+    return cursor.fetchone()
+
+
 _pending_counts_cache = {"data": None, "expires": None}
 _PENDING_COUNTS_CACHE_TTL = 30  # shorter than company_settings' 60s -- these
 # counts (leave/resignation/ticket approvals) change far more often, so a

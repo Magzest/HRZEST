@@ -2,27 +2,17 @@
 """Attendance calculation helpers."""
 import datetime
 import calendar
-import math
 from database import get_db_connection
 from extensions import app_log
 from utils.helpers import company_today
+from utils.geo import haversine_km
 import utils.config as cfg
 
 
 def is_within_range(user_lat, user_lon, office_lat, office_lon, radius_m=None):
-    R = 6371000
-    phi1 = math.radians(user_lat)
-    phi2 = math.radians(office_lat)
-    dphi = math.radians(office_lat - user_lat)
-    dlambda = math.radians(office_lon - user_lon)
-    a = (
-        math.sin(dphi / 2) ** 2
-        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-    )
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     if radius_m is None:
         radius_m = cfg.OFFICE_RADIUS_M
-    return (R * c) <= radius_m
+    return haversine_km(user_lat, user_lon, office_lat, office_lon) * 1000 <= radius_m
 
 
 def is_within_office_range(user_lat, user_lon):
@@ -61,6 +51,19 @@ def geofence_check_error(work_mode, work_lat, work_lon, lat, lon):
     elif not is_within_office_range(float(lat), float(lon)):
         return "You are outside the office premises."
     return None
+
+
+def fetch_employee_work_location(cursor, emp_id, include_face=False):
+    """Run the "name, work_mode, work_lat, work_lon [, face_image]" lookup
+    that every check-in route needs before calling geofence_check_error()
+    above -- previously copy-pasted at each call site in blueprints/
+    attendance.py and blueprints/employee_portal.py. Uses the caller's own
+    cursor/connection (lifecycle -- close/rollback on miss -- stays with
+    the caller, since each route handles that differently). Returns the row
+    tuple, or None if emp_id doesn't exist."""
+    cols = "name, work_mode, work_lat, work_lon, face_image" if include_face else "name, work_mode, work_lat, work_lon"
+    cursor.execute(f"SELECT {cols} FROM employees WHERE employee_id=%s", (emp_id,))
+    return cursor.fetchone()
 
 
 def compute_session_worked_minutes(current_time, today, login_time, last_relogin_stored, worked_mins_stored):

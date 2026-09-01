@@ -13,6 +13,7 @@ from database import get_db_connection
 from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
+    validate_new_password,
 )
 from utils.helpers import (
     _db, get_auth_config, validate_employee_email_domain,
@@ -518,8 +519,9 @@ def api_employee_signup():
     if not emp_id or not name or not password:
         return jsonify({"ok": False, "msg": "Employee ID, Full Name, and Password are required."}), 400
 
-    if len(password) < 6:
-        return jsonify({"ok": False, "msg": "Password must be at least 6 characters."}), 400
+    _pw_ok, _pw_err = validate_new_password(password)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
     _domain_error = validate_employee_email_domain(email)
     if _domain_error:

@@ -8,7 +8,7 @@ from flask import (
 )
 from extensions import app, app_log, limiter, log_security_event
 from database import get_db_connection
-from utils.auth import employee_required, employee_api_required, check_password_hash, generate_password_hash
+from utils.auth import employee_required, employee_api_required, validate_new_password
 from utils.helpers import (
     tpath,
     _audit, _db, encrypt_pii, decrypt_pii, decrypt_pii_date, _validate_image_file, get_auth_config,
@@ -20,6 +20,7 @@ from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, infer_type_legacy,
     fetch_holidays_set, get_billable_past_days, is_within_range,
     is_within_office_range, geofence_check_error, compute_session_worked_minutes,
+    fetch_employee_work_location,
 )
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
@@ -827,22 +828,14 @@ def api_employee_change_password():
     new_password = data.get("new_password", "").strip()
     if not current_password or not new_password:
         return jsonify({"ok": False, "msg": "current_password and new_password required"}), 400
-    if len(new_password) < 8:
-        return jsonify({"ok": False, "msg": "New password must be at least 8 characters"}), 400
+    _pw_ok, _pw_err = validate_new_password(new_password)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
     from flask import g as _g
+    from utils.auth import verify_and_update_password
     emp_id = _g.api_emp_id
-    with _db() as (cursor, conn):
-        cursor.execute("SELECT password FROM employees WHERE employee_id=%s", (emp_id,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"ok": False, "msg": "Employee not found"}), 404
-        if not row[0] or not check_password_hash(row[0], current_password):
-            return jsonify({"ok": False, "msg": "Current password is incorrect"}), 401
-        cursor.execute(
-            "UPDATE employees SET password=%s WHERE employee_id=%s",
-            (generate_password_hash(new_password), emp_id)
-        )
-        conn.commit()
+    if not verify_and_update_password("employees", "employee_id", emp_id, current_password, new_password):
+        return jsonify({"ok": False, "msg": "Current password is incorrect"}), 401
     return jsonify({"ok": True, "msg": "Password changed successfully"})
 
 
@@ -969,8 +962,7 @@ def api_employee_checkin():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT name, work_mode, work_lat, work_lon FROM employees WHERE employee_id=%s", (emp_id,))
-    result = cursor.fetchone()
+    result = fetch_employee_work_location(cursor, emp_id)
     if not result:
         cursor.close()
         db.close()
@@ -1110,8 +1102,7 @@ def api_employee_sync_punches():
 
     db2 = get_db_connection()
     cur2 = db2.cursor(buffered=True)
-    cur2.execute("SELECT name, work_mode, work_lat, work_lon FROM employees WHERE employee_id=%s", (emp_id,))
-    _emp_row = cur2.fetchone()
+    _emp_row = fetch_employee_work_location(cur2, emp_id)
     if not _emp_row:
         cur2.close()
         db2.close()
@@ -1268,11 +1259,7 @@ def api_employee_qr_face_checkin():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT name, work_mode, work_lat, work_lon, face_image FROM employees WHERE employee_id=%s",
-        (employee_id,)
-    )
-    result = cursor.fetchone()
+    result = fetch_employee_work_location(cursor, employee_id, include_face=True)
     if not result:
         cursor.close()
         db.close()

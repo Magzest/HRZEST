@@ -32,6 +32,49 @@ def check_password_hash(pw_hash: str, pw: str) -> bool:
     return _wz_check_pw(pw_hash, pw)
 
 
+# Single source of truth for the "new password" minimum -- every set/change/
+# reset endpoint (admin, employee, SecOps force-reset, platform admin seed
+# script) must call this instead of its own inline `len(pw) < N` check, so
+# the floor can't silently drift to something weaker on one path.
+MIN_PASSWORD_LENGTH = 8
+
+
+def validate_new_password(pw: str):
+    """Return (True, None) if pw meets the minimum bar, else (False, error_message)."""
+    if not pw or len(pw) < MIN_PASSWORD_LENGTH:
+        return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    return True, None
+
+
+def verify_and_update_password(table, id_column, id_value, current_pw, new_pw):
+    """Verify current_pw against `table`.password for the row matching
+    id_column=id_value, then overwrite it with new_pw. Returns True on
+    success, False if current_pw was wrong or the row doesn't exist (no
+    row is touched in that case). table/id_column are always call-site
+    literals ("admin_users"/"username" or "employees"/"employee_id"),
+    never request-controlled, so the f-string below carries no injection
+    risk. Shared by the web-session and Bearer-API "change own password"
+    routes for both admin_users and employees, which previously
+    reimplemented this identical verify-then-update per channel."""
+    from database import get_db_connection
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(f"SELECT password FROM {table} WHERE {id_column}=%s", (id_value,))
+    row = cursor.fetchone()
+    if not row or not check_password_hash(row[0], current_pw):
+        cursor.close()
+        db.close()
+        return False
+    cursor.execute(
+        f"UPDATE {table} SET password=%s WHERE {id_column}=%s",
+        (generate_password_hash(new_pw), id_value)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    return True
+
+
 # ── Token hashing ─────────────────────────────────────────────────────────────
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()

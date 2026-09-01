@@ -7,7 +7,7 @@ import secrets
 import datetime
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log, limiter, log_security_event
-from utils.auth import generate_password_hash, _hash_token, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
+from utils.auth import generate_password_hash, _hash_token, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY, validate_new_password
 from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 from utils.tenant_routing import RESERVED_PATH_SEGMENTS
@@ -69,8 +69,9 @@ def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_p
         return "Subdomain may only contain lowercase letters, digits, and hyphens."
     if subdomain in _RESERVED_SUBDOMAINS:
         return f"Subdomain '{subdomain}' is reserved. Choose another."
-    if len(admin_password) < 8:
-        return "Admin password must be at least 8 characters."
+    _pw_ok, _pw_err = validate_new_password(admin_password)
+    if not _pw_ok:
+        return _pw_err
     domain_error = validate_email_domain_format(clean_email_domain(email_domain))
     if domain_error:
         return domain_error

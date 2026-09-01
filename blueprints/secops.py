@@ -25,7 +25,7 @@ from utils.security_logs import (
 from utils.auth import (
     _db, check_password_hash, generate_password_hash,
     SOC_ANALYST_ROLE, SOC_2FA_WINDOW_SEC, soc_step_up_refresh,
-    turnstile_enabled,
+    turnstile_enabled, validate_new_password,
 )
 from utils.perf_metrics import snapshot as get_perf_snapshot
 from utils.session_risk import ensure_session_id
@@ -646,8 +646,9 @@ def api_reset_employee_password():
     if not emp_identifier or not new_pass:
         return jsonify({"ok": False, "msg": "Employee ID and new password are required."}), 400
 
-    if len(new_pass) < 6:
-        return jsonify({"ok": False, "msg": "Password must be at least 6 characters long."}), 400
+    _pw_ok, _pw_err = validate_new_password(new_pass)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
     pw_hash = generate_password_hash(new_pass)
     try:
@@ -717,8 +718,9 @@ def api_reset_admin_password():
     if not username or not new_pass:
         return jsonify({"ok": False, "msg": "Username and new password are required."}), 400
 
-    if len(new_pass) < 6:
-        return jsonify({"ok": False, "msg": "Password must be at least 6 characters long."}), 400
+    _pw_ok, _pw_err = validate_new_password(new_pass)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
     pw_hash = generate_password_hash(new_pass)
     try:

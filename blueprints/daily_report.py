@@ -21,6 +21,7 @@ from database import get_db_connection
 from extensions import app, app_log
 from utils.auth import admin_required
 from utils.email_utils import get_email_config, send_email_async, get_admin_emails
+from utils.helpers import get_pending_counts
 
 daily_report_bp = Blueprint("daily_report", __name__)
 
@@ -177,8 +178,7 @@ def _run_report():
     """, (today,))
     on_leave = cursor.fetchone()[0]
 
-    cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE status='Pending'")
-    pending_leaves = cursor.fetchone()[0]
+    pending_leaves = get_pending_counts()[0]
 
     absent = max(0, total - present - on_leave)
 

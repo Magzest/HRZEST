@@ -10,7 +10,7 @@ import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, employee_api_required
-from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings
+from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings, get_employee_sidebar_info
 from extensions import limiter
 
 performance_bp = Blueprint("performance", __name__)
@@ -523,9 +523,7 @@ def my_performance():
 
     reviews_data = [{"review": rev, "kpis": kpis_by_review[rev[0]]} for rev in reviews]
 
-    cursor.execute(
-        "SELECT name, COALESCE(role,''), COALESCE(department,''), face_image FROM employees WHERE employee_id=%s", (emp_id,))
-    emp_info = cursor.fetchone()
+    emp_info = get_employee_sidebar_info(cursor, emp_id)
     cursor.close()
     db.close()
 

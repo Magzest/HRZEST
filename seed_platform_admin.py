@@ -17,7 +17,7 @@ import argparse
 import getpass
 
 import database as db
-from utils.auth import generate_password_hash
+from utils.auth import generate_password_hash, validate_new_password
 
 
 def seed(username: str, email: str, password: str) -> None:
@@ -45,8 +45,9 @@ def main():
     args = ap.parse_args()
 
     password = args.password or getpass.getpass("Platform admin password: ")
-    if len(password) < 8:
-        raise SystemExit("Password must be at least 8 characters.")
+    _pw_ok, _pw_err = validate_new_password(password)
+    if not _pw_ok:
+        raise SystemExit(_pw_err)
 
     seed(args.username, args.email, password)
     print(f"Platform admin '{args.username}' is ready. Log in at /super_admin/login")

@@ -18,7 +18,7 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
 import utils.config as cfg
@@ -1584,9 +1584,7 @@ def my_compoff():
     lt_row = cursor.fetchone()
     compoff_lt_id = lt_row[0] if lt_row else None
 
-    cursor.execute(
-        "SELECT name, COALESCE(role,''), COALESCE(department,''), face_image FROM employees WHERE employee_id=%s", (emp_id,))
-    emp_info = cursor.fetchone()
+    emp_info = get_employee_sidebar_info(cursor, emp_id)
     cursor.close()
     db.close()
 

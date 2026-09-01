@@ -14,6 +14,7 @@ import html as _html
 import datetime
 import utils.config as cfg
 from utils.attendance_utils import infer_type_legacy
+from utils.dlp import mask_tail
 
 
 def build_salary_slip_html(emp_name, emp_id, emp_email, month_name, year, month, salary_data,
@@ -77,7 +78,7 @@ def build_salary_slip_html(emp_name, emp_id, emp_email, month_name, year, month,
     if uan:
         emp_row_extra += f"<tr><td>UAN</td><td>{_html.escape(str(uan))}</td></tr>"
     if bank_account:
-        masked = '*' * len(bank_account[:-4]) + bank_account[-4:]
+        masked = mask_tail(bank_account)
         emp_row_extra += f"<tr><td>Bank A/C</td><td>{_html.escape(masked)}</td></tr>"
     if bank_name:
         emp_row_extra += f"<tr><td>Bank</td><td>{_html.escape(str(bank_name))}</td></tr>"
