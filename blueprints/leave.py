@@ -1525,62 +1525,6 @@ def compoff():
     return redirect(tpath("/overtime?tab=compoff"))
 
 
-@leave_bp.route("/compoff_old")
-@admin_required
-def compoff_old():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-
-    # Settings
-    cursor.execute(
-        "SELECT COALESCE(compoff_min_ot_minutes,120), COALESCE(compoff_minutes_per_day,480), COALESCE(company_name,'') FROM company_settings LIMIT 1")
-    cfg_row = cursor.fetchone() or (120, 480, '')
-    min_ot_minutes = int(cfg_row[0])
-    minutes_per_day = int(cfg_row[1])
-    company_name = cfg_row[2]
-
-    # Employee balances
-    cursor.execute("""
-        SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
-               COALESCE(cb.earned_minutes,0), COALESCE(cb.used_minutes,0)
-        FROM employees e
-        LEFT JOIN compoff_balance cb ON cb.employee_id=e.employee_id
-        WHERE e.is_active=1 ORDER BY e.name
-    """)
-    balances = []
-    for emp_id, name, role, dept, earned, used in cursor.fetchall():
-        earned_days = round(earned / minutes_per_day, 2) if minutes_per_day else 0
-        used_days = round(used / minutes_per_day, 2) if minutes_per_day else 0
-        avail_days = max(0, round((earned - used) / minutes_per_day, 2)) if minutes_per_day else 0
-        balances.append({
-            "emp_id": emp_id, "name": name, "role": role, "dept": dept,
-            "earned_min": earned, "used_min": used,
-            "earned_days": earned_days, "used_days": used_days, "avail_days": avail_days
-        })
-
-    # Recent OT records (last 30 days)
-    cursor.execute("""
-        SELECT o.id, e.name, o.employee_id, o.date, o.ot_minutes, o.ot_pay, o.status
-        FROM overtime_records o JOIN employees e ON e.employee_id=o.employee_id
-        ORDER BY o.date DESC LIMIT 50
-    """)
-    ot_records = cursor.fetchall()
-
-    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
-    cursor.close()
-    db.close()
-
-    return render_template("compoff.html",
-                           balances=balances, ot_records=ot_records,
-                           min_ot_minutes=min_ot_minutes, minutes_per_day=minutes_per_day,
-                           company_name=company_name,
-                           pending_leaves=pending_leaves,
-                           pending_resignations=pending_resignations,
-                           pending_tickets=pending_tickets,
-                           active_nav="overtime",
-                           )
-
-
 @leave_bp.route("/compoff_settings", methods=["POST"])
 @admin_required
 def compoff_settings():

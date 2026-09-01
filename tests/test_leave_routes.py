@@ -823,11 +823,6 @@ class TestCompoffRedirectAndSettings:
         assert resp.status_code == 302
         assert "tab=compoff" in resp.headers["Location"]
 
-    def test_compoff_old_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/compoff_old")
-        assert resp.status_code == 200
-
     def test_compoff_settings_saves(self, client, seed_admin, db_engine):
         _admin_session(client, seed_admin["username"])
         resp = client.post("/compoff_settings", data={
