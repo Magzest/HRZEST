@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Org blueprint -- multi-tenant org self-registration."""
+import os
 import re
 import html
 import secrets
@@ -599,7 +600,16 @@ def _verify_application_otp(application, otp_code):
     mconn = get_master_db()
     mcur = mconn.cursor()
     stored_hash = application["otp_code_hash"] or ""
-    code_matches = bool(otp_code) and secrets.compare_digest(_hash_token(otp_code), stored_hash)
+    # Local-dev-only bypass: accepts any code (even blank) so the signup
+    # flow can be tested end-to-end without real SMTP -- same APP_ENV gate
+    # utils/helpers.py already uses for the malware-scan fail-open and the
+    # missing-APP_URL warning. Never active unless APP_ENV=development, so
+    # production (default "production") is unaffected.
+    _dev_bypass = os.environ.get("APP_ENV", "production") == "development"
+    if _dev_bypass:
+        app_log.warning("_verify_application_otp: APP_ENV=development -- OTP check bypassed for application %s",
+                         application["id"])
+    code_matches = _dev_bypass or (bool(otp_code) and secrets.compare_digest(_hash_token(otp_code), stored_hash))
     if not code_matches:
         mcur.execute("UPDATE tenant_applications SET otp_attempts=otp_attempts+1, updated_at=NOW() WHERE id=%s",
                      (application["id"],))
@@ -615,14 +625,21 @@ def _verify_application_otp(application, otp_code):
         mconn.close()
         return False, "This code has expired. Please request a new one."
 
+    _mark_application_otp_verified(application["id"], mconn, mcur)
+    return True, None
+
+
+def _mark_application_otp_verified(application_id, mconn, mcur):
+    """Shared with the APP_ENV=development skip-OTP path in create_org()
+    below -- same DB transition, whether a real code was checked or the
+    step was bypassed entirely for local testing."""
     mcur.execute(
         "UPDATE tenant_applications SET status='otp_verified', email_verified_at=NOW(), updated_at=NOW() WHERE id=%s",
-        (application["id"],)
+        (application_id,)
     )
     mconn.commit()
     mcur.close()
     mconn.close()
-    return True, None
 
 
 def _save_application_documents(application, files):
@@ -725,17 +742,29 @@ def create_org():
          _OTP_TTL_MINUTES, request.remote_addr)
     )
     application_id = mcur.fetchone()[0]
-    mconn.commit()
-    mcur.close()
-    mconn.close()
-
-    send_org_signup_otp_email(admin_email, company_name, otp_code)
 
     # access_token lives ONLY in the session cookie from here on for the
     # web flow -- never in a URL/query string, so it can't leak via
     # referrer headers or browser history. application_id (a bare
     # sequential id, not a secret) is fine to carry in the URL.
     session["org_access_token"] = access_token
+
+    if os.environ.get("APP_ENV", "production") == "development":
+        # Local-dev-only: skip the verify-email screen entirely instead of
+        # just accepting any code on it -- there's no SMTP to receive a
+        # real email against anyway. Same APP_ENV gate as everywhere else
+        # in this codebase that relaxes local dev; production (default
+        # "production") always goes through the real verify_otp step.
+        app_log.warning("create_org: APP_ENV=development -- OTP screen skipped entirely for application %s",
+                         application_id)
+        _mark_application_otp_verified(application_id, mconn, mcur)
+        return redirect(f"/create_org/upload_documents?application_id={application_id}")
+
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+
+    send_org_signup_otp_email(admin_email, company_name, otp_code)
     return redirect(f"/create_org/verify_otp?application_id={application_id}")
 
 
