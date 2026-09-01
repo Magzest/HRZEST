@@ -231,6 +231,16 @@
              style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
             <i class="ti ti-credit-card"></i> New Company (Paid Signup)
           </a>
+          <a href="/super_admin/applications" title="Review pending company-signup applications (OTP-verified, documents uploaded, awaiting your approval)"
+             style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fcd34d;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;position:relative;">
+            <i class="ti ti-clipboard-check"></i> Applications
+            {% if pending_applications_count %}<span style="background:#f59e0b;color:#1e293b;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ pending_applications_count }}</span>{% endif %}
+          </a>
+          <a href="/super_admin/duplicate-alerts" title="Signups blocked because the company name matched an existing tenant"
+             style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
+            <i class="ti ti-alert-triangle"></i> Duplicate Alerts
+            {% if unacknowledged_alerts_count %}<span style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ unacknowledged_alerts_count }}</span>{% endif %}
+          </a>
           <a href="/sp_admin/login" class="secops-btn" title="Opens the Security Dashboard (SecOps console) — separate login">
             <i class="ti ti-shield-lock"></i> Security Dashboard
           </a>

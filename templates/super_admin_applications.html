@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Company Applications — Platform Admin Console</title>
+    <link rel="stylesheet" href="/static/shared.min.css" />
+    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <style>
+      :root {
+        --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.85);
+        --border-color: rgba(51, 65, 85, 0.6);
+        --primary: #6366f1; --danger: #ef4444; --warning: #f59e0b; --success: #10b981;
+        --text-bright: #f8fafc; --text-muted: #94a3b8; --text-dim: #64748b;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+      body { background: var(--bg-main); color: var(--text-bright); min-height: 100vh; padding: 24px; }
+      .container { max-width: 1280px; margin: 0 auto; }
+      .header {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+        padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: 16px; margin-bottom: 24px;
+      }
+      .header h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+      .header h1 i { color: var(--warning); }
+      .back-link { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+      .back-link:hover { color: var(--text-bright); }
+      .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+      .tab {
+        padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none;
+        color: var(--text-muted); border: 1px solid var(--border-color); background: var(--bg-card);
+      }
+      .tab.active { color: var(--text-bright); border-color: var(--primary); background: rgba(99,102,241,.15); }
+      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border-color); }
+      td { padding: 12px; border-bottom: 1px solid rgba(51, 65, 85, .3); vertical-align: middle; }
+      .co-name { font-weight: 700; }
+      .subdomain { color: var(--text-muted); font-size: 12px; }
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+      .badge-pending_review { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
+      .badge-started, .badge-otp_verified { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
+      .badge-approved, .badge-approved_pending_payment, .badge-provisioned { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+      .badge-rejected { background: rgba(239, 68, 68, .15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .35); }
+      .mini-btn-link { display: inline-block; text-decoration: none; background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright); border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; }
+      .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1><i class="ti ti-clipboard-check"></i> Company Applications</h1>
+        <a href="/super_admin" class="back-link"><i class="ti ti-arrow-left"></i> Back to Console</a>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+        <div class="alert" style="padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:18px;{{ 'background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.35);color:#fca5a5;' if cat == 'error' else 'background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.35);color:#6ee7b7;' }}">
+          {{ msg }}
+        </div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="tabs">
+        <a class="tab {{ 'active' if status_filter == 'pending_review' }}" href="/super_admin/applications?status=pending_review">Pending Review{% if pending_count %} ({{ pending_count }}){% endif %}</a>
+        <a class="tab {{ 'active' if status_filter == 'all' }}" href="/super_admin/applications?status=all">All</a>
+        <a class="tab {{ 'active' if status_filter == 'approved_pending_payment' }}" href="/super_admin/applications?status=approved_pending_payment">Awaiting Payment</a>
+        <a class="tab {{ 'active' if status_filter == 'provisioned' }}" href="/super_admin/applications?status=provisioned">Provisioned</a>
+        <a class="tab {{ 'active' if status_filter == 'rejected' }}" href="/super_admin/applications?status=rejected">Rejected</a>
+      </div>
+
+      <div class="card">
+        {% if applications %}
+        <table>
+          <thead>
+            <tr><th>Company</th><th>Admin</th><th>Payment</th><th>Documents</th><th>Status</th><th>Submitted</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {% for app in applications %}
+            <tr>
+              <td>
+                <div class="co-name">{{ app.company_name }}</div>
+                <div class="subdomain">{{ app.subdomain }}</div>
+              </td>
+              <td class="subdomain">{{ app.admin_email }}</td>
+              <td class="subdomain">{{ app.payment_option }}</td>
+              <td class="subdomain">{{ 'Submitted' if app.documents_submitted_at else 'Not yet' }}</td>
+              <td><span class="badge badge-{{ app.status }}">{{ app.status.replace('_', ' ') }}</span></td>
+              <td class="subdomain">{{ app.created_at.strftime('%Y-%m-%d %H:%M') if app.created_at else '—' }}</td>
+              <td><a class="mini-btn-link" href="/super_admin/applications/{{ app.id }}"><i class="ti ti-eye"></i> Review</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state"><i class="ti ti-inbox" style="font-size:32px;"></i><p style="margin-top:8px;">No applications here.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

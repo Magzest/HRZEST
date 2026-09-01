@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """Org blueprint -- multi-tenant org self-registration."""
 import re
+import html
+import secrets
+import datetime
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
-from extensions import app_log, limiter
-from utils.auth import generate_password_hash, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
+from extensions import app_log, limiter, log_security_event
+from utils.auth import generate_password_hash, _hash_token, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY
 from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 from utils.tenant_routing import RESERVED_PATH_SEGMENTS
-from utils.helpers import clean_email_domain, validate_email_domain_format, _safe_app_url
+from utils.helpers import clean_email_domain, validate_email_domain_format, _safe_app_url, save_application_document
 
 org_bp = Blueprint("org", __name__)
 
@@ -76,13 +79,21 @@ def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_p
 _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
-def provision_tenant(company_name, subdomain, admin_username, admin_password, admin_email,
+def provision_tenant(company_name, subdomain, admin_username, admin_password_hash, admin_email,
                       payment_option="online", email_domain=None, employee_count=None, logo_path=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
     provisioning, which is where the three call sites would otherwise
     duplicate ~80 near-identical lines.
+
+    admin_password_hash is an ALREADY-HASHED password (bcrypt, via
+    utils/auth.py's generate_password_hash()) -- this function used to
+    accept and hash the plaintext itself, but callers now hash one level
+    up. That's because the gated signup flow (blueprints/org.py's
+    /create_org*) stores the application in tenant_applications for a
+    possibly multi-day pending-review window before provision_tenant() is
+    ever called, and the password must never sit there in plaintext.
 
     payment_option is a record of how the tenant is billed ("online" via
     Razorpay, "manual" bank-transfer/invoice, or "trial") -- it doesn't
@@ -157,7 +168,17 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         from database import get_tenant_db
         tconn = get_tenant_db(db_name)
         tcur = tconn.cursor()
-        logo_url = f"/static/{logo_path}" if logo_path else None
+        # save_uploaded_logo() (utils/helpers.py) returns a bare relative
+        # path today (local-disk mode) but a full https:// URL once
+        # S3_BUCKET is configured (utils/storage.py) -- forward-compatible
+        # so activating S3 later doesn't silently produce a broken
+        # "/static/https://..." URL here.
+        if not logo_path:
+            logo_url = None
+        elif logo_path.startswith("http://") or logo_path.startswith("https://"):
+            logo_url = logo_path
+        else:
+            logo_url = f"/static/{logo_path}"
         tcur.execute(
             "UPDATE company_settings SET company_name=%s, email_domain=%s, paid_employee_slots=%s, "
             "logo_url=COALESCE(%s, logo_url), setup_done=1 WHERE id=1",
@@ -168,7 +189,7 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password, ad
         # genuine race rather than legitimate reuse.
         tcur.execute(
             "INSERT INTO admin_users (username, password, email) VALUES (%s, %s, %s)",
-            (admin_username, generate_password_hash(admin_password), admin_email)
+            (admin_username, admin_password_hash, admin_email)
         )
         tconn.commit()
         tcur.close()
@@ -279,14 +300,16 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
         return False
 
 
-def send_payment_confirmation_email(admin_email, company_name, portal_url, set_password_url,
+def send_payment_confirmation_email(admin_email, company_name, portal_url,
                                      employee_count, amount_paise, razorpay_payment_id, checkin_url=None):
     """Post-payment welcome email for the paid /create_org flow
-    (blueprints/billing.py's verify_payment). Like send_portal_ready_email,
-    never includes a plaintext password -- instead links to a one-time
-    "set your password" reset-token URL, plus a payment receipt summary.
-    Never raises; billing.py doesn't gate the API response on this
-    succeeding, same best-effort contract as send_portal_ready_email.
+    (blueprints/billing.py's verify_payment). The admin logs in with the
+    password they already set during the gated signup application (well
+    before payment, once OTP + documents were reviewed) -- unlike the old
+    flow, there's no "set your password" link needed here anymore, just a
+    portal link and a payment receipt summary. Never raises; billing.py
+    doesn't gate the API response on this succeeding, same best-effort
+    contract as send_portal_ready_email.
 
     checkin_url is the company's own public attendance-scanner page, same
     as send_portal_ready_email's -- included here too so a paid signup
@@ -316,10 +339,10 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRzest.com portal has been created.</p>
-    <a href="{set_password_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
-      Set Your Password &amp; Sign In
+    <a href="{portal_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
+      Sign In to Your Portal
     </a>
-    <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">This link expires in 1 hour. Or copy it: {set_password_url}</p>
+    <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">Use the admin password you set when you registered. Or copy the link: {portal_url}</p>
     <div style="background:#f1f5f9;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">Payment Receipt</div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Billing</span><strong>{plan_display_name}</strong></div>
@@ -338,6 +361,185 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url, set_p
     except Exception as exc:
         app_log.error("send_payment_confirmation_email failed: %s", exc)
         return False
+
+
+def check_duplicate_name(company_name):
+    """Case-insensitive lookup for an existing, already-provisioned tenant
+    with this company name. Returns (tenant_id, company_name, admin_email)
+    if found, else None.
+
+    Deliberately NOT folded into _validate_new_tenant_fields() -- that
+    function is also called by platform_admin_create_tenant(), where a
+    platform admin legitimately re-creating/fixing a tenant must not be
+    blocked by this. Only the gated step-1 signup route calls this."""
+    normalized = re.sub(r'\s+', ' ', (company_name or '').strip()).lower()
+    if not normalized:
+        return None
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute("SELECT id, company_name, admin_email FROM tenants WHERE LOWER(TRIM(company_name))=%s", (normalized,))
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    return row
+
+
+def _record_duplicate_alert(application_id, attempted_company_name, attempted_admin_email, conflicting):
+    """Internal-only record of a signup blocked by check_duplicate_name().
+    The registrant never sees any of `conflicting`'s contents -- only the
+    platform-admin duplicate-alerts screen (blueprints/platform_admin.py)
+    ever reads this table. Best-effort: a logging failure must not be able
+    to block (or un-block) the signup rejection itself."""
+    conflicting_id, conflicting_name, conflicting_email = conflicting
+    try:
+        from database import get_master_db
+        mconn = get_master_db()
+        mcur = mconn.cursor()
+        mcur.execute(
+            "INSERT INTO tenant_duplicate_alerts "
+            "(application_id, attempted_company_name, attempted_admin_email, conflicting_tenant_id, "
+            "conflicting_company_name, conflicting_admin_email, match_type, source_ip) VALUES (%s,%s,%s,%s,%s,%s,'exact',%s)",
+            (application_id, attempted_company_name, attempted_admin_email, conflicting_id, conflicting_name,
+             conflicting_email, request.remote_addr)
+        )
+        mconn.commit()
+        mcur.close()
+        mconn.close()
+    except Exception as exc:
+        app_log.error("_record_duplicate_alert failed: %s", exc)
+    log_security_event(
+        "org.duplicate_company_blocked",
+        "Signup blocked: company name matches an existing tenant",
+        level="WARNING", attempted_company_name=attempted_company_name,
+        conflicting_tenant_id=conflicting_id,
+    )
+
+
+_OTP_TTL_MINUTES = 5
+_OTP_MAX_ATTEMPTS = 5
+_GENERIC_DUPLICATE_MSG = "A company with this name appears to already be registered. If this is your company, please contact support."
+_APPLICATION_DOC_KINDS = ("registration_cert", "address_proof", "visiting_card", "name_board_photo")
+
+
+def _generate_otp():
+    return f"{secrets.randbelow(900000) + 100000}"
+
+
+def send_org_signup_otp_email(to_email, company_name, otp_code):
+    """Email the signup-verification OTP for a new company application.
+    Deliberately a separate function from utils/totp.py's
+    send_mfa_login_email() -- that one's copy ("Login Verification Code" /
+    "finish signing in") is written for an existing account's login step;
+    reusing it here for a brand-new registrant who hasn't created anything
+    yet would be a confusing email to receive."""
+    try:
+        email_cfg = get_email_config()
+        if not email_cfg:
+            # No SMTP configured (local dev only, same situation
+            # MANDATORY_PLATFORM_ADMIN_MFA's .env comment documents for
+            # login MFA) -- this OTP step is a required business gate, not
+            # an optional hardening layer, so there's no bypass flag for it
+            # the way login MFA has one. Logging the code here (never in a
+            # response body, and only reached when there's genuinely no
+            # other way to deliver it) is what makes the flow testable
+            # locally at all without real SMTP creds.
+            app_log.warning("send_org_signup_otp_email: no SMTP configured -- OTP for %s (%s) is %s",
+                             to_email, company_name, otp_code)
+            return False
+        _company = html.escape(str(company_name))
+        _code = html.escape(str(otp_code))
+        html_body = f"""
+<div style="font-family:Segoe UI,sans-serif;max-width:480px;margin:auto;background:#0f172a;border-radius:16px;overflow:hidden;border:1px solid #1e293b;">
+  <div style="background:#1d4ed8;padding:22px 26px;color:#fff;">
+    <div style="font-size:18px;font-weight:700;">Verify Your Email</div>
+    <div style="font-size:12px;opacity:0.8;margin-top:4px;">Registering {_company}</div>
+  </div>
+  <div style="padding:26px;">
+    <p style="color:#cbd5e1;font-size:13px;">Use this code to confirm your email address and continue registering your company. It expires in {_OTP_TTL_MINUTES} minutes and can only be used once.</p>
+    <div style="text-align:center;margin:22px 0;padding:16px;background:#090d16;border-radius:12px;">
+      <span style="font-size:32px;font-weight:800;letter-spacing:6px;color:#60a5fa;">{_code}</span>
+    </div>
+    <p style="font-size:12px;color:#64748b;">If you didn't request this, you can safely ignore this email.</p>
+  </div>
+</div>"""
+        send_email_async(to_email, "Verify your email to register your company", html_body, email_cfg)
+        return True
+    except Exception as exc:
+        app_log.error("send_org_signup_otp_email failed: %s", exc)
+        return False
+
+
+def send_application_rejected_email(to_email, company_name, reason):
+    try:
+        email_cfg = get_email_config()
+        if not email_cfg:
+            return False
+        _company = html.escape(str(company_name))
+        _reason = html.escape(str(reason or "It did not meet our verification requirements."))
+        html_body = f"""
+<div style="font-family:Segoe UI,sans-serif;max-width:480px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
+  <div style="background:#7f1d1d;padding:22px 26px;color:#fff;">
+    <div style="font-size:18px;font-weight:700;">Application Not Approved</div>
+    <div style="font-size:12px;opacity:0.85;margin-top:4px;">{_company}</div>
+  </div>
+  <div style="padding:26px;">
+    <p style="color:#334155;font-size:14px;">We're unable to approve your company registration at this time.</p>
+    <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:14px;border-radius:6px;margin:16px 0;font-size:13px;color:#7f1d1d;">{_reason}</div>
+    <p style="color:#64748b;font-size:12px;">If you believe this is an error, please contact support.</p>
+  </div>
+</div>"""
+        send_email_async(to_email, f"Your company registration was not approved -- {company_name}", html_body, email_cfg)
+        return True
+    except Exception as exc:
+        app_log.error("send_application_rejected_email failed: %s", exc)
+        return False
+
+
+def _generate_access_token():
+    return secrets.token_urlsafe(32)
+
+
+def _load_application(application_id, access_token):
+    """Fetch a tenant_applications row by id, verifying the caller presents
+    the matching access_token (see app.py's schema comment on
+    access_token_hash) -- the single mechanism (used identically by web
+    and mobile) that stops someone from guessing a sequential application
+    id and hijacking or peeking at someone else's in-progress signup.
+    Returns a dict of the row's columns, or None if not found / token
+    mismatch."""
+    if not application_id or not access_token:
+        return None
+    try:
+        application_id = int(application_id)
+    except (TypeError, ValueError):
+        return None
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute(
+        "SELECT id, company_name, subdomain, admin_username, admin_email, admin_password_hash, "
+        "email_domain, employee_count, payment_option, logo_path, access_token_hash, otp_code_hash, "
+        "otp_expires_at, otp_attempts, email_verified_at, doc_registration_cert, doc_address_proof, "
+        "doc_visiting_card, doc_name_board_photo, documents_submitted_at, status, reviewed_by, "
+        "reviewed_at, rejection_reason, tenant_id "
+        "FROM tenant_applications WHERE id=%s",
+        (application_id,)
+    )
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    if not row:
+        return None
+    cols = ["id", "company_name", "subdomain", "admin_username", "admin_email", "admin_password_hash",
+            "email_domain", "employee_count", "payment_option", "logo_path", "access_token_hash", "otp_code_hash",
+            "otp_expires_at", "otp_attempts", "email_verified_at", "doc_registration_cert", "doc_address_proof",
+            "doc_visiting_card", "doc_name_board_photo", "documents_submitted_at", "status", "reviewed_by",
+            "reviewed_at", "rejection_reason", "tenant_id"]
+    application = dict(zip(cols, row))
+    if not secrets.compare_digest(application["access_token_hash"], _hash_token(access_token)):
+        return None
+    return application
 
 
 @org_bp.route("/get-started", methods=["GET"])
@@ -376,30 +578,101 @@ def create_org_page():
     )
 
 
-@org_bp.route("/create_org", methods=["POST"])
-def create_org():
-    """Direct-POST provisioning path. templates/create_org.html's JS no
-    longer submits here directly when Razorpay is configured (it goes
-    through blueprints/billing.py's create_order/verify_payment instead,
-    and no longer collects a password at all) -- but this route stays live
-    as a free fallback whenever RAZORPAY_KEY_ID/SECRET aren't set (local
-    dev, CI, and every test fixture that provisions a real tenant via this
-    exact endpoint, e.g. tests/test_ip_ban.py's signup_enabled_org). Once
-    real Razorpay keys are configured, hitting this directly with a
-    crafted POST (bypassing payment) is rejected -- the JSON /api/create_org
-    endpoint below is unrelated (mobile app's own registration flow) and is
-    untouched either way."""
-    from utils.razorpay_utils import razorpay_configured
-    if razorpay_configured():
-        flash("Please use the signup form to complete payment and create your organisation.", "error")
-        return redirect("/create_org")
+def _safe_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
-    # Signup has no prior-failure signal to key a captcha off (unlike
-    # login's CAPTCHA_AFTER_ATTEMPTS) -- it's shown unconditionally
-    # whenever Turnstile is configured, since this is the one endpoint
-    # that creates a brand-new schema. Fails open (signup stays reachable)
-    # when Turnstile isn't configured, matching how the rest of the app
-    # treats an unconfigured gate.
+
+def _verify_application_otp(application, otp_code):
+    """Shared OTP-check logic for both the web and mobile verify_otp
+    routes. Returns (True, None) on success (advances the row to
+    'otp_verified'), or (False, error_message) -- the caller decides how
+    to surface that (flash+redirect for web, a JSON 400 for mobile)."""
+    if application["status"] != "started":
+        return False, "This application has already moved past email verification."
+    if application["otp_attempts"] >= _OTP_MAX_ATTEMPTS:
+        return False, "Too many incorrect attempts. Please request a new code."
+
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    stored_hash = application["otp_code_hash"] or ""
+    code_matches = bool(otp_code) and secrets.compare_digest(_hash_token(otp_code), stored_hash)
+    if not code_matches:
+        mcur.execute("UPDATE tenant_applications SET otp_attempts=otp_attempts+1, updated_at=NOW() WHERE id=%s",
+                     (application["id"],))
+        mconn.commit()
+        mcur.close()
+        mconn.close()
+        return False, "Incorrect code. Please try again."
+
+    mcur.execute("SELECT otp_expires_at < NOW() FROM tenant_applications WHERE id=%s", (application["id"],))
+    expired = mcur.fetchone()[0]
+    if expired:
+        mcur.close()
+        mconn.close()
+        return False, "This code has expired. Please request a new one."
+
+    mcur.execute(
+        "UPDATE tenant_applications SET status='otp_verified', email_verified_at=NOW(), updated_at=NOW() WHERE id=%s",
+        (application["id"],)
+    )
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+    return True, None
+
+
+def _save_application_documents(application, files):
+    """Shared document-upload logic for both web and mobile. `files` is a
+    dict-like of {doc_kind: FileStorage} (request.files works directly).
+    Returns (True, None) on success (advances the row to 'pending_review'),
+    or (False, error_message)."""
+    if application["status"] not in ("otp_verified", "pending_review"):
+        return False, "This application isn't ready for document upload."
+
+    saved_paths = {}
+    for doc_kind in _APPLICATION_DOC_KINDS:
+        file_storage = files.get(doc_kind)
+        if not file_storage or not file_storage.filename:
+            return False, f"Please upload your {doc_kind.replace('_', ' ')}."
+        path, err = save_application_document(file_storage, application["id"], doc_kind)
+        if err:
+            return False, f"{doc_kind.replace('_', ' ').title()}: {err}"
+        saved_paths[doc_kind] = path
+
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute(
+        "UPDATE tenant_applications SET doc_registration_cert=%s, doc_address_proof=%s, doc_visiting_card=%s, "
+        "doc_name_board_photo=%s, documents_submitted_at=NOW(), status='pending_review', updated_at=NOW() "
+        "WHERE id=%s",
+        (saved_paths["registration_cert"], saved_paths["address_proof"], saved_paths["visiting_card"],
+         saved_paths["name_board_photo"], application["id"])
+    )
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+    return True, None
+
+
+@org_bp.route("/create_org", methods=["POST"])
+@limiter.limit("10 per hour")
+def create_org():
+    """Step 1 of the gated signup flow: validate fields, block a
+    duplicate company name, and -- if clear -- create a pending
+    tenant_applications row and email an OTP. No tenant is provisioned
+    here anymore; provision_tenant() is only ever called later, from
+    platform_admin.py's approve action (or billing.py's verify_payment
+    for paid plans, once payment completes after that approval). This
+    replaces the old instant-provisioning behavior entirely -- since
+    something like a name-board photo can't be validated by code, manual
+    review is a required step, not an optional hardening layer that's
+    safe to bypass in dev (unlike the Turnstile captcha below, which
+    fails open when unconfigured)."""
     if turnstile_enabled():
         token = request.form.get("cf-turnstile-response", "")
         if not verify_turnstile(token, request.remote_addr):
@@ -419,6 +692,12 @@ def create_org():
         flash(error, "error")
         return redirect("/create_org")
 
+    conflicting = check_duplicate_name(company_name)
+    if conflicting:
+        _record_duplicate_alert(None, company_name, admin_email, conflicting)
+        flash(_GENERIC_DUPLICATE_MSG, "error")
+        return redirect("/create_org")
+
     logo_path = None
     logo_file = request.files.get("logo")
     if logo_file and logo_file.filename:
@@ -428,61 +707,185 @@ def create_org():
             flash(f"Company logo: {logo_err}", "error")
             return redirect("/create_org")
 
-    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
-                                                            admin_email, email_domain=email_domain, logo_path=logo_path)
-    if not ok:
-        flash(error, "error")
+    from utils.razorpay_utils import razorpay_configured
+    payment_option = "online" if razorpay_configured() else "manual"
+
+    access_token = _generate_access_token()
+    otp_code = _generate_otp()
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute(
+        "INSERT INTO tenant_applications (company_name, subdomain, admin_username, admin_email, "
+        "admin_password_hash, email_domain, payment_option, logo_path, access_token_hash, otp_code_hash, "
+        "otp_expires_at, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW() + (%s * INTERVAL '1 minute'), %s) "
+        "RETURNING id",
+        (company_name, subdomain, admin_username, admin_email, generate_password_hash(admin_password),
+         email_domain, payment_option, logo_path, _hash_token(access_token), _hash_token(otp_code),
+         _OTP_TTL_MINUTES, request.remote_addr)
+    )
+    application_id = mcur.fetchone()[0]
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+
+    send_org_signup_otp_email(admin_email, company_name, otp_code)
+
+    # access_token lives ONLY in the session cookie from here on for the
+    # web flow -- never in a URL/query string, so it can't leak via
+    # referrer headers or browser history. application_id (a bare
+    # sequential id, not a secret) is fine to carry in the URL.
+    session["org_access_token"] = access_token
+    return redirect(f"/create_org/verify_otp?application_id={application_id}")
+
+
+@org_bp.route("/create_org/verify_otp", methods=["GET"])
+def create_org_verify_otp_page():
+    return render_template("create_org_verify_otp.html", application_id=request.args.get("application_id", ""))
+
+
+@org_bp.route("/create_org/verify_otp", methods=["POST"])
+@limiter.limit("20 per hour")
+def create_org_verify_otp():
+    application_id = request.form.get("application_id", "")
+    otp_code = request.form.get("otp_code", "").strip()
+    application = _load_application(application_id, session.get("org_access_token"))
+    if not application:
+        flash("Application not found. Please start again.", "error")
         return redirect("/create_org")
 
-    email_sent = send_portal_ready_email(admin_email, company_name, admin_username, portal_url,
-                                          checkin_url=checkin_url)
+    ok, error = _verify_application_otp(application, otp_code)
+    if not ok:
+        flash(error, "error")
+        return redirect(f"/create_org/verify_otp?application_id={application_id}")
 
-    return render_template(
-        "org_created.html",
-        company_name=company_name, subdomain=subdomain,
-        admin_username=admin_username, admin_email=admin_email,
-        portal_url=portal_url, checkin_url=checkin_url, email_sent=email_sent,
+    return redirect(f"/create_org/upload_documents?application_id={application_id}")
+
+
+@org_bp.route("/create_org/resend_otp", methods=["POST"])
+@limiter.limit("3 per 10 minutes")
+def create_org_resend_otp():
+    application_id = request.form.get("application_id", "")
+    application = _load_application(application_id, session.get("org_access_token"))
+    if not application or application["status"] != "started":
+        flash("This application can no longer receive a new code.", "error")
+        return redirect("/create_org")
+
+    otp_code = _generate_otp()
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute(
+        "UPDATE tenant_applications SET otp_code_hash=%s, otp_expires_at=NOW() + (%s * INTERVAL '1 minute'), "
+        "otp_attempts=0, updated_at=NOW() WHERE id=%s",
+        (_hash_token(otp_code), _OTP_TTL_MINUTES, application["id"])
     )
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+
+    send_org_signup_otp_email(application["admin_email"], application["company_name"], otp_code)
+    flash("A new code has been sent to your email.", "info")
+    return redirect(f"/create_org/verify_otp?application_id={application_id}")
 
 
-@org_bp.route("/org_payment_success", methods=["GET"])
-def org_payment_success():
-    """Landing page after templates/create_org.html's JS successfully
-    verifies payment (blueprints/billing.py's verify_payment) -- every value
-    here is display-only, Jinja auto-escapes all of them so a tampered
-    query string can't inject anything, and none of them drive any
-    server-side decision (the real charge already happened via Razorpay
-    before this page ever loads) -- a tampered employee_count/amount_display
-    would at worst show the visitor an inaccurate receipt summary, not
-    grant or alter anything. Order ID stays out of the URL regardless,
-    since that one IS still only in the confirmation email."""
-    portal_url = request.args.get("portal_url", "")
-    email = request.args.get("email", "")
-    employee_count = request.args.get("employee_count", "")
-    amount_display = request.args.get("amount_display", "")
+@org_bp.route("/create_org/upload_documents", methods=["GET"])
+def create_org_upload_documents_page():
+    return render_template("create_org_upload_documents.html", application_id=request.args.get("application_id", ""))
+
+
+@org_bp.route("/create_org/upload_documents", methods=["POST"])
+def create_org_upload_documents():
+    application_id = request.form.get("application_id", "")
+    application = _load_application(application_id, session.get("org_access_token"))
+    if not application:
+        flash("Application not found. Please start again.", "error")
+        return redirect("/create_org")
+
+    ok, error = _save_application_documents(application, request.files)
+    if not ok:
+        flash(error, "error")
+        return redirect(f"/create_org/upload_documents?application_id={application_id}")
+
+    return redirect(f"/create_org/pending?application_id={application_id}")
+
+
+@org_bp.route("/create_org/pending", methods=["GET"])
+def create_org_pending_page():
+    return render_template("create_org_pending.html", application_id=request.args.get("application_id", ""))
+
+
+@org_bp.route("/create_org/status/<int:application_id>", methods=["GET"])
+def create_org_status_page(application_id):
+    """Lets a returning registrant check their application's status later
+    (e.g. from a link in the approval/rejection email) without needing a
+    live session -- the token travels in the URL for this one read-only,
+    self-scoped endpoint (a deliberate, common "magic link" tradeoff; it
+    reveals only the requester's own application, nothing about anyone
+    else's). session's org_access_token is tried first so the same-tab
+    "just finished uploading, want to see it" case never needs a token
+    in the URL at all."""
+    access_token = session.get("org_access_token") or request.args.get("token", "")
+    application = _load_application(application_id, access_token)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/create_org")
+    portal_url = f"{_safe_app_url()}/{application['subdomain']}/login" if application["status"] == "provisioned" else None
+    return render_template("create_org_status.html", application=application, portal_url=portal_url)
+
+
+@org_bp.route("/create_org/pay/<int:application_id>", methods=["GET"])
+def create_org_pay_page(application_id):
+    """Landing page linked from the approval email for online-payment
+    applications (blueprints/platform_admin.py's approve action, once
+    payment_option=='online') -- pre-filled/locked to this one approved
+    application rather than an editable signup form, since every other
+    field was already collected and reviewed. No access_token needed in
+    the URL: application_id alone is enough here because this page only
+    ever *displays* the company name and hands off to
+    /api/billing/create_order, which independently re-checks the
+    application's own status='approved_pending_payment' before letting
+    any charge happen -- there's nothing sensitive this page itself could
+    leak or let someone tamper with."""
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute("SELECT company_name, status FROM tenant_applications WHERE id=%s", (application_id,))
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    if not row:
+        flash("Application not found.", "error")
+        return redirect("/create_org")
+    company_name, status = row
+    if status != "approved_pending_payment":
+        return redirect(f"/create_org/status/{application_id}")
     return render_template(
-        "org_payment_success.html", portal_url=portal_url, email=email,
-        employee_count=employee_count, amount_display=amount_display,
+        "create_org_pay.html", application_id=application_id, company_name=company_name,
+        per_employee_paise=PER_EMPLOYEE_PAISE,
     )
 
 
 @org_bp.route("/api/create_org", methods=["POST"])
+@limiter.limit("10 per hour")
 def api_create_org():
-    """JSON API Endpoint to create a new Organisation / Tenant (mobile app's
-    registration flow). Mirrors /create_org's validation -- particularly
-    the reserved-subdomain check and required, format-checked admin email --
-    since this is a second, independent path into the same tenant-creation
-    logic and must not be a softer bypass of those protections."""
+    """JSON step 1 of the gated signup flow (mobile app's company
+    registration screen). Mirrors /create_org's validation, duplicate-name
+    check, and pending-application creation -- this is a second,
+    independent path into the same logic and must not be a softer bypass
+    of those protections. Unlike the old version of this route, this no
+    longer provisions a tenant -- it returns an application_id + access_token
+    that the app must carry through verify_otp -> upload_documents ->
+    status (there's no session cookie on this side to hold it implicitly,
+    the way the web flow's does)."""
     try:
         data = request.get_json() or {}
         company_name = data.get("company_name", "").strip()
         raw_subdomain = data.get("subdomain", "").strip().lower()
-        # Clean subdomain: convert dots, spaces, special chars to hyphens
         subdomain = re.sub(r'[^a-z0-9\-]', '-', raw_subdomain).strip('-')
         admin_username = data.get("admin_username", "").strip()
         admin_password = data.get("admin_password", "").strip()
         admin_email = data.get("admin_email", "").strip()
-
         email_domain = clean_email_domain(data.get("email_domain", ""))
 
         error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
@@ -490,31 +893,119 @@ def api_create_org():
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
-                                                                admin_email, email_domain=email_domain)
-        if not ok:
-            # "Already taken" is client-correctable (400); anything else is
-            # a provisioning-side failure (schema creation, seeding, master
-            # registry) worth surfacing as a real server error.
-            status = 400 if "already taken" in error else 500
-            return jsonify({"ok": False, "msg": error}), status
+        conflicting = check_duplicate_name(company_name)
+        if conflicting:
+            _record_duplicate_alert(None, company_name, admin_email, conflicting)
+            return jsonify({"ok": False, "msg": _GENERIC_DUPLICATE_MSG}), 409
+
+        from utils.razorpay_utils import razorpay_configured
+        payment_option = "online" if razorpay_configured() else "manual"
+
+        access_token = _generate_access_token()
+        otp_code = _generate_otp()
+        from database import get_master_db
+        mconn = get_master_db()
+        mcur = mconn.cursor()
+        mcur.execute(
+            "INSERT INTO tenant_applications (company_name, subdomain, admin_username, admin_email, "
+            "admin_password_hash, email_domain, payment_option, access_token_hash, otp_code_hash, "
+            "otp_expires_at, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW() + (%s * INTERVAL '1 minute'), %s) "
+            "RETURNING id",
+            (company_name, subdomain, admin_username, admin_email, generate_password_hash(admin_password),
+             email_domain, payment_option, _hash_token(access_token), _hash_token(otp_code),
+             _OTP_TTL_MINUTES, request.remote_addr)
+        )
+        application_id = mcur.fetchone()[0]
+        mconn.commit()
+        mcur.close()
+        mconn.close()
+
+        send_org_signup_otp_email(admin_email, company_name, otp_code)
 
         return jsonify({
             "ok": True,
-            "msg": f"Organisation '{company_name}' created successfully! You can now sign in as {admin_username}.",
-            "subdomain": subdomain,
-            "username": admin_username,
-            # The signup form's submit handler redirects here on success
-            # (json.portal_url || '/login') -- this was previously discarded
-            # as _portal_url and never included, so every successful signup
-            # silently fell through to the bare /login page instead of the
-            # new tenant's own portal.
-            "portal_url": portal_url,
-            "checkin_url": checkin_url,
+            "msg": f"We've emailed a verification code to {admin_email}.",
+            "application_id": application_id,
+            "access_token": access_token,
+            "step": "otp",
         })
     except Exception as global_exc:
         app_log.error("api_create_org global exception: %s", global_exc)
         return jsonify({"ok": False, "msg": f"Server error: {global_exc}"}), 500
+
+
+@org_bp.route("/api/create_org/verify_otp", methods=["POST"])
+@limiter.limit("20 per hour")
+def api_create_org_verify_otp():
+    data = request.get_json() or {}
+    application = _load_application(data.get("application_id"), data.get("access_token", ""))
+    if not application:
+        return jsonify({"ok": False, "msg": "Application not found."}), 404
+
+    ok, error = _verify_application_otp(application, str(data.get("otp_code", "")).strip())
+    if not ok:
+        return jsonify({"ok": False, "msg": error}), 400
+
+    return jsonify({"ok": True, "step": "documents"})
+
+
+@org_bp.route("/api/create_org/resend_otp", methods=["POST"])
+@limiter.limit("3 per 10 minutes")
+def api_create_org_resend_otp():
+    data = request.get_json() or {}
+    application = _load_application(data.get("application_id"), data.get("access_token", ""))
+    if not application or application["status"] != "started":
+        return jsonify({"ok": False, "msg": "This application can no longer receive a new code."}), 400
+
+    otp_code = _generate_otp()
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute(
+        "UPDATE tenant_applications SET otp_code_hash=%s, otp_expires_at=NOW() + (%s * INTERVAL '1 minute'), "
+        "otp_attempts=0, updated_at=NOW() WHERE id=%s",
+        (_hash_token(otp_code), _OTP_TTL_MINUTES, application["id"])
+    )
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+
+    send_org_signup_otp_email(application["admin_email"], application["company_name"], otp_code)
+    return jsonify({"ok": True, "msg": "A new code has been sent to your email."})
+
+
+@org_bp.route("/api/create_org/upload_documents", methods=["POST"])
+def api_create_org_upload_documents():
+    application = _load_application(request.form.get("application_id"), request.form.get("access_token", ""))
+    if not application:
+        return jsonify({"ok": False, "msg": "Application not found."}), 404
+
+    ok, error = _save_application_documents(application, request.files)
+    if not ok:
+        return jsonify({"ok": False, "msg": error}), 400
+
+    return jsonify({"ok": True, "step": "pending_review",
+                     "msg": "Your application has been submitted and is under review. We'll email you once it's approved."})
+
+
+@org_bp.route("/api/create_org/status/<int:application_id>", methods=["GET"])
+def api_create_org_status(application_id):
+    access_token = request.args.get("access_token", "")
+    application = _load_application(application_id, access_token)
+    if not application:
+        return jsonify({"ok": False, "msg": "Application not found."}), 404
+
+    portal_url = None
+    if application["status"] == "provisioned":
+        portal_url = f"{_safe_app_url()}/{application['subdomain']}/login"
+
+    return jsonify({
+        "ok": True,
+        "status": application["status"],
+        "company_name": application["company_name"],
+        "rejection_reason": application["rejection_reason"],
+        "portal_url": portal_url,
+    })
 
 
 # /superadmin is superseded by /super_admin -- redirect for backwards compat

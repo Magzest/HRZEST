@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload Business Documents — HRzest Enterprise Platform</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="/static/landing_v2.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }
+    html, body { min-height: 100vh; color: var(--text-main); }
+    body {
+      background: linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+      background-attachment: fixed;
+    }
+    .page-container { max-width: 560px; margin: 0 auto; padding: 56px 24px 72px; }
+    .page-intro { text-align: center; margin-bottom: 32px; }
+    .page-intro .intro-icon {
+      width: 52px; height: 52px; margin: 0 auto 18px; border-radius: var(--radius-md); background: var(--gradient-brand);
+      display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
+      box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+    }
+    .page-intro h1 { font-family: var(--font-heading); font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-main); margin-bottom: 8px; }
+    .page-intro p { font-size: 14px; color: var(--text-muted); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 32px; box-shadow: var(--shadow-lg); }
+    .field-group { margin-bottom: 20px; }
+    .field-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; }
+    .field-label i { font-size: 15px; color: var(--accent-cyan); }
+    .field-hint { font-size: 12px; color: var(--text-subtle); margin-bottom: 8px; }
+    .field-input {
+      width: 100%; padding: 12px 15px; background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm); color: var(--text-main); font-size: 13.5px; outline: none;
+    }
+    .btn-submit {
+      width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm); background: var(--gradient-brand);
+      color: #fff; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-md); margin-top: 6px;
+    }
+    .alert { padding: 13px 15px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+    .alert-error { background: rgba(225, 29, 72, 0.08); border: 1px solid rgba(225, 29, 72, 0.25); color: var(--accent-rose); }
+    .alert-success { background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.25); color: var(--accent-emerald); }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="page-intro">
+      <div class="intro-icon"><i class="ti ti-file-upload"></i></div>
+      <h1>Upload Business Documents</h1>
+      <p>Almost there — we need these to verify your company before your portal goes live.</p>
+    </div>
+    <div class="card">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+        <div class="alert alert-{{ 'error' if cat == 'error' else 'success' }}">
+          <i class="ti ti-{{ 'circle-x' if cat == 'error' else 'circle-check' }}"></i> {{ msg }}
+        </div>
+        {% endfor %}
+      {% endwith %}
+
+      <form method="POST" action="/create_org/upload_documents" enctype="multipart/form-data">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+        <input type="hidden" name="application_id" value="{{ application_id }}" />
+
+        <div class="field-group">
+          <label class="field-label"><i class="ti ti-certificate"></i> Company Registration Certificate</label>
+          <div class="field-hint">PDF, JPG or PNG, up to 10 MB.</div>
+          <input class="field-input" type="file" name="registration_cert" accept=".pdf,image/jpeg,image/png" required />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label"><i class="ti ti-map-pin"></i> Address Proof</label>
+          <div class="field-hint">Utility bill, lease agreement, or similar — PDF, JPG or PNG, up to 10 MB.</div>
+          <input class="field-input" type="file" name="address_proof" accept=".pdf,image/jpeg,image/png" required />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label"><i class="ti ti-id-badge-2"></i> Company Visiting Card</label>
+          <div class="field-hint">Photo of a business card — JPG, PNG, WEBP or BMP, up to 5 MB.</div>
+          <input class="field-input" type="file" name="visiting_card" accept="image/jpeg,image/png,image/webp,image/bmp" required />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label"><i class="ti ti-photo"></i> Office Name-Board Photo</label>
+          <div class="field-hint">A photo of your office entrance/name-board — JPG, PNG, WEBP or BMP, up to 5 MB.</div>
+          <input class="field-input" type="file" name="name_board_photo" accept="image/jpeg,image/png,image/webp,image/bmp" required />
+        </div>
+
+        <button type="submit" class="btn-submit">Submit for Review</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

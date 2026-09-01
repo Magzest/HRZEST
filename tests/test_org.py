@@ -161,99 +161,104 @@ class TestSignupValidation:
 # Full provisioning — real schema creation, one end-to-end test
 # ===========================================================================
 
-class TestPortalLinkOnSuccess:
-    """After signup, the success page must show the tenant's OWN dedicated
-    subdomain link -- not a redirect to /login on whatever host the
-    signup form happened to be submitted from, which for a fresh company
-    would never be their real subdomain until wildcard DNS resolves it."""
+class TestGatedSignupFlow:
+    """Signup is no longer instant: POST /create_org now only starts a
+    pending application (blocking a duplicate company name up front) and
+    emails an OTP; provision_tenant() isn't called until a platform admin
+    approves the application (blueprints/platform_admin.py) after
+    reviewing the uploaded KYC documents. These tests walk the real
+    pipeline end-to-end rather than assuming the old single-request
+    instant-provision behavior."""
 
-    def test_success_page_shows_dedicated_portal_link_no_smtp(self, client, db_engine, monkeypatch):
+    import io as _io
+
+    _FAKE_PDF = b"%PDF-1.4\n" + b"x" * 20
+    _FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"x" * 20
+
+    def _start_application(self, client, monkeypatch, **overrides):
         import blueprints.org as org_module
-        from utils.helpers import _safe_app_url
-        monkeypatch.setattr(org_module, "get_email_config", lambda: None)
+        captured = {}
+        monkeypatch.setattr(
+            org_module, "send_org_signup_otp_email",
+            lambda email, company, otp: captured.setdefault("otp", otp) or True
+        )
+        payload = {
+            "company_name": "Gated Flow Org", "subdomain": "gated-flow-org",
+            "admin_username": "gf_admin", "admin_password": "password123",
+            "admin_email": "gf@test.local", "email_domain": "test.local",
+        }
+        payload.update(overrides)
+        resp = client.post("/create_org", data=payload, follow_redirects=False)
+        return resp, captured.get("otp")
 
+    def _application_id_from_redirect(self, resp):
+        location = resp.headers["Location"]
+        return int(location.rsplit("=", 1)[-1])
+
+    def _verify_otp(self, client, application_id, otp_code):
+        return client.post("/create_org/verify_otp", data={
+            "application_id": application_id, "otp_code": otp_code,
+        }, follow_redirects=False)
+
+    def _upload_documents(self, client, application_id):
+        data = {
+            "application_id": str(application_id),
+            "registration_cert": (self._io.BytesIO(self._FAKE_PDF), "cert.pdf"),
+            "address_proof": (self._io.BytesIO(self._FAKE_PDF), "address.pdf"),
+            "visiting_card": (self._io.BytesIO(self._FAKE_PNG), "card.png"),
+            "name_board_photo": (self._io.BytesIO(self._FAKE_PNG), "board.png"),
+        }
+        return client.post("/create_org/upload_documents", data=data,
+                            content_type="multipart/form-data", follow_redirects=False)
+
+    def _login_platform_admin(self, client):
+        import time as _time
+        with client.session_transaction() as sess:
+            sess["platform_admin_logged_in"] = True
+            sess["platform_admin_username"] = "test_platform_admin"
+            sess["platform_admin_last_activity"] = _time.time()
+
+    def _run_full_pipeline(self, client, monkeypatch, **overrides):
+        """Start -> verify OTP -> upload docs, leaving the application at
+        status='pending_review'. Returns application_id."""
+        resp, otp = self._start_application(client, monkeypatch, **overrides)
+        assert resp.status_code in (301, 302), resp.data
+        application_id = self._application_id_from_redirect(resp)
+        assert otp is not None, "OTP email was never sent"
+
+        resp = self._verify_otp(client, application_id, otp)
+        assert resp.status_code in (301, 302)
+        assert "/create_org/upload_documents" in resp.headers["Location"]
+
+        resp = self._upload_documents(client, application_id)
+        assert resp.status_code in (301, 302)
+        assert "/create_org/pending" in resp.headers["Location"]
+
+        return application_id
+
+    def test_full_flow_provisions_real_tenant_schema(self, client, db_engine, monkeypatch):
         from app import init_master_db
         init_master_db()
 
-        subdomain = "e2e-portal-link"
+        subdomain = "e2e-gated-org"
         schema_name = "att_" + subdomain.replace("-", "_")
         _drop_schema(db_engine, schema_name)
         try:
-            resp = client.post("/create_org", data={
-                "company_name": "Portal Link Org", "subdomain": subdomain,
-                "admin_username": "portal_admin", "admin_password": "password123",
-                "admin_email": "portal@test.local", "email_domain": "test.local",
-            }, follow_redirects=False)
-            assert resp.status_code == 200
-            # portal_url is built from _safe_app_url() (APP_URL if set, else
-            # the request's own host) -- not a hardcoded production domain,
-            # since that would send every dev/test/staging signup to a real
-            # external host instead of wherever this app is actually running.
-            assert f"{_safe_app_url()}/{subdomain}/login".encode() in resp.data
-            assert b"portal_admin" in resp.data
-            # No SMTP configured -- the page must degrade gracefully to
-            # "bookmark this link" rather than falsely claiming an email
-            # was sent.
-            assert b"Bookmark this link" in resp.data
-        finally:
-            _drop_schema(db_engine, schema_name)
-
-    def test_success_page_notes_email_sent_when_smtp_configured(self, client, db_engine, monkeypatch):
-        import blueprints.org as org_module
-        sent = []
-        monkeypatch.setattr(org_module, "get_email_config", lambda: {"host": "smtp.test"})
-        monkeypatch.setattr(org_module, "send_email_async",
-                             lambda *a, **k: sent.append(a))
-
-        from app import init_master_db
-        init_master_db()
-
-        subdomain = "e2e-portal-link-email"
-        schema_name = "att_" + subdomain.replace("-", "_")
-        _drop_schema(db_engine, schema_name)
-        try:
-            resp = client.post("/create_org", data={
-                "company_name": "Portal Link Email Org", "subdomain": subdomain,
-                "admin_username": "portal_admin2", "admin_password": "password123",
-                "admin_email": "portal2@test.local", "email_domain": "test.local",
-            }, follow_redirects=False)
-            assert resp.status_code == 200
-            assert b"We've also emailed this link to" in resp.data
-            assert len(sent) == 1
-            assert sent[0][0] == "portal2@test.local"
-        finally:
-            _drop_schema(db_engine, schema_name)
-
-
-class TestFullProvisioning:
-    def test_create_org_provisions_real_tenant_schema(self, client, db_engine):
-        from app import init_master_db
-        init_master_db()
-
-        subdomain = "e2e-test-org"
-        schema_name = "att_" + subdomain.replace("-", "_")
-        _drop_schema(db_engine, schema_name)
-        try:
-            resp = client.post("/create_org", data={
-                "company_name": "E2E Test Org",
-                "subdomain": subdomain,
-                "admin_username": "e2e_admin",
-                "admin_password": "password123",
-                "admin_email": "e2e@test.local",
-                "email_domain": "test.local",
-            }, follow_redirects=False)
-            # Success now renders the org_created.html page directly (with
-            # the tenant's dedicated portal link) instead of redirecting to
-            # /login on whatever host the signup form was submitted
-            # from -- that host isn't necessarily the new tenant's subdomain.
-            assert resp.status_code == 200
-            assert b"Organisation Created" in resp.data
-            assert subdomain.encode() in resp.data
+            application_id = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="E2E Gated Org",
+                admin_username="e2e_admin", admin_email="e2e-gated@test.local",
+            )
 
             cur = db_engine.cursor()
+            cur.execute("SELECT status FROM att_master.tenant_applications WHERE id=%s", (application_id,))
+            assert cur.fetchone()[0] == "pending_review"
+
+            self._login_platform_admin(client)
+            resp = client.post(f"/super_admin/applications/{application_id}/approve", follow_redirects=False)
+            assert resp.status_code in (301, 302)
+
             cur.execute(
-                "SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s",
-                (schema_name,),
+                "SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s", (schema_name,)
             )
             assert cur.fetchone() is not None, "tenant schema was not created"
 
@@ -263,47 +268,23 @@ class TestFullProvisioning:
             assert row[0] == schema_name
             assert row[1] == "active"
             import utils.plan_limits as plan_limits
-            assert row[2] == plan_limits.PLAN_LABEL  # audit-trail value only, no live tier behind it
+            assert row[2] == plan_limits.PLAN_LABEL
 
             cur.execute(f'SELECT username FROM "{schema_name}".admin_users WHERE username=%s', ("e2e_admin",))
             assert cur.fetchone() is not None, "admin user was not seeded into the new tenant schema"
-            cur.close()
-        finally:
-            _drop_schema(db_engine, schema_name)
 
-    def test_plan_field_in_post_is_ignored(self, client, db_engine):
-        # A stray "plan" field (e.g. from an old cached client) must not
-        # affect provisioning -- billing is purely employee-count-based now.
-        from app import init_master_db
-        init_master_db()
-
-        subdomain = "e2e-default-plan"
-        schema_name = "att_" + subdomain.replace("-", "_")
-        _drop_schema(db_engine, schema_name)
-        try:
-            resp = client.post("/create_org", data={
-                "company_name": "Default Plan Org", "subdomain": subdomain,
-                "admin_username": "dp_admin", "admin_password": "password123",
-                "admin_email": "dp@test.local", "plan": "not-a-real-plan",
-                "email_domain": "test.local",
-            }, follow_redirects=False)
-            assert resp.status_code == 200
-            import utils.plan_limits as plan_limits
-            cur = db_engine.cursor()
-            cur.execute("SELECT plan, status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
-            row = cur.fetchone()
-            assert row[0] == plan_limits.PLAN_LABEL
-            assert row[1] == "active"
+            cur.execute("SELECT status, tenant_id FROM att_master.tenant_applications WHERE id=%s", (application_id,))
+            app_row = cur.fetchone()
+            assert app_row[0] == "provisioned"
+            assert app_row[1] is not None
             cur.close()
         finally:
             _drop_schema(db_engine, schema_name)
 
     def test_subdomain_colliding_with_master_registry_schema_rejected(self, client, db_engine):
-        # subdomain "master" is now caught by the reserved-subdomain
-        # blocklist before ever reaching the schema-collision check --
-        # kept as its own test since it's the specific vulnerability this
-        # regression-guards (see TestSignupValidation's parametrized
-        # reserved-subdomain test for the general case).
+        # subdomain "master" is caught by the reserved-subdomain blocklist
+        # at step 1, before any application row is even created --
+        # unchanged behavior from before the gated flow.
         from app import init_master_db
         init_master_db()
 
@@ -315,10 +296,6 @@ class TestFullProvisioning:
         assert resp.status_code in (301, 302)
         assert resp.headers.get("Location") == "/create_org"
 
-        # If the vulnerability were still present, the tenant-schema migration
-        # would have run against att_master, creating an admin_users table
-        # there (att_master normally only ever has `tenants`) and seeding
-        # evil_admin into it.
         cur = db_engine.cursor()
         cur.execute(
             "SELECT 1 FROM information_schema.tables "
@@ -328,7 +305,11 @@ class TestFullProvisioning:
         cur.close()
         assert not polluted, "tenant schema migration leaked into the master registry schema"
 
-    def test_duplicate_subdomain_rejected(self, client, db_engine):
+    def test_duplicate_subdomain_rejected_at_approval(self, client, db_engine, monkeypatch):
+        # Subdomain availability is only enforced at provision_tenant()
+        # time now (approval), not at step-1 submission -- two applicants
+        # could both submit the same slug, but only the first can ever be
+        # approved.
         from app import init_master_db
         init_master_db()
 
@@ -336,17 +317,133 @@ class TestFullProvisioning:
         schema_name = "att_" + subdomain.replace("-", "_")
         _drop_schema(db_engine, schema_name)
         try:
-            payload = {
-                "company_name": "Dup Org", "subdomain": subdomain,
-                "admin_username": "dup_admin", "admin_password": "password123",
-                "admin_email": "dup@test.local", "email_domain": "test.local",
-            }
-            r1 = client.post("/create_org", data=payload, follow_redirects=False)
-            assert r1.status_code == 200
-            assert b"Organisation Created" in r1.data
+            app1 = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="Dup Org One",
+                admin_username="dup_admin1", admin_email="dup1@test.local",
+            )
+            app2 = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="Dup Org Two",
+                admin_username="dup_admin2", admin_email="dup2@test.local",
+            )
 
-            r2 = client.post("/create_org", data=payload, follow_redirects=False)
-            assert r2.status_code in (301, 302)
-            assert r2.headers.get("Location") == "/create_org"
+            self._login_platform_admin(client)
+            resp1 = client.post(f"/super_admin/applications/{app1}/approve", follow_redirects=False)
+            assert resp1.status_code in (301, 302)
+
+            resp2 = client.post(f"/super_admin/applications/{app2}/approve", follow_redirects=True)
+            assert resp2.status_code == 200
+            assert b"already taken" in resp2.data
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT status FROM att_master.tenant_applications WHERE id=%s", (app2,))
+            assert cur.fetchone()[0] == "pending_review", "a failed approval must not silently mark provisioned"
+            cur.close()
         finally:
             _drop_schema(db_engine, schema_name)
+
+    def test_duplicate_company_name_blocked_with_generic_message_and_alert(self, client, db_engine, monkeypatch):
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-dupname-org"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        _drop_schema(db_engine, schema_name)
+        try:
+            application_id = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="Acme Duplicate Test",
+                admin_username="dupname_admin", admin_email="dupname@test.local",
+            )
+            self._login_platform_admin(client)
+            client.post(f"/super_admin/applications/{application_id}/approve", follow_redirects=False)
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            assert cur.fetchone()[0] == "active"
+
+            # A second, unrelated registrant tries the SAME company name
+            # (different case/whitespace) -- must be blocked with a
+            # generic message that never reveals the real owner's details.
+            resp = client.post("/create_org", data={
+                "company_name": "  acme duplicate test  ", "subdomain": "some-other-slug",
+                "admin_username": "impersonator", "admin_password": "password123",
+                "admin_email": "impersonator@test.local", "email_domain": "impersonator.test",
+            }, follow_redirects=True)
+            assert resp.status_code == 200
+            assert b"already" in resp.data
+            assert b"dupname@test.local" not in resp.data
+
+            cur.execute(
+                "SELECT conflicting_company_name, conflicting_admin_email "
+                "FROM att_master.tenant_duplicate_alerts WHERE attempted_admin_email=%s",
+                ("impersonator@test.local",)
+            )
+            alert = cur.fetchone()
+            assert alert is not None, "duplicate attempt was not recorded for platform-admin review"
+            assert alert[0] == "Acme Duplicate Test"
+            assert alert[1] == "dupname@test.local"
+            cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE attempted_admin_email=%s",
+                        ("impersonator@test.local",))
+            db_engine.commit()
+            cur.close()
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+    def test_otp_lockout_after_max_attempts(self, client, db_engine, monkeypatch):
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-otp-lockout"
+        try:
+            resp, otp = self._start_application(
+                client, monkeypatch, subdomain=subdomain, company_name="OTP Lockout Org",
+                admin_username="lockout_admin", admin_email="lockout@test.local",
+            )
+            application_id = self._application_id_from_redirect(resp)
+            wrong_otp = "000000" if otp != "000000" else "111111"
+
+            for _ in range(5):
+                self._verify_otp(client, application_id, wrong_otp)
+
+            # Even the CORRECT code is now refused -- the attempt cap trips
+            # regardless of what's submitted next.
+            resp = self._verify_otp(client, application_id, otp)
+            assert resp.status_code in (301, 302)
+            assert resp.headers["Location"].startswith("/create_org/verify_otp")
+
+            resp = client.get(f"/create_org/verify_otp?application_id={application_id}", follow_redirects=True)
+            assert b"Too many incorrect attempts" in resp.data
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM att_master.tenant_applications WHERE subdomain=%s", (subdomain,))
+            db_engine.commit()
+            cur.close()
+
+    def test_application_rejected_by_platform_admin_never_provisions(self, client, db_engine, monkeypatch):
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-reject-org"
+        try:
+            application_id = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="Reject Me Org",
+                admin_username="reject_admin", admin_email="reject@test.local",
+            )
+            self._login_platform_admin(client)
+            resp = client.post(f"/super_admin/applications/{application_id}/reject",
+                                data={"reason": "Documents did not match."}, follow_redirects=False)
+            assert resp.status_code in (301, 302)
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT status, rejection_reason FROM att_master.tenant_applications WHERE id=%s",
+                        (application_id,))
+            row = cur.fetchone()
+            assert row[0] == "rejected"
+            assert row[1] == "Documents did not match."
+            cur.execute("SELECT 1 FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            assert cur.fetchone() is None, "a rejected application must never provision a tenant"
+            cur.close()
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM att_master.tenant_applications WHERE subdomain=%s", (subdomain,))
+            db_engine.commit()
+            cur.close()

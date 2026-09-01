@@ -123,6 +123,22 @@ export const employeeSignup = (employee_id, name, password, email = '', role = '
 export const changePassword = (current_password, new_password) =>
   client.post('/api/employee/change-password', { current_password, new_password });
 
+// ── Company Signup (gated: OTP verification + KYC document upload + ─
+// platform-admin review, before a tenant is ever provisioned) ────────
+export const startCompanySignup = (payload) => client.post('/api/create_org', payload);
+
+export const verifyCompanySignupOtp = (application_id, access_token, otp_code) =>
+  client.post('/api/create_org/verify_otp', { application_id, access_token, otp_code });
+
+export const resendCompanySignupOtp = (application_id, access_token) =>
+  client.post('/api/create_org/resend_otp', { application_id, access_token });
+
+export const uploadCompanyDocuments = (formData) =>
+  client.post('/api/create_org/upload_documents', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
+
+export const getCompanySignupStatus = (application_id, access_token) =>
+  client.get(`/api/create_org/status/${application_id}`, { params: { access_token } });
+
 export const uploadEmployeePhoto = (formData) =>
   client.post('/api/employee/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
 

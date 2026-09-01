@@ -37,6 +37,7 @@
       "expo-font",
       "expo-secure-store",
       "expo-file-system",
+      "expo-document-picker",
       "@sentry/react-native"
     ]
   }

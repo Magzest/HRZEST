@@ -2,23 +2,23 @@
 """Billing blueprint -- Razorpay-backed paid signup for the public
 /create_org flow (templates/create_org.html).
 
-Flow: create_order() creates a Razorpay order + a staging `payment_orders`
-row (att_master schema) BEFORE any tenant exists -- the tenant schema only
-gets provisioned once verify_payment() confirms the payment signature.
-This mirrors blueprints/org.py's provision_tenant() core but never collects
-or stores a plaintext password: the new admin account gets a random,
-never-surfaced password, and the customer sets their own via the same
-password-reset-token mechanism blueprints/auth.py's admin_forgot_password
-already uses (confirmed with the user: no plaintext password in email,
-consistent with this codebase's existing never-email-passwords posture --
-see org.py's send_portal_ready_email docstring).
+Flow: an applicant first goes through blueprints/org.py's gated signup
+(OTP email verification, KYC document upload, platform-admin review) --
+only once an application is approved (status='approved_pending_payment')
+does this blueprint come into play. create_order() creates a Razorpay
+order + a staging `payment_orders` row (att_master schema) keyed off that
+already-approved application; the tenant schema only gets provisioned once
+verify_payment() confirms the payment signature, using the
+admin_password_hash already stored on the application (set, hashed, at
+signup step 1 -- well before payment, once OTP + documents were reviewed)
+so there's no separate "set your password" reset-link step needed anymore
+for this flow, unlike the old instant-provisioning design this replaced.
 
 The Platform Admin's own "Create a new company" form (blueprints/
 platform_admin.py) is untouched and stays free/unmetered -- this billing
 flow only gates the public self-service signup path.
 """
 import secrets
-import hashlib
 import datetime
 from flask import Blueprint, request, jsonify
 from extensions import app_log, limiter, log_security_event
@@ -28,16 +28,7 @@ from utils.razorpay_utils import (
     create_order as razorpay_create_order, verify_payment_signature,
     key_id as razorpay_key_id, create_id_or_demo, verify_or_demo,
 )
-from utils.auth import turnstile_enabled, verify_turnstile
-
 billing_bp = Blueprint("billing", __name__)
-
-# Used only to satisfy blueprints.org._validate_new_tenant_fields()'s
-# "password required, >=8 chars" check -- the billing flow no longer
-# collects a password from the customer at all (see module docstring), so
-# this placeholder stands in for validation purposes only and is NEVER
-# passed to provision_tenant() as the real account password.
-_VALIDATION_PLACEHOLDER_PASSWORD = "billing-flow-placeholder"
 
 # Demo/test-mode checkout, used only while RAZORPAY_KEY_ID/SECRET aren't
 # configured -- lets the full register -> pay -> provisioned flow be
@@ -53,45 +44,41 @@ _DEMO_ORDER_PREFIX = "demo_order_"
 @billing_bp.route("/api/billing/create_order", methods=["POST"])
 @limiter.limit("10 per minute")
 def create_order():
-    from blueprints.org import _validate_new_tenant_fields
-    from utils.helpers import clean_email_domain
-
-    if turnstile_enabled():
-        token = request.form.get("cf-turnstile-response") or (request.get_json(silent=True) or {}).get("cf_turnstile_response", "")
-        if not verify_turnstile(token, request.remote_addr):
-            return jsonify({"ok": False, "msg": "Captcha verification failed. Please try again."}), 400
-
+    """Payment now happens AFTER a platform admin approves the applicant's
+    gated signup (blueprints/org.py's tenant_applications), not before --
+    so this no longer collects fresh company/admin fields from the client
+    at all (those were already validated, duplicate-checked, and OTP/KYC
+    verified during the application). It only needs application_id
+    (identifying an already-approved application) and employee_count
+    (the one thing genuinely decided at checkout time)."""
     data = request.get_json(silent=True) or request.form
-    company_name = (data.get("company_name") or "").strip()
-    subdomain = (data.get("subdomain") or "").strip().lower()
-    admin_username = (data.get("admin_username") or "").strip()
-    admin_email = (data.get("admin_email") or "").strip()
-    email_domain = clean_email_domain(data.get("email_domain") or "")
+    try:
+        application_id = int(data.get("application_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "msg": "Missing or invalid application_id."}), 400
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status "
+        "FROM tenant_applications WHERE id=%s",
+        (application_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "Application not found."}), 404
+    company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status = row
+    if status != "approved_pending_payment":
+        return jsonify({"ok": False, "msg": "This application isn't ready for payment."}), 400
+
     try:
         employee_count = int(data.get("employee_count") or 1)
     except (TypeError, ValueError):
         return jsonify({"ok": False, "msg": "Employee count must be a number."}), 400
     if employee_count < 1:
         return jsonify({"ok": False, "msg": "Employee count must be at least 1."}), 400
-
-    error = _validate_new_tenant_fields(
-        company_name, subdomain, admin_username, _VALIDATION_PLACEHOLDER_PASSWORD, admin_email, email_domain
-    )
-    if error:
-        return jsonify({"ok": False, "msg": error}), 400
-
-    # Logo, if the signup form's file input was used -- staged now (before
-    # any tenant/payment exists) since request.files is only available on
-    # this request, not the later verify_payment() call that actually
-    # provisions the tenant. Optional: signup proceeds with no logo on a
-    # validation failure too, same as an unset file input.
-    logo_path = None
-    logo_file = request.files.get("logo")
-    if logo_file and logo_file.filename:
-        from utils.helpers import save_uploaded_logo
-        logo_path, logo_err = save_uploaded_logo(logo_file, subdomain)
-        if logo_err:
-            return jsonify({"ok": False, "msg": f"Company logo: {logo_err}"}), 400
 
     amount_paise = calculate_price(employee_count)
 
@@ -108,10 +95,10 @@ def create_order():
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO payment_orders (razorpay_order_id, plan, employee_count, amount_paise, "
-            "company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'created')",
+            "company_name, subdomain, admin_username, admin_email, email_domain, logo_path, application_id, status) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'created')",
             (order_id, PLAN_LABEL, employee_count, amount_paise, company_name, subdomain, admin_username, admin_email,
-             email_domain, logo_path)
+             email_domain, logo_path, application_id)
         )
         conn.commit()
         cur.close()
@@ -135,6 +122,7 @@ def create_order():
 @limiter.limit("20 per minute")
 def verify_payment():
     from blueprints.org import provision_tenant, send_payment_confirmation_email
+    from utils.auth import generate_password_hash
     from utils.helpers import _safe_app_url
 
     data = request.get_json(silent=True) or request.form
@@ -161,7 +149,8 @@ def verify_payment():
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "SELECT employee_count, company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status "
+        "SELECT employee_count, company_name, subdomain, admin_username, admin_email, email_domain, logo_path, "
+        "status, application_id "
         "FROM payment_orders WHERE razorpay_order_id=%s",
         (razorpay_order_id,)
     )
@@ -171,7 +160,8 @@ def verify_payment():
         conn.close()
         return jsonify({"ok": False, "msg": "Unknown order."}), 404
 
-    employee_count, company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status = row
+    (employee_count, company_name, subdomain, admin_username, admin_email, email_domain, logo_path, status,
+     application_id) = row
 
     # Idempotent: a retried/duplicate client POST for an already-provisioned
     # order must not attempt to re-provision (the subdomain is now taken,
@@ -192,13 +182,32 @@ def verify_payment():
     cur.close()
     conn.close()
 
-    # Random password, never stored/emailed/logged in plaintext -- the new
-    # admin sets their own via the reset-token link below. See module
-    # docstring for why (agreed with the user: no plaintext password in
-    # email, matching this codebase's existing posture everywhere else).
-    random_password = secrets.token_urlsafe(24)
+    # The applicant already set (and it was hashed at) their real admin
+    # password during the gated signup application -- OTP-verified and
+    # KYC-document-reviewed well before payment ever happens now, unlike
+    # the old flow where payment was the very first step and no password
+    # had been collected yet. So there's no more random-password +
+    # "set your password" reset-link dance needed: provision_tenant() just
+    # gets the hash that's already on file.
+    admin_password_hash = None
+    if application_id:
+        aconn = get_master_db()
+        acur = aconn.cursor(buffered=True)
+        acur.execute("SELECT admin_password_hash FROM tenant_applications WHERE id=%s", (application_id,))
+        arow = acur.fetchone()
+        acur.close()
+        aconn.close()
+        admin_password_hash = arow[0] if arow else None
+    if not admin_password_hash:
+        # Defensive fallback for a payment_orders row with no linked
+        # application (shouldn't happen via create_order() above, which
+        # now requires one) -- still provisions correctly with a random
+        # password the admin can recover via the normal forgot-password flow.
+        app_log.warning("billing.verify_payment: order %s has no linked application; using a random password", razorpay_order_id)
+        admin_password_hash = generate_password_hash(secrets.token_urlsafe(24))
+
     ok, error, portal_url, checkin_url = provision_tenant(
-        company_name, subdomain, admin_username, random_password, admin_email,
+        company_name, subdomain, admin_username, admin_password_hash, admin_email,
         email_domain=email_domain, employee_count=employee_count, logo_path=logo_path
     )
     if not ok:
@@ -210,34 +219,6 @@ def verify_payment():
         cur.close()
         conn.close()
         return jsonify({"ok": False, "msg": f"Payment received, but provisioning failed: {error}. Contact support with order ID {razorpay_order_id}."}), 500
-
-    # Set-your-password token -- same generation scheme as
-    # blueprints/auth.py's admin_forgot_password (secrets.token_hex(32),
-    # stored as its SHA-256 hash, 1-hour expiry), written directly into the
-    # freshly-provisioned tenant schema's admin_users row. Can't reuse
-    # admin_forgot_password's route directly: that looks the account up by
-    # email against whatever tenant the CURRENT request's Host header
-    # resolves to, which here is the billing/create_org host, not the
-    # brand-new tenant subdomain.
-    reset_token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
-    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
-    db_name = "att_" + subdomain.replace("-", "_")
-    try:
-        from database import get_tenant_db
-        tconn = get_tenant_db(db_name)
-        tcur = tconn.cursor()
-        tcur.execute(
-            "UPDATE admin_users SET reset_token=%s, reset_token_expiry=%s WHERE username=%s",
-            (token_hash, expiry, admin_username)
-        )
-        tconn.commit()
-        tcur.close()
-        tconn.close()
-    except Exception as exc:
-        app_log.error("billing.verify_payment: failed to set reset token for order %s: %s", razorpay_order_id, exc)
-
-    set_password_url = f"{_safe_app_url()}/{subdomain}/admin_reset_password/{reset_token}"
 
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
@@ -252,12 +233,17 @@ def verify_payment():
         "UPDATE payment_orders SET status='provisioned', tenant_id=%s WHERE razorpay_order_id=%s",
         (tenant_row[0] if tenant_row else None, razorpay_order_id)
     )
+    if application_id and tenant_row:
+        cur.execute(
+            "UPDATE tenant_applications SET status='provisioned', tenant_id=%s, updated_at=NOW() WHERE id=%s",
+            (tenant_row[0], application_id)
+        )
     conn.commit()
     cur.close()
     conn.close()
 
     send_payment_confirmation_email(
-        admin_email, company_name, portal_url, set_password_url,
+        admin_email, company_name, portal_url,
         employee_count, amount_paise, razorpay_payment_id, checkin_url=checkin_url,
     )
 

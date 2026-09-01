@@ -16,6 +16,7 @@ mobile/.expo/
 static/employee_docs/
 static/company_logos/
 static/id_card_templates/
+private_uploads/
 venv/
 cert.pem
 key.pem

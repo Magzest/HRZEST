@@ -22,7 +22,7 @@ import { useAuth } from "../store/AuthContext";
 import { useTheme } from "../store/ThemeContext";
 import QRScannerModal from "./QRScannerModal";
 
-export default function LoginScreen() {
+export default function LoginScreen({ navigation }) {
   const { signIn } = useAuth();
   const { colors } = useTheme();
   const styles = React.useMemo(() => makeStyles(colors), [colors]);
@@ -378,6 +378,14 @@ export default function LoginScreen() {
               </>
             )}
           </View>
+
+          <TouchableOpacity
+            style={styles.registerLink}
+            onPress={() => navigation.navigate("CompanySignup")}
+          >
+            <Ionicons name="business-outline" size={14} color="rgba(255,255,255,0.85)" style={{ marginRight: 6 }} />
+            <Text style={styles.registerLinkText}>New company? Register here</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -569,5 +577,17 @@ const makeStyles = (colors) => StyleSheet.create({
     fontWeight: "700",
     color: "#173B8C",
     marginLeft: 8,
+  },
+
+  registerLink: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 22,
+  },
+  registerLinkText: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    color: "rgba(255, 255, 255, 0.85)",
   },
 });

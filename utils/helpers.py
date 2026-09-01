@@ -254,8 +254,11 @@ def _audit(action, table=None, record_id=None, detail=None):
         finally:
             cursor.close()
             db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        # A silently-lost audit_logs row undermines the whole point of an
+        # audit trail -- worth a trace even though _audit() itself must
+        # never raise and block the action it's recording.
+        app_log.warning("_audit failed (action=%s, table=%s, record_id=%s): %s", action, table, record_id, exc, exc_info=True)
 
 
 # ── Notification helper ───────────────────────────────────────────────────────
@@ -272,8 +275,8 @@ def _create_notification(recipient_type, title, message, employee_id=None):
         finally:
             cursor.close()
             db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("_create_notification failed (recipient_type=%s, employee_id=%s): %s", recipient_type, employee_id, exc, exc_info=True)
 
 
 # ── Malware scanning (ClamAV) ─────────────────────────────────────────────────
@@ -424,29 +427,73 @@ _LOGO_NAME_RE = re.compile(r'[^a-z0-9\-]')
 
 def save_uploaded_logo(file_storage, name_hint):
     """Validate and save an uploaded company-logo image under
-    static/company_logos/, named after name_hint (the tenant's subdomain
-    slug, already restricted to [a-z0-9-] by org.py's _SUBDOMAIN_RE --
-    scrubbed again here defensively since other callers may not enforce
-    that). Returns (relative_path, None) on success -- relative_path is
-    under static/ and is what company_settings.logo_url is built from --
-    or (None, error_message) if the file is present but invalid. Callers
-    should treat "no file provided" as optional and skip calling this
-    entirely rather than treating it as an error.
+    static/company_logos/ (or the equivalent S3 key -- see utils/storage.py,
+    a no-op switch controlled entirely by whether S3_BUCKET is set), named
+    after name_hint (the tenant's subdomain slug, already restricted to
+    [a-z0-9-] by org.py's _SUBDOMAIN_RE -- scrubbed again here defensively
+    since other callers may not enforce that). Returns (stored_ref, None)
+    on success -- stored_ref is either the "company_logos/x.png"-style
+    relative path (local disk, what company_settings.logo_url is built
+    from as before) or a full https:// S3 object URL, or (None,
+    error_message) if the file is present but invalid. Callers should
+    treat "no file provided" as optional and skip calling this entirely
+    rather than treating it as an error.
 
     Deterministic filename (no re-upload dedup needed): a second signup
     attempt for the same subdomain just overwrites the previous file,
     which is fine since a subdomain can only ever back one live tenant."""
     from flask import current_app
+    from utils.storage import save_public
     ok, err = _validate_image_file(file_storage)
     if not ok:
         return None, err
     ext = os.path.splitext(file_storage.filename)[1].lower()
     safe_name = _LOGO_NAME_RE.sub("", name_hint.lower()) or "logo"
-    folder = os.path.join(current_app.root_path, "static", "company_logos")
-    os.makedirs(folder, exist_ok=True)
-    filename = f"{safe_name}{ext}"
-    file_storage.save(os.path.join(folder, filename))
-    return f"company_logos/{filename}", None
+    return save_public(current_app.root_path, file_storage, f"company_logos/{safe_name}{ext}",
+                        content_type=file_storage.content_type)
+
+
+_APPLICATION_DOC_KINDS = {
+    "registration_cert": ("upload", {"pdf", "jpg", "jpeg", "png"}),
+    "address_proof": ("upload", {"pdf", "jpg", "jpeg", "png"}),
+    "visiting_card": ("image", None),
+    "name_board_photo": ("image", None),
+}
+
+
+def save_application_document(file_storage, application_id, doc_kind):
+    """Validate and save one KYC document for a pending company-signup
+    application (blueprints/org.py's gated /create_org flow). Unlike
+    save_uploaded_logo() above, this deliberately does NOT save under
+    static/ -- these are business-verification documents (registration
+    certificate, address proof, visiting card, name-board photo), not an
+    asset meant to be publicly rendered on every dashboard. They're only
+    ever read back server-side, by the platform-admin-only document-view
+    route (blueprints/platform_admin.py), which reads via
+    utils/storage.py's open_private() after checking
+    @_platform_admin_required -- that route plus never constructing a
+    client-facing URL to this path is the entire access control.
+
+    Returns (stored_ref, None) on success -- stored_ref is either an
+    absolute local filesystem path or an "s3://bucket/key" reference (see
+    utils/storage.py; a no-op switch controlled by S3_BUCKET), pass it
+    straight into open_private()/delete_private() -- or (None, error_message).
+    """
+    from flask import current_app
+    from utils.storage import save_private
+    kind_info = _APPLICATION_DOC_KINDS.get(doc_kind)
+    if not kind_info:
+        return None, "Unknown document type."
+    validator_kind, allowed_exts = kind_info
+    if validator_kind == "image":
+        ok, err = _validate_image_file(file_storage)
+    else:
+        ok, err = _validate_upload(file_storage, allowed_exts=allowed_exts)
+    if not ok:
+        return None, err
+    ext = os.path.splitext(file_storage.filename)[1].lower()
+    return save_private(current_app.root_path, file_storage,
+                         f"tenant_applications/{int(application_id)}/{doc_kind}{ext}")
 
 
 # ── Company settings cache (60-second TTL) ────────────────────────────────────
@@ -553,8 +600,11 @@ def get_company_settings():
                 _co_cache["data"] = result
                 _co_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL)
             return dict(result)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Falls through to generic hardcoded defaults below -- every page
+        # in the app would silently render wrong branding/settings, worth
+        # a trace.
+        app_log.warning("get_company_settings failed, using generic defaults: %s", exc, exc_info=True)
     return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
             "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
@@ -739,8 +789,8 @@ def get_auth_config():
                 _auth_cache["data"] = result
                 _auth_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL)
             return dict(result)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("get_auth_config failed, using defaults: %s", exc, exc_info=True)
     return dict(_AUTH_CONFIG_DEFAULTS)
 
 
@@ -776,8 +826,8 @@ def _read_global_features():
                 "holiday_pay": r[15], "leave_pay": r[16],
                 "shift_start": r[17], "shift_half": r[18], "shift_end": r[19],
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("_read_global_features failed, using defaults: %s", exc, exc_info=True)
     return {
         "face_auth_enabled": True, "geo_enabled": False, "geo_radius": 300,
         "qr_enabled": True, "pin_enabled": True, "fingerprint_enabled": False,
@@ -818,8 +868,8 @@ def get_co_features(company_id=None):
                 "holiday_pay": r[15], "leave_pay": r[16],
                 "shift_start": r[17], "shift_half": r[18], "shift_end": r[19],
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Per-company feature settings lookup failed, falling back to global: %s", exc, exc_info=True)
     return _read_global_features()
 
 
@@ -856,8 +906,10 @@ def _upsert_co_feature(company_id, field, value):
         db.commit()
         cur.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        # The caller (a settings-save route) has no idea this silently
+        # failed -- it flashes "saved" while nothing actually persisted.
+        app_log.warning("_upsert_co_feature failed (company_id=%s, field=%s): %s", company_id, field, exc, exc_info=True)
 
 
 def _upsert_co_features(company_id, fields_dict):
@@ -884,8 +936,8 @@ def _upsert_co_features(company_id, fields_dict):
         db.commit()
         cur.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("_upsert_co_features failed (company_id=%s, fields=%s): %s", company_id, list(fields_dict.keys()), exc, exc_info=True)
 
 
 # ── Company-scoping WHERE fragments ─────────────────────────────────────────

@@ -221,17 +221,22 @@ def _recent_platform_activity(limit=20):
 
 
 def _self_signup_tenant_ids():
-    """Tenant IDs that came through the public self-service flow
-    (blueprints/billing.py's verify_payment -- real Razorpay or the demo
-    checkout, doesn't matter which) rather than being created directly by
-    a platform admin. A payment_orders row with tenant_id set is only ever
-    written by that path, so its presence is the signal -- no separate
-    'source' column needed on tenants itself."""
+    """Tenant IDs that came through the public self-service flow -- either
+    the paid path (blueprints/billing.py's verify_payment, real Razorpay or
+    the demo checkout) or the gated free/manual path (a tenant_applications
+    row approved directly by platform_admin_approve_application()) -- rather
+    than being created directly by a platform admin via
+    platform_admin_create_tenant(), which never touches either table. A
+    payment_orders or tenant_applications row with tenant_id set is only
+    ever written by one of those two self-service paths, so its presence
+    is the signal -- no separate 'source' column needed on tenants itself."""
     try:
         conn = get_master_db()
         cur = conn.cursor(buffered=True)
         cur.execute("SELECT DISTINCT tenant_id FROM payment_orders WHERE tenant_id IS NOT NULL")
         ids = {r[0] for r in cur.fetchall()}
+        cur.execute("SELECT DISTINCT tenant_id FROM tenant_applications WHERE tenant_id IS NOT NULL")
+        ids |= {r[0] for r in cur.fetchall()}
         cur.close()
         conn.close()
         return ids
@@ -459,6 +464,15 @@ def platform_admin_dashboard():
     costs = _get_platform_costs()
     pnl = _compute_pnl(mrr_paise, active_employee_count, costs)
 
+    conn2 = get_master_db()
+    cur2 = conn2.cursor(buffered=True)
+    cur2.execute("SELECT COUNT(*) FROM tenant_applications WHERE status='pending_review'")
+    pending_applications_count = cur2.fetchone()[0]
+    cur2.execute("SELECT COUNT(*) FROM tenant_duplicate_alerts WHERE acknowledged=0")
+    unacknowledged_alerts_count = cur2.fetchone()[0]
+    cur2.close()
+    conn2.close()
+
     return render_template(
         "super_admin_dashboard.html", tenants=tenants,
         per_employee_paise=PER_EMPLOYEE_PAISE,
@@ -472,6 +486,8 @@ def platform_admin_dashboard():
         traffic=get_traffic_stats(),
         pnl=pnl,
         costs=costs,
+        pending_applications_count=pending_applications_count,
+        unacknowledged_alerts_count=unacknowledged_alerts_count,
     )
 
 
@@ -542,6 +558,7 @@ def platform_admin_create_tenant():
     onboarded company gets an identical, fully-isolated schema rather than
     a second, softer path into tenant creation."""
     from blueprints.org import _validate_new_tenant_fields, provision_tenant, send_portal_ready_email
+    from utils.auth import generate_password_hash
     from utils.helpers import clean_email_domain
 
     company_name = request.form.get("company_name", "").strip()
@@ -567,7 +584,8 @@ def platform_admin_create_tenant():
             flash(f"Company logo: {logo_err}", "error")
             return redirect("/super_admin")
 
-    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
+    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username,
+                                                            generate_password_hash(admin_password),
                                                             admin_email, payment_option, email_domain=email_domain,
                                                             logo_path=logo_path)
     if not ok:
@@ -607,6 +625,269 @@ def platform_admin_set_status(tenant_id):
     )
     flash("Status updated.", "success")
     return redirect("/super_admin")
+
+
+# ── Gated company-signup review queue (blueprints/org.py's tenant_applications) ──
+# Every applicant now goes through email OTP + KYC document upload before
+# reaching this queue; provision_tenant() is only ever called from the
+# approve action below (or, for paid plans, from billing.py's
+# verify_payment() after the post-approval payment step completes).
+
+_APPLICATION_DOC_KINDS = ("registration_cert", "address_proof", "visiting_card", "name_board_photo")
+_APPLICATION_STATUS_COLS = (
+    "id, company_name, subdomain, admin_username, admin_email, email_domain, employee_count, "
+    "payment_option, logo_path, email_verified_at, doc_registration_cert, doc_address_proof, "
+    "doc_visiting_card, doc_name_board_photo, documents_submitted_at, status, reviewed_by, "
+    "reviewed_at, rejection_reason, tenant_id, created_at"
+)
+_APPLICATION_COLS = [c.strip() for c in _APPLICATION_STATUS_COLS.split(",")]
+
+
+def _fetch_application(application_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- _APPLICATION_STATUS_COLS is a fixed module-level constant, never built from request input
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    return dict(zip(_APPLICATION_COLS, row))
+
+
+@platform_admin_bp.route("/super_admin/applications", methods=["GET"])
+@_platform_admin_required
+def platform_admin_applications_queue():
+    status_filter = request.args.get("status", "pending_review")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    if status_filter == "all":
+        cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications ORDER BY created_at DESC")  # nosec B608 -- fixed constant, see _fetch_application
+    else:
+        cur.execute(
+            f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE status=%s ORDER BY created_at ASC",  # nosec B608
+            (status_filter,)
+        )
+    rows = cur.fetchall()
+    cur.execute("SELECT COUNT(*) FROM tenant_applications WHERE status='pending_review'")
+    pending_count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    applications = [dict(zip(_APPLICATION_COLS, r)) for r in rows]
+    return render_template(
+        "super_admin_applications.html", applications=applications,
+        status_filter=status_filter, pending_count=pending_count,
+    )
+
+
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>", methods=["GET"])
+@_platform_admin_required
+def platform_admin_application_detail(application_id):
+    application = _fetch_application(application_id)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/super_admin/applications")
+    return render_template("super_admin_application_detail.html", application=application,
+                            doc_kinds=_APPLICATION_DOC_KINDS)
+
+
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>/documents/<doc_kind>", methods=["GET"])
+@_platform_admin_required
+def platform_admin_view_document(application_id, doc_kind):
+    """Streams one uploaded KYC document. This route + the
+    @_platform_admin_required guard above is the ENTIRE access control for
+    these files -- they're saved outside static/ (see utils/helpers.py's
+    save_application_document()) specifically so there is no other way to
+    reach them. doc_kind is checked against a fixed whitelist and the
+    actual filesystem path/S3 ref always comes from the DB row, never from
+    anything client-supplied, so this can't be tricked into serving an
+    arbitrary path.
+
+    Reads via utils/storage.py's open_private() rather than send_file(path)
+    directly, since the stored ref may be a local path OR an "s3://..."
+    reference (whichever save_application_document() actually used) --
+    open_private() handles both transparently, this route doesn't need to
+    know or care which mode is active."""
+    if doc_kind not in _APPLICATION_DOC_KINDS:
+        flash("Invalid document type.", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(f"SELECT doc_{doc_kind} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- doc_kind is allowlist-checked against _APPLICATION_DOC_KINDS above, never interpolated from an unchecked value
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row or not row[0]:
+        flash("Document not found.", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+    import io
+    import mimetypes
+    from flask import send_file
+    from utils.storage import open_private
+    try:
+        data = open_private(row[0])
+    except Exception as exc:
+        app_log.warning("Could not read application document %s (application_id=%s): %s", row[0], application_id, exc, exc_info=True)
+        flash("Could not read this document.", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+    mimetype = mimetypes.guess_type(row[0])[0] or "application/octet-stream"
+    return send_file(io.BytesIO(data), mimetype=mimetype, as_attachment=False)
+
+
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>/approve", methods=["POST"])
+@_platform_admin_required
+def platform_admin_approve_application(application_id):
+    from blueprints.org import provision_tenant, check_duplicate_name, _record_duplicate_alert, \
+        send_portal_ready_email, _GENERIC_DUPLICATE_MSG
+
+    application = _fetch_application(application_id)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/super_admin/applications")
+    if application["status"] != "pending_review":
+        flash("This application isn't awaiting review.", "error")
+        return redirect("/super_admin/applications")
+
+    # Re-check for a name collision -- state may have shifted since this
+    # application was submitted (e.g. a different applicant with the same
+    # name was approved first).
+    conflicting = check_duplicate_name(application["company_name"])
+    if conflicting:
+        _record_duplicate_alert(application_id, application["company_name"], application["admin_email"], conflicting)
+        flash(_GENERIC_DUPLICATE_MSG + " (duplicate detected at approval time)", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    reviewer = session.get("platform_admin_username")
+
+    if application["payment_option"] == "online":
+        # Payment happens AFTER approval for paid plans -- provisioning is
+        # deferred until blueprints/billing.py's verify_payment() confirms
+        # the charge (see create_order()'s new application_id requirement).
+        cur.execute(
+            "UPDATE tenant_applications SET status='approved_pending_payment', reviewed_by=%s, reviewed_at=NOW(), "
+            "updated_at=NOW() WHERE id=%s",
+            (reviewer, application_id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        from utils.email_utils import get_email_config, send_email_async
+        pay_url = f"{request.url_root.rstrip('/')}/create_org/pay/{application_id}"
+        email_cfg = get_email_config()
+        if email_cfg:
+            send_email_async(
+                application["admin_email"], f"Your application was approved -- complete payment for {application['company_name']}",
+                f"<p>Your company registration for <strong>{application['company_name']}</strong> has been approved.</p>"
+                f"<p><a href=\"{pay_url}\">Complete payment to activate your portal</a></p>",
+                email_cfg,
+            )
+        log_security_event("platform_admin.application_approved", f"Application {application_id} approved (awaiting payment)",
+                            level="INFO", identifier=reviewer, application_id=application_id)
+        flash(f"Application approved. Applicant has been emailed a payment link: {pay_url}", "success")
+        return redirect("/super_admin/applications")
+
+    cur.execute("SELECT admin_password_hash FROM tenant_applications WHERE id=%s", (application_id,))
+    admin_password_hash = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+
+    ok, error, portal_url, checkin_url = provision_tenant(
+        application["company_name"], application["subdomain"], application["admin_username"], admin_password_hash,
+        application["admin_email"], payment_option=application["payment_option"],
+        email_domain=application["email_domain"], employee_count=application["employee_count"],
+        logo_path=application["logo_path"],
+    )
+    if not ok:
+        flash(f"Approval failed: {error}", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT id FROM tenants WHERE subdomain=%s", (application["subdomain"],))
+    tenant_id = cur.fetchone()[0]
+    cur.execute(
+        "UPDATE tenant_applications SET status='provisioned', reviewed_by=%s, reviewed_at=NOW(), tenant_id=%s, "
+        "updated_at=NOW() WHERE id=%s",
+        (reviewer, tenant_id, application_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    send_portal_ready_email(application["admin_email"], application["company_name"], application["admin_username"],
+                             portal_url, checkin_url=checkin_url)
+    log_security_event("platform_admin.application_approved", f"Application {application_id} approved and provisioned",
+                        level="INFO", identifier=reviewer, application_id=application_id, tenant_id=tenant_id)
+    flash(f"Company '{application['company_name']}' approved and provisioned. Portal: {portal_url}", "success")
+    return redirect("/super_admin/applications")
+
+
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>/reject", methods=["POST"])
+@_platform_admin_required
+def platform_admin_reject_application(application_id):
+    from blueprints.org import send_application_rejected_email
+    reason = request.form.get("reason", "").strip()[:1000]
+    application = _fetch_application(application_id)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/super_admin/applications")
+
+    reviewer = session.get("platform_admin_username")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE tenant_applications SET status='rejected', reviewed_by=%s, reviewed_at=NOW(), rejection_reason=%s, "
+        "updated_at=NOW() WHERE id=%s",
+        (reviewer, reason, application_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    send_application_rejected_email(application["admin_email"], application["company_name"], reason)
+    log_security_event("platform_admin.application_rejected", f"Application {application_id} rejected",
+                        level="INFO", identifier=reviewer, application_id=application_id, reason=reason)
+    flash("Application rejected.", "success")
+    return redirect("/super_admin/applications")
+
+
+@platform_admin_bp.route("/super_admin/duplicate-alerts", methods=["GET"])
+@_platform_admin_required
+def platform_admin_duplicate_alerts():
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, application_id, attempted_company_name, attempted_admin_email, conflicting_tenant_id, "
+        "conflicting_company_name, conflicting_admin_email, match_type, acknowledged, acknowledged_by, "
+        "acknowledged_at, source_ip, created_at "
+        "FROM tenant_duplicate_alerts ORDER BY acknowledged ASC, created_at DESC"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    cols = ["id", "application_id", "attempted_company_name", "attempted_admin_email", "conflicting_tenant_id",
+            "conflicting_company_name", "conflicting_admin_email", "match_type", "acknowledged", "acknowledged_by",
+            "acknowledged_at", "source_ip", "created_at"]
+    alerts = [dict(zip(cols, r)) for r in rows]
+    return render_template("super_admin_duplicate_alerts.html", alerts=alerts)
+
+
+@platform_admin_bp.route("/super_admin/duplicate-alerts/<int:alert_id>/acknowledge", methods=["POST"])
+@_platform_admin_required
+def platform_admin_acknowledge_duplicate_alert(alert_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE tenant_duplicate_alerts SET acknowledged=1, acknowledged_by=%s, acknowledged_at=NOW() WHERE id=%s",
+        (session.get("platform_admin_username"), alert_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash("Alert acknowledged.", "success")
+    return redirect("/super_admin/duplicate-alerts")
 
 
 # ── Self-service device management (utils/device_utils.py) ─────────────────

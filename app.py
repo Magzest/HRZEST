@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 import sys
+# Runs before app_log is importable -- harmless either way (fails only on a
+# stream that doesn't support .reconfigure(), e.g. Python <3.7 or a fully
+# redirected/piped stdout that's already fixed-encoding). See wsgi.py's
+# identical guard for the same rationale.
 try:
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
@@ -794,8 +798,11 @@ def _inject_csrf_meta(response):
             data = _SCRIPT_TAG_RE.sub(b'<script nonce="' + nb + b'"', data)
             data = _STYLE_TAG_RE.sub(b'<style nonce="' + nb + b'"', data)
         response.set_data(data)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Silent failure here means CSRF-token/killswitch injection and CSP
+        # nonce rewriting both silently no-op on this response -- worth
+        # knowing about even though the response still goes out.
+        app_log.warning("Response HTML injection (CSRF token/CSP nonce) failed: %s", exc, exc_info=True)
     return response
 
 
@@ -859,8 +866,12 @@ with app.app_context():
     try:
         cfg.load_default_shift()
         cfg.load_salary_rules()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Falls back to cfg's hardcoded defaults, silently -- worth logging
+        # since a DB that isn't reachable yet at this exact import-time
+        # point means shift/salary config stays wrong until the next
+        # successful load, not just this one startup.
+        app_log.warning("Startup load of default shift/salary config failed: %s", exc, exc_info=True)
 
 # ── PII Encryption ────────────────────────────────────────────────
 # Consolidated onto utils/helpers.py (see import block near the top of this
@@ -1687,10 +1698,10 @@ def _init_core_tables(cursor, db):
     # Add default shift columns if not present
     for col, default in [("shift_start", "09:00:00"), ("shift_half", "13:00:00"), ("shift_end", "18:00:00")]:
         try:
-            cursor.execute(f"ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS {col} TIME DEFAULT '{default}'")
+            cursor.execute(f"ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS {col} TIME DEFAULT '{default}'")  # nosec B608 -- col/default come from the fixed literal list above, never user input
             db.commit()
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Migration: ALTER company_settings ADD COLUMN %s failed: %s", col, exc, exc_info=True)
 
 
 def _run_schema_migrations(cursor, db):
@@ -1879,8 +1890,8 @@ def _run_password_migrations(cursor, db):
             cursor.execute("UPDATE employees SET password=%s", (generate_password_hash('1234'),))
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('default_pin_1234')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'default_pin_1234' failed: %s", exc, exc_info=True)
 
     # Migration: add force_pin_change column and flag employees on default PIN
     try:
@@ -1897,8 +1908,8 @@ def _run_password_migrations(cursor, db):
                     cursor.execute("UPDATE employees SET force_pin_change=1 WHERE employee_id=%s", (eid,))
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('force_pin_change_flag')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'force_pin_change_flag' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations(cursor, db):
@@ -1935,8 +1946,8 @@ def _run_index_migrations_v1(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('perf_indexes_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'perf_indexes_v1' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations_v2(cursor, db):
@@ -1959,8 +1970,8 @@ def _run_index_migrations_v2(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('perf_indexes_v2')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'perf_indexes_v2' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations_v3(cursor, db):
@@ -1999,8 +2010,8 @@ def _run_index_migrations_v3(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('perf_indexes_v3')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'perf_indexes_v3' failed: %s", exc, exc_info=True)
 
 
 def _run_data_integrity_migrations(cursor, db):
@@ -2037,8 +2048,8 @@ def _run_incentives_unique_constraint_migration(cursor, db):
                 db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('incentives_unique_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'incentives_unique_v1' failed: %s", exc, exc_info=True)
 
 
 def _run_pii_widen_migration_v1(cursor, db):
@@ -2075,8 +2086,8 @@ def _run_pii_widen_migration_v1(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('employee_pii_columns_to_text_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'employee_pii_columns_to_text_v1' failed: %s", exc, exc_info=True)
 
 
 def _run_pii_widen_migration_v2(cursor, db):
@@ -2115,8 +2126,8 @@ def _run_pii_widen_migration_v2(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('employee_pii_columns_to_text_v2')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'employee_pii_columns_to_text_v2' failed: %s", exc, exc_info=True)
 
 
 def _run_fk_backstop_migration(cursor, db):
@@ -2172,8 +2183,8 @@ def _run_fk_backstop_migration(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('fk_constraints_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'fk_constraints_v1' failed: %s", exc, exc_info=True)
 
 
 def _seed_defaults_and_admin(cursor, db, seed_admin=True):
@@ -2365,6 +2376,93 @@ def init_master_db():
         # exists) -- verify_payment() reads it back and hands it to
         # provision_tenant() once the tenant schema is actually created.
         cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL")
+        # Links a payment_orders row back to the tenant_applications row it
+        # was raised from, once payment moves to after admin approval (see
+        # tenant_applications below) -- nullable since platform-admin-created
+        # tenants (platform_admin.py) and the free/manual signup path never
+        # go through payment_orders at all.
+        cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS application_id INT DEFAULT NULL")
+        # Gated company signup: a prospective tenant now goes through this
+        # pending-application state machine (email OTP -> KYC document
+        # upload -> manual platform-admin review) before provision_tenant()
+        # is ever called, instead of being provisioned instantly from the
+        # signup form. status: started -> otp_verified -> pending_review ->
+        # approved | approved_pending_payment -> provisioned, or terminal
+        # rejected / expired. admin_password_hash is the ONLY form the
+        # password is ever stored in during the (possibly multi-day) pending
+        # window -- provision_tenant() was changed to accept a pre-hashed
+        # password precisely so plaintext never sits here waiting on review.
+        # access_token_hash: a random opaque token (secrets.token_urlsafe)
+        # is generated once at application-start and returned to the caller
+        # (web: stashed in session; mobile: held by the app for the rest of
+        # the signup flow) -- every later step (verify OTP, upload
+        # documents, check status) must present it, hashed the same way
+        # api_tokens are (utils/auth.py's _hash_token). This is what stops
+        # someone from guessing a sequential application id and hijacking
+        # or peeking at someone else's in-progress signup, on either
+        # platform, without needing a session cookie mobile doesn't have.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_applications (
+                id SERIAL PRIMARY KEY,
+                company_name VARCHAR(200) NOT NULL,
+                subdomain VARCHAR(100) NOT NULL,
+                admin_username VARCHAR(100) NOT NULL,
+                admin_email VARCHAR(200) NOT NULL,
+                admin_password_hash VARCHAR(255) NOT NULL,
+                email_domain VARCHAR(255) DEFAULT NULL,
+                employee_count INT DEFAULT NULL,
+                payment_option VARCHAR(20) NOT NULL DEFAULT 'manual',
+                logo_path VARCHAR(255) DEFAULT NULL,
+
+                access_token_hash VARCHAR(64) NOT NULL,
+                otp_code_hash VARCHAR(64) DEFAULT NULL,
+                otp_expires_at TIMESTAMP DEFAULT NULL,
+                otp_attempts SMALLINT NOT NULL DEFAULT 0,
+                email_verified_at TIMESTAMP DEFAULT NULL,
+
+                doc_registration_cert VARCHAR(500) DEFAULT NULL,
+                doc_address_proof VARCHAR(500) DEFAULT NULL,
+                doc_visiting_card VARCHAR(500) DEFAULT NULL,
+                doc_name_board_photo VARCHAR(500) DEFAULT NULL,
+                documents_submitted_at TIMESTAMP DEFAULT NULL,
+
+                status VARCHAR(30) NOT NULL DEFAULT 'started',
+                reviewed_by VARCHAR(100) DEFAULT NULL,
+                reviewed_at TIMESTAMP DEFAULT NULL,
+                rejection_reason VARCHAR(1000) DEFAULT NULL,
+                tenant_id INT DEFAULT NULL,
+
+                source_ip VARCHAR(45) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_applications_status ON tenant_applications (status, created_at)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_applications_email ON tenant_applications (admin_email)")
+        # Internal-only record of a signup blocked because its company_name
+        # matched an existing tenant. Deliberately a SEPARATE table from
+        # tenant_applications (rather than a flag/column on it) so the real
+        # conflicting tenant's identity can never be joined into any
+        # registrant-facing view -- it is only ever read by the platform-admin
+        # duplicate-alerts screen (blueprints/platform_admin.py).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_duplicate_alerts (
+                id SERIAL PRIMARY KEY,
+                application_id INT DEFAULT NULL,
+                attempted_company_name VARCHAR(200) NOT NULL,
+                attempted_admin_email VARCHAR(200) NOT NULL,
+                conflicting_tenant_id INT NOT NULL,
+                conflicting_company_name VARCHAR(200) NOT NULL,
+                conflicting_admin_email VARCHAR(200) DEFAULT NULL,
+                match_type VARCHAR(20) NOT NULL DEFAULT 'exact',
+                acknowledged SMALLINT NOT NULL DEFAULT 0,
+                acknowledged_by VARCHAR(100) DEFAULT NULL,
+                acknowledged_at TIMESTAMP DEFAULT NULL,
+                source_ip VARCHAR(45) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_duplicate_alerts_ack ON tenant_duplicate_alerts (acknowledged, created_at)")
         # Razorpay orders for an EXISTING tenant buying more employee seats
         # after signup (blueprints/seats.py) -- separate from payment_orders
         # above (that table stages a brand-new tenant that doesn't exist yet;

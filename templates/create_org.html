@@ -9,20 +9,12 @@
   <link rel="stylesheet" href="/static/shared.min.css" />
   <link rel="stylesheet" href="/static/landing_v2.css" />
   <style>
-    /* This page reuses landing_v2.css's tokens (--bg-primary, --accent-cyan,
-       --text-main, --shadow-*, --radius-*, the Inter @font-face, etc.) so it
-       reads as the same product as the marketing site instead of a
-       differently-themed page bolted on. Only page-specific layout/component
-       rules live here. */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }
     html, body { min-height: 100vh; color: var(--text-main); }
     body {
-      background:
-        linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+      background: linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
       background-attachment: fixed;
     }
-
-    /* ── Header ── */
     .top-nav {
       display: flex; justify-content: space-between; align-items: center;
       max-width: 1180px; margin: 0 auto; padding: 22px 24px;
@@ -31,269 +23,93 @@
       backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border-color);
     }
-    .brand-logo {
-      display: flex; align-items: center; gap: 10px;
-      text-decoration: none; color: var(--text-main); font-weight: 800; font-size: 20px;
-    }
+    .brand-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text-main); font-weight: 800; font-size: 20px; }
     .brand-logo .logo-badge {
-      width: 38px; height: 38px; border-radius: var(--radius-sm);
-      background: var(--gradient-brand);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 19px; color: #fff; box-shadow: 0 4px 18px rgba(79, 70, 229, 0.35);
+      width: 38px; height: 38px; border-radius: var(--radius-sm); background: var(--gradient-brand);
+      display: flex; align-items: center; justify-content: center; font-size: 19px; color: #fff;
+      box-shadow: 0 4px 18px rgba(79, 70, 229, 0.35);
     }
     .nav-link-btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600;
-      padding: 8px 16px; border-radius: var(--radius-sm); background: var(--bg-card);
-      border: 1px solid var(--border-color); transition: var(--transition-fast);
+      display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); text-decoration: none;
+      font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: var(--radius-sm);
+      background: var(--bg-card); border: 1px solid var(--border-color); transition: var(--transition-fast);
     }
     .nav-link-btn:hover { color: var(--accent-cyan); border-color: var(--border-color-glow); box-shadow: var(--shadow-sm); }
-
-    /* ── Main Layout ── */
-    .page-container {
-      max-width: 560px; margin: 0 auto; padding: 56px 24px 72px;
-    }
-
+    .page-container { max-width: 560px; margin: 0 auto; padding: 56px 24px 72px; }
     .page-intro { text-align: center; margin-bottom: 32px; }
     .page-intro .intro-icon {
-      width: 52px; height: 52px; margin: 0 auto 18px;
-      border-radius: var(--radius-md);
-      background: var(--gradient-brand);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 24px; color: #fff;
+      width: 52px; height: 52px; margin: 0 auto 18px; border-radius: var(--radius-md); background: var(--gradient-brand);
+      display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
       box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
     }
-    .page-intro h1 {
-      font-family: var(--font-heading);
-      font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
-      color: var(--text-main); margin-bottom: 8px;
-    }
+    .page-intro h1 { font-family: var(--font-heading); font-size: 28px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-main); margin-bottom: 8px; }
     .page-intro p { font-size: 14.5px; color: var(--text-muted); }
-
-    /* ── Registration Card ── */
     .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color); border-radius: var(--radius-lg);
-      padding: 32px 32px 28px; box-shadow: var(--shadow-lg);
-      position: relative; overflow: hidden;
+      background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+      padding: 32px 32px 28px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden;
     }
-    .card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
-      background: var(--gradient-brand);
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--gradient-brand); }
+    .verify-note {
+      display: flex; align-items: flex-start; gap: 10px; background: rgba(79, 70, 229, 0.06);
+      border: 1px solid var(--border-color-glow); border-radius: var(--radius-sm); padding: 12px 14px;
+      font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 22px;
     }
-
-    /* Step indicator */
-    .step-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 24px; padding-bottom: 18px; border-bottom: 1px solid var(--border-color);
-    }
-    .step-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--text-subtle); transition: var(--transition-fast); cursor: default; }
-    .step-item.active { color: var(--accent-cyan); }
-    .step-item.completed { color: var(--accent-emerald); cursor: pointer; }
-    .step-number {
-      width: 24px; height: 24px; border-radius: 50%;
-      background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 700; color: var(--text-subtle); transition: var(--transition-fast);
-    }
-    .step-item.active .step-number { background: var(--gradient-brand); color: #fff; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); }
-    .step-item.completed .step-number { background: var(--accent-emerald); color: #fff; font-size: 13px; }
-    .step-line { flex: 1; height: 1px; background: var(--border-color); margin: 0 10px; }
-
-    /* Step panels -- only one visible at a time */
-    .step-panel { display: none; }
-    .step-panel.active { display: block; animation: fadeStep 0.25s ease; }
-    @keyframes fadeStep { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* Form Fields */
+    .verify-note i { color: var(--accent-cyan); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
     .field-group { margin-bottom: 18px; }
     .field-label {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-      color: var(--text-muted); margin-bottom: 7px;
+      display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 7px;
     }
     .field-label i { font-size: 14px; color: var(--accent-cyan); }
-
-    .input-wrapper { position: relative; }
     .field-input {
-      width: 100%; padding: 12px 15px;
-      background: var(--bg-secondary); border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm); color: var(--text-main); font-size: 14px; outline: none;
-      transition: var(--transition-fast);
+      width: 100%; padding: 12px 15px; background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm); color: var(--text-main); font-size: 14px; outline: none; transition: var(--transition-fast);
     }
     .field-input::placeholder { color: var(--text-subtle); }
-    .field-input:focus {
-      background: var(--bg-card); border-color: var(--accent-cyan);
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
-    }
-
+    .field-input:focus { background: var(--bg-card); border-color: var(--accent-cyan); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
     .subdomain-container {
-      display: flex; align-items: center;
-      background: var(--bg-secondary); border: 1px solid var(--border-color);
+      display: flex; align-items: center; background: var(--bg-secondary); border: 1px solid var(--border-color);
       border-radius: var(--radius-sm); overflow: hidden; transition: var(--transition-fast);
     }
-    .subdomain-container:focus-within {
-      border-color: var(--accent-cyan); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
-    }
-    .subdomain-prefix {
-      padding: 12px 14px; background: var(--bg-tertiary);
-      color: var(--text-muted); font-size: 13px; font-weight: 600; border-right: 1px solid var(--border-color);
-      white-space: nowrap; user-select: none;
-    }
-    .subdomain-input {
-      border: none !important; border-radius: 0 !important; background: transparent !important;
-      box-shadow: none !important; flex: 1;
-    }
-
+    .subdomain-container:focus-within { border-color: var(--accent-cyan); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
+    .subdomain-prefix { padding: 12px 14px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 13px; font-weight: 600; border-right: 1px solid var(--border-color); white-space: nowrap; user-select: none; }
+    .subdomain-input { border: none !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; flex: 1; }
     .field-hint { font-size: 11.5px; color: var(--text-subtle); margin-top: 6px; line-height: 1.4; }
-
-    /* Employee count stepper */
-    .stepper-row { display: flex; align-items: stretch; gap: 10px; }
-    .stepper-btn {
-      width: 44px; flex-shrink: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-      background: var(--bg-secondary); color: var(--text-main); font-size: 18px; font-weight: 700;
-      cursor: pointer; transition: var(--transition-fast);
-    }
-    .stepper-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); background: var(--bg-card); }
-    .stepper-input { text-align: center; font-weight: 700; }
-    .stepper-input::-webkit-outer-spin-button, .stepper-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-    /* Live price box */
-    .price-box {
-      background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);
-      padding: 16px 18px; margin: 18px 0;
-    }
-    .price-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
-    .price-total-row {
-      display: flex; justify-content: space-between; align-items: baseline;
-      padding-top: 10px; border-top: 1px dashed var(--border-color);
-      font-size: 15px; font-weight: 800; color: var(--text-main);
-    }
-    .price-period { font-size: 11px; font-weight: 600; color: var(--text-subtle); margin-left: 3px; }
-
-    /* Review summary */
-    .review-box {
-      background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md);
-      padding: 14px 18px; margin-bottom: 18px;
-    }
-    .review-row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 6px 0; }
-    .review-row span:first-child { color: var(--text-muted); }
-    .review-row strong { color: var(--text-main); font-weight: 700; text-align: right; word-break: break-word; }
-
-    /* Info note (replaces the old, unused admin-password field) */
-    .info-note {
-      display: flex; align-items: flex-start; gap: 10px;
-      background: rgba(79, 70, 229, 0.06); border: 1px solid var(--border-color-glow);
-      border-radius: var(--radius-sm); padding: 12px 14px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5;
-    }
-    .info-note i { color: var(--accent-cyan); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-
     .btn-submit {
-      width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm);
-      background: var(--gradient-brand);
-      color: #ffffff; font-size: 14.5px; font-weight: 700; letter-spacing: 0.2px;
-      cursor: pointer; transition: var(--transition-fast); box-shadow: var(--shadow-md);
-      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm); background: var(--gradient-brand);
+      color: #ffffff; font-size: 14.5px; font-weight: 700; letter-spacing: 0.2px; cursor: pointer;
+      transition: var(--transition-fast); box-shadow: var(--shadow-md); display: flex; align-items: center; justify-content: center; gap: 8px;
     }
     .btn-submit:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
-    .btn-submit:active { transform: translateY(0); }
-    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-    .step-nav-row { display: flex; gap: 12px; margin-top: 4px; }
-    .step-nav-row .btn-submit { flex: 1; }
-    .btn-back {
-      flex: 0 0 auto; padding: 15px 20px; border: 1px solid var(--border-color); border-radius: var(--radius-sm);
-      background: var(--bg-card); color: var(--text-main); font-size: 14.5px; font-weight: 700;
-      cursor: pointer; transition: var(--transition-fast); display: flex; align-items: center; gap: 8px;
-    }
-    .btn-back:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
-
     .alert {
       padding: 13px 15px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
       margin-bottom: 18px; display: flex; align-items: center; gap: 10px;
     }
     .alert-error { background: rgba(225, 29, 72, 0.08); border: 1px solid rgba(225, 29, 72, 0.25); color: var(--accent-rose); }
     .alert-success { background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.25); color: var(--accent-emerald); }
-
-    .footer-login-link {
-      display: block; text-align: center; font-size: 13px; color: var(--text-muted);
-      text-decoration: none; margin-top: 18px; transition: var(--transition-fast);
-    }
+    .footer-login-link { display: block; text-align: center; font-size: 13px; color: var(--text-muted); text-decoration: none; margin-top: 18px; transition: var(--transition-fast); }
     .footer-login-link:hover { color: var(--accent-cyan); }
-
-    /* ── Mock Checkout Modal ── */
-    .mock-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); z-index: 100;
-      align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto;
-    }
-    .mock-overlay.open { display: flex; }
-    .mock-sheet {
-      width: 100%; max-width: 420px; background: #ffffff; border-radius: var(--radius-lg); overflow: hidden;
-      box-shadow: var(--shadow-lg); color: var(--text-main); animation: mockIn 0.2s ease-out;
-    }
-    @keyframes mockIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-    .mock-testbar { background: var(--accent-amber); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-align: center; padding: 8px; text-transform: uppercase; }
-    .mock-head { background: var(--text-main); color: #ffffff; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; }
-    .mock-head-brand { display: flex; align-items: center; gap: 12px; }
-    .mock-head-brand .m-icon { width: 34px; height: 34px; border-radius: var(--radius-sm); background: var(--gradient-brand); display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff; }
-    .mock-head-brand .m-name { font-size: 14px; font-weight: 800; }
-    .mock-head-brand .m-sub { font-size: 12px; color: rgba(255,255,255,0.6); }
-    .mock-close { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 20px; cursor: pointer; line-height: 1; }
-    .mock-close:hover { color: #ffffff; }
-    .mock-amount-row { padding: 18px 22px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: baseline; }
-    .mock-amount-row .m-label { font-size: 13px; color: var(--text-muted); font-weight: 600; }
-    .mock-amount-row .m-amount { font-size: 22px; font-weight: 800; color: var(--text-main); }
-    .mock-body { padding: 22px; }
-    .mock-field-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 6px; }
-    .mock-input { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 14px; color: var(--text-main); margin-bottom: 15px; outline: none; transition: var(--transition-fast); }
-    .mock-input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
-    .mock-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .mock-pay-btn { width: 100%; padding: 14px; border: none; border-radius: var(--radius-sm); background: var(--text-main); color: #ffffff; font-size: 14.5px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: var(--transition-fast); }
-    .mock-pay-btn:hover { background: var(--accent-blue); }
-    .mock-note { font-size: 11.5px; color: var(--text-subtle); text-align: center; margin-top: 14px; line-height: 1.5; }
   </style>
 </head>
 <body>
 
-  <!-- Top Navigation Header -->
   <header class="top-nav">
     <a href="/" class="brand-logo">
       <div class="logo-badge"><i class="ti ti-shield-check"></i></div>
       <span>HRzest</span>
     </a>
-    <a href="/login" class="nav-link-btn">
-      <i class="ti ti-login"></i> Sign In to Existing Portal
-    </a>
+    <a href="/login" class="nav-link-btn"><i class="ti ti-login"></i> Sign In to Existing Portal</a>
   </header>
 
-  <!-- Main Container -->
   <div class="page-container">
 
     <div class="page-intro">
       <div class="intro-icon"><i class="ti ti-building-skyscraper"></i></div>
       <h1>Register Your Organisation</h1>
-      <p>Set up your dedicated corporate portal in just a few steps.</p>
+      <p>We verify every new company before it goes live — you'll confirm your email and upload a few business documents next.</p>
     </div>
 
-    <!-- Registration Card -->
     <div class="card">
-      <!-- Step Indicator Bar -->
-      <div class="step-bar">
-        <div class="step-item active" data-step="1">
-          <div class="step-number">1</div>
-          <span>Organisation</span>
-        </div>
-        <div class="step-line"></div>
-        <div class="step-item" data-step="2">
-          <div class="step-number">2</div>
-          <span>Admin Setup</span>
-        </div>
-        <div class="step-line"></div>
-        <div class="step-item" data-step="3">
-          <div class="step-number">3</div>
-          <span>Activation</span>
-        </div>
-      </div>
-
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}
         <div class="alert alert-{{ 'error' if cat == 'error' else 'success' }}">
@@ -302,185 +118,68 @@
         {% endfor %}
       {% endwith %}
 
-      <!-- novalidate: per-step validation (validateStep() below) runs its own
-           reportValidity() checks before advancing, so the browser's native
-           full-form validation -- which would otherwise also inspect
-           required fields sitting in other, currently display:none panels --
-           never gets a chance to trip over them. -->
-      <form autocomplete="off" id="createOrgForm" enctype="multipart/form-data" novalidate>
+      <div class="verify-note">
+        <i class="ti ti-shield-lock"></i>
+        After this step we'll email you a verification code, then ask for a few business documents (registration certificate, address proof, visiting card, and a photo of your office name-board). A member of our team reviews every application before your portal goes live.
+      </div>
+
+      <form method="POST" action="/create_org" enctype="multipart/form-data" autocomplete="off">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
 
-        <!-- STEP 1: Organisation -->
-        <div class="step-panel active" data-step="1">
-          <div class="field-group">
-            <label class="field-label" for="company_name_input">
-              <i class="ti ti-building"></i> Company Name
-            </label>
-            <div class="input-wrapper">
-              <input class="field-input" type="text" name="company_name" id="company_name_input"
-                     placeholder="e.g. Acme Corporation" required autofocus oninput="autoFillSubdomain(this.value)" />
-            </div>
-          </div>
-
-          <div class="field-group">
-            <label class="field-label" for="subdomain_input">
-              <i class="ti ti-world-www"></i> Corporate Subdomain URL
-            </label>
-            <div class="subdomain-container">
-              <div class="subdomain-prefix">www.hrzest.com/</div>
-              <input class="field-input subdomain-input" type="text" name="subdomain" id="subdomain_input"
-                     placeholder="acme" pattern="[a-z0-9\-]+" required
-                     title="Lowercase letters, digits and hyphens only"
-                     oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
-            </div>
-            <div class="field-hint">
-              Your team will access their portal at: <strong id="liveUrlPreview" style="color: var(--accent-cyan);">www.hrzest.com/acme/login</strong>
-            </div>
-          </div>
-
-          <div class="field-group" style="margin-bottom: 0;">
-            <label class="field-label" for="logo_input">
-              <i class="ti ti-photo"></i> Company Logo (optional)
-            </label>
-            <div class="input-wrapper">
-              <input class="field-input" type="file" name="logo" id="logo_input"
-                     accept="image/jpeg,image/png,image/webp,image/bmp" />
-            </div>
-            <div class="field-hint">
-              Shown in your team's employee, admin and HR dashboards. JPG, PNG, WEBP or BMP, up to 5&nbsp;MB. You can skip this and add it later from Settings.
-            </div>
-          </div>
+        <div class="field-group">
+          <label class="field-label" for="company_name_input"><i class="ti ti-building"></i> Company Name</label>
+          <input class="field-input" type="text" name="company_name" id="company_name_input"
+                 placeholder="e.g. Acme Corporation" required autofocus oninput="autoFillSubdomain(this.value)" />
         </div>
 
-        <!-- STEP 2: Admin Setup -->
-        <div class="step-panel" data-step="2">
-          <div class="field-group">
-            <label class="field-label" for="admin_email_input">
-              <i class="ti ti-mail"></i> Executive Admin Email
-            </label>
-            <div class="input-wrapper">
-              <input class="field-input" type="email" name="admin_email" id="admin_email_input"
-                     placeholder="admin@acme.com" required autocomplete="email"
-                     oninput="deriveFromEmail(this.value)" onblur="deriveFromEmail(this.value)" />
-            </div>
-            <div class="field-hint">
-              Also used as your admin login (username: <strong id="derivedUsername">—</strong>).
-            </div>
+        <div class="field-group">
+          <label class="field-label" for="subdomain_input"><i class="ti ti-world-www"></i> Corporate Subdomain URL</label>
+          <div class="subdomain-container">
+            <div class="subdomain-prefix">www.hrzest.com/</div>
+            <input class="field-input subdomain-input" type="text" name="subdomain" id="subdomain_input"
+                   placeholder="acme" pattern="[a-z0-9\-]+" required title="Lowercase letters, digits and hyphens only"
+                   oninput="cleanSubdomainInput(this)" onblur="cleanSubdomainInput(this)" />
           </div>
-
-          <div class="info-note" style="margin-bottom: 0;">
-            <i class="ti ti-shield-lock"></i>
-            For security we don't collect a password here. Once payment is confirmed, we'll email a secure link to <strong>set your admin password</strong> — valid for 1 hour.
-          </div>
+          <div class="field-hint">Your team will access their portal at: <strong id="liveUrlPreview" style="color: var(--accent-cyan);">www.hrzest.com/acme/login</strong></div>
         </div>
 
-        <!-- STEP 3: Activation -->
-        <div class="step-panel" data-step="3">
-          <div class="field-group">
-            <label class="field-label" for="employeeCount">
-              <i class="ti ti-users"></i> Number of Employees
-            </label>
-            <div class="stepper-row">
-              <button type="button" class="stepper-btn" id="empMinus" aria-label="Decrease employee count">−</button>
-              <input class="field-input stepper-input" type="number" name="employee_count" id="employeeCount"
-                     value="10" min="1" max="100000" required />
-              <button type="button" class="stepper-btn" id="empPlus" aria-label="Increase employee count">+</button>
-            </div>
-            <div class="field-hint">You can add or remove employees anytime later — billing adjusts automatically.</div>
-          </div>
-
-          <div class="price-box">
-            <div class="price-row">
-              <span>₹99 / employee / month × <span id="priceCount">10</span></span>
-              <span id="priceMonthly">₹990</span>
-            </div>
-            <div class="price-total-row">
-              <span>Total due today</span>
-              <span id="priceTotal">₹990<span class="price-period">/month</span></span>
-            </div>
-          </div>
-
-          <div class="review-box">
-            <div class="review-row"><span>Company</span><strong id="reviewCompany">—</strong></div>
-            <div class="review-row"><span>Portal URL</span><strong id="reviewSubdomain">—</strong></div>
-            <div class="review-row"><span>Admin Email</span><strong id="reviewEmail">—</strong></div>
-          </div>
-
-          {% if show_captcha %}
-          <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
-          <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-          {% endif %}
+        <div class="field-group">
+          <label class="field-label" for="admin_email_input"><i class="ti ti-mail"></i> Admin Email</label>
+          <input class="field-input" type="email" name="admin_email" id="admin_email_input"
+                 placeholder="admin@acme.com" required autocomplete="email"
+                 oninput="deriveFromEmail(this.value)" onblur="deriveFromEmail(this.value)" />
+          <div class="field-hint">We'll send your verification code here. Also used as your admin login (username: <strong id="derivedUsername">—</strong>).</div>
         </div>
 
-        <!-- Email Domain and Admin Username are auto-derived from the admin
-             email in step 2 (deriveFromEmail() below) instead of asking for
-             them separately -- both are already contained in the email
-             address itself. -->
+        <div class="field-group">
+          <label class="field-label" for="admin_password_input"><i class="ti ti-lock"></i> Admin Password</label>
+          <input class="field-input" type="password" name="admin_password" id="admin_password_input"
+                 placeholder="At least 8 characters" required minlength="8" autocomplete="new-password" />
+        </div>
+
+        <div class="field-group" style="margin-bottom: 24px;">
+          <label class="field-label" for="logo_input"><i class="ti ti-photo"></i> Company Logo (optional)</label>
+          <input class="field-input" type="file" name="logo" id="logo_input" accept="image/jpeg,image/png,image/webp,image/bmp" />
+          <div class="field-hint">Shown in your team's dashboards. JPG, PNG, WEBP or BMP, up to 5&nbsp;MB. You can skip this and add it later.</div>
+        </div>
+
         <input type="hidden" name="email_domain" id="email_domain_input" />
         <input type="hidden" name="admin_username" id="admin_username_input" />
 
-        <div id="formError" class="alert alert-error" style="display:none;"></div>
+        {% if show_captcha %}
+        <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+        {% endif %}
 
-        <div class="step-nav-row">
-          <button type="button" class="btn-back" id="backBtn" style="display:none;">
-            <i class="ti ti-arrow-left"></i> Back
-          </button>
-          <button type="button" class="btn-submit" id="nextBtn">
-            <span>Continue</span> <i class="ti ti-arrow-right"></i>
-          </button>
-          <button type="submit" class="btn-submit" id="payBtn" style="display:none;">
-            <span>Provision Corporate Workspace</span> <i class="ti ti-arrow-right"></i>
-          </button>
-        </div>
+        <button type="submit" class="btn-submit"><span>Continue to Verification</span> <i class="ti ti-arrow-right"></i></button>
       </form>
 
-      <a href="/login" class="footer-login-link">
-        Already registered? Log in to your corporate workspace →
-      </a>
+      <a href="/login" class="footer-login-link">Already registered? Log in to your corporate workspace →</a>
     </div>
 
   </div>
 
-  <!-- Mock Checkout Modal -->
-  <div class="mock-overlay" id="mockOverlay" role="dialog" aria-modal="true" aria-label="Test mode payment">
-    <div class="mock-sheet">
-      <div class="mock-testbar"><i class="ti ti-flask"></i> Sandbox Test Mode — No Card Charged</div>
-      <div class="mock-head">
-        <div class="mock-head-brand">
-          <div class="m-icon"><i class="ti ti-building-skyscraper"></i></div>
-          <div>
-            <div class="m-name">HRzest Enterprise</div>
-            <div class="m-sub" id="mockCompanyLabel">Organisation Provisioning</div>
-          </div>
-        </div>
-        <button type="button" class="mock-close" id="mockCloseBtn" aria-label="Cancel">✕</button>
-      </div>
-      <div class="mock-amount-row">
-        <div class="m-label">Amount Payable</div>
-        <div class="m-amount" id="mockAmount">₹0</div>
-      </div>
-      <div class="mock-body">
-        <label class="mock-field-label">Test Card Number</label>
-        <input class="mock-input" type="text" id="mockCardNumber" value="4111 1111 1111 1111" inputmode="numeric" maxlength="19" />
-        <div class="mock-row2">
-          <div>
-            <label class="mock-field-label">Expiry</label>
-            <input class="mock-input" type="text" id="mockExpiry" value="12/29" maxlength="5" />
-          </div>
-          <div>
-            <label class="mock-field-label">CVV</label>
-            <input class="mock-input" type="text" id="mockCvv" value="123" maxlength="3" />
-          </div>
-        </div>
-        <button type="button" class="mock-pay-btn" id="mockPayBtn">Confirm &amp; Provision Workspace</button>
-        <p class="mock-note">This is a <strong>sandbox test checkout</strong> for local evaluation.</p>
-      </div>
-    </div>
-  </div>
-
-  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
-  const PER_EMPLOYEE_PAISE = {{ per_employee_paise }};
   let subdomainUserEdited = false;
 
   function cleanSubdomainInput(el) {
@@ -488,9 +187,7 @@
     let val = el.value.toLowerCase().trim();
     val = val.replace(/^https?:\/\//, '').split('/')[0].split(':')[0];
     const suffixes = ['.hrzest.com', '.hrms.gradzest.com', '.gradzest.com', '.gradzest.in', '.com', '.in', '.org', '.net', '.io'];
-    for (let s of suffixes) {
-      if (val.endsWith(s)) val = val.slice(0, -s.length);
-    }
+    for (let s of suffixes) { if (val.endsWith(s)) val = val.slice(0, -s.length); }
     val = val.replace(/[^a-z0-9\-]/g, '');
     el.value = val;
     updateLivePreview(val);
@@ -507,254 +204,18 @@
 
   function updateLivePreview(slug) {
     const preview = document.getElementById('liveUrlPreview');
-    if (preview) {
-      preview.textContent = 'www.hrzest.com/' + (slug || 'acme') + '/login';
-    }
+    if (preview) preview.textContent = 'www.hrzest.com/' + (slug || 'acme') + '/login';
   }
 
-  // Email Domain and Admin Username are both already contained in the
-  // admin email address, so they're derived here instead of asked for
-  // separately -- one less pair of fields to fill and keep in sync.
   function deriveFromEmail(email) {
     const at = email.indexOf('@');
     if (at < 1) return;
     const localPart = email.slice(0, at).toLowerCase().replace(/[^a-z0-9_.\-]/g, '');
     const domainPart = email.slice(at + 1).toLowerCase();
-    const userEl = document.getElementById('admin_username_input');
-    const domainEl = document.getElementById('email_domain_input');
-    const label = document.getElementById('derivedUsername');
-    if (userEl) userEl.value = localPart;
-    if (domainEl) domainEl.value = domainPart;
-    if (label) label.textContent = localPart || '—';
+    document.getElementById('admin_username_input').value = localPart;
+    document.getElementById('email_domain_input').value = domainPart;
+    document.getElementById('derivedUsername').textContent = localPart || '—';
   }
-
-  function formatInr(paise) {
-    return '₹' + Math.round(paise / 100).toLocaleString('en-IN');
-  }
-
-  function updatePrice() {
-    const countEl = document.getElementById('employeeCount');
-    let count = parseInt(countEl.value, 10);
-    if (!count || count < 1) count = 1;
-    countEl.value = count;
-    const totalPaise = count * PER_EMPLOYEE_PAISE;
-    document.getElementById('priceCount').textContent = count;
-    document.getElementById('priceMonthly').textContent = formatInr(totalPaise);
-    document.getElementById('priceTotal').innerHTML = formatInr(totalPaise) + '<span class="price-period">/month</span>';
-  }
-
-  function updateReview() {
-    const company = document.getElementById('company_name_input').value;
-    const subdomain = document.getElementById('subdomain_input').value;
-    const email = document.getElementById('admin_email_input').value;
-    document.getElementById('reviewCompany').textContent = company || '—';
-    document.getElementById('reviewSubdomain').textContent = subdomain ? ('www.hrzest.com/' + subdomain) : '—';
-    document.getElementById('reviewEmail').textContent = email || '—';
-  }
-
-  document.getElementById('employeeCount').addEventListener('input', updatePrice);
-  document.getElementById('empMinus').addEventListener('click', () => {
-    const el = document.getElementById('employeeCount');
-    el.value = Math.max(1, (parseInt(el.value, 10) || 1) - 1);
-    updatePrice();
-  });
-  document.getElementById('empPlus').addEventListener('click', () => {
-    const el = document.getElementById('employeeCount');
-    el.value = (parseInt(el.value, 10) || 1) + 1;
-    updatePrice();
-  });
-  updatePrice();
-
-  // ── 3-step wizard: Organisation -> Admin Setup -> Activation ──────────────
-  let currentStep = 1;
-  let maxStepReached = 1;
-
-  function validateStep(step) {
-    const panel = document.querySelector('.step-panel[data-step="' + step + '"]');
-    const inputs = panel.querySelectorAll('[required]');
-    for (const inp of inputs) {
-      if (!inp.checkValidity()) {
-        inp.reportValidity();
-        return false;
-      }
-    }
-    return true;
-  }
-
-  function goToStep(step) {
-    if (step > currentStep && !validateStep(currentStep)) return;
-    if (step > maxStepReached + 1) return; // can't skip ahead of validated steps
-
-    currentStep = step;
-    maxStepReached = Math.max(maxStepReached, step);
-
-    document.querySelectorAll('.step-panel').forEach(function (p) {
-      p.classList.toggle('active', p.dataset.step === String(step));
-    });
-    document.querySelectorAll('.step-item').forEach(function (item) {
-      const s = parseInt(item.dataset.step, 10);
-      item.classList.toggle('active', s === step);
-      if (s < step) item.classList.add('completed');
-    });
-
-    document.getElementById('backBtn').style.display = step > 1 ? 'flex' : 'none';
-    document.getElementById('nextBtn').style.display = step < 3 ? 'flex' : 'none';
-    document.getElementById('payBtn').style.display = step === 3 ? 'flex' : 'none';
-
-    if (step === 3) updateReview();
-  }
-
-  document.getElementById('nextBtn').addEventListener('click', function () { goToStep(currentStep + 1); });
-  document.getElementById('backBtn').addEventListener('click', function () { goToStep(currentStep - 1); });
-  document.querySelectorAll('.step-item').forEach(function (item) {
-    item.addEventListener('click', function () {
-      const s = parseInt(item.dataset.step, 10);
-      if (s <= maxStepReached) goToStep(s);
-    });
-  });
-
-  // Payment-gated signup: create_order() stages the signup + a Razorpay
-  // order WITHOUT creating any tenant yet (blueprints/billing.py); the
-  // tenant only gets provisioned once verify_payment() confirms the
-  // payment (or, locally/without Razorpay configured, once the demo
-  // checkout below is confirmed). This used to call /api/create_org
-  // directly, which provisioned the account immediately with no payment
-  // step at all -- that endpoint still exists for other callers (e.g. the
-  // mobile app's own registration flow) but the web signup form no longer
-  // uses it.
-  let currentOrder = null;
-
-  function resetSubmitButton() {
-    const btn = document.getElementById('payBtn');
-    btn.disabled = false;
-    btn.innerHTML = '<span>Provision Corporate Workspace</span> <i class="ti ti-arrow-right"></i>';
-  }
-
-  document.getElementById('createOrgForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    if (!validateStep(3)) return;
-    const btn = document.getElementById('payBtn');
-    const err = document.getElementById('formError');
-    err.style.display = 'none';
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ti ti-loader rotate"></i> Processing...';
-
-    const formData = new FormData(this);
-    const data = Object.fromEntries(formData.entries());
-
-    try {
-      // multipart/form-data, not JSON: the logo file above can't survive
-      // JSON.stringify(), and letting fetch set its own Content-Type
-      // (with the multipart boundary) instead of forcing application/json
-      // is what makes that work -- billing.py's create_order() already
-      // reads request.form/request.files as a fallback for exactly this.
-      const res = await fetch('/api/billing/create_order', {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': data._csrf_token },
-        body: formData
-      });
-      const json = await res.json();
-      if (!json.ok) {
-        err.textContent = json.msg || 'Could not start checkout.';
-        err.style.display = 'flex';
-        resetSubmitButton();
-        return;
-      }
-
-      currentOrder = json;
-      document.getElementById('mockCompanyLabel').textContent = data.company_name;
-      document.getElementById('mockAmount').textContent = json.amount_display;
-
-      if (json.demo) {
-        // Razorpay isn't configured on this server -- sandbox checkout
-        // (already built into this page) stands in so the full flow can
-        // still be exercised end-to-end locally.
-        document.getElementById('mockOverlay').classList.add('open');
-        resetSubmitButton();
-      } else {
-        openRazorpayCheckout(json, data);
-      }
-    } catch(ex) {
-      err.textContent = 'Network error. Please check your connection and try again.';
-      err.style.display = 'flex';
-      resetSubmitButton();
-    }
-  });
-
-  function openRazorpayCheckout(order, formValues) {
-    const rzp = new Razorpay({
-      key: order.key_id,
-      amount: order.amount_paise,
-      currency: order.currency,
-      order_id: order.order_id,
-      name: 'HRzest Enterprise',
-      description: formValues.company_name + ' -- workspace setup',
-      handler: function(response) {
-        finalizeOrder({
-          razorpay_order_id: response.razorpay_order_id,
-          razorpay_payment_id: response.razorpay_payment_id,
-          razorpay_signature: response.razorpay_signature,
-        });
-      },
-      modal: {
-        ondismiss: function() { resetSubmitButton(); },
-      },
-      prefill: { email: formValues.admin_email },
-      theme: { color: '#4F46E5' },
-    });
-    rzp.on('payment.failed', function() {
-      const err = document.getElementById('formError');
-      err.textContent = 'Payment failed. Please try again.';
-      err.style.display = 'flex';
-      resetSubmitButton();
-    });
-    rzp.open();
-  }
-
-  async function finalizeOrder(paymentPayload) {
-    const err = document.getElementById('formError');
-    try {
-      const res = await fetch('/api/billing/verify_payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(paymentPayload)
-      });
-      const json = await res.json();
-      if (json.ok) {
-        window.location.href = json.portal_url || '/login';
-      } else {
-        err.textContent = json.msg || 'Payment received, but activation failed. Contact support.';
-        err.style.display = 'flex';
-        resetSubmitButton();
-      }
-    } catch (ex) {
-      err.textContent = 'Network error while confirming payment. Contact support if you were charged.';
-      err.style.display = 'flex';
-      resetSubmitButton();
-    }
-  }
-
-  // Mock overlay close
-  document.getElementById('mockCloseBtn')?.addEventListener('click', () => {
-    document.getElementById('mockOverlay').classList.remove('open');
-  });
-
-  document.getElementById('mockPayBtn')?.addEventListener('click', async () => {
-    if (!currentOrder) return;
-    const btn = document.getElementById('mockPayBtn');
-    btn.disabled = true;
-    btn.textContent = 'Provisioning Workspace...';
-    try {
-      await finalizeOrder({
-        razorpay_order_id: currentOrder.order_id,
-        razorpay_payment_id: 'demo_payment',
-        razorpay_signature: '',
-      });
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Confirm & Provision Workspace';
-    }
-  });
   </script>
 </body>
 </html>

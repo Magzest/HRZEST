@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complete Payment — HRzest Enterprise Platform</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+  <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="/static/landing_v2.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }
+    html, body { min-height: 100vh; color: var(--text-main); }
+    body {
+      background: linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+      background-attachment: fixed;
+    }
+    .page-container { max-width: 460px; margin: 0 auto; padding: 72px 24px; }
+    .page-intro { text-align: center; margin-bottom: 28px; }
+    .page-intro .intro-icon {
+      width: 52px; height: 52px; margin: 0 auto 18px; border-radius: var(--radius-md); background: var(--gradient-brand);
+      display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
+      box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+    }
+    .page-intro h1 { font-family: var(--font-heading); font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+    .page-intro p { font-size: 14px; color: var(--text-muted); }
+    .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 28px; box-shadow: var(--shadow-lg); }
+    .field-group { margin-bottom: 18px; }
+    .field-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 7px; display: block; }
+    .stepper-row { display: flex; align-items: stretch; gap: 10px; }
+    .stepper-btn { width: 44px; flex-shrink: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: var(--bg-secondary); color: var(--text-main); font-size: 18px; font-weight: 700; cursor: pointer; }
+    .field-input { width: 100%; padding: 12px 15px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-main); font-size: 14px; outline: none; text-align: center; font-weight: 700; }
+    .price-box { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px 18px; margin: 18px 0; }
+    .price-row { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-muted); margin-bottom: 10px; }
+    .price-total-row { display: flex; justify-content: space-between; align-items: baseline; padding-top: 10px; border-top: 1px dashed var(--border-color); font-size: 15px; font-weight: 800; color: var(--text-main); }
+    .price-period { font-size: 11px; font-weight: 600; color: var(--text-subtle); margin-left: 3px; }
+    .btn-submit {
+      width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm); background: var(--gradient-brand);
+      color: #fff; font-size: 14.5px; font-weight: 700; cursor: pointer; box-shadow: var(--shadow-md);
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .alert { padding: 13px 15px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; margin-bottom: 18px; display: none; align-items: center; gap: 10px; }
+    .alert-error { background: rgba(225, 29, 72, 0.08); border: 1px solid rgba(225, 29, 72, 0.25); color: var(--accent-rose); }
+
+    .mock-overlay { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); z-index: 100; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+    .mock-overlay.open { display: flex; }
+    .mock-sheet { width: 100%; max-width: 420px; background: #ffffff; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-lg); color: var(--text-main); }
+    .mock-testbar { background: var(--accent-amber); color: #ffffff; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-align: center; padding: 8px; text-transform: uppercase; }
+    .mock-head { background: var(--text-main); color: #ffffff; padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; }
+    .mock-close { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 20px; cursor: pointer; }
+    .mock-amount-row { padding: 18px 22px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: baseline; }
+    .mock-body { padding: 22px; }
+    .mock-input { width: 100%; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 14px; margin-bottom: 15px; }
+    .mock-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mock-pay-btn { width: 100%; padding: 14px; border: none; border-radius: var(--radius-sm); background: var(--text-main); color: #fff; font-size: 14.5px; font-weight: 700; cursor: pointer; margin-top: 6px; }
+    .mock-note { font-size: 11.5px; color: var(--text-subtle); text-align: center; margin-top: 14px; }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="page-intro">
+      <div class="intro-icon"><i class="ti ti-credit-card"></i></div>
+      <h1>{{ company_name }}</h1>
+      <p>Your application was approved — complete payment to activate your portal.</p>
+    </div>
+    <div class="card">
+      <div id="formError" class="alert alert-error"></div>
+
+      <div class="field-group">
+        <label class="field-label">Number of Employees</label>
+        <div class="stepper-row">
+          <button type="button" class="stepper-btn" id="empMinus">−</button>
+          <input class="field-input" type="number" id="employeeCount" value="10" min="1" max="100000" />
+          <button type="button" class="stepper-btn" id="empPlus">+</button>
+        </div>
+      </div>
+
+      <div class="price-box">
+        <div class="price-row"><span>₹{{ (per_employee_paise // 100) }} / employee / month × <span id="priceCount">10</span></span><span id="priceMonthly">—</span></div>
+        <div class="price-total-row"><span>Total due today</span><span id="priceTotal">—<span class="price-period">/month</span></span></div>
+      </div>
+
+      <button type="button" class="btn-submit" id="payBtn"><span>Pay &amp; Activate Portal</span> <i class="ti ti-arrow-right"></i></button>
+    </div>
+  </div>
+
+  <div class="mock-overlay" id="mockOverlay">
+    <div class="mock-sheet">
+      <div class="mock-testbar"><i class="ti ti-flask"></i> Sandbox Test Mode — No Card Charged</div>
+      <div class="mock-head">
+        <div>
+          <div style="font-size:14px;font-weight:800;">HRzest Enterprise</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);">{{ company_name }}</div>
+        </div>
+        <button type="button" class="mock-close" id="mockCloseBtn">✕</button>
+      </div>
+      <div class="mock-amount-row"><div style="font-size:13px;color:var(--text-muted);font-weight:600;">Amount Payable</div><div style="font-size:22px;font-weight:800;" id="mockAmount">₹0</div></div>
+      <div class="mock-body">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);display:block;margin-bottom:6px;">Test Card Number</label>
+        <input class="mock-input" type="text" value="4111 1111 1111 1111" readonly />
+        <div class="mock-row2">
+          <input class="mock-input" type="text" value="12/29" readonly />
+          <input class="mock-input" type="text" value="123" readonly />
+        </div>
+        <button type="button" class="mock-pay-btn" id="mockPayBtn">Confirm &amp; Activate Portal</button>
+        <p class="mock-note">This is a <strong>sandbox test checkout</strong> for local evaluation.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+  const APPLICATION_ID = {{ application_id }};
+  const PER_EMPLOYEE_PAISE = {{ per_employee_paise }};
+  let currentOrder = null;
+
+  function formatInr(paise) { return '₹' + Math.round(paise / 100).toLocaleString('en-IN'); }
+
+  function updatePrice() {
+    const countEl = document.getElementById('employeeCount');
+    let count = parseInt(countEl.value, 10);
+    if (!count || count < 1) count = 1;
+    countEl.value = count;
+    const totalPaise = count * PER_EMPLOYEE_PAISE;
+    document.getElementById('priceCount').textContent = count;
+    document.getElementById('priceMonthly').textContent = formatInr(totalPaise);
+    document.getElementById('priceTotal').innerHTML = formatInr(totalPaise) + '<span class="price-period">/month</span>';
+  }
+  document.getElementById('employeeCount').addEventListener('input', updatePrice);
+  document.getElementById('empMinus').addEventListener('click', () => {
+    const el = document.getElementById('employeeCount');
+    el.value = Math.max(1, (parseInt(el.value, 10) || 1) - 1);
+    updatePrice();
+  });
+  document.getElementById('empPlus').addEventListener('click', () => {
+    const el = document.getElementById('employeeCount');
+    el.value = (parseInt(el.value, 10) || 1) + 1;
+    updatePrice();
+  });
+  updatePrice();
+
+  function resetSubmitButton() {
+    const btn = document.getElementById('payBtn');
+    btn.disabled = false;
+    btn.innerHTML = '<span>Pay &amp; Activate Portal</span> <i class="ti ti-arrow-right"></i>';
+  }
+
+  document.getElementById('payBtn').addEventListener('click', async function() {
+    const btn = this;
+    const err = document.getElementById('formError');
+    err.style.display = 'none';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader rotate"></i> Processing...';
+
+    try {
+      const res = await fetch('/api/billing/create_order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          application_id: APPLICATION_ID,
+          employee_count: parseInt(document.getElementById('employeeCount').value, 10),
+        }),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        err.textContent = json.msg || 'Could not start checkout.';
+        err.style.display = 'flex';
+        resetSubmitButton();
+        return;
+      }
+      currentOrder = json;
+      document.getElementById('mockAmount').textContent = json.amount_display;
+      if (json.demo) {
+        document.getElementById('mockOverlay').classList.add('open');
+        resetSubmitButton();
+      } else {
+        openRazorpayCheckout(json);
+      }
+    } catch (ex) {
+      err.textContent = 'Network error. Please check your connection and try again.';
+      err.style.display = 'flex';
+      resetSubmitButton();
+    }
+  });
+
+  function openRazorpayCheckout(order) {
+    const rzp = new Razorpay({
+      key: order.key_id,
+      amount: order.amount_paise,
+      currency: order.currency,
+      order_id: order.order_id,
+      name: 'HRzest Enterprise',
+      description: {{ company_name|tojson }} + ' -- portal activation',
+      handler: function(response) {
+        finalizeOrder({
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        });
+      },
+      modal: { ondismiss: function() { resetSubmitButton(); } },
+      theme: { color: '#4F46E5' },
+    });
+    rzp.on('payment.failed', function() {
+      const err = document.getElementById('formError');
+      err.textContent = 'Payment failed. Please try again.';
+      err.style.display = 'flex';
+      resetSubmitButton();
+    });
+    rzp.open();
+  }
+
+  async function finalizeOrder(paymentPayload) {
+    const err = document.getElementById('formError');
+    try {
+      const res = await fetch('/api/billing/verify_payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(paymentPayload),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        window.location.href = json.portal_url || '/login';
+      } else {
+        err.textContent = json.msg || 'Payment received, but activation failed. Contact support.';
+        err.style.display = 'flex';
+        resetSubmitButton();
+      }
+    } catch (ex) {
+      err.textContent = 'Network error while confirming payment. Contact support if you were charged.';
+      err.style.display = 'flex';
+      resetSubmitButton();
+    }
+  }
+
+  document.getElementById('mockCloseBtn')?.addEventListener('click', () => {
+    document.getElementById('mockOverlay').classList.remove('open');
+  });
+  document.getElementById('mockPayBtn')?.addEventListener('click', async () => {
+    if (!currentOrder) return;
+    const btn = document.getElementById('mockPayBtn');
+    btn.disabled = true;
+    btn.textContent = 'Activating Portal...';
+    try {
+      await finalizeOrder({
+        razorpay_order_id: currentOrder.order_id,
+        razorpay_payment_id: 'demo_payment',
+        razorpay_signature: '',
+      });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Confirm & Activate Portal';
+    }
+  });
+  </script>
+</body>
+</html>

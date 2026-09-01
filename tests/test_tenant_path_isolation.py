@@ -24,7 +24,22 @@ def _drop_schema(db_engine, schema_name):
     cur.close()
 
 
-def _provision(client, subdomain, admin_username, admin_password):
+def _provision(client, monkeypatch, subdomain, admin_username, admin_password):
+    """Signup is gated now (blueprints/org.py's tenant_applications state
+    machine: OTP verification -> KYC document upload -> platform-admin
+    approval) rather than a single instant-provisioning POST -- walk the
+    whole pipeline so this fixture still ends with a real, live tenant
+    schema. See tests/test_org.py's TestGatedSignupFlow for the dedicated
+    coverage of each individual step; this just needs the end result."""
+    import io as _io
+    import blueprints.org as org_module
+
+    captured = {}
+    monkeypatch.setattr(
+        org_module, "send_org_signup_otp_email",
+        lambda email, company, otp: captured.setdefault("otp", otp) or True
+    )
+
     resp = client.post("/create_org", data={
         "company_name": f"{subdomain} Inc",
         "subdomain": subdomain,
@@ -33,12 +48,39 @@ def _provision(client, subdomain, admin_username, admin_password):
         "admin_email": f"{admin_username}@test.local",
         "email_domain": "test.local",
     }, follow_redirects=False)
-    assert resp.status_code == 200, resp.data
+    assert resp.status_code in (301, 302), resp.data
+    application_id = int(resp.headers["Location"].rsplit("=", 1)[-1])
+    assert captured.get("otp"), "OTP email was never sent"
+
+    resp = client.post("/create_org/verify_otp", data={
+        "application_id": application_id, "otp_code": captured["otp"],
+    }, follow_redirects=False)
+    assert resp.status_code in (301, 302), resp.data
+
+    fake_pdf = b"%PDF-1.4\n" + b"x" * 20
+    fake_png = b"\x89PNG\r\n\x1a\n" + b"x" * 20
+    resp = client.post("/create_org/upload_documents", data={
+        "application_id": str(application_id),
+        "registration_cert": (_io.BytesIO(fake_pdf), "cert.pdf"),
+        "address_proof": (_io.BytesIO(fake_pdf), "address.pdf"),
+        "visiting_card": (_io.BytesIO(fake_png), "card.png"),
+        "name_board_photo": (_io.BytesIO(fake_png), "board.png"),
+    }, content_type="multipart/form-data", follow_redirects=False)
+    assert resp.status_code in (301, 302), resp.data
+
+    with client.session_transaction() as sess:
+        sess["platform_admin_logged_in"] = True
+        sess["platform_admin_username"] = "tpi_platform_admin"
+        import time as _time
+        sess["platform_admin_last_activity"] = _time.time()
+    resp = client.post(f"/super_admin/applications/{application_id}/approve", follow_redirects=False)
+    assert resp.status_code in (301, 302), resp.data
+
     return "att_" + subdomain.replace("-", "_")
 
 
 @pytest.fixture
-def two_tenants(client, db_engine):
+def two_tenants(client, db_engine, monkeypatch):
     from app import init_master_db
     init_master_db()
 
@@ -48,12 +90,13 @@ def two_tenants(client, db_engine):
     _drop_schema(db_engine, schema_a)
     _drop_schema(db_engine, schema_b)
     try:
-        _provision(client, slug_a, "tpi_admin_a", "password123")
-        _provision(client, slug_b, "tpi_admin_b", "password123")
-        # Provisioning itself resolves g.tenant_db/session["tenant_db"] as a
-        # side effect (blueprints/org.py's provision_tenant -> init_tenant_db)
-        # -- clear the session so the isolation tests below start from a
-        # clean, logged-out slate rather than accidentally inheriting it.
+        _provision(client, monkeypatch, slug_a, "tpi_admin_a", "password123")
+        _provision(client, monkeypatch, slug_b, "tpi_admin_b", "password123")
+        # Provisioning (via the platform-admin approve step) resolves
+        # g.tenant_db/session["tenant_db"] and sets platform_admin_* keys as
+        # a side effect -- clear the session so the isolation tests below
+        # start from a clean, logged-out slate rather than accidentally
+        # inheriting either.
         with client.session_transaction() as sess:
             sess.clear()
         yield slug_a, schema_a, slug_b, schema_b
