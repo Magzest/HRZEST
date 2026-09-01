@@ -107,10 +107,23 @@ def _set_search_path(conn, schema_name):
 
 
 import sqlite3
+import threading
+
+# The SQLite fallback below shares ONE sqlite3.Connection across every
+# thread (check_same_thread=False just disables Python's own guard --
+# it does NOT make concurrent access safe, per the sqlite3 docs: "you
+# have to serialize accesses yourself"). Without this lock, two threads
+# racing to execute/commit on the same connection can corrupt its
+# in-flight cursor state or throw spurious "database is locked" errors.
+# SQLite has no real concurrent-writer story anyway, so serializing here
+# costs nothing over the pooled-connection concurrency Postgres normally
+# provides -- this path only runs at all when Postgres is unreachable.
+_sqlite_lock = threading.Lock()
 
 class _SqliteCursor:
     def __init__(self, conn):
-        self._cur = conn.cursor()
+        with _sqlite_lock:
+            self._cur = conn.cursor()
         self.rowcount = -1
 
     def execute(self, query, params=()):
@@ -119,23 +132,25 @@ class _SqliteCursor:
         q = re.sub(r'\bILIKE\b', 'LIKE', q, flags=re.IGNORECASE)
         q = re.sub(r'\bTIMESTAMP WITH TIME ZONE\b', 'TEXT', q, flags=re.IGNORECASE)
         q = re.sub(r'\bNOW\(\)', 'CURRENT_TIMESTAMP', q, flags=re.IGNORECASE)
-        try:
-            res = self._cur.execute(q, params)
-            self.rowcount = self._cur.rowcount
-            return res
-        except Exception as e:
-            _log.debug("SQLite query warning: %s | Query: %s", e, query)
-            return self
+        with _sqlite_lock:
+            try:
+                res = self._cur.execute(q, params)
+                self.rowcount = self._cur.rowcount
+                return res
+            except Exception as e:
+                _log.debug("SQLite query warning: %s | Query: %s", e, query)
+                return self
 
     def executemany(self, query, seq_of_params=()):
         q = query.replace("%s", "?")
-        try:
-            res = self._cur.executemany(q, seq_of_params)
-            self.rowcount = self._cur.rowcount
-            return res
-        except Exception as e:
-            _log.debug("SQLite executemany warning: %s", e)
-            return self
+        with _sqlite_lock:
+            try:
+                res = self._cur.executemany(q, seq_of_params)
+                self.rowcount = self._cur.rowcount
+                return res
+            except Exception as e:
+                _log.debug("SQLite executemany warning: %s", e)
+                return self
 
     def fetchone(self):
         try:
@@ -178,10 +193,12 @@ class _SqliteConnWrapper:
         pass
 
     def commit(self):
-        self.conn.commit()
+        with _sqlite_lock:
+            self.conn.commit()
 
     def rollback(self):
-        self.conn.rollback()
+        with _sqlite_lock:
+            self.conn.rollback()
 
 class _SqlitePool:
     def __init__(self):

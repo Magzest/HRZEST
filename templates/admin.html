@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
-    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
-    <script src="/static/toast.js"></script>
+    <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+    <script src="{{ static_url('toast.js') }}"></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       body { background: #f1f5f9; min-height: 100vh; display: flex; }
@@ -331,8 +331,8 @@
       body.dark-mode .flash-success { background: #14532d !important; border-color: #166534 !important; color: #4ade80 !important; }
       body.dark-mode .flash-error   { background: #7f1d1d !important; border-color: #991b1b !important; color: #fca5a5 !important; }
     </style>
-  <link rel="stylesheet" href="/static/shared.min.css" />
-  <link rel="stylesheet" href="/static/toast.css" />
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('toast.css') }}" />
   </head>
   <body>
 
@@ -779,7 +779,7 @@
          scheduleChartRefresh() executes near the end of this same script
          block, so loading it here instead lets the rest of the dashboard
          render immediately. -->
-    <script src="/static/chart.umd.min.js"></script>
+    <script src="{{ static_url('chart.umd.min.js') }}"></script>
     <script>
       /* ── CLOCK ── */
       function updateClock() {
@@ -1013,7 +1013,7 @@
       }
       scheduleChartRefresh();
     </script>
-  <script src="/static/darkmode.min.js"></script>
+  <script src="{{ static_url('darkmode.min.js') }}"></script>
 
   <!-- ADMIN SEARCH -->
   <script>

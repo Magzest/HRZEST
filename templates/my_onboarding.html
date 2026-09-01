@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Onboarding</title>
-  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
-  <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
   <style>
 
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
@@ -420,7 +420,7 @@ function openDoneModal(taskId, obId, reqDoc, title){
 </script>
     </div><!-- /app-content -->
   </div><!-- /main-area -->
-<script src="/static/darkmode.min.js"></script>
+<script src="{{ static_url('darkmode.min.js') }}"></script>
 
 
 </body>

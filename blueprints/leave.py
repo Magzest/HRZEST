@@ -18,7 +18,7 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
 import utils.config as cfg
@@ -648,7 +648,7 @@ def request_resignation():
     except ValueError:
         return redirect(tpath("/employee_portal#resign"))
 
-    min_lwd = datetime.date.today() + datetime.timedelta(days=30)
+    min_lwd = company_today() + datetime.timedelta(days=30)
     if lwd < min_lwd:
         return redirect(tpath("/employee_portal#resign"))
 
@@ -1021,7 +1021,7 @@ def api_employee_resign():
         lwd = datetime.datetime.strptime(last_working_day, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"ok": False, "msg": "Invalid date format. Use YYYY-MM-DD"}), 400
-    min_lwd = datetime.date.today() + datetime.timedelta(days=30)
+    min_lwd = company_today() + datetime.timedelta(days=30)
     if lwd < min_lwd:
         return jsonify({"ok": False, "msg": "Last working day must be at least 30 days from today"}), 400
     db = get_db_connection()
@@ -1113,7 +1113,7 @@ def api_employee_cancel_leave(lid):
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": f"Cannot cancel a leave that is already {row[0]}."}), 400
-    if row[1] <= datetime.date.today():
+    if row[1] <= company_today():
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": "Cannot cancel a leave for today or a past date."}), 400
@@ -1140,7 +1140,7 @@ def cancel_leave_web(lid):
         flash("Leave request not found.", "error")
     elif row[0] != "Pending":
         flash(f"Cannot cancel a leave that is already {row[0]}.", "error")
-    elif row[1] <= datetime.date.today():
+    elif row[1] <= company_today():
         flash("Cannot cancel a leave for today or a past date.", "error")
     else:
         cursor.execute(
@@ -1167,7 +1167,7 @@ def api_employee_request_overtime():
         ot_date = datetime.date.fromisoformat(ot_date)
     except ValueError:
         return jsonify({"ok": False, "msg": "Invalid date."}), 400
-    if ot_date < datetime.date.today():
+    if ot_date < company_today():
         return jsonify({"ok": False, "msg": "Cannot request OT for a past date."}), 400
 
     db = get_db_connection()
@@ -1229,7 +1229,7 @@ def api_employee_holidays():
     rows = cursor.fetchall()
     cursor.close()
     db.close()
-    today = datetime.date.today()
+    today = company_today()
     return jsonify({
         "ok": True,
         "holidays": [

@@ -313,13 +313,28 @@ def api_mobile_web_session_link():
     username = g.api_user
     raw_token = secrets.token_hex(32)
     token_hash = _hash_token(raw_token)
-    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+    # Bug fix: this used to compute expires_at in Python as
+    # datetime.utcnow() + timedelta(minutes=5) and bind it as a plain
+    # parameter into a TIMESTAMP (no time zone) column, then compare it
+    # against SQL's NOW() at redemption time. Postgres interprets a naive
+    # timestamp being compared to NOW() (timestamptz) in the *session's*
+    # TimeZone setting, not UTC -- on any server where that setting isn't
+    # UTC (e.g. Asia/Calcutta, +5:30 here), the naive UTC value silently
+    # gets read back as local wall-clock time, landing hours in the past
+    # and making every bridge token look already-expired the instant it's
+    # minted, a total feature break rather than a rare edge case. The
+    # token-minting code right above this in the same file
+    # (api_login/api_employee_login's api_tokens.expires_at) never hits
+    # this because it computes expiry with "NOW() + INTERVAL" directly in
+    # SQL instead of mixing in a Python-side datetime -- doing the same
+    # here keeps expiry computation and comparison in the same timezone
+    # frame of reference no matter what the server's TimeZone GUC is.
     with _db() as (cursor, conn):
         cursor.execute("DELETE FROM mobile_bridge_tokens WHERE expires_at < NOW()")
         cursor.execute(
             "INSERT INTO mobile_bridge_tokens (token_hash, admin_username, target_path, expires_at) "
-            "VALUES (%s, %s, %s, %s)",
-            (token_hash, username, target, expires_at)
+            "VALUES (%s, %s, %s, NOW() + INTERVAL '5 minutes')",
+            (token_hash, username, target)
         )
         conn.commit()
 

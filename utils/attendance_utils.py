@@ -5,6 +5,7 @@ import calendar
 import math
 from database import get_db_connection
 from extensions import app_log
+from utils.helpers import company_today
 import utils.config as cfg
 
 
@@ -191,7 +192,12 @@ def fetch_holidays_set(year, month):
 
 
 def get_billable_past_days(year, month):
-    today = datetime.date.today()
+    # company_today() (not the server's own local date) -- this feeds every
+    # payroll/attendance-report "days counted so far this month" calculation
+    # (blueprints/payroll.py, blueprints/attendance.py, blueprints/
+    # employee_portal.py), so a server clock in a different timezone than
+    # the tenant's configured one must not shift which days are billable.
+    today = company_today()
     return [d for d in get_working_days(year, month) if d <= today]
 
 

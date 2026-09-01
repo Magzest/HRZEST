@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Recruitment & Resume Screening — HRzest.com</title>
-    <link rel="stylesheet" href="/static/shared.min.css" />
-    <link rel="stylesheet" href="/static/tabler-icons.min.css" />
+    <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+    <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       body { background: #f8fafc; color: #1e293b; min-height: 100vh; display: flex; }
@@ -121,7 +121,7 @@
       </div>
     </div>
 
-    <script src="/static/darkmode.min.js"></script>
+    <script src="{{ static_url('darkmode.min.js') }}"></script>
     <script>
       document.getElementById('screenForm').addEventListener('submit', async function(e) {
         e.preventDefault();

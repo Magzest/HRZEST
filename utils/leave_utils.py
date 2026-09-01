@@ -10,12 +10,18 @@ extraction is safe.
 """
 import datetime
 from extensions import app_log
+from utils.helpers import company_today
 
 
 def assign_leave_balances_for_employee(cursor, employee_id, year=None):
     """Auto-assign leave balances for all active leave types for a new/existing employee."""
     if year is None:
-        year = datetime.date.today().year
+        # company_today() rather than the server's own local date -- this
+        # runs unconditionally on every new-employee registration
+        # (blueprints/employees.py), so a server clock in a different
+        # timezone than the tenant's configured one must not put a hire
+        # made right around New Year's into the wrong year's leave balances.
+        year = company_today().year
     cursor.execute("SELECT id, annual_quota FROM leave_types WHERE is_active=1")
     for lt_id, quota in cursor.fetchall():
         cursor.execute("""

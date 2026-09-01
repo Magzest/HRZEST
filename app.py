@@ -186,8 +186,9 @@ def _csrf_token():
 app.jinja_env.globals["csrf_token"] = _csrf_token
 app.jinja_env.globals["timedelta"] = datetime.timedelta
 
-from utils.helpers import tpath as _tpath
+from utils.helpers import tpath as _tpath, static_url as _static_url
 app.jinja_env.globals["tpath"] = _tpath
+app.jinja_env.globals["static_url"] = _static_url
 
 
 @app.context_processor

@@ -18,7 +18,7 @@ from flask import (
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required
-from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii, get_pending_action_counts
+from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii, get_pending_action_counts, company_today, company_now
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
@@ -44,7 +44,7 @@ def _today_pending_counts(cursor):
 def today_present():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
     _args = (today,) + _co_args
@@ -71,7 +71,7 @@ def today_present():
 def today_absent():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
     _args = (today,) + _co_args
@@ -97,7 +97,7 @@ def today_absent():
 def today_late():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
     _args = (today,) + _co_args
@@ -542,7 +542,7 @@ def monthly_report():
 
     holidays = fetch_holidays_set(year, month)
     working_days = get_working_days(year, month)
-    today = datetime.date.today()
+    today = company_today()
 
     report = []
     for emp_id, name, role, phone, email in employees:
@@ -628,7 +628,7 @@ def employee_attendance_detail(emp_id, year, month):
     att_map = {row[0]: row for row in cursor.fetchall()}
 
     holidays_set = fetch_holidays_set(year, month)
-    today = datetime.date.today()
+    today = company_today()
 
     # Informational only -- which dates this employee is currently locked
     # out of online check-in for (utils/attendance_utils.py). Table may not
@@ -1018,7 +1018,7 @@ def monthly_report_export():
 
     holidays = fetch_holidays_set(year, month)
     working_days = get_working_days(year, month)
-    today = datetime.date.today()
+    today = company_today()
     cursor.close()
     db.close()
 
@@ -1128,7 +1128,7 @@ def send_absentee_report():
     if not cfg:
         return jsonify({"ok": False, "msg": "Email not configured. Go to Email Settings first."})
 
-    today = datetime.date.today()
+    today = company_today()
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
@@ -1231,7 +1231,7 @@ def attendance():
     # (correct_attendance/bulk_mark_attendance) clears it. Checked before any
     # biometric work so a locked-out employee doesn't burn a face-recognition
     # pass for nothing. Available to every tenant.
-    _today = datetime.date.today()
+    _today = company_today()
     _locked, _lock_msg = check_attendance_lockout(emp_id, _today)
     if _locked:
         return jsonify({"ok": False, "msg": _lock_msg}), 403
@@ -1334,7 +1334,7 @@ def attendance():
             record_attendance_failure(emp_id, _today, "Face does not match")
             return jsonify({"ok": False, "msg": "Face does not match. Please try again."})
 
-    now = datetime.datetime.now()
+    now = company_now()
     today = now.date()
     current_time = now.time()
 
@@ -1438,10 +1438,10 @@ def process_punch(cursor, db, emp_id, employee_name, punch_dt=None):
     device push). Returns a plain dict rather than a Response so callers
     can add their own fields (e.g. a device's raw PIN) before jsonifying.
 
-    punch_dt defaults to now() for a live human tap; a device push passes
-    the device's own punch timestamp instead, since it may be delivered
-    slightly after the fact."""
-    now = punch_dt or datetime.datetime.now()
+    punch_dt defaults to the tenant's current company-local time for a live
+    human tap; a device push passes the device's own punch timestamp
+    instead, since it may be delivered slightly after the fact."""
+    now = punch_dt or company_now()
     today = now.date()
     current_time = now.time()
     cursor.execute(
@@ -1510,7 +1510,7 @@ def api_checkin():
     lon = data.get("lon")
     if not emp_id:
         return jsonify({"ok": False, "msg": "employee_id required"}), 400
-    _locked, _lock_msg = check_attendance_lockout(emp_id, datetime.date.today())
+    _locked, _lock_msg = check_attendance_lockout(emp_id, company_today())
     if _locked:
         return jsonify({"ok": False, "msg": _lock_msg}), 403
     db = get_db_connection()

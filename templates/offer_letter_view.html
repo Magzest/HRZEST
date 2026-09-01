@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Offer Letter — {{ letter[17] }}</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="/static/tabler-icons.min.css"/>
+  <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}"/>
   <style>
     *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
     body {
@@ -160,7 +160,7 @@
     .status-accepted { color: #16a34a; font-weight: 700; }
     .status-rejected { color: #dc2626; font-weight: 700; }
   </style>
-  <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
 </head>
 <body>
 
@@ -321,6 +321,6 @@
   <div class="bot-line"></div>
 </div>
 
-<script src="/static/darkmode.min.js"></script>
+<script src="{{ static_url('darkmode.min.js') }}"></script>
 </body>
 </html>

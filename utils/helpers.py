@@ -3,8 +3,11 @@
 import os
 import re
 import datetime
+import hashlib
 import threading
 from contextlib import contextmanager
+
+import pytz
 
 _SAFE_IDENT_RE = re.compile(r'^[a-z][a-z0-9_]*$')
 
@@ -75,6 +78,66 @@ def tpath(path: str) -> str:
     if not prefix or path == prefix or path.startswith(prefix + "/"):
         return path
     return prefix + path
+
+
+# ── Static asset cache-busting ────────────────────────────────────────────────
+# filename -> (mtime, hash) -- lets static_url() below skip re-hashing a file
+# on every request and only pay that cost the first time a filename is seen
+# or after the file has actually changed on disk.
+_STATIC_ASSET_CACHE = {}
+_STATIC_ASSET_CACHE_LOCK = threading.Lock()
+
+
+def static_url(filename: str) -> str:
+    """Return "/static/<filename>?v=<hash>" for a CSS/JS (or any other)
+    file under static/, so a deploy that changes a file's bytes is visible
+    to browsers/CDNs immediately instead of being served stale for up to
+    SEND_FILE_MAX_AGE_DEFAULT (extensions.py, currently 1 hour) -- or
+    indefinitely by any intermediary that ignores that header.
+
+    Templates call this in place of a bare "/static/x.js" href/src (this
+    codebase writes static links as literal strings, same as tpath() above
+    -- see its docstring) or `{{ url_for('static', filename='x.js') }}`.
+
+    The hash is an md5 of the file's actual bytes, memoized in
+    _STATIC_ASSET_CACHE keyed by filename and invalidated with a cheap
+    os.path.getmtime() check -- so a request only re-reads+re-hashes the
+    file when it's new to the cache or has actually changed, not on every
+    page render of a busy HR app.
+
+    This mtime-keyed, in-process cache is correct today because there is
+    exactly one app instance reading static/ off its own local disk, so
+    "the file changed" and "mtime changed" are the same fact, and every
+    request sees the same cache. It would need to change (e.g. to a
+    build-time manifest file checked into the deploy, or a shared
+    Redis-backed cache) if this ever runs as multiple instances behind a
+    load balancer -- each process's mtime cache would only reflect files
+    it happens to have re-read locally, so a client could get inconsistent
+    hashes for the same file across requests -- or if static/ moves to
+    S3/a CDN origin instead of local disk, where there is no local mtime
+    to check at all.
+    """
+    from extensions import app as _app
+    static_root = _app.static_folder or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+    path = os.path.join(static_root, filename)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return f"/static/{filename}"  # missing file -- let the resulting 404 happen with no query string
+
+    cached = _STATIC_ASSET_CACHE.get(filename)
+    if cached is None or cached[0] != mtime:
+        with _STATIC_ASSET_CACHE_LOCK:
+            cached = _STATIC_ASSET_CACHE.get(filename)
+            if cached is None or cached[0] != mtime:
+                try:
+                    with open(path, "rb") as f:
+                        digest = hashlib.md5(f.read()).hexdigest()[:10]
+                except OSError:
+                    return f"/static/{filename}"
+                cached = (mtime, digest)
+                _STATIC_ASSET_CACHE[filename] = cached
+    return f"/static/{filename}?v={cached[1]}"
 
 
 def employee_login_url() -> str:
@@ -609,6 +672,36 @@ def get_company_settings():
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
             "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
             "email_domain": "", "paid_employee_slots": None}
+
+
+def _company_tzinfo():
+    """Resolve the current tenant's configured timezone (company_settings.timezone,
+    via get_company_settings() -- already tenant-scoped through get_db_connection()'s
+    flask.g.tenant_db resolution) to a pytz tzinfo, falling back to Asia/Kolkata for an
+    unset/unrecognized value -- same fallback get_company_settings() itself uses."""
+    tz_name = (get_company_settings().get("timezone") or "Asia/Kolkata").strip()
+    try:
+        return pytz.timezone(tz_name)
+    except Exception:
+        return pytz.timezone("Asia/Kolkata")
+
+
+def company_now():
+    """Current wall-clock datetime in the current tenant's configured timezone
+    (company_settings.timezone), timezone-aware. Anchored to a real UTC instant
+    first (datetime.datetime.now(pytz.utc)) rather than the naive local
+    datetime.datetime.now(), since the server host's own system clock is not
+    guaranteed to be UTC either. Use this (or company_today()) instead of
+    datetime.datetime.now()/datetime.date.today() anywhere "today"/"now" is used
+    to decide which calendar day a check-in, leave date, or payroll period
+    belongs to."""
+    return datetime.datetime.now(pytz.utc).astimezone(_company_tzinfo())
+
+
+def company_today():
+    """Current calendar date in the current tenant's configured timezone. See
+    company_now() -- this is just company_now().date()."""
+    return company_now().date()
 
 
 # ── Company email domain (employee-registration gate) ────────────────────────

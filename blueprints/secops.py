@@ -1055,14 +1055,28 @@ def api_secops_emergency_lockdown():
     body = request.get_json(silent=True) or request.form or {}
     enable = bool(body.get("enable", True))
 
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute(
-        "INSERT INTO company_settings (session_timeout) VALUES (5) ON CONFLICT DO NOTHING"
-    )
-    db.commit()
-    cursor.close()
-    db.close()
+    # Bug fix: this used to be an unconditional
+    # "INSERT INTO company_settings (session_timeout) VALUES (5) ON CONFLICT
+    # DO NOTHING" -- company_settings has no unique constraint on
+    # session_timeout (only its auto-incrementing id PK), so ON CONFLICT
+    # never actually fired and every single toggle (enable OR disable)
+    # silently inserted a brand-new company_settings row defaulted to
+    # company_name='My Company' etc. Every other route in the app treats
+    # company_settings as a singleton ("SELECT ... FROM company_settings
+    # LIMIT 1" with no ORDER BY, or a bare UPDATE with no WHERE, same as
+    # api_secops_session_timeout() just above), so that stray row could
+    # make an unrelated LIMIT-1 read flip to the wrong row's stale
+    # defaults at any time depending on Postgres's undefined tie-breaking.
+    # Fixed to match the singleton convention: only write on enable (the
+    # only state this hardcoded "5" ever represented), and UPDATE the
+    # existing row instead of inserting a new one.
+    if enable:
+        db = get_db_connection()
+        cursor = db.cursor()
+        cursor.execute("UPDATE company_settings SET session_timeout=5")
+        db.commit()
+        cursor.close()
+        db.close()
 
     log_security_event(
         "soc.emergency_lockdown",

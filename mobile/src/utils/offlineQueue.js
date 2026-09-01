@@ -4,7 +4,7 @@ const QUEUE_KEY = 'offline_punch_queue';
 
 export async function queuePunch(lat = null, lon = null) {
   const punch = {
-    id: Date.now().toString(),
+    id: `${Date.now().toString()}-${Math.random().toString(36).slice(2)}`,
     punched_at: new Date().toISOString(),
     lat,
     lon,

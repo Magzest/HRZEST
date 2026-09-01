@@ -12,6 +12,7 @@ from utils.auth import employee_required, employee_api_required, check_password_
 from utils.helpers import (
     tpath,
     _audit, _db, encrypt_pii, decrypt_pii, decrypt_pii_date, _validate_image_file, get_auth_config,
+    company_today, company_now,
 )
 from utils.ai_assistant import build_employee_context, ask_assistant
 from utils.session_risk import ensure_session_id, evaluate_session_risk
@@ -325,7 +326,7 @@ def employee_portal():
             emp[_pii_idx] = decrypt_pii(emp[_pii_idx])
     emp[12] = decrypt_pii_date(emp[12])
 
-    today = datetime.date.today()
+    today = company_today()
     cursor.execute(
         "SELECT login_time, logout_time, status, logout_status, attendance_type "
         "FROM attendance WHERE employee_id=%s AND date=%s",
@@ -866,7 +867,7 @@ def api_employee_portal():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
 
     cursor.execute("""
         SELECT e.name, e.email, COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), '') AS company_name
@@ -997,11 +998,24 @@ def api_employee_checkin():
                 return jsonify({"ok": False, "msg": "You are outside the office premises."})
 
     punched_at_str = data.get("punched_at")
-    now = datetime.datetime.now()
+    now = company_now()
     if punched_at_str:
         try:
             _pt = datetime.datetime.fromisoformat(punched_at_str.replace("Z", "+00:00"))
-            _pt = _pt.replace(tzinfo=None)
+            if _pt.tzinfo is not None:
+                # Mobile sends Date.toISOString() (always UTC, "...Z") --
+                # convert to the tenant's configured timezone before using
+                # it as a wall-clock "now". Previously this just discarded
+                # the offset (.replace(tzinfo=None)) and treated the raw
+                # UTC digits as if they were already local, which shifted
+                # every offline check-in's date/time by the UTC offset
+                # (e.g. a 9am IST check-in landing as 3:30am).
+                _pt = _pt.astimezone(now.tzinfo)
+            else:
+                # No offset info on the string (e.g. this app's own test
+                # suite posts a naive isoformat()) -- assume it already
+                # represents company-local wall-clock time, same as before.
+                _pt = now.tzinfo.localize(_pt)
             if (now - _pt).total_seconds() <= 86400:
                 now = _pt
             else:
@@ -1131,8 +1145,15 @@ def api_employee_sync_punches():
                     continue
         try:
             _pt = datetime.datetime.fromisoformat(punched_at_str.replace("Z", "+00:00"))
-            _pt = _pt.replace(tzinfo=None)
-            _now = datetime.datetime.now()
+            _now = company_now()
+            if _pt.tzinfo is not None:
+                # See api_employee_checkin's punched_at handling above --
+                # mobile always sends UTC ("...Z"); convert to the tenant's
+                # configured timezone instead of discarding the offset and
+                # treating the raw UTC digits as local.
+                _pt = _pt.astimezone(_now.tzinfo)
+            else:
+                _pt = _now.tzinfo.localize(_pt)
             age = (_now - _pt).total_seconds()
             if age > 86400:
                 results.append({"id": punch.get("id"), "ok": False, "msg": "Too old (>24 h)"})
@@ -1322,7 +1343,7 @@ def api_employee_qr_face_checkin():
             # knowing about.
             app_log.warning("Face-log photo save failed for %s: %s", employee_id, exc, exc_info=True)
 
-    now = datetime.datetime.now()
+    now = company_now()
     today = now.date()
     current_time = now.time()
 

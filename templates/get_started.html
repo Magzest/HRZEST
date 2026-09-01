@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Get Started — HRzest.com</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+  <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
+    html{height:100%}
+    body{min-height:100vh;background:linear-gradient(145deg,#0f172a 0%,#1e3a8a 50%,#1e40af 100%);
+      display:flex;align-items:center;justify-content:center;padding:24px;position:relative;
+      overflow-x:hidden;overflow-y:auto}
+    body::before{content:'';position:fixed;inset:0;pointer-events:none;
+      background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);background-size:32px 32px}
+    .wrap{width:100%;max-width:820px;position:relative;z-index:1}
+    .header{text-align:center;margin-bottom:32px}
+    .logo-icon{width:68px;height:68px;background:linear-gradient(135deg,#3b82f6,#6366f1);border-radius:20px;
+      display:flex;align-items:center;justify-content:center;font-size:30px;margin:0 auto 14px;
+      box-shadow:0 8px 24px rgba(59,130,246,.4);color:#fff}
+    .header h1{font-size:26px;font-weight:800;color:#fff;letter-spacing:-.3px;margin-bottom:8px}
+    .header p{font-size:14px;color:rgba(255,255,255,.55)}
+    .cards{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .card{background:rgba(255,255,255,.06);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+      border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:32px 28px;
+      box-shadow:0 24px 60px rgba(0,0,0,.35),0 0 0 1px rgba(255,255,255,.05) inset}
+    .card .icon{width:52px;height:52px;background:rgba(99,102,241,.15);border-radius:14px;
+      display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:16px;color:#a5b4fc}
+    .card h2{font-size:18px;font-weight:800;color:#fff;margin-bottom:8px}
+    .card p{font-size:13px;color:rgba(255,255,255,.5);line-height:1.5;margin-bottom:20px}
+    .field-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;
+      letter-spacing:.7px;color:rgba(255,255,255,.55);margin-bottom:8px}
+    .subdomain-row{display:flex;align-items:center;gap:0;margin-bottom:16px}
+    .field-input{width:100%;padding:12px 14px;background:rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.15);border-radius:12px 0 0 12px;color:#fff;font-size:14px;
+      outline:none;transition:.2s;flex:1}
+    .field-input::placeholder{color:rgba(255,255,255,.3)}
+    .field-input:focus{background:rgba(255,255,255,.12);border-color:rgba(99,102,241,.7)}
+    .subdomain-suffix{padding:12px 12px;background:rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.15);border-left:none;border-radius:0 12px 12px 0;
+      color:rgba(255,255,255,.4);font-size:13px;white-space:nowrap}
+    .btn{width:100%;padding:14px;border:none;border-radius:12px;
+      background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;font-size:14px;font-weight:700;
+      cursor:pointer;transition:.2s;letter-spacing:.3px;box-shadow:0 6px 20px rgba(59,130,246,.4);
+      text-decoration:none;display:block;text-align:center}
+    .btn:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(59,130,246,.5)}
+    .btn:active{transform:translateY(0)}
+    .btn-outline{background:rgba(255,255,255,.06);box-shadow:none;border:1px solid rgba(255,255,255,.15)}
+    .btn-outline:hover{background:rgba(255,255,255,.1);box-shadow:none}
+    .error-hint{font-size:12px;color:#fca5a5;margin:-10px 0 14px;display:none}
+    .back-link{display:block;text-align:center;font-size:13px;color:rgba(255,255,255,.4);
+      text-decoration:none;margin-top:24px;transition:.2s}
+    .back-link:hover{color:rgba(255,255,255,.75)}
+    @media(max-width:640px){.cards{grid-template-columns:1fr}}
+  </style>
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="logo-icon"><i class="ti ti-building-skyscraper"></i></div>
+    <h1>HRzest.com for Teams</h1>
+    <p>Register your company or sign in to your existing HRzest.com portal</p>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="icon"><i class="ti ti-login"></i></div>
+      <h2>Login to Your Company</h2>
+      <p>Enter your company's subdomain to go to its HRzest.com login page.</p>
+      <label class="field-label">Company Subdomain</label>
+      <div class="subdomain-row">
+        <div class="subdomain-suffix">www.hrzest.com/</div>
+        <input class="field-input" type="text" id="loginSubdomain"
+               placeholder="acme" pattern="[a-z0-9\-]+" />
+      </div>
+      <div class="error-hint" id="loginError">Enter a valid subdomain first.</div>
+      <a href="#" class="btn" id="loginGoBtn">Go to Login <i class="ti ti-arrow-right"></i></a>
+    </div>
+
+    <div class="card">
+      <div class="icon"><i class="ti ti-rocket"></i></div>
+      <h2>Register Your Company</h2>
+      <p>New here? Set up your own HRzest.com portal in a couple of minutes — pick a plan, pick a subdomain, done.</p>
+      <a href="/create_org" class="btn btn-outline">Create Organisation <i class="ti ti-arrow-right"></i></a>
+    </div>
+  </div>
+
+  <a href="/checkin" class="back-link">← Back to Scanner</a>
+</div>
+<script>
+  document.getElementById("loginGoBtn").addEventListener("click", function (e) {
+    e.preventDefault();
+    var input = document.getElementById("loginSubdomain");
+    var sd = input.value.trim().toLowerCase();
+    var errEl = document.getElementById("loginError");
+    if (!sd || !/^[a-z0-9-]+$/.test(sd)) {
+      errEl.style.display = "block";
+      return;
+    }
+    errEl.style.display = "none";
+    window.location.href = "/" + sd + "/login";
+  });
+</script>
+<script src="{{ static_url('darkmode.min.js') }}"></script>
+</body>
+</html>

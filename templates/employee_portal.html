@@ -20,9 +20,9 @@
          well after user interaction starts a scan -- nothing needs this
          130KB library synchronously during initial parse, so deferring it
          lets the rest of the page render without waiting on it. -->
-    <script src="/static/jsQR.min.js" defer></script>
-    <script src="/static/toast.js"></script>
-    <link rel="stylesheet" href="/static/toast.css" />
+    <script src="{{ static_url('jsQR.min.js') }}" defer></script>
+    <script src="{{ static_url('toast.js') }}"></script>
+    <link rel="stylesheet" href="{{ static_url('toast.css') }}" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       html, body { height: 100%; }
@@ -705,9 +705,9 @@
       body.dark-mode .toast-red{background:#7f1d1d!important;border-color:#991b1b!important;color:#f87171!important}
       body.dark-mode .badge-role{background:#1e3a8a!important;color:#60a5fa!important;border-color:#3b82f6!important}
     </style>
-  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
-  <link rel="stylesheet" href="/static/shared.min.css" />
-  <link rel="stylesheet" href="/static/animate-core.min.css" />
+  <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('animate-core.min.css') }}" />
   </head>
   <body>
 
@@ -4347,8 +4347,8 @@
     </script>
     <!-- /BREAK TIME NOTIFICATION -->
 
-  <script src="/static/darkmode.min.js"></script>
-  <script src="/static/animate-core.min.js"></script>
+  <script src="{{ static_url('darkmode.min.js') }}"></script>
+  <script src="{{ static_url('animate-core.min.js') }}"></script>
 
   <!-- AI CHAT ASSISTANT -->
   <style>
@@ -4690,7 +4690,7 @@
   })();
   </script>
   <!-- /DEVICE POSTURE RELAY -->
-  <script src="/static/js/i18n.js"></script>
+  <script src="{{ static_url('js/i18n.js') }}"></script>
   <script>
     function enrollTouchID() {
       if (!window.PublicKeyCredential) {

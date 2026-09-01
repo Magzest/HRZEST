@@ -11,7 +11,7 @@
          well after user interaction starts a scan -- nothing needs this
          130KB library synchronously during initial parse, so deferring it
          lets the rest of the page render without waiting on it. -->
-    <script src="/static/jsQR.min.js" defer></script>
+    <script src="{{ static_url('jsQR.min.js') }}" defer></script>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
 
@@ -464,7 +464,7 @@
       body.dark-mode .badge-red { background: #7f1d1d !important; color: #fca5a5 !important; border-color: #991b1b !important; }
       body.dark-mode .btn:disabled { background: #1c2128 !important; color: #768390 !important; }
     </style>
-  <link rel="stylesheet" href="/static/shared.min.css" />
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
   </head>
   <body>
 
@@ -1386,7 +1386,7 @@
         }
       }
     </script>
-  <script src="/static/darkmode.min.js"></script>
+  <script src="{{ static_url('darkmode.min.js') }}"></script>
 
 
 </body>
