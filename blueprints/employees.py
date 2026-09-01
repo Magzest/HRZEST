@@ -2,6 +2,7 @@
 """Employees blueprint -- CRUD, photos, QR codes, ID cards."""
 import os
 import json
+import hashlib
 import datetime
 import secrets
 import psycopg2
@@ -15,8 +16,8 @@ from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
 from utils.helpers import (
     tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
-    validate_employee_email_domain, get_company_settings, employee_login_url, get_pending_counts,
-    add_employee_seat_cap_check,
+    validate_employee_email_domain, get_company_settings, get_pending_counts,
+    add_employee_seat_cap_check, _safe_app_url,
 )
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
@@ -28,6 +29,46 @@ from utils.webauthn_utils import _enroll_fingerprint_from_form
 employees_bp = Blueprint("employees", __name__)
 
 UPLOAD_FOLDER = app.config["UPLOAD_FOLDER"]
+
+
+def _send_welcome_credentials_email(emp_id, name, email):
+    """Emails a one-time 'set your password' link instead of the actual
+    auto-generated password. A welcome email containing a raw password
+    plus a login link is exactly the content shape Gmail's spam/phishing
+    classifier hard-blocks (550 5.7.1 'likely unsolicited mail'), and
+    plaintext passwords shouldn't be emailed regardless of deliverability.
+
+    Reuses the same reset_token mechanism as auth.py's
+    employee_forgot_password/employee_reset_password flow -- 24h expiry
+    here rather than that flow's 1h, since a first-time welcome link may
+    sit unread longer than an active forgot-password request.
+
+    Returns True if the email was sent, False if no SMTP is configured
+    (matches the pre-existing silent-skip behavior of the callers below).
+    """
+    _ecfg = get_email_config()
+    if not _ecfg:
+        return False
+    token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("UPDATE employees SET reset_token=%s, reset_token_expiry=%s WHERE employee_id=%s",
+                   (token_hash, expiry, emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    set_url = f"{_safe_app_url()}/employee_reset_password/{token}"
+    html_body = (
+        f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
+        f"<p>Employee ID: <strong>{emp_id}</strong></p>"
+        f"<p><a href=\"{set_url}\">Set your password</a> to finish setting up your account "
+        f"(link expires in 24 hours).</p>"
+        f"<p>Or copy this link: {set_url}</p>"
+    )
+    send_email_smtp(email, f"Welcome {name} -- Set Your Password", html_body, _ecfg)
+    return True
 
 
 @employees_bp.route("/admin_action", methods=["POST"])
@@ -922,18 +963,11 @@ def add_employee_page():
                     db.commit()
                     flash("Onboarding checklist auto-assigned.", "success")
         if email:
-            _ecfg = get_email_config()
-            if _ecfg:
-                _login_url = employee_login_url()
-                _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
-                         f"<p>Employee ID: <strong>{emp_id}</strong><br>"
-                         f"Password: <strong>{auto_pass}</strong></p>"
-                         f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
-                try:
-                    send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
+            try:
+                if _send_welcome_credentials_email(emp_id, name, email):
                     flash(f"Credentials email sent to {email}", "success")
-                except Exception as exc:
-                    app_log.warning("Welcome-credentials email failed for %s (%s): %s", emp_id, email, exc, exc_info=True)
+            except Exception as exc:
+                app_log.warning("Welcome-credentials email failed for %s (%s): %s", emp_id, email, exc, exc_info=True)
     else:
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -1907,17 +1941,10 @@ def api_register_employee():
     cursor.close()
     db.close()
     if email:
-        _ecfg = get_email_config()
-        if _ecfg:
-            _login_url = employee_login_url()
-            _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
-                     f"<p>Employee ID: <strong>{emp_id}</strong><br>"
-                     f"Password: <strong>{init_pass}</strong></p>"
-                     f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
-            try:
-                send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
-            except Exception:
-                app_log.error("api_register_employee: welcome email failed", exc_info=True)
+        try:
+            _send_welcome_credentials_email(emp_id, name, email)
+        except Exception:
+            app_log.error("api_register_employee: welcome email failed", exc_info=True)
     return jsonify({"ok": True, "msg": f"Employee {name} registered."})
 
 
