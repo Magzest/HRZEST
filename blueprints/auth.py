@@ -19,7 +19,7 @@ from utils.auth import (
     _check_login_lockout, _record_login_failure, _clear_login_failures,
     admin_required, role_required, employee_required, employee_api_required,
     _get_failed_count, verify_turnstile, turnstile_enabled,
-    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE, HR_ROLE,
+    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, HR_ROLE,
     api_required,
 )
 from utils.helpers import tpath, get_company_settings, _audit, _db, _safe_app_url
@@ -161,24 +161,6 @@ def admin_login():
                 (identifier,)
             )
             admin_row = cursor.fetchone()
-        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
-            # SOC analyst accounts are deliberately a separate credential
-            # (blueprints/secops.py's /sp_admin/login) -- letting it also
-            # complete the regular admin login here would grant it a full
-            # admin_required session (payroll, tenant settings, company
-            # management, everything), which that dedicated, narrowly-scoped
-            # login exists specifically to avoid. Same generic error either
-            # way, no distinction leaked between "wrong role" and "wrong
-            # password". HR accounts use this same general login instead
-            # (see the is_active check and role='hr' redirect below) --
-            # role_required("admin") already scopes them away from
-            # admin-only pages, so a second gate here was redundant.
-            _record_login_failure(identifier)
-            return render_template(
-                "admin_login.html", co=co,
-                error="Invalid credentials. Check your ID and password.",
-                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
-            )
         if admin_row and check_password_hash(admin_row[0], password):
             if not admin_row[3]:
                 # Terminated account -- same generic error as a wrong
@@ -209,7 +191,6 @@ def admin_login():
             session["admin_username"] = identifier
             session["admin_role"] = admin_row[1]
             session["_session_created"] = time.time()
-            session["soc_step_up_until"] = time.time() + 600
             session.permanent = True
             sid = ensure_session_id(session)
             log_security_event(

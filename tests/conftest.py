@@ -54,7 +54,7 @@ from blueprints.webhooks import webhooks_bp
 from blueprints.seats import seats_bp
 from blueprints.auto_debit import auto_debit_bp
 from blueprints.platform_admin import platform_admin_bp
-from blueprints.secops import secops_bp
+from blueprints.honeypot_routes import honeypot_bp
 from blueprints.biometric import biometric_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
@@ -79,7 +79,7 @@ flask_app.register_blueprint(webhooks_bp)
 flask_app.register_blueprint(seats_bp)
 flask_app.register_blueprint(auto_debit_bp)
 flask_app.register_blueprint(platform_admin_bp)
-flask_app.register_blueprint(secops_bp)
+flask_app.register_blueprint(honeypot_bp)
 flask_app.register_blueprint(biometric_bp)
 
 # Mirror wsgi.py's WSGI-level tenant-prefix stripping so tests exercise the

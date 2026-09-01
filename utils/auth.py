@@ -514,41 +514,20 @@ def email_settings_step_up_clear():
     session.pop("email_2fa_verified_at", None)
 
 
-# ── SOC Analyst security dashboard step-up gate ───────────────────────────────
-# Deliberately a SEPARATE step-up flag from the Email Settings one above, even
-# though both ultimately check the same enrolled TOTP secret (utils/totp.py --
-# one MFA seed per admin account, reused across every step-up gate, matching
-# how a real authenticator app works: one enrollment, many uses). Passing the
-# Email Settings gate must not silently also unlock the SOC dashboard, and
-# vice versa -- each sensitive area gets its own proof-of-recent-verification,
-# not one that leaks scope to the others.
-#
-# Shorter window than Email Settings (10 min vs 15) because this gate sits in
-# front of security telemetry (who's compromised, who's locked out) rather
-# than a config form -- a smaller blast radius if a SOC analyst's unlocked tab
-# is left unattended, but still short enough not to force re-entering a code
-# on every click while actively triaging.
-SOC_ANALYST_ROLE = "soc_analyst"
-SOC_2FA_WINDOW_SEC = 10 * 60
-
 # HR accounts (created/managed via blueprints/admin_views.py's /hr_accounts
-# page) log in through the same general /login as admin, unlike
-# SOC_ANALYST_ROLE -- but role_required("admin") elsewhere still scopes
-# them to employees/attendance/leave/onboarding/performance/tickets/
-# documents, away from tenant/system settings, company management, and
-# analytics that a full admin session carries.
+# page) log in through the same general /login as admin -- but
+# role_required("admin") elsewhere still scopes them to employees/
+# attendance/leave/onboarding/performance/tickets/documents, away from
+# tenant/system settings, company management, and analytics that a full
+# admin session carries.
 HR_ROLE = "hr"
-
-
-def soc_step_up_refresh():
-    session["soc_2fa_verified_at"] = time.time()
 
 
 # ── Security Settings hub step-up gate ────────────────────────────────────────
 # Same time.time()-in-session step-up pattern as Email Settings, guarding the
 # consolidated "Security" tab in Settings (session timeout, audit log, MFA
-# status, SOC entry point, security posture -- all in one place, per the
-# row-wise hub requirement).
+# status, security posture -- all in one place, per the row-wise hub
+# requirement).
 #
 # This one has NO role restriction -- every admin can open this hub with just
 # their own TOTP code.
