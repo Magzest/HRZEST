@@ -83,6 +83,15 @@ export default function SeatsBillingScreen() {
     load();
   };
 
+  // Memoized so an unrelated re-render (e.g. `refreshing` toggling from a
+  // background pull-to-refresh) doesn't hand the WebView a new `source`
+  // object reference and risk it reloading /settings/seats mid-checkout.
+  // Called unconditionally, before the `loading` early return below --
+  // every hook in this component must run on every render regardless of
+  // `loading`, or React throws "Rendered more hooks than during the
+  // previous render" the moment `loading` flips from true to false.
+  const webviewSource = useMemo(() => (webviewUrl ? { uri: webviewUrl } : null), [webviewUrl]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -101,10 +110,6 @@ export default function SeatsBillingScreen() {
   const pct = isUnlimited ? 0 : cap > 0 ? Math.min(100, (employeeCount / cap) * 100) : 100;
   const autoDebit = status?.auto_debit;
   const autoDebitActive = autoDebit?.status === "active";
-  // Memoized so an unrelated re-render (e.g. `refreshing` toggling from a
-  // background pull-to-refresh) doesn't hand the WebView a new `source`
-  // object reference and risk it reloading /settings/seats mid-checkout.
-  const webviewSource = useMemo(() => (webviewUrl ? { uri: webviewUrl } : null), [webviewUrl]);
 
   return (
     <SafeAreaView style={styles.container}>

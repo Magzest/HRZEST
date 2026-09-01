@@ -2,6 +2,7 @@
 """Shared utility helpers used across multiple blueprints."""
 import os
 import re
+import base64
 import datetime
 import hashlib
 import threading
@@ -251,13 +252,45 @@ def encrypt_pii(value: str) -> str:
     return _fernet.encrypt(value.encode()).decode()
 
 
+def _looks_like_fernet_token(value: str) -> bool:
+    """True if `value` is at least shaped like a real Fernet token (right
+    base64 alphabet, right minimum length, right version byte) -- as
+    opposed to legacy plaintext written before PII encryption existed
+    (e.g. a bare "Female" or "1988-03-10" seeded by an old migration or a
+    test fixture), which decrypt_pii() must keep passing through
+    unchanged rather than flagging as a decryption failure."""
+    try:
+        raw = base64.urlsafe_b64decode(value.encode())
+    except Exception:
+        return False
+    # Fernet token = 1 version byte + 8 timestamp + 16 IV + >=16 ciphertext
+    # (AES-CBC pads to a full block even for empty input) + 32 HMAC = 73
+    # bytes minimum; version byte is always 0x80.
+    return len(raw) >= 73 and raw[0:1] == b"\x80"
+
+
 def decrypt_pii(value: str) -> str:
     if not value:
         return value
     try:
         return _fernet.decrypt(value.encode()).decode()
     except (_FernetInvalid, Exception):
-        return value
+        if not _looks_like_fernet_token(value):
+            # Legacy plaintext that was never encrypted in the first
+            # place -- not a failure, just pass it through as-is (existing
+            # behavior, relied on by pre-encryption data / test fixtures).
+            return value
+        # This IS shaped like real ciphertext but failed to decrypt --
+        # almost always ENCRYPTION_KEY having been rotated after this row
+        # was written, or corrupted data. Previously this fell through to
+        # returning the raw gAAAAAB... blob, rendered directly in the UI
+        # and indistinguishable from a template bug to whoever's looking
+        # at it. Log it (so a real key-rotation incident is actually
+        # visible) and return an unambiguous placeholder instead; the
+        # underlying ciphertext is unrecoverable without the original key
+        # either way, so there's nothing useful to show the caller.
+        app_log.warning("decrypt_pii: failed to decrypt a PII value (wrong/rotated ENCRYPTION_KEY or corrupted data) -- returning placeholder")
+        return "[unable to decrypt]"
 
 
 def decrypt_pii_date(value):

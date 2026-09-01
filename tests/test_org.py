@@ -177,6 +177,26 @@ class TestGatedSignupFlow:
 
     def _start_application(self, client, monkeypatch, **overrides):
         import blueprints.org as org_module
+        # org.py has an APP_ENV=development convenience branch (added
+        # 2026-09-01) that skips the OTP screen entirely for local
+        # browser testing without real SMTP -- conftest.py forces
+        # APP_ENV=development for the whole suite, so without this
+        # override every test in this class would silently take that
+        # bypass instead of exercising the real OTP flow these tests are
+        # actually verifying (including OTP-lockout, which has nothing to
+        # lock out if the screen never appears). Scoped to just this
+        # request via monkeypatch so the dev bypass itself stays intact
+        # for its real purpose outside the test suite.
+        monkeypatch.setenv("APP_ENV", "production")
+        # _scan_for_malware() (utils/helpers.py) also reads APP_ENV to decide
+        # whether to fail open or closed when ClamAV is unreachable -- forcing
+        # "production" above for the OTP gate would otherwise also flip
+        # malware scanning to fail-closed, and there's no local ClamAV to
+        # reach in this test environment. _MALWARE_SCAN_ENABLED is read once
+        # at import time (not per-request like APP_ENV), so it has to be
+        # patched directly rather than via monkeypatch.setenv.
+        import utils.helpers as helpers_module
+        monkeypatch.setattr(helpers_module, "_MALWARE_SCAN_ENABLED", False)
         captured = {}
         monkeypatch.setattr(
             org_module, "send_org_signup_otp_email",
