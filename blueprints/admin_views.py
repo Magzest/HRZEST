@@ -153,6 +153,10 @@ def admin():
         ob_active = ob_completed = ob_overdue = 0
         ob_overdue_list = []
 
+    cursor.execute("SELECT email FROM admin_users WHERE username=%s", (session.get("admin_username"),))
+    _admin_row = cursor.fetchone()
+    admin_recovery_email = _admin_row[0] if _admin_row else ""
+
     cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active FROM break_config ORDER BY break_time")
     break_rows = cursor.fetchall()
     breaks_display = []
@@ -200,6 +204,7 @@ def admin():
                            ob_completed=ob_completed,
                            ob_overdue=ob_overdue,
                            ob_overdue_list=ob_overdue_list,
+                           admin_recovery_email=admin_recovery_email,
                            )
 
 
