@@ -44,7 +44,7 @@ employee-attendance/
 │   ├── auth.py                 # Password hashing (bcrypt) & lockout mechanisms
 │   ├── clamav.py               # Uploaded document malware scanner
 │   ├── device_risk.py          # Network & device risk posture evaluation
-│   ├── email.py                # SMTP email dispatcher (Brevo / SendGrid)
+│   ├── email.py                # SMTP email dispatcher (any provider)
 │   ├── geo.py                  # Geofenced check-in distance math (Haversine)
 │   ├── helpers.py              # Cryptographic helper functions & DB context wrappers
 │   ├── mfa.py                  # Multi-factor TOTP authentication logic

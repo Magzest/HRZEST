@@ -154,7 +154,7 @@ All variables are documented with examples in [.env.example](.env.example).
 | `OFFICE_LAT` / `OFFICE_LON` | No | — | GPS geo-fence centre |
 | `APP_URL` | No | *(request host)* | Trusted base URL for email links |
 | `ALLOWED_ORIGINS` | No | `*` | CORS whitelist — set your domain in production |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | No | — | Brevo (or any) SMTP for email delivery |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | No | — | SMTP for email delivery (any provider) |
 | `ANTHROPIC_API_KEY` | No | *(disabled)* | Enables the employee portal's AI chat widget |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | No | *(disabled)* | CAPTCHA challenge on `/admin_login` after 2 failed attempts |
 
