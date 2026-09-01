@@ -143,12 +143,17 @@ def wipe_uploads(dry_run):
                 continue
             if os.path.isdir(path):
                 shutil.rmtree(path, ignore_errors=True)
+                print(f"  removed {os.path.join(rel, name)}")
             else:
                 try:
                     os.remove(path)
-                except OSError:
-                    pass
-            print(f"  removed {os.path.join(rel, name)}")
+                    print(f"  removed {os.path.join(rel, name)}")
+                except OSError as exc:
+                    # This unconditionally printed "removed" before, even
+                    # on failure -- a bad look for a script whose entire
+                    # job is convincing an operator the wipe actually
+                    # happened.
+                    print(f"  FAILED to remove {os.path.join(rel, name)}: {exc}")
 
 
 def main():

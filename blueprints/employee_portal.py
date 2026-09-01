@@ -1008,8 +1008,13 @@ def api_employee_checkin():
                 cursor.close()
                 db.close()
                 return jsonify({"ok": False, "msg": "Offline punch too old (>24 h). Rejected."}), 400
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            # Deliberate fallback, not a bug being hidden: an unparseable
+            # client-supplied offline-punch timestamp just means `now`
+            # (already set above) is used instead -- still worth a trace
+            # for diagnosing a client that's persistently sending malformed
+            # timestamps.
+            app_log.debug("Unparseable offline-punch punched_at=%r: %s", punched_at_str, exc)
 
     today = now.date()
     current_time = now.time()
@@ -1311,8 +1316,11 @@ def api_employee_qr_face_checkin():
             face_path = os.path.join(face_dir, f"{employee_id}_{ts}.jpg")
             img = _PILImage.open(face_photo.stream).convert("RGB")
             img.save(face_path, "JPEG", quality=80)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Best-effort audit-log attachment -- must not block attendance
+            # marking, but silently missing the face-log photo is worth
+            # knowing about.
+            app_log.warning("Face-log photo save failed for %s: %s", employee_id, exc, exc_info=True)
 
     now = datetime.datetime.now()
     today = now.date()

@@ -149,8 +149,8 @@ def import_indian_holidays():
                 "INSERT INTO holidays (date, name) VALUES (%s, %s) ON CONFLICT (date) DO NOTHING",
                 (date_obj, name)
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Import Indian holiday '%s' (%s) failed: %s", name, date_obj, exc, exc_info=True)
     db.commit()
     cursor.close()
     db.close()

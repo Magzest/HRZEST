@@ -151,8 +151,11 @@ def add_shift():
                 (name, start, half, end)
             )
         db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Previously silent -- the admin got redirected back with no
+        # indication the shift was never actually created.
+        app_log.warning("create_shift failed for '%s': %s", name, exc, exc_info=True)
+        flash("Could not create shift. Please try again.", "error")
     cursor.close()
     db.close()
     return redirect(dest)
@@ -638,8 +641,10 @@ def employee_attendance_detail(emp_id, year, month):
             (emp_id, datetime.date(year, month, 1), datetime.date(year, month, last_day))
         )
         locked_dates = {r[0] for r in cursor.fetchall()}
-    except Exception:
-        pass
+    except Exception as exc:
+        # debug, not warning: expected and harmless on an older tenant
+        # schema that predates the attendance_lockouts table.
+        app_log.debug("attendance_lockouts lookup failed for %s (%s/%s): %s", emp_id, year, month, exc)
 
     days = []
     full_days = half_days = late_days = absent = 0
@@ -857,8 +862,8 @@ def bulk_mark_attendance():
             "SELECT employee_id FROM attendance_lockouts WHERE date=%s AND locked=1", (date_obj,)
         )
         locked_employee_ids = {r[0] for r in cursor.fetchall()}
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("attendance_lockouts lookup failed for date=%s: %s", date_obj, exc)
 
     # Monthly summary for the selected date's month
     cursor.execute(
@@ -881,8 +886,10 @@ def bulk_mark_attendance():
     pending_tickets = 0
     try:
         pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, tickets_open_only=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Counts stay at 0 -- misleadingly implies nothing pending, worth
+        # knowing since it directly affects what admins see on this page.
+        app_log.warning("get_pending_action_counts failed: %s", exc, exc_info=True)
     cursor.close()
     db.close()
 

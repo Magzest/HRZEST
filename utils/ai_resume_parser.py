@@ -21,8 +21,8 @@ def _extract_text_from_bytes(file_bytes, filename=""):
         text = file_bytes.decode("utf-8", errors="ignore")
         if text.strip():
             return text
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("Resume plain-text decode fallback failed for %s: %s", filename, exc)
 
     # Basic PDF stream extraction fallback
     if b"%PDF" in file_bytes[:10]:

@@ -52,8 +52,8 @@ def csp_report():
                 "source_file": violation.get("source-file", ""),
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("Malformed CSP violation report: %s", exc)
     return "", 204
 
 
@@ -561,12 +561,12 @@ def api_employee_signup():
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as _close_exc:
+                app_log.debug("api_employee_signup error-path cursor.close() failed: %s", _close_exc)
         if db:
             try:
                 db.close()
-            except Exception:
-                pass
+            except Exception as _close_exc:
+                app_log.debug("api_employee_signup error-path db.close() failed: %s", _close_exc)
         return jsonify({"ok": False, "msg": f"Failed to register employee: {exc}"}), 500
 

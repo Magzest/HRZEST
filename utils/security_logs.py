@@ -187,8 +187,8 @@ def fetch_threat_logs(filter_category="all", severity=None, search_ip=None, user
     try:
         cur.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("security_logs cursor/db close failed: %s", exc)
 
     # Sort combined logs by timestamp descending
     logs.sort(key=lambda x: str(x.get("raw_timestamp") or x.get("timestamp")), reverse=True)

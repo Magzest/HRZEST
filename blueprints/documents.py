@@ -4,7 +4,7 @@ import os
 import uuid
 import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, send_from_directory, jsonify, g as _g
-from extensions import app
+from extensions import app, app_log
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, enforce_ownership, api_required, api_role_required, employee_api_required
@@ -120,8 +120,11 @@ def delete_document(did):
         fpath = os.path.join(app.root_path, 'static', 'employee_docs', emp_id, stored_name)
         try:
             os.remove(fpath)
-        except Exception:
-            pass
+        except Exception as exc:
+            # DB row still gets deleted below -- an orphaned file left on
+            # disk is a minor leak, not worth blocking the delete over, but
+            # worth knowing about since these silently accumulate.
+            app_log.warning("Could not remove document file %s: %s", fpath, exc)
         cursor.execute("DELETE FROM employee_documents WHERE id=%s", (did,))
         db.commit()
     cursor.close()
@@ -202,8 +205,8 @@ def delete_my_document(did):
         fpath = os.path.join(app.root_path, 'static', 'employee_docs', emp_id, row[1])
         try:
             os.remove(fpath)
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Could not remove document file %s: %s", fpath, exc)
         cursor.execute("DELETE FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
         db.commit()
     cursor.close()
@@ -311,8 +314,8 @@ def api_documents_delete(did):
     fpath = os.path.join(app.root_path, "static", "employee_docs", emp_id, stored_name)
     try:
         os.remove(fpath)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Could not remove document file %s: %s", fpath, exc)
     cursor.execute("DELETE FROM employee_documents WHERE id=%s", (did,))
     db.commit()
     cursor.close()
@@ -383,8 +386,8 @@ def api_my_documents_delete(did):
     fpath = os.path.join(app.root_path, "static", "employee_docs", emp_id, row[0])
     try:
         os.remove(fpath)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Could not remove document file %s: %s", fpath, exc)
     cursor.execute("DELETE FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
     db.commit()
     cursor.close()

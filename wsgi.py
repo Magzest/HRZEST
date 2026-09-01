@@ -17,6 +17,10 @@ import os
 import sys
 
 # ── Encoding fix for Windows ──────────────────────────────────────────────────
+# Runs before `from extensions import app_log` below, so there's no logger
+# available yet to report a failure here to -- harmless either way (fails
+# only on a stream that doesn't support .reconfigure(), e.g. Python <3.7 or
+# a fully redirected/piped stdout that's already fixed-encoding).
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")

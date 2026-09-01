@@ -131,8 +131,8 @@ def build_employee_context(cursor, emp_id):
         if leave_lines:
             lines.append(f"Leave balances ({today.year}):")
             lines.extend(leave_lines)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("AI assistant context: leave balances lookup failed for %s: %s", emp_id, exc)
 
     try:
         cursor.execute(
@@ -141,8 +141,8 @@ def build_employee_context(cursor, emp_id):
         )
         pending = cursor.fetchone()[0] or 0
         lines.append(f"Pending leave requests: {pending}")
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("AI assistant context: pending leave count failed for %s: %s", emp_id, exc)
 
     try:
         cursor.execute("""
@@ -154,8 +154,8 @@ def build_employee_context(cursor, emp_id):
         if att_lines:
             lines.append("Recent attendance (most recent first):")
             lines.extend(att_lines)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("AI assistant context: recent attendance lookup failed for %s: %s", emp_id, exc)
 
     try:
         cursor.execute(
@@ -166,8 +166,8 @@ def build_employee_context(cursor, emp_id):
         if hol_lines:
             lines.append("Upcoming holidays:")
             lines.extend(hol_lines)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("AI assistant context: upcoming holidays lookup failed: %s", exc)
 
     return "\n".join(lines)
 

@@ -4,6 +4,7 @@ import datetime
 import calendar
 import math
 from database import get_db_connection
+from extensions import app_log
 import utils.config as cfg
 
 
@@ -162,8 +163,8 @@ def detect_overtime(employee_id, date, logout_time):
         db.commit()
         cursor.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Overtime record failed for %s on %s: %s", employee_id, date, exc, exc_info=True)
 
 
 def get_working_days(year, month):
@@ -222,8 +223,12 @@ def check_attendance_lockout(employee_id, date):
         db.close()
         if row and row[0]:
             return True, row[1] or "Attendance marking is locked for today. Contact your admin."
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fails open (treated as not-locked) -- acceptable since this is a
+        # UX guard against repeated failed check-ins, not the actual
+        # authentication check itself, but still worth logging since a
+        # lockout silently not being enforced is worth knowing about.
+        app_log.warning("check_attendance_lockout failed for %s on %s: %s", employee_id, date, exc, exc_info=True)
     return False, ""
 
 
@@ -258,8 +263,8 @@ def record_attendance_failure(employee_id, date, reason):
             db.commit()
         cursor.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("record_attendance_failure failed for %s on %s: %s", employee_id, date, exc, exc_info=True)
 
 
 def clear_attendance_lockout(employee_id, date, admin_username=None):
@@ -277,5 +282,5 @@ def clear_attendance_lockout(employee_id, date, admin_username=None):
         db.commit()
         cursor.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("clear_attendance_lockout failed for %s on %s: %s", employee_id, date, exc, exc_info=True)

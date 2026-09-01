@@ -9,6 +9,7 @@ bootstrap) out of order. Neither function here touches the DB directly
 extraction is safe.
 """
 import datetime
+from extensions import app_log
 
 
 def assign_leave_balances_for_employee(cursor, employee_id, year=None):
@@ -82,11 +83,14 @@ def get_indian_holidays(year):
     for m, d, name in fixed:
         try:
             result.append((datetime.date(year, m, d), name))
-        except ValueError:
-            pass
+        except ValueError as exc:
+            # These are hand-typed literal (month, day) tuples above --
+            # a ValueError here means a typo (e.g. day=31 in February),
+            # not a runtime data problem, but still worth surfacing.
+            app_log.debug("get_indian_holidays: invalid fixed-date entry %r for year %s: %s", (m, d, name), year, exc)
     for m, d, name in variable_by_year.get(year, []):
         try:
             result.append((datetime.date(year, m, d), name))
-        except ValueError:
-            pass
+        except ValueError as exc:
+            app_log.debug("get_indian_holidays: invalid variable-date entry %r for year %s: %s", (m, d, name), year, exc)
     return sorted(result, key=lambda x: x[0])

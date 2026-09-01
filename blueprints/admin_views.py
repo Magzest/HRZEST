@@ -1394,8 +1394,8 @@ def _delete_company_image(rel_path):
         return
     try:
         os.remove(os.path.join(app.root_path, "static", rel_path))
-    except OSError:
-        pass
+    except OSError as exc:
+        app_log.warning("Could not remove company image file %s: %s", rel_path, exc)
 
 
 @admin_views_bp.route("/companies/add", methods=["POST"])
@@ -1552,15 +1552,19 @@ def edit_company(cid):
                 old_ids = [p[0] for p in to_rename]
                 new_ids = [p[1] for p in to_rename]
                 for tbl in related_tables:
-                    try:
-                        cursor.execute(
-                            f"UPDATE {tbl} AS t SET employee_id = m.new_eid "  # nosec B608
-                            f"FROM (SELECT * FROM UNNEST(%s::text[], %s::text[]) AS m(old_eid, new_eid)) AS m "
-                            f"WHERE t.employee_id = m.old_eid",
-                            (old_ids, new_ids)
-                        )
-                    except Exception:
-                        pass
+                    # No inner try/except here on purpose: a failure partway
+                    # through this per-table loop must propagate to the
+                    # outer except below (which rolls the whole rename back
+                    # and flashes "no changes were made") -- swallowing it
+                    # locally previously let some related tables keep the
+                    # old employee_id while others got the new one, leaving
+                    # the rename applied inconsistently across tables.
+                    cursor.execute(
+                        f"UPDATE {tbl} AS t SET employee_id = m.new_eid "  # nosec B608 -- tbl is one of the fixed related_tables literals above, never user input
+                        f"FROM (SELECT * FROM UNNEST(%s::text[], %s::text[]) AS m(old_eid, new_eid)) AS m "
+                        f"WHERE t.employee_id = m.old_eid",
+                        (old_ids, new_ids)
+                    )
 
                 for old_eid, new_eid in to_rename:
                     new_img = os.path.join(app.config["UPLOAD_FOLDER"], new_eid + ".jpg")
@@ -1589,13 +1593,13 @@ def edit_company(cid):
         if os.path.exists(old_img):
             try:
                 os.rename(old_img, new_img)
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("Could not rename employee photo %s -> %s during company edit: %s", old_img, new_img, exc)
         if os.path.exists(old_qr):
             try:
                 os.rename(old_qr, new_qr)
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("Could not rename employee QR %s -> %s during company edit: %s", old_qr, new_qr, exc)
 
     if logo_file and logo_file.filename:
         new_logo_path = _save_company_image(logo_file, cid, "logo")
@@ -1789,8 +1793,8 @@ def id_card_template_save_positions(cid):
         if "font_size" in box:
             try:
                 entry["font_size"] = max(6, min(72, int(box["font_size"])))
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as exc:
+                app_log.debug("ID card template: invalid font_size %r ignored: %s", box.get("font_size"), exc)
         if box.get("bold"):
             entry["bold"] = True
         if box.get("square"):

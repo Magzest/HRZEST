@@ -83,8 +83,12 @@ class _PooledConnection:
         # every Python implementation), just a backstop for the common case.
         try:
             self.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # debug, not warning: __del__ can run during interpreter
+            # shutdown when logging handlers may already be torn down --
+            # this is a documented backstop for the uncommon case anyway,
+            # not a signal something is actually wrong in the normal path.
+            _log.debug("_PooledConnection.__del__ close failed: %s", exc)
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
@@ -155,8 +159,8 @@ class _SqliteCursor:
     def close(self):
         try:
             self._cur.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("_SqliteCursor.close failed: %s", exc)
 
 _SQLITE_FALLBACK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance", "local_fallback.db")
 
@@ -184,8 +188,8 @@ class _SqlitePool:
         self.conn = _SqliteConnWrapper()
         try:
             _seed_sqlite_db(self.conn.conn)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("_seed_sqlite_db failed: %s", exc)
     def getconn(self):
         return self.conn
     def putconn(self, conn):

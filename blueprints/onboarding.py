@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
 from utils.helpers import tpath, get_company_settings, _safe_app_url, _db
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async
-from extensions import limiter
+from extensions import limiter, app_log
 
 onboarding_bp = Blueprint("onboarding", __name__)
 
@@ -257,8 +257,8 @@ def bulk_assign_onboarding():
                     _html = (f"<p>Hi <strong>{_er[0]}</strong>,</p>"
                              f"<p>A new onboarding checklist <strong>'{_tr[0]}'</strong> has been assigned to you. Please complete all tasks by <strong>{due_date}</strong>.</p>")
                     send_email_async(_er[1], f"New Onboarding Checklist -- {_tr[0]}", _html, _ecfg)
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Onboarding-assigned notification email failed for %s: %s", emp_id, exc, exc_info=True)
     db.commit()
     cursor.close()
     db.close()
@@ -464,8 +464,8 @@ def onboarding_assign():
                           VALUES (%s, 'Onboarding Started', %s, 'info')""",
                        (emp_id, f"Your onboarding checklist '{tname}' has been assigned. Please complete all tasks."))
         db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("In-app onboarding-started notification failed for %s: %s", emp_id, exc, exc_info=True)
 
     cursor.execute("SELECT name, email FROM employees WHERE employee_id=%s", (emp_id,))
     _er = cursor.fetchone()
@@ -483,8 +483,8 @@ def onboarding_assign():
                             f"<p>Due date: <strong>{due_date or 'Not set'}</strong></p>"
                             f"<p>Please log in to your employee portal and complete all tasks on time.</p>")
                 send_email_async(emp_email, f"New Onboarding Checklist Assigned -- {tname}", _ob_html, _ecfg)
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("Onboarding-assigned email failed for %s: %s", emp_id, exc, exc_info=True)
     cursor.close()
     db.close()
     flash(f"Onboarding assigned to {emp_name}.", "success")
@@ -1402,8 +1402,8 @@ def my_onboarding_task_done():
             else:
                 _msg += f"<p>{remaining} task(s) remaining.</p>"
             send_email_async(admin_email, f"Onboarding Task Done -- {emp_name_ob}", _msg, _ecfg)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Onboarding-task-done admin notification failed for %s: %s", emp_id, exc, exc_info=True)
 
     cursor.close()
     db.close()
@@ -1529,8 +1529,8 @@ def api_my_onboarding_task_done(task_id):
             else:
                 _msg += f"<p>{remaining} task(s) remaining.</p>"
             send_email_async(admin_email, f"Onboarding Task Done -- {emp_name_ob}", _msg, _ecfg)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Onboarding-task-done admin notification failed for %s: %s", emp_id, exc, exc_info=True)
 
     cursor.close()
     db.close()

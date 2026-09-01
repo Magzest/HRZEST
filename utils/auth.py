@@ -135,8 +135,10 @@ def _check_login_lockout(identifier: str, attempt_type: str = "admin"):
             row = cur.fetchone()
         if row and row[0] and row[0] > datetime.datetime.now():
             return True, row[0].strftime("%H:%M")
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fails open (treated as not-locked) -- a lockout check that can't
+        # run is exactly the kind of failure that should never be silent.
+        app_log.warning("_check_login_lockout failed for %s (%s): %s", _mask_identifier(identifier), attempt_type, exc, exc_info=True)
     return False, None
 
 
@@ -194,8 +196,11 @@ def _record_login_failure_db(identifier: str, attempt_type: str = "admin"):
                     identifier=_mask_identifier(identifier), attempt_type=attempt_type,
                     failed_count=row[0], locked_until=lockout_until.isoformat(),
                 )
-    except Exception:
-        pass
+    except Exception as exc:
+        # This DB write is what actually enforces lockout -- a silent
+        # failure here means brute-force protection isn't tracking
+        # attempts at all for this identifier.
+        app_log.warning("_record_login_failure_db failed for %s (%s): %s", _mask_identifier(identifier), attempt_type, exc, exc_info=True)
 
 
 def _clear_login_failures(identifier: str, attempt_type: str = "admin"):
@@ -221,8 +226,10 @@ def _clear_login_failures_db(identifier: str, attempt_type: str = "admin"):
                 (identifier, attempt_type)
             )
             conn.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fails safe (stale failure count just stays, doesn't unlock
+        # anything it shouldn't) but still worth knowing about.
+        app_log.warning("_clear_login_failures_db failed for %s (%s): %s", _mask_identifier(identifier), attempt_type, exc, exc_info=True)
 
 
 # ── Session kill-switch enforcement ───────────────────────────────────────────

@@ -54,8 +54,12 @@ def get_email_config():
                 "host": row[0], "port": row[1], "user": row[2], "password": decrypt_pii(row[3]),
                 "from_name": row[4], "from_email": row[5] or row[2],
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        # See the docstring above: this exact silent swallow used to be
+        # the reason a DB-configured SMTP setup could go unused with zero
+        # indication why -- now at least surfaced before falling back to
+        # .env config.
+        app_log.warning("get_email_config: DB lookup failed, falling back to .env config: %s", exc, exc_info=True)
     smtp_host = os.environ.get("SMTP_HOST", "")
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS", "")

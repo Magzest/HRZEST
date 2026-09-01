@@ -269,8 +269,8 @@ def _touch_device_last_seen(device_serial):
         conn.commit()
         cur.close()
         conn.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("Could not update last_seen_at for biometric device %s: %s", device_serial, exc)
 
 
 @biometric_bp.route("/iclock/cdata", methods=["GET", "POST"])

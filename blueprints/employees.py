@@ -825,8 +825,11 @@ def add_employee_page():
             try:
                 os.rename(original_filepath, new_filepath)
                 original_filepath = new_filepath
-            except OSError:
-                pass
+            except OSError as exc:
+                # Photo stays under the pre-retry emp_id filename -- not
+                # fatal to registration, but worth knowing since it means
+                # the employee's photo path may not match their final ID.
+                app_log.warning("Could not rename employee photo %s -> %s: %s", original_filepath, new_filepath, exc)
         filepath = new_filepath
         qr_path = generate_qr(emp_id)
         try:
@@ -928,8 +931,8 @@ def add_employee_page():
                 try:
                     send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
                     flash(f"Credentials email sent to {email}", "success")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    app_log.warning("Welcome-credentials email failed for %s (%s): %s", emp_id, email, exc, exc_info=True)
     else:
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -1132,8 +1135,28 @@ def _idc_blood_drop(draw, x, y, w, h, color):
 
 
 def _idc_font(size, bold=False):
+    """Resolves a TrueType font for ID-card rendering. The bundled
+    static/fonts/DejaVuSans[-Bold].ttf (freely-licensed, see
+    static/fonts/LICENSE_DEJAVU.txt) is tried FIRST and is the only path
+    guaranteed to exist regardless of host OS -- the old version of this
+    function only ever looked at OS-installed font locations
+    (C:/Windows/Fonts/... on Windows, nothing bundled), which works by
+    accident on a dev machine with Windows/Office installed but silently
+    degrades to PIL's tiny built-in bitmap font on a minimal Linux
+    container that has no fontconfig/dejavu packages -- ID cards would
+    render with visibly different, worse typography in production than
+    whatever was tested locally. The OS-path candidates are kept below
+    only as a secondary preference for a nicer-looking installed font
+    when one happens to be present; they are never required."""
     from PIL import ImageFont
-    candidates = (
+    # app (the real Flask object, imported at module level above), not
+    # current_app -- this is called from tests/test_id_card_templates.py's
+    # rendering tests with no active request/app context, where
+    # current_app's LocalProxy would raise "Working outside of
+    # application context" on first attribute access.
+    bundled = os.path.join(app.root_path, "static", "fonts",
+                            "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
+    os_candidates = (
         ["C:/Windows/Fonts/segoeuib.ttf",
          "C:/Windows/Fonts/arialbd.ttf",
          "C:/Windows/Fonts/calibrib.ttf",
@@ -1146,11 +1169,17 @@ def _idc_font(size, bold=False):
          "/System/Library/Fonts/Supplemental/Arial.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
     )
-    for p in candidates:
+    for p in [bundled] + os_candidates:
         try:
             return ImageFont.truetype(p, size)
         except OSError:
-            pass
+            continue
+    # Reaching here means even the bundled static/fonts/DejaVuSans*.ttf
+    # couldn't be loaded (missing/corrupted install) -- ID cards will
+    # render with PIL's tiny built-in bitmap font, a real visual
+    # regression worth flagging rather than discovering from a support
+    # ticket about ugly ID cards.
+    app_log.warning("_idc_font: no TrueType font resolved (bundled path=%s) -- falling back to PIL's bitmap default", bundled)
     return ImageFont.load_default()
 
 
@@ -1483,8 +1512,11 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
         fd.rounded_rectangle([(qr_x - 6, qr_y - 6), (qr_x + QS_SMALL + 6, qr_y + QS_SMALL + 6)], radius=6, fill=_IDC_WHITE)
         qr_img = Image.open(qr_path).convert("RGB").resize((QS_SMALL, QS_SMALL), Image.LANCZOS)
         front.paste(qr_img, (qr_x, qr_y))
-    except Exception:
-        pass
+    except Exception as exc:
+        # Card still renders without the small front-face QR (the
+        # full-size one on the back is unaffected) -- not fatal, but a
+        # visibly missing QR is worth a trace when someone reports it.
+        app_log.warning("ID card front-QR paste failed for %s: %s", emp_id, exc, exc_info=True)
 
     fd.rectangle([(0, CH - 60), (CW, CH)], fill=_IDC_BLUE)
     fd.rectangle([(0, CH - 62), (CW, CH - 60)], fill=_IDC_GOLD)
@@ -1658,8 +1690,8 @@ def _render_custom_side(image_path, fields, side, emp_id, row, logo_path, compan
                     else:
                         draw.rectangle([(x, y), (x + w, y + h)], fill=bg)
                         img.paste(fitted, (x + off_x, y + off_y), fitted)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    app_log.warning("ID card custom-template logo paste failed for %s: %s", emp_id, exc, exc_info=True)
         elif key == "qr":
             qr_path = os.path.join("static", "qrcodes", emp_id + ".png")
             if not os.path.exists(qr_path):
@@ -1667,8 +1699,8 @@ def _render_custom_side(image_path, fields, side, emp_id, row, logo_path, compan
             try:
                 qr_img = Image.open(qr_path).convert("RGB").resize((w, h), Image.LANCZOS)
                 img.paste(qr_img, (x, y))
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("ID card custom-template QR paste failed for %s: %s", emp_id, exc, exc_info=True)
         elif key in _ID_CARD_TEXT_FIELDS:
             font_size = box.get("font_size", 14)
             bg = _idc_parse_color(box.get("bg_color"), None) or _idc_box_bg_color(original, (x, y, w, h))

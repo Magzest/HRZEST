@@ -920,8 +920,8 @@ def webauthn_verify_challenge():
         try:
             cur.close()
             db.close()
-        except Exception:
-            pass
+        except Exception as _close_exc:
+            app_log.debug("WebAuthn auth failure cleanup (cursor/db close) also failed: %s", _close_exc)
         app_log.warning("WebAuthn authentication verification failed for emp_id=%s: %s",
                         emp_id or "(passkey mode)", e, exc_info=True)
         return jsonify({"ok": False, "msg": f"Verification failed: {e}"}), 401
@@ -940,8 +940,9 @@ def webauthn_verify_challenge():
             (verified.new_sign_count, emp_id)
         )
         db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Persisting WebAuthn sign_count failed for %s (anti-clone bookkeeping degraded): %s",
+                        emp_id, exc, exc_info=True)
     finally:
         cur.close()
         db.close()
