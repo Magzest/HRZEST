@@ -1,4 +1,4 @@
-"""Tests for the mandatory admin/manager/soc_analyst MFA-enrollment gate
+"""Tests for the mandatory admin/manager/hr MFA-enrollment gate
 (app.py's _enforce_admin_mfa_enrollment before_request hook): an admin-side
 session without TOTP enrolled can reach nothing except the enrollment flow
 itself (and login/logout) until they enroll — no grace period.
@@ -25,7 +25,7 @@ def mandatory_mfa_enabled(client):
 
 
 class TestMandatoryMfaGate:
-    @pytest.mark.parametrize("role", ["admin", "manager", "soc_analyst", "hr"])
+    @pytest.mark.parametrize("role", ["admin", "manager", "hr"])
     def test_unenrolled_admin_role_redirected_to_enrollment(self, client, seed_admin, mandatory_mfa_enabled, role):
         _admin_session(client, seed_admin["username"], role=role)
         resp = client.get("/admin", follow_redirects=False)

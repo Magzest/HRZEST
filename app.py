@@ -3632,9 +3632,48 @@ if __name__ == "__main__":
     # threaded by default -- without this, one open stream blocks every
     # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
+        # app.run(..., ssl_context=(...)) wraps the *listening* socket
+        # (Werkzeug's serving.py), so every TLS handshake runs synchronously
+        # inside the single accept() loop, before threaded=True's per-
+        # connection threading ever kicks in. A client that completes the
+        # TCP connect but stalls or never sends its ClientHello (a browser's
+        # abandoned speculative/prefetch connection is enough) leaves that
+        # accept() call blocked forever -- wedging the loop and freezing the
+        # *entire* server for every subsequent request, not just that one
+        # connection: process stays alive and CPU-idle, but even /healthz
+        # times out. run_dev.py hit and fixed this exact freeze; ported here
+        # so `python app.py` doesn't carry the same live bug -- the TLS wrap
+        # is deferred into finish_request(), which always runs inside the
+        # freshly spawned per-connection worker thread, so a stalled
+        # handshake only ever ties up its own disposable thread.
+        import ssl as _ssl
+        from werkzeug.serving import ThreadedWSGIServer, load_ssl_context
+
         print("🔒  SSL cert found -- starting on https://0.0.0.0:5000")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
-                ssl_context=(_cert, _key), request_handler=_QuietRequestHandler)
+        _tls_ctx = load_ssl_context(_cert, _key)
+
+        class _DeferredHandshakeServer(ThreadedWSGIServer):
+            def finish_request(self, request, client_address):
+                request.settimeout(30)
+                try:
+                    request = _tls_ctx.wrap_socket(request, server_side=True)
+                except (_ssl.SSLError, OSError):
+                    request.close()
+                    return
+                super().finish_request(request, client_address)
+
+        _srv = _DeferredHandshakeServer("0.0.0.0", 5000, app, handler=_QuietRequestHandler,
+                                         ssl_context=None)
+        # Socket itself stays unwrapped (see finish_request above); this
+        # attribute only drives wsgi.url_scheme detection and SSL-error-log
+        # suppression elsewhere in werkzeug/serving.py, both of which still
+        # need to know this is actually an HTTPS server.
+        _srv.ssl_context = _tls_ctx
+        _srv.log_startup()
+        try:
+            _srv.serve_forever()
+        except KeyboardInterrupt:
+            pass
     else:
         print("⚠   No cert.pem / key.pem -- starting on http://0.0.0.0:5000")
         print("    Fingerprint / WebAuthn requires HTTPS. Run: python generate_cert.py")
