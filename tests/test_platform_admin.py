@@ -119,30 +119,43 @@ class TestLoginFlow:
         assert resp.status_code == 200
         assert b"Invalid credentials." in resp.data
 
-    def test_correct_password_redirects_to_mfa_verify(self, client, platform_admin_row, monkeypatch):
+    def test_correct_password_renders_mfa_step_on_same_page(self, client, platform_admin_row, monkeypatch):
+        # Merged single-page flow: credentials POST re-renders /super_admin/login
+        # in its step-2 (OTP) state instead of redirecting to a separate page.
         captured = self._capture_otp(monkeypatch)
         resp = client.post("/super_admin/login", data={
             "username": self.LOGIN_USERNAME, "password": self.LOGIN_PASSWORD,
         }, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/mfa_verify"
+        assert resp.status_code == 200
+        assert b"Check Your Email" in resp.data
         assert captured.get("otp"), "MFA OTP email was never 'sent'"
         with client.session_transaction() as sess:
             assert sess.get("platform_mfa_pending") is True
             assert sess.get("platform_mfa_user") == self.LOGIN_USERNAME
             assert not sess.get("platform_admin_logged_in")
 
-    def test_mfa_verify_without_pending_session_redirects_to_login(self, client):
-        resp = client.get("/super_admin/mfa_verify", follow_redirects=False)
+    def test_login_without_pending_session_shows_credentials_step(self, client):
+        resp = client.get("/super_admin/login", follow_redirects=False)
+        assert resp.status_code == 200
+        assert b"Check Your Email" not in resp.data
+
+    def test_restart_query_param_clears_pending_mfa_session(self, client, platform_admin_row, monkeypatch):
+        self._capture_otp(monkeypatch)
+        client.post("/super_admin/login", data={
+            "username": self.LOGIN_USERNAME, "password": self.LOGIN_PASSWORD,
+        })
+        resp = client.get("/super_admin/login?restart=1", follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
+        with client.session_transaction() as sess:
+            assert not sess.get("platform_mfa_pending")
 
     def test_mfa_verify_wrong_code_rejected(self, client, platform_admin_row, monkeypatch):
         self._capture_otp(monkeypatch)
         client.post("/super_admin/login", data={
             "username": self.LOGIN_USERNAME, "password": self.LOGIN_PASSWORD,
         })
-        resp = client.post("/super_admin/mfa_verify", data={"otp_code": "000000"})
+        resp = client.post("/super_admin/login", data={"otp_code": "000000"})
         assert resp.status_code == 200
         assert b"Invalid verification code." in resp.data
         with client.session_transaction() as sess:
@@ -153,7 +166,7 @@ class TestLoginFlow:
         client.post("/super_admin/login", data={
             "username": self.LOGIN_USERNAME, "password": self.LOGIN_PASSWORD,
         })
-        resp = client.post("/super_admin/mfa_verify", data={"otp_code": captured["otp"]}, follow_redirects=False)
+        resp = client.post("/super_admin/login", data={"otp_code": captured["otp"]}, follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin"
         with client.session_transaction() as sess:
@@ -179,7 +192,7 @@ class TestLoginFlow:
         })
         with client.session_transaction() as sess:
             sess["platform_mfa_issued_at"] = time.time() - 400  # > _MFA_OTP_TTL_SEC (300)
-        resp = client.get("/super_admin/mfa_verify")
+        resp = client.get("/super_admin/login")
         assert resp.status_code == 200
         assert b"Your code expired" in resp.data
         with client.session_transaction() as sess:
