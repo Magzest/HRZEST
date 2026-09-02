@@ -236,13 +236,6 @@ _TENANT_STATUS_RECHECK_SEC = 5 * 60
 
 
 @app.before_request
-def _perf_start_timer():
-    """Stash a start time for _perf_record below (registered first so it
-    wraps every other before_request hook's cost too)."""
-    _g._perf_start = time.perf_counter()
-
-
-@app.before_request
 def _resolve_tenant():
     """Determine the tenant database for this request and store it in
     g.tenant_db. Registered second -- right after the perf timer, before
@@ -455,7 +448,7 @@ def _enforce_idle_timeout():
     absolute max-age check above, which only catches a session once it's
     lived 8 hours regardless of how recently it was used. The threshold
     itself (company_settings.session_timeout, admin-configurable 5-1440 min
-    via the SOC dashboard's /api/secops/session-timeout)
+    via Settings)
     used to be stored and displayed in the UI but was never actually
     enforced anywhere -- this closes that gap. Reads through
     get_company_settings()'s existing 60s cache rather than querying the DB
@@ -480,7 +473,7 @@ def _enforce_idle_timeout():
 
 # Roles that count as "administrative/HR" for the mandatory-MFA requirement
 # below -- every role that can reach admin-side data or actions.
-_MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
+_MANDATORY_MFA_ROLES = {"admin", "manager", "hr"}
 
 # Routes reachable by an admin/manager/soc_analyst/hr session that has NOT
 # yet enrolled TOTP -- must stay small and deliberate. Anything not on this
@@ -491,7 +484,7 @@ _MANDATORY_MFA_EXEMPT_PATHS = {
     "/logout", "/admin_login", "/hr_login"
 }
 
-app.config.setdefault("MANDATORY_ADMIN_MFA", False)
+app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
 app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
 # Platform admin's emailed-OTP step (blueprints/platform_admin.py) --
 # defaults on (secure by default) unlike the two flags above, since this is
@@ -559,7 +552,7 @@ def _enforce_csrf():
         # device pushing attendance logs has no browser session/CSRF token
         # to carry, same posture as /webhooks/ above.
         return
-    if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
+    if request.path in ("/login", "/admin_login", "/hr_login"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
     # script (_inject_csrf_meta) adds X-CSRF-Token to every fetch() call, so
@@ -806,18 +799,6 @@ def _inject_csrf_meta(response):
         app_log.warning("Response HTML injection (CSRF token/CSP nonce) failed: %s", exc, exc_info=True)
     return response
 
-
-@app.after_request
-def _perf_record(response):
-    """Record real request timing/error-rate for the Security hub's
-    Performance & Quality panel. Skips static assets -- they're served
-    differently (cached, no app logic) and would skew the average down."""
-    from flask import g
-    start = getattr(g, "_perf_start", None)
-    if start is not None and not request.path.startswith("/static/"):
-        from utils.perf_metrics import record as _record_perf
-        _record_perf((time.perf_counter() - start) * 1000, response.status_code)
-    return response
 
 # ---------------- AUDIT LOGGING ----------------
 # (Consolidated onto utils/helpers.py -- see import block above.)
@@ -3585,13 +3566,13 @@ if "core.home" not in app.view_functions:
     from blueprints.seats import seats_bp
     from blueprints.auto_debit import auto_debit_bp
     from blueprints.platform_admin import platform_admin_bp
-    from blueprints.secops import secops_bp
+    from blueprints.honeypot_routes import honeypot_bp
     from blueprints.biometric import biometric_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                platform_admin_bp, secops_bp, biometric_bp):
+                platform_admin_bp, honeypot_bp, biometric_bp):
         app.register_blueprint(_bp)
 
 
