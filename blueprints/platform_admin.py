@@ -98,8 +98,41 @@ def _platform_admin_required(view):
 @platform_admin_bp.route("/super_admin/login", methods=["GET", "POST"])
 @limiter.limit("10 per 15 minutes")
 def platform_admin_login():
+    """Single-page credentials + emailed-OTP MFA login -- one URL, one
+    template. Which of the two steps renders is driven entirely by session
+    state (platform_mfa_pending), not by a second page: submitting
+    username/password here starts the OTP step in place (re-renders this
+    same route); submitting otp_code here while that session state is set
+    completes it via _complete_platform_admin_login."""
     if session.get("platform_admin_logged_in"):
         return redirect("/super_admin")
+
+    if request.args.get("restart"):
+        session.pop("platform_mfa_pending", None)
+        session.pop("platform_mfa_user", None)
+        session.pop("platform_mfa_otp_code", None)
+        session.pop("platform_mfa_issued_at", None)
+        return redirect("/super_admin/login")
+
+    mfa_pending = bool(session.get("platform_mfa_pending"))
+    if mfa_pending:
+        issued_at = session.get("platform_mfa_issued_at") or 0
+        if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
+            session.clear()
+            return render_template("super_admin_login.html", error="Your code expired. Please log in again.")
+
+    if request.method == "POST" and mfa_pending and "otp_code" in request.form:
+        username = session.get("platform_mfa_user")
+        submitted = (request.form.get("otp_code") or "").strip()
+        expected = session.get("platform_mfa_otp_code") or ""
+        if username and submitted and expected and secrets.compare_digest(submitted, expected):
+            return _complete_platform_admin_login(username)
+
+        log_security_event(
+            "auth.platform_admin_mfa_failure", "Invalid platform admin login MFA code",
+            level="WARNING", identifier=username,
+        )
+        return render_template("super_admin_login.html", mfa_step=True, error="Invalid verification code.")
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -134,7 +167,7 @@ def platform_admin_login():
             session["platform_mfa_user"] = username
             session["platform_mfa_otp_code"] = otp_code
             session["platform_mfa_issued_at"] = time.time()
-            return redirect("/super_admin/mfa_verify")
+            return render_template("super_admin_login.html", mfa_step=True)
 
         log_security_event(
             "auth.platform_admin_login_failed",
@@ -143,34 +176,7 @@ def platform_admin_login():
         )
         return render_template("super_admin_login.html", error="Invalid credentials.")
 
-    return render_template("super_admin_login.html")
-
-
-@platform_admin_bp.route("/super_admin/mfa_verify", methods=["GET", "POST"])
-@limiter.limit("8 per 15 minutes")
-def platform_admin_mfa_verify():
-    username = session.get("platform_mfa_user")
-    if not username or not session.get("platform_mfa_pending"):
-        return redirect("/super_admin/login")
-
-    issued_at = session.get("platform_mfa_issued_at") or 0
-    if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
-        session.clear()
-        return render_template("super_admin_login.html", error="Your code expired. Please log in again.")
-
-    if request.method == "POST":
-        submitted = (request.form.get("otp_code") or "").strip()
-        expected = session.get("platform_mfa_otp_code") or ""
-        if submitted and expected and secrets.compare_digest(submitted, expected):
-            return _complete_platform_admin_login(username)
-
-        log_security_event(
-            "auth.platform_admin_mfa_failure", "Invalid platform admin login MFA code",
-            level="WARNING", identifier=username,
-        )
-        return render_template("super_admin_mfa_verify.html", error="Invalid verification code.")
-
-    return render_template("super_admin_mfa_verify.html")
+    return render_template("super_admin_login.html", mfa_step=mfa_pending)
 
 
 @platform_admin_bp.route("/super_admin/logout", methods=["POST"])
