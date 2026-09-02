@@ -231,6 +231,14 @@ def bulk_assign_onboarding():
     today = datetime.date.today()
     due_date = (today + datetime.timedelta(days=30)).isoformat()
     assigned = 0
+    # Fetched once outside the loop -- tid is fixed for the whole bulk
+    # action, so re-running these same two SELECTs per employee (as the
+    # loop used to) is redundant work repeated N times for no reason.
+    cursor.execute(
+        "SELECT id, task_title, task_description, requires_document, due_days FROM onboarding_template_tasks WHERE template_id=%s ORDER BY sort_order, id", (tid,))
+    template_tasks = cursor.fetchall()
+    cursor.execute("SELECT name FROM onboarding_templates WHERE id=%s", (tid,))
+    _tr = cursor.fetchone()
     for emp_id in emp_ids:
         cursor.execute(
             "SELECT id FROM employee_onboarding WHERE employee_id=%s AND template_id=%s AND status='In Progress'", (emp_id, tid))
@@ -239,18 +247,16 @@ def bulk_assign_onboarding():
         cursor.execute("INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date, status) VALUES (%s,%s,%s,%s,'In Progress') RETURNING id",
                        (emp_id, tid, today, due_date))
         ob_id = cursor.fetchone()[0]
-        cursor.execute(
-            "SELECT id, task_title, task_description, requires_document, due_days FROM onboarding_template_tasks WHERE template_id=%s ORDER BY sort_order, id", (tid,))
-        for tt in cursor.fetchall():
-            cursor.execute("INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, task_description, requires_document, due_days, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'Pending')",
-                           (ob_id, tt[0], emp_id, tt[1], tt[2], tt[3], tt[4]))
+        if template_tasks:
+            cursor.executemany(
+                "INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, task_description, requires_document, due_days, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'Pending')",
+                [(ob_id, tt[0], emp_id, tt[1], tt[2], tt[3], tt[4]) for tt in template_tasks]
+            )
         assigned += 1
         # Email notification
         try:
             cursor.execute("SELECT name, email FROM employees WHERE employee_id=%s", (emp_id,))
             _er = cursor.fetchone()
-            cursor.execute("SELECT name FROM onboarding_templates WHERE id=%s", (tid,))
-            _tr = cursor.fetchone()
             if _er and _er[1] and _tr:
                 _ecfg = get_email_config()
                 if _ecfg:

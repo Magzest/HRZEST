@@ -20,7 +20,7 @@ from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
 from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
-from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
+from utils.leave_utils import get_indian_holidays
 import utils.config as cfg
 
 leave_bp = Blueprint("leave", __name__)
@@ -287,11 +287,23 @@ def leave_balance():
     cursor.execute("SELECT id, name, annual_quota FROM leave_types WHERE is_active=1 ORDER BY id")
     leave_types = cursor.fetchall()
 
-    # Auto-assign balances for employees who don't have them yet
-    cursor.execute("SELECT employee_id FROM employees")
-    all_emps = [r[0] for r in cursor.fetchall()]
-    for eid in all_emps:
-        assign_leave_balances_for_employee(cursor, eid, year)
+    # Auto-assign balances for employees who don't have them yet -- one
+    # set-based upsert for every (employee, active leave type) pair instead
+    # of a Python loop calling assign_leave_balances_for_employee() per
+    # employee, which re-ran "SELECT ... FROM leave_types" and one INSERT
+    # per leave type on every single page load (500 employees x 5 leave
+    # types was ~3,000 round-trips for a single GET). Same net effect --
+    # same ON CONFLICT semantics (only refresh total_days while the balance
+    # is still untouched) -- just expressed as one statement.
+    cursor.execute("""
+        INSERT INTO leave_balances (employee_id, leave_type_id, year, total_days, used_days)
+        SELECT e.employee_id, lt.id, %s, lt.annual_quota, 0
+        FROM employees e CROSS JOIN leave_types lt
+        WHERE lt.is_active = 1
+        ON CONFLICT (employee_id, leave_type_id, year) DO UPDATE SET
+            total_days = CASE WHEN leave_balances.used_days = 0
+                              THEN EXCLUDED.total_days ELSE leave_balances.total_days END
+    """, (year,))
     db.commit()
 
     # Fetch all balances

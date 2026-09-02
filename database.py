@@ -378,6 +378,13 @@ def _seed_sqlite_db(raw_conn):
 
 # ── Default tenant pool ──────────────────────────────────────────────────────
 _pool = None
+# Guards every _pool creation/replacement below -- without it, concurrent
+# requests hitting a cold start (or a caught getconn() failure resetting
+# _pool to None) can each construct their own ThreadedConnectionPool and
+# stomp the shared global reference; whichever pool object loses that race
+# is simply dropped, leaking its connections (never .closeall()'d) until
+# Postgres's own idle-connection reaping kicks in.
+_pool_lock = threading.Lock()
 
 
 def _ensure_pg_schema(raw_conn):
@@ -445,13 +452,20 @@ def _borrow_connection():
     MySQL's behavior."""
     global _pool
     if _pool is None:
-        _create_pool()
+        with _pool_lock:
+            if _pool is None:  # re-check: another thread may have built it while we waited
+                _create_pool()
     try:
         conn = _pool.getconn()
     except Exception:
-        if not isinstance(_pool, _SqlitePool):
-            _pool = None
-            _create_pool(retries=1, delay=0.1)
+        _failed_pool = _pool
+        if not isinstance(_failed_pool, _SqlitePool):
+            with _pool_lock:
+                # Only rebuild if _pool is still the same broken object we
+                # just failed against -- another thread may have already
+                # replaced it while we waited for the lock.
+                if _pool is _failed_pool:
+                    _create_pool(retries=1, delay=0.1)
         conn = _pool.getconn()
     conn.autocommit = True
     return conn
@@ -524,7 +538,9 @@ def create_tenant_schema(schema_name: str):
     if not re.match(r'^[a-zA-Z0-9_]+$', schema_name):
         raise ValueError(f"Invalid tenant schema name: {schema_name!r}")
     if _pool is None:
-        _create_pool()
+        with _pool_lock:
+            if _pool is None:
+                _create_pool()
     conn = _pool.getconn()
     try:
         cur = conn.cursor()
