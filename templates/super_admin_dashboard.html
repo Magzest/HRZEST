@@ -234,10 +234,6 @@
             <i class="ti ti-alert-triangle"></i> Duplicate Alerts
             {% if unacknowledged_alerts_count %}<span style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ unacknowledged_alerts_count }}</span>{% endif %}
           </a>
-          <button type="button" onclick="dmOpen()" title="Manage your own login devices and assets"
-             style="display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);color:#93c5fd;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">
-            <i class="ti ti-device-laptop"></i> My Devices
-          </button>
           <form action="/super_admin/logout" method="POST" style="margin:0;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="logout-btn"><i class="ti ti-logout"></i> Sign Out</button>
@@ -678,8 +674,5 @@
         return false;
       }
     </script>
-
-    <script>var DEVICE_API_BASE = '/super_admin/devices';</script>
-    {% include '_device_manager.html' %}
   </body>
 </html>

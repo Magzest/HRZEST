@@ -10,7 +10,7 @@ pipelines. It covers everything else in the blueprint: the real
 login+MFA+logout flow, the dashboard's summary counts, cost/lead/tenant
 management, the applications queue/detail/document-streaming views (access
 control specifically), the duplicate-alerts admin-facing list/acknowledge
-flow, device inventory management, and the per-tenant support chat.
+flow, and the per-tenant support chat.
 
 Most routes only need `_platform_admin_required` to see
 session["platform_admin_logged_in"]/["platform_admin_username"] truthy --
@@ -173,17 +173,6 @@ class TestLoginFlow:
             assert sess.get("platform_admin_logged_in") is True
             assert sess.get("platform_admin_username") == self.LOGIN_USERNAME
             assert sess.get("platform_admin_last_activity")
-
-        # _complete_platform_admin_login also records a device row.
-        cur = db_engine.cursor()
-        cur.execute(
-            "SELECT COUNT(*) FROM att_master.user_devices WHERE owner_kind='platform_admin' AND owner_id=%s",
-            (self.LOGIN_USERNAME,),
-        )
-        assert cur.fetchone()[0] >= 1
-        cur.execute("DELETE FROM att_master.user_devices WHERE owner_kind='platform_admin' AND owner_id=%s",
-                    (self.LOGIN_USERNAME,))
-        cur.close()
 
     def test_mfa_code_expires_after_ttl(self, client, platform_admin_row, monkeypatch):
         self._capture_otp(monkeypatch)
@@ -738,156 +727,6 @@ class TestDuplicateAlerts:
         assert row[0] == 1
         assert row[1] == "ack_platform_admin"
         cur.close()
-
-
-# ===========================================================================
-# Device inventory management (att_master.user_devices)
-# ===========================================================================
-
-class TestDevices:
-    DEVICE_USER = "pa_device_test_admin"
-
-    def test_list_requires_login(self, client):
-        resp = client.get("/super_admin/devices", follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_list_returns_only_this_admins_devices(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute("DELETE FROM att_master.user_devices WHERE owner_kind='platform_admin' AND owner_id=%s",
-                    (self.DEVICE_USER,))
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', %s, %s, 'login', 'Chrome on Windows') RETURNING id",
-            (self.DEVICE_USER, secrets.token_hex(24)),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.get("/super_admin/devices")
-            assert resp.status_code == 200
-            payload = resp.get_json()
-            assert payload["ok"] is True
-            assert any(d["id"] == device_id for d in payload["devices"])
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_rename_requires_login(self, client):
-        resp = client.post("/super_admin/devices/1/rename", json={"name": "x"}, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_rename_device(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', %s, %s, 'login', 'Old Name') RETURNING id",
-            (self.DEVICE_USER, secrets.token_hex(24)),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.post(f"/super_admin/devices/{device_id}/rename", json={"name": "My Laptop"})
-            assert resp.status_code == 200
-            assert resp.get_json()["ok"] is True
-            cur.execute("SELECT device_name FROM att_master.user_devices WHERE id=%s", (device_id,))
-            assert cur.fetchone()[0] == "My Laptop"
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_rename_another_admins_device_fails(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', 'someone_else_pa', %s, 'login', 'Other Name') RETURNING id",
-            (secrets.token_hex(24),),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.post(f"/super_admin/devices/{device_id}/rename", json={"name": "Hijacked"})
-            assert resp.status_code == 200
-            assert resp.get_json()["ok"] is False
-            cur.execute("SELECT device_name FROM att_master.user_devices WHERE id=%s", (device_id,))
-            assert cur.fetchone()[0] == "Other Name"
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_revoke_requires_login(self, client):
-        resp = client.post("/super_admin/devices/1/revoke", follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_revoke_device_removes_it_from_list(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', %s, %s, 'login', 'To Revoke') RETURNING id",
-            (self.DEVICE_USER, secrets.token_hex(24)),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.post(f"/super_admin/devices/{device_id}/revoke")
-            assert resp.status_code == 200
-            assert resp.get_json()["ok"] is True
-            cur.execute("SELECT is_revoked FROM att_master.user_devices WHERE id=%s", (device_id,))
-            assert cur.fetchone()[0] == 1
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_add_and_delete_asset_device(self, client, db_engine):
-        _login_platform_admin(client, username=self.DEVICE_USER)
-        resp = client.post("/super_admin/devices/asset", json={
-            "device_name": "Office Laptop #3", "asset_model": "Dell Latitude", "asset_serial": "SN12345",
-        })
-        assert resp.status_code == 200
-        payload = resp.get_json()
-        assert payload["ok"] is True
-        asset_id = payload["id"]
-        assert asset_id is not None
-
-        cur = db_engine.cursor()
-        try:
-            cur.execute("SELECT kind, device_name, asset_model, asset_serial FROM att_master.user_devices WHERE id=%s",
-                        (asset_id,))
-            row = cur.fetchone()
-            assert row == ("asset", "Office Laptop #3", "Dell Latitude", "SN12345")
-
-            del_resp = client.post(f"/super_admin/devices/asset/{asset_id}/delete")
-            assert del_resp.status_code == 200
-            assert del_resp.get_json()["ok"] is True
-            cur.execute("SELECT 1 FROM att_master.user_devices WHERE id=%s", (asset_id,))
-            assert cur.fetchone() is None
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (asset_id,))
-            cur.close()
-
-    def test_add_asset_device_requires_login(self, client):
-        resp = client.post("/super_admin/devices/asset", json={"device_name": "x"}, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_add_asset_device_missing_name_fails(self, client):
-        _login_platform_admin(client, username=self.DEVICE_USER)
-        resp = client.post("/super_admin/devices/asset", json={"device_name": "  "})
-        assert resp.status_code == 200
-        payload = resp.get_json()
-        assert payload["ok"] is False
-        assert payload["id"] is None
-
-    def test_delete_asset_device_requires_login(self, client):
-        resp = client.post("/super_admin/devices/asset/1/delete", follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
 
 
 # ===========================================================================

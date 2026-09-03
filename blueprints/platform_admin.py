@@ -28,10 +28,6 @@ from utils.totp import send_mfa_login_email
 from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
 from utils.helpers import coerce_datetime
 from utils.analytics import get_traffic_stats
-from utils.device_utils import (
-    get_or_create_device_token, set_device_cookie, record_login_device,
-    list_devices, rename_device, add_asset_device, delete_asset_device, revoke_device,
-)
 from utils import chat_utils
 
 platform_admin_bp = Blueprint("platform_admin", __name__)
@@ -65,19 +61,7 @@ def _complete_platform_admin_login(username):
         f"Platform admin session established for '{username}'",
         level="INFO", identifier=username,
     )
-    dest = redirect("/super_admin")
-    try:
-        token, is_new = get_or_create_device_token(request)
-        # No session_risk participation here (see this module's docstring
-        # on why platform admin keeps its own lighter session model), so
-        # last_sid stays unset -- revoke on this owner_kind is row-only,
-        # not a live session kill.
-        record_login_device(get_master_db, "platform_admin", username, token, None, request)
-        if is_new:
-            set_device_cookie(dest, token)
-    except Exception as exc:
-        app_log.warning("device capture failed for platform_admin '%s': %s", username, exc)
-    return dest
+    return redirect("/super_admin")
 
 
 def _platform_admin_required(view):
@@ -894,58 +878,6 @@ def platform_admin_acknowledge_duplicate_alert(alert_id):
     conn.close()
     flash("Alert acknowledged.", "success")
     return redirect("/super_admin/duplicate-alerts")
-
-
-# ── Self-service device management (utils/device_utils.py) ─────────────────
-# Platform admin's own rows live in att_master's user_devices, not any
-# tenant schema -- get_master_db throughout, never get_db_connection.
-
-@platform_admin_bp.route("/super_admin/devices", methods=["GET"])
-@_platform_admin_required
-def platform_admin_devices():
-    username = session["platform_admin_username"]
-    token, _ = get_or_create_device_token(request)
-    return jsonify({"ok": True, "devices": list_devices(get_master_db, "platform_admin", username, token)})
-
-
-@platform_admin_bp.route("/super_admin/devices/<int:device_id>/rename", methods=["POST"])
-@_platform_admin_required
-def platform_admin_device_rename(device_id):
-    username = session["platform_admin_username"]
-    data = request.get_json(silent=True) or {}
-    ok = rename_device(get_master_db, "platform_admin", username, device_id, data.get("name"))
-    return jsonify({"ok": ok})
-
-
-@platform_admin_bp.route("/super_admin/devices/<int:device_id>/revoke", methods=["POST"])
-@_platform_admin_required
-def platform_admin_device_revoke(device_id):
-    username = session["platform_admin_username"]
-    ok = revoke_device(get_master_db, "platform_admin", username, device_id, username)
-    if ok:
-        log_security_event(
-            "platform_admin.device_revoked", f"Device {device_id} revoked by '{username}'",
-            level="INFO", identifier=username,
-        )
-    return jsonify({"ok": ok})
-
-
-@platform_admin_bp.route("/super_admin/devices/asset", methods=["POST"])
-@_platform_admin_required
-def platform_admin_device_add_asset():
-    username = session["platform_admin_username"]
-    data = request.get_json(silent=True) or {}
-    new_id = add_asset_device(get_master_db, "platform_admin", username,
-                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
-    return jsonify({"ok": new_id is not None, "id": new_id})
-
-
-@platform_admin_bp.route("/super_admin/devices/asset/<int:device_id>/delete", methods=["POST"])
-@_platform_admin_required
-def platform_admin_device_delete_asset(device_id):
-    username = session["platform_admin_username"]
-    ok = delete_asset_device(get_master_db, "platform_admin", username, device_id)
-    return jsonify({"ok": ok})
 
 
 # ── Internal chat with a company's admin/HR (utils/chat_utils.py) ──────────
