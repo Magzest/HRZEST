@@ -130,6 +130,28 @@
       .section-body { display: flex; flex-direction: column; gap: 16px; }
       .section-toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
 
+      /* ── Tenant search/filter, bulk actions, pagination ── */
+      .tenant-filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .tenant-filter-bar input[type="search"] {
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 220px;
+      }
+      .tenant-filter-bar select {
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 8px 10px; font-size: 13px;
+      }
+      .tenant-filter-bar input[type="search"]:focus, .tenant-filter-bar select:focus {
+        border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none;
+      }
+      .bulk-action-bar {
+        display: flex; align-items: center; gap: 10px; background: var(--primary-soft);
+        border: 1px solid var(--primary-soft-border); border-radius: 10px; padding: 10px 14px; font-size: 13px;
+      }
+      .bulk-action-bar span { color: var(--primary-dark); }
+      .pagination-bar { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 16px; }
+      .pagination-info { font-size: 12px; color: var(--text-dim); }
+      .mini-btn-disabled { opacity: .4; pointer-events: none; }
+
       /* ── Stats row ── */
       .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
       .stat-card {
@@ -290,7 +312,7 @@
             <div class="stat-card">
               <div class="stat-label">Active Companies</div>
               <div class="stat-value">{{ active_tenant_count }}</div>
-              <div class="stat-sub">of {{ tenants|length }} total</div>
+              <div class="stat-sub">of {{ total_tenant_count }} total</div>
             </div>
             <div class="stat-card">
               <div class="stat-label">Total Employees Billed</div>
@@ -389,7 +411,7 @@
       <section class="page-section">
         <div class="section-heading">
           <img class="icon-photo" src="{{ static_url('icons/photos/building.jpg') }}" alt=""> Companies
-          <span class="section-count">{{ tenants|length }}</span>
+          <span class="section-count">{{ filtered_tenant_count }}{% if filtered_tenant_count != total_tenant_count %} of {{ total_tenant_count }}{% endif %}</span>
         </div>
         <div class="section-body">
           <div class="section-toolbar">
@@ -420,7 +442,27 @@
               <img class="icon-photo" src="{{ static_url('icons/photos/alert-triangle.jpg') }}" alt=""> Duplicate Alerts
               {% if unacknowledged_alerts_count %}<span style="background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ unacknowledged_alerts_count }}</span>{% endif %}
             </a>
+            <a href="/super_admin/audit-log" title="Search and browse the full history of platform admin actions"
+               style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
+               onmouseover="this.style.background='#e2e8f0';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='#f1f5f9';this.style.boxShadow='none';this.style.transform='none';">
+              <img class="icon-photo" src="{{ static_url('icons/photos/history.jpg') }}" alt=""> Audit Log
+            </a>
           </div>
+
+          <form class="tenant-filter-bar" method="GET" action="/super_admin">
+            <input type="search" name="q" value="{{ q }}" placeholder="Search company or subdomain…" aria-label="Search companies" />
+            <select name="status" aria-label="Filter by status">
+              <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All statuses</option>
+              <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+              <option value="suspended" {% if status_filter == 'suspended' %}selected{% endif %}>Deactivated</option>
+            </select>
+            <button type="submit" class="mini-btn"><img class="icon-photo-sm" src="{{ static_url('icons/photos/search.jpg') }}" alt=""> Search</button>
+            {% if q or status_filter != 'all' %}<a href="/super_admin" class="mini-btn mini-btn-link">Clear</a>{% endif %}
+            <a href="/super_admin/export/tenants.csv?q={{ q | urlencode }}&amp;status={{ status_filter }}" class="mini-btn mini-btn-link" style="margin-left:auto;" title="Export the current search/filter results as CSV">
+              <img class="icon-photo-sm" src="{{ static_url('icons/photos/download.jpg') }}" alt=""> Export CSV
+            </a>
+          </form>
 
           <div class="new-co card" id="newCoPanel" hidden>
             <p style="margin:0;font-size:12px;color:var(--text-muted);">
@@ -492,17 +534,30 @@
             </form>
           </div>
 
+          <form id="bulkTenantForm" action="/super_admin/tenants/bulk-status" method="POST" style="display:none;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="status" id="bulkStatusInput" value="" />
+          </form>
+
+          <div class="bulk-action-bar" id="bulkActionBar" hidden>
+            <span><strong id="bulkSelectedCount">0</strong> selected</span>
+            <button type="submit" form="bulkTenantForm" class="mini-btn mini-btn-success" onclick="document.getElementById('bulkStatusInput').value='active';">Activate Selected</button>
+            <button type="submit" form="bulkTenantForm" class="mini-btn mini-btn-danger" onclick="return bulkDeactivateConfirm();">Deactivate Selected</button>
+          </div>
+
           <div class="card">
             {% if tenants %}
             <table>
               <thead>
                 <tr>
+                  <th><input type="checkbox" id="selectAllTenants" onchange="toggleAllTenants(this)" aria-label="Select all companies" /></th>
                   <th>Company</th><th>Source</th><th>Payment</th><th>Employees</th><th>Monthly Bill</th><th>Status</th><th>Created</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {% for t in tenants %}
                 <tr>
+                  <td><input type="checkbox" class="tenant-select" form="bulkTenantForm" name="tenant_ids" value="{{ t.id }}" onchange="updateBulkBar()" aria-label="Select {{ t.company_name }}" /></td>
                   <td>
                     <div class="co-name">{{ t.company_name }}</div>
                     <a class="subdomain" href="{{ portal_base_url }}/{{ t.subdomain }}/login" target="_blank" rel="noopener" style="text-decoration:underline;">{{ t.subdomain }}</a>
@@ -551,8 +606,29 @@
                 {% endfor %}
               </tbody>
             </table>
+            {% if total_pages > 1 %}
+            <div class="pagination-bar">
+              {% if page > 1 %}
+              <a class="mini-btn" href="/super_admin?q={{ q | urlencode }}&amp;status={{ status_filter }}&amp;page={{ page - 1 }}">&laquo; Prev</a>
+              {% else %}
+              <span class="mini-btn mini-btn-disabled">&laquo; Prev</span>
+              {% endif %}
+              <span class="pagination-info">Page {{ page }} of {{ total_pages }}</span>
+              {% if page < total_pages %}
+              <a class="mini-btn" href="/super_admin?q={{ q | urlencode }}&amp;status={{ status_filter }}&amp;page={{ page + 1 }}">Next &raquo;</a>
+              {% else %}
+              <span class="mini-btn mini-btn-disabled">Next &raquo;</span>
+              {% endif %}
+            </div>
+            {% endif %}
             {% else %}
-            <div class="empty-state"><img src="{{ static_url('icons/photos/building-off.jpg') }}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;"><p style="margin-top:8px;">No companies registered yet.</p></div>
+            <div class="empty-state">
+              {% if q or status_filter != 'all' %}
+              <img class="icon-photo-lg" src="{{ static_url('icons/photos/search.jpg') }}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;"><p style="margin-top:8px;">No companies match your search.</p>
+              {% else %}
+              <img src="{{ static_url('icons/photos/building-off.jpg') }}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;"><p style="margin-top:8px;">No companies registered yet.</p>
+              {% endif %}
+            </div>
             {% endif %}
           </div>
         </div>
@@ -603,7 +679,12 @@
         <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/receipt.jpg') }}" alt=""> Payments</div>
         <div class="section-body">
       <div class="card section-card">
-        <h2><img class="icon-photo" src="{{ static_url('icons/photos/receipt.jpg') }}" alt=""> Recent Payments</h2>
+        <h2 style="display:flex;align-items:center;justify-content:space-between;">
+          <span><img class="icon-photo" src="{{ static_url('icons/photos/receipt.jpg') }}" alt=""> Recent Payments</span>
+          <a href="/super_admin/export/payments.csv" class="mini-btn mini-btn-link" style="font-size:11px;" title="Export full payment history as CSV">
+            <img class="icon-photo-sm" src="{{ static_url('icons/photos/download.jpg') }}" alt=""> Export CSV
+          </a>
+        </h2>
         {% if recent_payments %}
         <table>
           <thead>
@@ -708,6 +789,24 @@
       }
       function closePaymentModal() {
         document.getElementById('payModalOverlay').classList.remove('open');
+      }
+
+      function toggleAllTenants(master) {
+        document.querySelectorAll('.tenant-select').forEach(function (cb) { cb.checked = master.checked; });
+        updateBulkBar();
+      }
+      function updateBulkBar() {
+        var checked = document.querySelectorAll('.tenant-select:checked').length;
+        document.getElementById('bulkSelectedCount').textContent = checked;
+        document.getElementById('bulkActionBar').hidden = checked === 0;
+      }
+      function bulkDeactivateConfirm() {
+        var checked = document.querySelectorAll('.tenant-select:checked').length;
+        if (!confirm('Deactivate ' + checked + ' compan' + (checked === 1 ? 'y' : 'ies') + '? They will be locked out of their portal until reactivated.')) {
+          return false;
+        }
+        document.getElementById('bulkStatusInput').value = 'suspended';
+        return true;
       }
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') closePaymentModal();

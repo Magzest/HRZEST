@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audit Log — Platform Admin Console</title>
+    <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+    <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <style>
+      :root {
+        --bg-main: #ffffff; --bg-card: #ffffff;
+        --border-color: #e2e8f0;
+        --primary: #1d4ed8; --primary-dark: #1e3a8a; --primary-soft: #eff6ff; --primary-soft-border: #bfdbfe;
+        --danger: #dc2626; --warning: #b45309; --success: #059669;
+        --text-bright: #0f172a; --text-muted: #475569; --text-dim: #94a3b8;
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+      body {
+        background: radial-gradient(1100px 520px at 50% -12%, #eaf2ff 0%, #ffffff 55%) fixed, var(--bg-main);
+        color: var(--text-bright); min-height: 100vh; padding: 24px;
+      }
+      .container { max-width: 1180px; margin: 0 auto; }
+      .header {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+        padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: 16px; margin-bottom: 24px; box-shadow: var(--shadow-sm);
+      }
+      .header h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+      .header h1 i { color: var(--primary); }
+      .back-link { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: color .15s; }
+      .back-link:hover { color: var(--primary); }
+      .intro-note { font-size: 12.5px; color: var(--text-dim); margin-bottom: 18px; line-height: 1.6; }
+      .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+      .filter-bar input[type="search"] {
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 260px;
+      }
+      .filter-bar select {
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 8px 10px; font-size: 13px;
+      }
+      .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
+      .mini-btn {
+        background: var(--primary); border: 1px solid var(--primary); color: #fff; border-radius: 8px;
+        padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: none;
+        display: inline-flex; align-items: center; gap: 6px; transition: background-color .15s;
+      }
+      .mini-btn:hover { background: var(--primary-dark); }
+      .mini-btn-link { background: #f1f5f9; border-color: #e2e8f0; color: #475569; }
+      .mini-btn-link:hover { background: #e2e8f0; }
+      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; overflow-x: auto; box-shadow: var(--shadow-sm); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border-color); }
+      td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+      tbody tr:hover td { background: #f8fafc; }
+      .subdomain { color: var(--text-muted); font-size: 12px; }
+      .msg { color: var(--text-bright); max-width: 460px; }
+      .level-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+      .level-dot.INFO { background: var(--success); }
+      .level-dot.WARNING { background: var(--warning); }
+      .level-dot.ERROR { background: var(--danger); }
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+      .badge-type { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
+      .pagination-bar { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 16px; }
+      .pagination-info { font-size: 12px; color: var(--text-dim); }
+      .mini-btn-disabled { opacity: .4; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1><i class="ti ti-history"></i> Audit Log</h1>
+        <a href="/super_admin" class="back-link"><i class="ti ti-arrow-left"></i> Back to Console</a>
+      </div>
+
+      <p class="intro-note">
+        Every platform admin action -- rate changes, tenant activation/deactivation, application approvals/rejections,
+        blocked duplicate signups -- searchable in one place. {{ total }} matching event{{ '' if total == 1 else 's' }}.
+      </p>
+
+      <form class="filter-bar" method="GET" action="/super_admin/audit-log">
+        <input type="search" name="q" value="{{ q }}" placeholder="Search message, identifier, or event type…" aria-label="Search audit log" />
+        <select name="level" aria-label="Filter by level">
+          <option value="" {% if not level_filter %}selected{% endif %}>All levels</option>
+          <option value="INFO" {% if level_filter == 'INFO' %}selected{% endif %}>Info</option>
+          <option value="WARNING" {% if level_filter == 'WARNING' %}selected{% endif %}>Warning</option>
+          <option value="ERROR" {% if level_filter == 'ERROR' %}selected{% endif %}>Error</option>
+        </select>
+        <button type="submit" class="mini-btn"><i class="ti ti-search"></i> Search</button>
+        {% if q or level_filter %}<a href="/super_admin/audit-log" class="mini-btn mini-btn-link">Clear</a>{% endif %}
+      </form>
+
+      <div class="card">
+        {% if events %}
+        <table>
+          <thead>
+            <tr><th>When</th><th>Level</th><th>Event Type</th><th>Message</th><th>Who</th><th>IP</th></tr>
+          </thead>
+          <tbody>
+            {% for ev in events %}
+            <tr>
+              <td class="subdomain">{{ ev.created_at.strftime('%Y-%m-%d %H:%M:%S') if ev.created_at else '—' }}</td>
+              <td><span class="level-dot {{ ev.level }}"></span>{{ ev.level }}</td>
+              <td><span class="badge badge-type">{{ ev.event_type }}</span></td>
+              <td class="msg">{{ ev.message }}</td>
+              <td class="subdomain">{{ ev.identifier or '—' }}</td>
+              <td class="subdomain">{{ ev.ip or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if total_pages > 1 %}
+        <div class="pagination-bar">
+          {% if page > 1 %}
+          <a class="mini-btn mini-btn-link" href="/super_admin/audit-log?q={{ q | urlencode }}&amp;level={{ level_filter }}&amp;page={{ page - 1 }}">&laquo; Prev</a>
+          {% else %}
+          <span class="mini-btn mini-btn-link mini-btn-disabled">&laquo; Prev</span>
+          {% endif %}
+          <span class="pagination-info">Page {{ page }} of {{ total_pages }}</span>
+          {% if page < total_pages %}
+          <a class="mini-btn mini-btn-link" href="/super_admin/audit-log?q={{ q | urlencode }}&amp;level={{ level_filter }}&amp;page={{ page + 1 }}">Next &raquo;</a>
+          {% else %}
+          <span class="mini-btn mini-btn-link mini-btn-disabled">Next &raquo;</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="empty-state"><i class="ti ti-history" style="font-size:32px;"></i><p style="margin-top:8px;">No matching events.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </body>
+</html>

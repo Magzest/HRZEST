@@ -83,5 +83,15 @@
     "file": "receipt-2.jpg",
     "source_title": "File:Cash-receipt-sampleasdf.jpg",
     "bytes": 3751
+  },
+  "search": {
+    "file": "search.jpg",
+    "source_title": "File:Magnifying glass2.jpg",
+    "bytes": 5074
+  },
+  "download": {
+    "file": "download.jpg",
+    "source_title": "File:USB flash drive.jpg",
+    "bytes": 5859
   }
 }

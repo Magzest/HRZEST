@@ -482,6 +482,119 @@ class TestTenantStatus:
         cur.close()
 
 
+class TestBulkTenantStatus:
+    @pytest.fixture
+    def two_tenant_rows(self, db_engine):
+        cur = db_engine.cursor()
+        ids = []
+        for i in range(2):
+            cur.execute(
+                "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+                "VALUES (%s,%s,%s,'active') RETURNING id",
+                (f"Bulk Test Co {i}", f"bulk-test-co-{i}", f"att_bulk_test_co_{i}"),
+            )
+            ids.append(cur.fetchone()[0])
+        yield ids
+        cur.execute("DELETE FROM att_master.tenants WHERE id=ANY(%s)", (ids,))
+        cur.close()
+
+    def test_requires_login(self, client, two_tenant_rows):
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                            follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_bulk_deactivate_and_reactivate(self, client, db_engine, two_tenant_rows):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"2 companies updated." in resp.data
+        cur = db_engine.cursor()
+        cur.execute("SELECT status FROM att_master.tenants WHERE id=ANY(%s)", (two_tenant_rows,))
+        assert [r[0] for r in cur.fetchall()] == ["suspended", "suspended"]
+
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "active", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        cur.execute("SELECT status FROM att_master.tenants WHERE id=ANY(%s)", (two_tenant_rows,))
+        assert [r[0] for r in cur.fetchall()] == ["active", "active"]
+        cur.close()
+
+    def test_no_selection_rejected(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/bulk-status", data={"status": "suspended"},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"No companies were selected." in resp.data
+
+    def test_invalid_status_rejected(self, client, db_engine, two_tenant_rows):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "deleted", "tenant_ids": [str(two_tenant_rows[0])]},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Invalid status." in resp.data
+        cur = db_engine.cursor()
+        cur.execute("SELECT status FROM att_master.tenants WHERE id=%s", (two_tenant_rows[0],))
+        assert cur.fetchone()[0] == "active"
+        cur.close()
+
+
+class TestDashboardSearchPaginationAndExport:
+    @pytest.fixture
+    def searchable_tenant(self, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ("Zephyr Search Target Co", "zephyr-search-target", "att_zephyr_search_target"),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.close()
+
+    def test_search_filters_to_matching_company(self, client, searchable_tenant):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin?q=Zephyr+Search+Target")
+        assert resp.status_code == 200
+        assert b"Zephyr Search Target Co" in resp.data
+
+        resp = client.get("/super_admin?q=NoSuchCompanyXYZ123")
+        assert resp.status_code == 200
+        assert b"Zephyr Search Target Co" not in resp.data
+        assert b"No companies match your search." in resp.data
+
+    def test_out_of_range_page_clamps_instead_of_erroring(self, client, searchable_tenant):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin?page=99999")
+        assert resp.status_code == 200
+
+    def test_export_tenants_csv(self, client, searchable_tenant):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/export/tenants.csv?q=Zephyr+Search+Target")
+        assert resp.status_code == 200
+        assert resp.headers["Content-Type"].startswith("text/csv")
+        assert b"Zephyr Search Target Co" in resp.data
+        assert resp.data.startswith(b"Company,Subdomain,Status")
+
+    def test_export_payments_csv_requires_login(self, client):
+        resp = client.get("/super_admin/export/payments.csv", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_export_payments_csv(self, client):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/export/payments.csv")
+        assert resp.status_code == 200
+        assert resp.headers["Content-Type"].startswith("text/csv")
+        assert resp.data.startswith(b"Kind,Company,Subdomain")
+
+
 # ===========================================================================
 # Applications queue / detail / document streaming
 # (approve/reject happy paths are covered by tests/test_org.py already --
@@ -729,6 +842,52 @@ class TestDuplicateAlerts:
         cur.close()
 
 
+class TestBulkAcknowledgeDuplicateAlerts:
+    @pytest.fixture
+    def two_alert_rows(self, db_engine):
+        cur = db_engine.cursor()
+        ids = []
+        for i in range(2):
+            cur.execute(
+                "INSERT INTO att_master.tenant_duplicate_alerts "
+                "(attempted_company_name, attempted_admin_email, conflicting_tenant_id, conflicting_company_name) "
+                "VALUES (%s,%s,%s,%s) RETURNING id",
+                (f"Bulk Ack Impersonator {i}", f"bulk-ack-{i}@test.local", 999999, "Bulk Ack Real Co"),
+            )
+            ids.append(cur.fetchone()[0])
+        yield ids
+        cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE id=ANY(%s)", (ids,))
+        cur.close()
+
+    def test_requires_login(self, client, two_alert_rows):
+        resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge",
+                            data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_bulk_acknowledge_marks_all_selected(self, client, db_engine, two_alert_rows):
+        _login_platform_admin(client, username="bulk_ack_admin")
+        resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge",
+                            data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"2 alert(s) acknowledged." in resp.data
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT acknowledged, acknowledged_by FROM att_master.tenant_duplicate_alerts WHERE id=ANY(%s)",
+            (two_alert_rows,),
+        )
+        rows = cur.fetchall()
+        assert all(r[0] == 1 for r in rows)
+        assert all(r[1] == "bulk_ack_admin" for r in rows)
+        cur.close()
+
+    def test_no_selection_rejected(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge", data={}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"No alerts were selected." in resp.data
+
+
 # ===========================================================================
 # Support chat with a tenant (att_master.chat_messages)
 # ===========================================================================
@@ -784,3 +943,68 @@ class TestChat:
         resp = client.post(f"/super_admin/chat/{tenant_row}/send", json={"message": "   "})
         assert resp.status_code == 400
         assert resp.get_json()["ok"] is False
+
+
+# ===========================================================================
+# Audit log (browsable view over security_events, scoped to
+# platform-admin-relevant event_type prefixes -- see
+# blueprints/platform_admin.py's _AUDIT_LOG_PREFIXES)
+# ===========================================================================
+
+class TestAuditLog:
+    @pytest.fixture
+    def audit_events(self, db_engine):
+        """Writes directly to security_events rather than going through
+        log_security_event()'s async background writer (see
+        tests/test_security_events_log.py's docstring) -- these tests only
+        care about the audit-log route's filtering/rendering, not the
+        writer itself, so a synchronous INSERT keeps them fast and
+        deterministic. INSERT isn't blocked by the append-only trigger
+        (only UPDATE/DELETE are), so no bypass is needed to create rows --
+        only to clean them up."""
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO security_events (event_type, level, message, identifier) VALUES "
+            "('platform_admin.rate_updated', 'WARNING', 'Per-employee rate changed from X to Y', 'AUDIT_TEST_ADMIN'),"
+            "('platform_admin.tenant_created', 'INFO', 'Platform admin created tenant Audit Test Co', 'AUDIT_TEST_ADMIN'),"
+            "('auth.admin_login_success', 'INFO', 'Should never appear -- not a platform-admin-scoped prefix', 'AUDIT_TEST_ADMIN')"
+        )
+        db_engine.commit()
+        yield
+        cur.execute("SET audit.bypass = 'on'")
+        cur.execute("DELETE FROM security_events WHERE identifier='AUDIT_TEST_ADMIN'")
+        cur.execute("SET audit.bypass = 'off'")
+        db_engine.commit()
+        cur.close()
+
+    def test_requires_login(self, client):
+        resp = client.get("/super_admin/audit-log", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_shows_platform_admin_scoped_events_only(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log")
+        assert resp.status_code == 200
+        assert b"Per-employee rate changed from X to Y" in resp.data
+        assert b"Platform admin created tenant Audit Test Co" in resp.data
+        assert b"Should never appear" not in resp.data
+
+    def test_search_filters_by_message(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log?q=Audit+Test+Co")
+        assert resp.status_code == 200
+        assert b"Platform admin created tenant Audit Test Co" in resp.data
+        assert b"Per-employee rate changed" not in resp.data
+
+    def test_level_filter(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log?level=WARNING")
+        assert resp.status_code == 200
+        assert b"Per-employee rate changed from X to Y" in resp.data
+        assert b"Platform admin created tenant Audit Test Co" not in resp.data
+
+    def test_out_of_range_page_clamps_instead_of_erroring(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log?page=99999")
+        assert resp.status_code == 200

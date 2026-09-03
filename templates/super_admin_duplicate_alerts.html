@@ -50,6 +50,12 @@
       .mini-btn:hover { background: var(--primary-dark); }
       .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
       .row-new { background: #fef2f2; }
+      .bulk-action-bar {
+        display: flex; align-items: center; gap: 10px; background: var(--primary-soft);
+        border: 1px solid var(--primary-soft-border); border-radius: 10px; padding: 10px 14px;
+        font-size: 13px; margin-bottom: 16px;
+      }
+      .bulk-action-bar span { color: var(--primary-dark); }
     </style>
   </head>
   <body>
@@ -71,15 +77,34 @@
         are internal-only and never shown to them.
       </p>
 
+      <form id="bulkAlertForm" action="/super_admin/duplicate-alerts/bulk-acknowledge" method="POST" style="display:none;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+      </form>
+
+      {% if alerts %}
+      <div class="bulk-action-bar" id="bulkActionBar" hidden>
+        <span><strong id="bulkSelectedCount">0</strong> selected</span>
+        <button type="submit" form="bulkAlertForm" class="mini-btn"><i class="ti ti-check"></i> Acknowledge Selected</button>
+      </div>
+      {% endif %}
+
       <div class="card">
         {% if alerts %}
         <table>
           <thead>
-            <tr><th>Attempted Name</th><th>Attempted By</th><th>Existing Tenant</th><th>Existing Admin</th><th>Match</th><th>When</th><th>Status</th><th>Actions</th></tr>
+            <tr>
+              <th><input type="checkbox" id="selectAllAlerts" onchange="toggleAllAlerts(this)" aria-label="Select all unacknowledged alerts" /></th>
+              <th>Attempted Name</th><th>Attempted By</th><th>Existing Tenant</th><th>Existing Admin</th><th>Match</th><th>When</th><th>Status</th><th>Actions</th>
+            </tr>
           </thead>
           <tbody>
             {% for alert in alerts %}
             <tr class="{{ 'row-new' if not alert.acknowledged }}">
+              <td>
+                {% if not alert.acknowledged %}
+                <input type="checkbox" class="alert-select" form="bulkAlertForm" name="alert_ids" value="{{ alert.id }}" onchange="updateAlertBulkBar()" aria-label="Select alert for {{ alert.attempted_company_name }}" />
+                {% endif %}
+              </td>
               <td class="co-name">{{ alert.attempted_company_name }}</td>
               <td class="subdomain">{{ alert.attempted_admin_email }}</td>
               <td class="co-name">{{ alert.conflicting_company_name }} <span class="subdomain">(#{{ alert.conflicting_tenant_id }})</span></td>
@@ -109,6 +134,18 @@
         <div class="empty-state"><i class="ti ti-shield-check" style="font-size:32px;"></i><p style="margin-top:8px;">No duplicate-name attempts recorded.</p></div>
         {% endif %}
       </div>
+
+      <script>
+        function toggleAllAlerts(master) {
+          document.querySelectorAll('.alert-select').forEach(function (cb) { cb.checked = master.checked; });
+          updateAlertBulkBar();
+        }
+        function updateAlertBulkBar() {
+          var checked = document.querySelectorAll('.alert-select:checked').length;
+          document.getElementById('bulkSelectedCount').textContent = checked;
+          document.getElementById('bulkActionBar').hidden = checked === 0;
+        }
+      </script>
     </div>
   </body>
 </html>
