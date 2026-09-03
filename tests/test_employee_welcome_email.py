@@ -1,12 +1,19 @@
-"""New-employee welcome emails now include a clickable link to the
-tenant's own login page, not just bare credentials (previously the email
-listed an Employee ID + password with nowhere to use them). Covers all 3
-live employee-creation entry points: /add_employee_page, the Bearer-token
+"""New-employee welcome emails link the recipient somewhere useful rather
+than listing bare credentials with nowhere to use them. Covers all 3 live
+employee-creation entry points: /add_employee_page, the Bearer-token
 /api/employees, and the self-service /api/employee/signup. (A 4th used to
 exist -- POST /admin_action action="register" -- but that branch was
 removed from blueprints/employees.py; see tests/test_employee_registration.py's
 docstring. /add_employee_page's coverage below is the same welcome-email
 behavior, just through the route that actually creates employees now.)
+
+/add_employee_page and /api/employees generate the password themselves, so
+their welcome email sends a one-time "set your password" link
+(/employee_reset_password/<token>) instead of a plain login link -- see
+blueprints/employees.py's _send_welcome_credentials_email docstring for
+why (Gmail hard-blocks the old plaintext-password-plus-login-link shape as
+phishing). /api/employee/signup is self-service -- the employee already
+chose their own password -- so it still links straight to /login.
 
 get_email_config()/send_email_smtp() are monkeypatched per call site
 (imported directly into each blueprint module, same pattern
@@ -73,7 +80,7 @@ class TestEmployeeLoginUrlHelper:
 
 
 class TestAddEmployeePageWelcomeEmail:
-    def test_add_employee_sends_email_with_login_link(self, client, seed_admin, db_engine, monkeypatch):
+    def test_add_employee_sends_email_with_set_password_link(self, client, seed_admin, db_engine, monkeypatch):
         _mock_face_detected(monkeypatch)
         import blueprints.employees as employees_module
         monkeypatch.setattr(employees_module, "get_email_config", lambda: {"host": "smtp.test"})
@@ -94,13 +101,13 @@ class TestAddEmployeePageWelcomeEmail:
             assert len(sent) == 1
             to, subject, html = sent[0]
             assert to == "welmail002@test.local"
-            assert "/login" in html
+            assert "/employee_reset_password/" in html
         finally:
             _cleanup_employee(db_engine, emp_id)
 
 
 class TestApiRegisterEmployeeWelcomeEmail:
-    def test_api_register_sends_email_with_login_link(self, client, seed_admin, db_engine, monkeypatch):
+    def test_api_register_sends_email_with_set_password_link(self, client, seed_admin, db_engine, monkeypatch):
         _mock_face_detected(monkeypatch)
         import blueprints.employees as employees_module
         monkeypatch.setattr(employees_module, "get_email_config", lambda: {"host": "smtp.test"})
@@ -128,7 +135,7 @@ class TestApiRegisterEmployeeWelcomeEmail:
             assert len(sent) == 1
             to, subject, html = sent[0]
             assert to == "welmail003@test.local"
-            assert "/login" in html
+            assert "/employee_reset_password/" in html
         finally:
             _cleanup_employee(db_engine, emp_id)
 

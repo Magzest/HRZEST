@@ -512,11 +512,15 @@ class TestApiDeleteEmployee:
 
     def test_success(self, client, seed_admin, db_engine):
         cur = db_engine.cursor()
-        cur.execute("INSERT INTO employees (employee_id, name) VALUES (%s,%s)",
-                    ("APIDEL1", "Api Delete Target"))
-        token = _admin_bearer_token(client, seed_admin)
-        resp = client.delete("/api/employees/APIDEL1", headers={"Authorization": f"Bearer {token}"})
-        assert resp.status_code == 200
-        cur.execute("SELECT 1 FROM employees WHERE employee_id='APIDEL1'")
-        assert cur.fetchone() is None
-        cur.close()
+        try:
+            cur.execute("DELETE FROM employees WHERE employee_id='APIDEL1'")
+            cur.execute("INSERT INTO employees (employee_id, name) VALUES (%s,%s)",
+                        ("APIDEL1", "Api Delete Target"))
+            token = _admin_bearer_token(client, seed_admin)
+            resp = client.delete("/api/employees/APIDEL1", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+            cur.execute("SELECT 1 FROM employees WHERE employee_id='APIDEL1'")
+            assert cur.fetchone() is None
+        finally:
+            cur.execute("DELETE FROM employees WHERE employee_id='APIDEL1'")
+            cur.close()
