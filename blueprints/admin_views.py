@@ -32,10 +32,6 @@ from utils.auth import (
     check_password_hash, generate_password_hash, HR_ROLE,
     api_required, api_role_required, validate_new_password,
 )
-from utils.device_utils import (
-    get_or_create_device_token, list_devices, rename_device,
-    add_asset_device, delete_asset_device, revoke_device,
-)
 from utils import chat_utils
 from utils.helpers import (
     tpath,
@@ -2678,62 +2674,11 @@ def api_hr_accounts_set_status_bearer(username):
     return jsonify({"ok": True, "msg": f"HR account '{username}' {'activated' if active else 'terminated'}."})
 
 
-# ── Self-service device management (utils/device_utils.py) ─────────────────
-# Shared by both admin and hr roles -- admin_required covers either (only
-# role_required("admin") elsewhere is HR-exclusive), and each account only
-# ever sees/manages its own rows (owner_id=admin_username).
-
+# 'admin' or HR_ROLE for whichever role this admin session actually has --
+# used to scope rows owned by this account (e.g. chat_messages.sender_kind
+# below) across the shared admin/hr login.
 def _device_owner_kind():
     return HR_ROLE if session.get("admin_role") == HR_ROLE else "admin"
-
-
-@admin_views_bp.route("/api/admin/devices", methods=["GET"])
-@admin_required
-def api_admin_devices():
-    username = session["admin_username"]
-    token, _ = get_or_create_device_token(request)
-    devices = list_devices(get_db_connection, _device_owner_kind(), username, token)
-    return jsonify({"ok": True, "devices": devices})
-
-
-@admin_views_bp.route("/api/admin/devices/<int:device_id>/rename", methods=["POST"])
-@admin_required
-def api_admin_device_rename(device_id):
-    username = session["admin_username"]
-    data = request.get_json(silent=True) or {}
-    ok = rename_device(get_db_connection, _device_owner_kind(), username, device_id, data.get("name"))
-    return jsonify({"ok": ok})
-
-
-@admin_views_bp.route("/api/admin/devices/<int:device_id>/revoke", methods=["POST"])
-@admin_required
-def api_admin_device_revoke(device_id):
-    username = session["admin_username"]
-    ok = revoke_device(get_db_connection, _device_owner_kind(), username, device_id, username)
-    if ok:
-        log_security_event(
-            "admin.device_revoked", f"Device {device_id} revoked by '{username}'",
-            level="INFO", identifier=username,
-        )
-    return jsonify({"ok": ok})
-
-
-@admin_views_bp.route("/api/admin/devices/asset", methods=["POST"])
-@admin_required
-def api_admin_device_add_asset():
-    username = session["admin_username"]
-    data = request.get_json(silent=True) or {}
-    new_id = add_asset_device(get_db_connection, _device_owner_kind(), username,
-                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
-    return jsonify({"ok": new_id is not None, "id": new_id})
-
-
-@admin_views_bp.route("/api/admin/devices/asset/<int:device_id>/delete", methods=["POST"])
-@admin_required
-def api_admin_device_delete_asset(device_id):
-    username = session["admin_username"]
-    ok = delete_asset_device(get_db_connection, _device_owner_kind(), username, device_id)
-    return jsonify({"ok": ok})
 
 
 # ── Internal chat with the platform operator (utils/chat_utils.py) ─────────

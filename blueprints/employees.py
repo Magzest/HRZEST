@@ -1093,7 +1093,7 @@ def update_photo(emp_id):
     file.save(save_path)
     db = get_db_connection()
     cursor = db.cursor()
-    cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (emp_id + ".jpg", emp_id))
+    cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (save_path, emp_id))
     db.commit()
     cursor.close()
     db.close()

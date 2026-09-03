@@ -25,7 +25,6 @@ from utils.auth import (
 from utils.helpers import tpath, get_company_settings, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
 from utils.session_risk import ensure_session_id
-from utils.device_utils import get_or_create_device_token, set_device_cookie, record_login_device
 from utils.totp import verify_totp_code, send_mfa_login_email, mark_totp_enabled
 from utils.face_utils import verify_uploaded_face
 from utils.webauthn_utils import (
@@ -86,21 +85,6 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     session["mfa_issued_at"] = time.time()
     return redirect(tpath("/mfa_verify"))
 
-
-def _capture_and_cookie_device(resp, owner_kind, owner_id, sid):
-    """Best-effort: record this login's device (utils/device_utils.py) on
-    whichever schema get_db_connection() currently resolves to, and stamp
-    the browser's device-token cookie on the response we're about to
-    return. Never fails or blocks the login itself -- a device-tracking
-    hiccup must not be able to lock someone out of signing in."""
-    try:
-        token, is_new = get_or_create_device_token(request)
-        record_login_device(get_db_connection, owner_kind, owner_id, token, sid, request)
-        if is_new:
-            set_device_cookie(resp, token)
-    except Exception as exc:
-        app_log.warning("device capture failed for %s '%s': %s", owner_kind, owner_id, exc)
-    return resp
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -203,7 +187,7 @@ def admin_login():
                 dest = redirect(tpath("/employees"))
             else:
                 dest = redirect(tpath("/admin"))
-            return _capture_and_cookie_device(dest, HR_ROLE if admin_row[1] == HR_ROLE else "admin", identifier, sid)
+            return dest
         # Try employee credentials
         with _db() as (cursor, db):
             cursor.execute(
@@ -237,7 +221,7 @@ def admin_login():
             if emp_row[5]:
                 notify_if_new_login_ip(emp_row[0], "employee", request.remote_addr, emp_row[1], emp_row[5])
             dest = redirect(tpath("/force_change_pin")) if emp_row[4] else redirect(tpath("/employee_portal"))
-            return _capture_and_cookie_device(dest, "employee", emp_row[0], sid)
+            return dest
         _record_login_failure(identifier)
         return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
                                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
@@ -290,7 +274,7 @@ def mfa_verify():
                 if row[4]:
                     notify_if_new_login_ip(row[0], "employee", request.remote_addr, row[1], row[4])
                 dest = redirect(tpath("/force_change_pin")) if row[3] else redirect(tpath("/employee_portal"))
-                return _capture_and_cookie_device(dest, "employee", row[0], sid)
+                return dest
             else:
                 with _db() as (cursor, db):
                     cursor.execute("SELECT role, email FROM admin_users WHERE username=%s", (username,))
@@ -314,7 +298,7 @@ def mfa_verify():
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
                 dest = redirect(tpath("/employees" if role == HR_ROLE else "/admin"))
-                return _capture_and_cookie_device(dest, HR_ROLE if role == HR_ROLE else "admin", username, sid)
+                return dest
 
         log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
         return render_template("mfa_verify.html", username=username, error="Invalid code. Please try again.")
