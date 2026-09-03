@@ -201,7 +201,7 @@ def update_my_photo():
         img.save(save_path, "JPEG", quality=90)
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (emp_id + ".jpg", emp_id))
+        cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (save_path, emp_id))
         db.commit()
         cursor.close()
         db.close()
@@ -748,8 +748,22 @@ def employee_portal():
             pm = 12
             py -= 1
 
+    # Cache-busting suffix for the /my_photo <img> src -- that URL is always
+    # the same regardless of which photo is behind it, so the browser (and
+    # send_from_directory's own Cache-Control/ETag headers) can keep showing
+    # a stale image after update_my_photo() saves a new one over the old
+    # file. Tying the query string to the file's own mtime forces a fresh
+    # fetch exactly when the photo actually changed, without needing a
+    # dedicated "photo updated at" column.
+    try:
+        _photo_path = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
+        photo_v = int(os.path.getmtime(_photo_path))
+    except OSError:
+        photo_v = 0
+
     return render_template("employee_portal.html",
                            emp=emp,
+                           photo_v=photo_v,
                            today_date=today,
                            today=today.strftime("%d %b %Y"),
                            today_long=today.strftime("%A, %d %B %Y"),
