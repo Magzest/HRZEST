@@ -25,10 +25,6 @@ from utils.attendance_utils import (
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified, _mobile_biometric_recently_verified
-from utils.device_utils import (
-    get_or_create_device_token, list_devices, rename_device,
-    add_asset_device, delete_asset_device, revoke_device,
-)
 from qr_generator import generate_qr
 import utils.config as cfg
 
@@ -201,7 +197,7 @@ def update_my_photo():
         img.save(save_path, "JPEG", quality=90)
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (emp_id + ".jpg", emp_id))
+        cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (save_path, emp_id))
         db.commit()
         cursor.close()
         db.close()
@@ -748,8 +744,22 @@ def employee_portal():
             pm = 12
             py -= 1
 
+    # Cache-busting suffix for the /my_photo <img> src -- that URL is always
+    # the same regardless of which photo is behind it, so the browser (and
+    # send_from_directory's own Cache-Control/ETag headers) can keep showing
+    # a stale image after update_my_photo() saves a new one over the old
+    # file. Tying the query string to the file's own mtime forces a fresh
+    # fetch exactly when the photo actually changed, without needing a
+    # dedicated "photo updated at" column.
+    try:
+        _photo_path = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
+        photo_v = int(os.path.getmtime(_photo_path))
+    except OSError:
+        photo_v = 0
+
     return render_template("employee_portal.html",
                            emp=emp,
+                           photo_v=photo_v,
                            today_date=today,
                            today=today.strftime("%d %b %Y"),
                            today_long=today.strftime("%A, %d %B %Y"),
@@ -1895,54 +1905,3 @@ def api_employee_device_risk():
                         "msg": "Device risk too high -- this session is being terminated."})
 
     return jsonify({"ok": True, "blocked": False})
-
-
-# ── Self-service device management (utils/device_utils.py) ─────────────────
-
-@employee_portal_bp.route("/api/employee/devices", methods=["GET"])
-@employee_required
-def api_employee_devices():
-    emp_id = session["employee_id"]
-    token, _ = get_or_create_device_token(request)
-    devices = list_devices(get_db_connection, "employee", emp_id, token)
-    return jsonify({"ok": True, "devices": devices})
-
-
-@employee_portal_bp.route("/api/employee/devices/<int:device_id>/rename", methods=["POST"])
-@employee_required
-def api_employee_device_rename(device_id):
-    emp_id = session["employee_id"]
-    data = request.get_json(silent=True) or {}
-    ok = rename_device(get_db_connection, "employee", emp_id, device_id, data.get("name"))
-    return jsonify({"ok": ok})
-
-
-@employee_portal_bp.route("/api/employee/devices/<int:device_id>/revoke", methods=["POST"])
-@employee_required
-def api_employee_device_revoke(device_id):
-    emp_id = session["employee_id"]
-    ok = revoke_device(get_db_connection, "employee", emp_id, device_id, emp_id)
-    if ok:
-        log_security_event(
-            "employee.device_revoked", f"Device {device_id} revoked by '{emp_id}'",
-            level="INFO", identifier=emp_id,
-        )
-    return jsonify({"ok": ok})
-
-
-@employee_portal_bp.route("/api/employee/devices/asset", methods=["POST"])
-@employee_required
-def api_employee_device_add_asset():
-    emp_id = session["employee_id"]
-    data = request.get_json(silent=True) or {}
-    new_id = add_asset_device(get_db_connection, "employee", emp_id,
-                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
-    return jsonify({"ok": new_id is not None, "id": new_id})
-
-
-@employee_portal_bp.route("/api/employee/devices/asset/<int:device_id>/delete", methods=["POST"])
-@employee_required
-def api_employee_device_delete_asset(device_id):
-    emp_id = session["employee_id"]
-    ok = delete_asset_device(get_db_connection, "employee", emp_id, device_id)
-    return jsonify({"ok": ok})

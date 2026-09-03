@@ -727,7 +727,7 @@
       <div class="sb-profile">
         <div class="sb-avatar">
           {% if emp[4] %}
-            <img src="/my_photo" alt="{{ emp[1] }}"
+            <img src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}"
                  onerror="this.parentNode.innerHTML='{{ emp[1][0] | upper }}'" />
           {% else %}
             {{ emp[1][0] | upper }}
@@ -740,20 +740,6 @@
         </div>
       </div>
 
-      <!-- Language Switcher, Touch ID & Theme Toggle -->
-      <div style="display:flex;gap:6px;margin-bottom:14px;padding:0 2px;">
-        <select id="langSelector" onchange="i18n.setLanguage(this.value)" style="flex:1;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.2);font-size:11px;font-weight:700;outline:none;cursor:pointer;">
-          <option value="en" style="color:#000;">🌐 EN (English)</option>
-          <option value="es" style="color:#000;">🌐 ES (Español)</option>
-          <option value="hi" style="color:#000;">🌐 HI (हिन्दी)</option>
-        </select>
-        <button type="button" onclick="enrollTouchID()" style="padding:6px 8px;border-radius:8px;background:rgba(34,197,94,0.25);color:#86efac;border:1px solid rgba(34,197,94,0.4);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;" title="Register Touch ID / Biometric">
-          <i class="ti ti-fingerprint"></i>
-        </button>
-        <button type="button" onclick="toggleTheme()" style="padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-size:12px;font-weight:700;cursor:pointer;" id="themeToggleBtn" title="Toggle Light/Dark Theme">
-          🌙
-        </button>
-      </div>
 
       <div class="sb-scroll-nav">
         <div class="sb-nav-label">Main</div>
@@ -842,7 +828,7 @@
           <div class="u-d-flex u-ai-center u-gap-18 u-mb-14">
             <div class="profile-avatar u-mb-0 u-fxs-0">
               {% if emp[4] %}
-                <img src="/my_photo" alt="{{ emp[1] }}"
+                <img src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}"
                      onerror="this.parentNode.innerHTML='{{ emp[1][0] | upper }}'" />
               {% else %}
                 {{ emp[1][0] | upper }}
@@ -1015,9 +1001,6 @@
             📍 Mark Attendance
           </button>
           {% endif %}
-          <button class="u-mt-8 u-w-100pct u-p-11 u-bd-1-solid-dbeafe u-br-10 u-bg-fff u-c-1e3a8a u-fs-13 u-fw-700 u-cur-pointer u-d-flex u-ai-center u-jc-center u-gap-8" onclick="dmOpen()">
-            💻 My Devices
-          </button>
         </div>
         <script>
           (function(){
@@ -1376,42 +1359,6 @@
 
           <button type="submit" class="btn-leave">Submit Leave Request</button>
         </form>
-      </div>
-
-      <!-- Upcoming Holidays for Leave Planning -->
-      <div class="section u-mt-20 u-bg-linear-gradien139ca0 u-bd-1-solid-fcd34d u-br-14 u-p-18-20">
-        <div class="u-d-flex u-ai-center u-gap-8 u-mb-14">
-          <span class="u-fs-18">🎉</span>
-          <div>
-            <div class="u-fs-14 u-fw-700 u-c-78350f">Upcoming Holidays</div>
-            <div class="u-fs-11 u-c-92400e u-mt-1">No need to apply leave on these dates</div>
-          </div>
-        </div>
-        {% if leave_holidays %}
-        <div class="u-d-flex u-fxd-column u-gap-8">
-          {% for hdate, hname in leave_holidays %}
-          <div class="u-d-flex u-ai-center u-jc-space-between u-bg-rgba255_255_255_0d7 u-bd-1-solid-fde68a u-br-9 u-p-9-13">
-            <div class="u-d-flex u-ai-center u-gap-10">
-              <div class="u-bg-f59e0b u-c-fff u-fs-11 u-fw-700 u-br-6 u-p-3-8 u-minw-40 u-ta-center">
-                {{ hdate.strftime('%d') }}
-              </div>
-              <div>
-                <div class="u-fs-13 u-fw-600 u-c-1c1917">{{ hname }}</div>
-                <div class="u-fs-11 u-c-78350f">{{ hdate.strftime('%A, %B %Y') }}</div>
-              </div>
-            </div>
-            {% set days_left = (hdate - today_date).days %}
-            <div class="u-fs-11 u-c-92400e u-fw-600 u-ta-right u-ws-nowrap">
-              {% if days_left == 0 %}Today{% elif days_left == 1 %}Tomorrow{% else %}in {{ days_left }} days{% endif %}
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="u-ta-center u-c-92400e u-fs-13 u-p-12-0">
-          No upcoming holidays for the rest of this year.
-        </div>
-        {% endif %}
       </div>
 
       <div class="section u-mt-24">
@@ -2313,8 +2260,8 @@
             <div class="u-pos-relative u-w-100 u-h-100 u-fxs-0">
               <div class="profile-avatar u-w-100 u-h-100 u-fs-36 u-mb-0">
                 {% if emp[4] %}
-                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}" title="View full photo">
-                    <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo" alt="{{ emp[1] }}" id="profilePreview"
+                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}?v={{ photo_v }}" title="View full photo">
+                    <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}" id="profilePreview"
                          onerror="this.parentNode.parentNode.innerHTML='{{ emp[1][0]|upper }}'" />
                   </a>
                 {% else %}
@@ -2330,9 +2277,6 @@
               <form class="u-mt-10 u-d-flex u-ai-center u-gap-10" action="{{ tpath('/update_my_photo') }}" method="POST" enctype="multipart/form-data" id="photoForm">
                 <input class="u-d-none" type="file" name="photo" id="photoUpload" accept=".jpg,.jpeg,.png" onchange="previewPhoto(this)" />
                 <span class="u-fs-12 u-c-94a3b8" id="photoFileName">No file chosen</span>
-                <button class="u-d-none u-p-6-14 u-bd-none u-br-8 u-bg-3b82f6 u-c-white u-fs-12 u-fw-600 u-cur-pointer" type="submit" id="photoSubmitBtn">
-                  Upload
-                </button>
               </form>
             </div>
             <!-- Download buttons -->
@@ -4156,8 +4100,7 @@
       function previewPhoto(input) {
         if (!input.files || !input.files[0]) return;
         var file = input.files[0];
-        document.getElementById('photoFileName').textContent = file.name;
-        document.getElementById('photoSubmitBtn').style.display = 'inline-block';
+        document.getElementById('photoFileName').textContent = 'Uploading ' + file.name + '…';
         var reader = new FileReader();
         reader.onload = function(e) {
           var prev = document.getElementById('profilePreview');
@@ -4173,6 +4116,15 @@
           }
         };
         reader.readAsDataURL(file);
+        // Submit immediately instead of waiting on a separate "Upload"
+        // click -- the photo picker is a single <label>-triggered file
+        // input with no visible affordance suggesting a second step is
+        // needed, so requiring one meant a selected photo could look
+        // "changed" here (via the local preview above) while never
+        // actually reaching the server -- explaining reports of a photo
+        // update that showed in Profile but never appeared anywhere else
+        // (sidebar, Dashboard), because it was never actually saved.
+        document.getElementById('photoForm').submit();
       }
     </script>
 
@@ -4716,7 +4668,5 @@
       }
     });
   </script>
-  <script>var DEVICE_API_BASE = '/api/employee/devices';</script>
-  {% include '_device_manager.html' %}
 </body>
 </html>

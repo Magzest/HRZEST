@@ -94,9 +94,6 @@
         padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
       }
       .new-co-btn:hover { background: var(--primary-dark); border-color: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-1px); }
-      details.new-co summary { list-style: none; cursor: pointer; }
-      details.new-co summary::-webkit-details-marker { display: none; }
-      details.new-co summary:hover strong { color: var(--primary); }
       .new-co-form {
         margin-top: 12px; padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr);
         gap: 14px 16px;
@@ -266,12 +263,6 @@
       <div class="header">
         <h1><img class="icon-photo-lg" src="{{ static_url('icons/photos/building-fortress.jpg') }}" alt=""> Platform Admin Console</h1>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" onclick="dmOpen()" title="Manage your own login devices and assets"
-             style="display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);border:1px solid var(--primary-soft-border);color:var(--primary-dark);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;transition:background-color .15s,box-shadow .15s,transform .15s;"
-             onmouseover="this.style.background='#dbeafe';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
-             onmouseout="this.style.background='var(--primary-soft)';this.style.boxShadow='none';this.style.transform='none';">
-            <img class="icon-photo" src="{{ static_url('icons/photos/device-laptop.jpg') }}" alt=""> My Devices
-          </button>
           <form action="/super_admin/logout" method="POST" style="margin:0;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
             <button type="submit" class="logout-btn"><img class="icon-photo" src="{{ static_url('icons/photos/logout.jpg') }}" alt=""> Sign Out</button>
@@ -402,10 +393,10 @@
         </div>
         <div class="section-body">
           <div class="section-toolbar">
-            <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').open = !document.getElementById('newCoPanel').open;">
+            <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').hidden = !document.getElementById('newCoPanel').hidden;">
               <img class="icon-photo" src="{{ static_url('icons/photos/plus.jpg') }}" alt=""> New Company (Free)
             </button>
-            <button type="button" class="new-co-btn" onclick="document.getElementById('editRatePanel').open = !document.getElementById('editRatePanel').open;"
+            <button type="button" class="new-co-btn" onclick="document.getElementById('editRatePanel').hidden = !document.getElementById('editRatePanel').hidden;"
                     title="Change the flat per-employee monthly rate — applies to every new signup, top-up, and bill immediately">
               <img class="icon-photo" src="{{ static_url('icons/photos/credit-card.jpg') }}" alt=""> Edit Rate ({{ per_employee_paise | plan_price }})
             </button>
@@ -431,9 +422,8 @@
             </a>
           </div>
 
-          <details class="new-co card" id="newCoPanel">
-            <summary><strong><img class="icon-photo" src="{{ static_url('icons/photos/building-plus.jpg') }}" alt=""> Create a new company (free / manual)</strong></summary>
-            <p style="margin:10px 4px 0;font-size:12px;color:var(--text-muted);">
+          <div class="new-co card" id="newCoPanel" hidden>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">
               Provisions immediately at no charge — for sales-assisted or trial onboarding. To actually
               charge a client via Razorpay instead, use <strong>New Company (Paid Signup)</strong> above.
               Billing for every tenant is {{ per_employee_paise | plan_price }}/employee/month, live-computed
@@ -481,11 +471,10 @@
                 <button type="submit" class="submit-btn"><img class="icon-photo" src="{{ static_url('icons/photos/check.png') }}" alt=""> Create Company</button>
               </div>
             </form>
-          </details>
+          </div>
 
-          <details class="new-co card" id="editRatePanel">
-            <summary><strong><img class="icon-photo" src="{{ static_url('icons/photos/credit-card.jpg') }}" alt=""> Edit per-employee rate</strong></summary>
-            <p style="margin:10px 4px 0;font-size:12px;color:var(--text-muted);">
+          <div class="new-co card" id="editRatePanel" hidden>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">
               Current rate: <strong>{{ per_employee_paise | plan_price }}/employee/month</strong>. Changing this applies
               to every new signup, seat top-up, and manual/dunning bill on the next calculation — no redeploy needed.
               It does <strong>not</strong> retroactively reprice tenants already on recurring auto-debit (Razorpay
@@ -501,7 +490,7 @@
                 <button type="submit" class="submit-btn"><img class="icon-photo" src="{{ static_url('icons/photos/check.png') }}" alt=""> Save Rate</button>
               </div>
             </form>
-          </details>
+          </div>
 
           <div class="card">
             {% if tenants %}
@@ -802,8 +791,5 @@
         return false;
       }
     </script>
-
-    <script>var DEVICE_API_BASE = '/super_admin/devices';</script>
-    {% include '_device_manager.html' %}
   </body>
 </html>
