@@ -212,39 +212,40 @@
       .badge-source-manual { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
 
       /* ── Profit & Loss card ── */
-      .pnl-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+      .pnl-card { padding: 16px 20px; }
+      .pnl-card > h2 { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
       .pnl-card > h2 i { color: var(--primary); }
-      .pnl-figures { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; }
-      .pnl-figures .pnl-figure .pnl-figure-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); font-weight: 700; margin-bottom: 4px; }
-      .pnl-figures .pnl-figure .pnl-figure-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .pnl-figures { display: flex; gap: 28px; flex-wrap: wrap; margin-bottom: 10px; }
+      .pnl-figures .pnl-figure .pnl-figure-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; margin-bottom: 2px; }
+      .pnl-figures .pnl-figure .pnl-figure-value { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
       .pnl-figures .pnl-figure .pnl-figure-value.revenue { color: var(--success); }
       .pnl-figures .pnl-figure .pnl-figure-value.cost { color: var(--warning); }
       .pnl-figures .pnl-figure .pnl-figure-value.net.profit { color: var(--success); }
       .pnl-figures .pnl-figure .pnl-figure-value.net.loss { color: var(--danger); }
-      .pnl-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+      .pnl-bars { display: flex; flex-direction: column; gap: 6px; margin-bottom: 2px; }
       .pnl-bar-row { display: flex; align-items: center; gap: 10px; }
-      .pnl-bar-row .pnl-bar-tag { width: 64px; flex-shrink: 0; font-size: 11px; color: var(--text-muted); font-weight: 700; }
-      .pnl-bar-row .pnl-bar-track { flex: 1; height: 14px; background: #f1f5f9; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-color); }
-      .pnl-bar-row .pnl-bar-fill { height: 100%; border-radius: 7px; transition: width .3s; }
+      .pnl-bar-row .pnl-bar-tag { width: 52px; flex-shrink: 0; font-size: 10.5px; color: var(--text-muted); font-weight: 700; }
+      .pnl-bar-row .pnl-bar-track { flex: 1; height: 8px; background: var(--surface-2); border-radius: 5px; overflow: hidden; border: 1px solid var(--border-color); }
+      .pnl-bar-row .pnl-bar-fill { height: 100%; border-radius: 5px; transition: width .3s; }
       .pnl-bar-row .pnl-bar-fill.revenue { background: var(--success); }
       .pnl-bar-row .pnl-bar-fill.cost { background: var(--warning); }
-      .pnl-bar-row .pnl-bar-amount { width: 110px; flex-shrink: 0; text-align: right; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .pnl-bar-row .pnl-bar-amount { width: 90px; flex-shrink: 0; text-align: right; font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
       .pnl-suggestion {
-        margin-top: 16px; border: 1px solid #fecaca; background: #fef2f2;
-        border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--text-bright);
+        margin-top: 10px; border: 1px solid #fecaca; background: #fef2f2;
+        border-radius: 9px; padding: 10px 14px; font-size: 12px; color: var(--text-bright);
       }
       .pnl-suggestion strong { color: var(--danger); }
-      .pnl-suggestion .pnl-suggestion-math { color: var(--text-muted); font-size: 11.5px; margin-top: 6px; }
-      .pnl-cost-form { margin-top: 16px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-      .pnl-cost-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; }
+      .pnl-suggestion .pnl-suggestion-math { color: var(--text-muted); font-size: 11px; margin-top: 4px; }
+      .pnl-cost-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+      .pnl-cost-form label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; }
       .pnl-cost-form input {
         background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
-        border-radius: 8px; padding: 9px 10px; font-size: 13.5px; width: 140px;
+        border-radius: var(--radius-md); padding: 7px 10px; font-size: 13px; width: 120px;
       }
       .pnl-cost-form input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
       .pnl-cost-form button {
-        background: var(--primary); border: none; color: white; padding: 10px 18px;
-        border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
+        background: var(--primary); border: none; color: white; padding: 8px 16px;
+        border-radius: var(--radius-md); font-size: 12.5px; font-weight: 700; cursor: pointer;
       }
       .pnl-cost-form button:hover { background: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 
@@ -421,43 +422,43 @@
 
       <section class="page-section">
         <div class="section-heading">
-          <img class="icon-photo" src="{{ static_url('icons/photos/building.jpg') }}" alt=""> Companies
+          Companies
           <span class="section-count">{{ filtered_tenant_count }}{% if filtered_tenant_count != total_tenant_count %} of {{ total_tenant_count }}{% endif %}</span>
         </div>
         <div class="section-body">
           <div class="section-toolbar">
             <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').hidden = !document.getElementById('newCoPanel').hidden;">
-              <img class="icon-photo" src="{{ static_url('icons/photos/plus.jpg') }}" alt=""> New Company (Free)
+              New Company (Free)
             </button>
             <button type="button" class="new-co-btn" onclick="document.getElementById('editRatePanel').hidden = !document.getElementById('editRatePanel').hidden;"
                     title="Change the flat per-employee monthly rate — applies to every new signup, top-up, and bill immediately">
-              <img class="icon-photo" src="{{ static_url('icons/photos/credit-card.jpg') }}" alt=""> Edit Rate ({{ per_employee_paise | plan_price }})
+              Edit Rate ({{ per_employee_paise | plan_price }})
             </button>
             <a href="/create_org" target="_blank" rel="noopener" title="Opens the same public registration + Razorpay checkout a self-service customer would use — hand this to a client to pay on the spot."
                style="display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);border:1px solid var(--primary-soft-border);color:var(--primary-dark);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
                onmouseover="this.style.background='#e0e2fa';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
                onmouseout="this.style.background='var(--primary-soft)';this.style.boxShadow='none';this.style.transform='none';">
-              <img class="icon-photo" src="{{ static_url('icons/photos/credit-card.jpg') }}" alt=""> New Company (Paid Signup)
+              New Company (Paid Signup)
             </a>
             <a href="/super_admin/applications" title="Review pending company-signup applications (OTP-verified, documents uploaded, awaiting your approval)"
                style="display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);border:1px solid var(--primary-soft-border);color:var(--primary-dark);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;position:relative;transition:background-color .15s,box-shadow .15s,transform .15s;"
                onmouseover="this.style.background='#e0e2fa';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
                onmouseout="this.style.background='var(--primary-soft)';this.style.boxShadow='none';this.style.transform='none';">
-              <img class="icon-photo" src="{{ static_url('icons/photos/clipboard-check.jpg') }}" alt=""> Applications
+              Applications
               {% if pending_applications_count %}<span style="background:var(--warning);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ pending_applications_count }}</span>{% endif %}
             </a>
             <a href="/super_admin/duplicate-alerts" title="Signups blocked because the company name matched an existing tenant"
                style="display:inline-flex;align-items:center;gap:6px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
                onmouseover="this.style.background='#fee2e2';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
                onmouseout="this.style.background='#fef2f2';this.style.boxShadow='none';this.style.transform='none';">
-              <img class="icon-photo" src="{{ static_url('icons/photos/alert-triangle.jpg') }}" alt=""> Duplicate Alerts
+              Duplicate Alerts
               {% if unacknowledged_alerts_count %}<span style="background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ unacknowledged_alerts_count }}</span>{% endif %}
             </a>
             <a href="/super_admin/audit-log" title="Search and browse the full history of platform admin actions"
                style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
                onmouseover="this.style.background='#e2e8f0';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
                onmouseout="this.style.background='#f1f5f9';this.style.boxShadow='none';this.style.transform='none';">
-              <img class="icon-photo" src="{{ static_url('icons/photos/history.jpg') }}" alt=""> Audit Log
+              Audit Log
             </a>
           </div>
 
@@ -468,10 +469,10 @@
               <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
               <option value="suspended" {% if status_filter == 'suspended' %}selected{% endif %}>Deactivated</option>
             </select>
-            <button type="submit" class="mini-btn"><img class="icon-photo-sm" src="{{ static_url('icons/photos/search.jpg') }}" alt=""> Search</button>
+            <button type="submit" class="mini-btn">Search</button>
             {% if q or status_filter != 'all' %}<a href="/super_admin" class="mini-btn mini-btn-link">Clear</a>{% endif %}
             <a href="/super_admin/export/tenants.csv?q={{ q | urlencode }}&amp;status={{ status_filter }}" class="mini-btn mini-btn-link" style="margin-left:auto;" title="Export the current search/filter results as CSV">
-              <img class="icon-photo-sm" src="{{ static_url('icons/photos/download.jpg') }}" alt=""> Export CSV
+              Export CSV
             </a>
           </form>
 
@@ -521,7 +522,7 @@
                 </select>
               </div>
               <div class="actions">
-                <button type="submit" class="submit-btn"><img class="icon-photo" src="{{ static_url('icons/photos/check.png') }}" alt=""> Create Company</button>
+                <button type="submit" class="submit-btn">Create Company</button>
               </div>
             </form>
           </div>
@@ -540,7 +541,7 @@
                 <input type="number" name="per_employee_rupees" min="0.01" step="0.01" value="{{ '%.2f' | format(per_employee_paise / 100) }}" required />
               </div>
               <div class="actions">
-                <button type="submit" class="submit-btn"><img class="icon-photo" src="{{ static_url('icons/photos/check.png') }}" alt=""> Save Rate</button>
+                <button type="submit" class="submit-btn">Save Rate</button>
               </div>
             </form>
           </div>
@@ -575,7 +576,7 @@
                   </td>
                   <td>
                     {% if t.self_signup %}
-                    <span class="badge badge-source-self" title="Registered themselves via the public landing page"><img class="icon-photo-sm" src="{{ static_url('icons/photos/user.jpg') }}" alt=""> Self-Signup</span>
+                    <span class="badge badge-source-self" title="Registered themselves via the public landing page">Self-Signup</span>
                     {% else %}
                     <span class="badge badge-source-manual" title="Created directly by a platform admin">Platform Admin</span>
                     {% endif %}
@@ -598,9 +599,9 @@
                   <td class="subdomain">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</td>
                   <td>
                     <div class="row-actions">
-                      <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard"><img class="icon-photo-sm" src="{{ static_url('icons/photos/layout-dashboard.jpg') }}" alt=""> Admin</a>
-                      <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page"><img class="icon-photo-sm" src="{{ static_url('icons/photos/users.jpg') }}" alt=""> Employees</a>
-                      <button type="button" class="mini-btn mini-btn-link" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)" title="Chat with this company's admin/HR"><img class="icon-photo-sm" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Chat</button>
+                      <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard">Admin</a>
+                      <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page">Employees</a>
+                      <button type="button" class="mini-btn mini-btn-link" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)" title="Chat with this company's admin/HR">Chat</button>
                       <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
                         {% if t.status == 'active' %}
@@ -611,7 +612,7 @@
                         <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
                         {% endif %}
                       </form>
-                      <button type="button" class="mini-btn mini-btn-danger" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" data-subdomain="{{ t.subdomain }}" onclick="openDeleteModal(this)" title="Permanently delete this company and all its data"><img class="icon-photo-sm" src="{{ static_url('icons/photos/trash.jpg') }}" alt=""> Delete</button>
+                      <button type="button" class="mini-btn mini-btn-danger" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" data-subdomain="{{ t.subdomain }}" onclick="openDeleteModal(this)" title="Permanently delete this company and all its data">Delete</button>
                     </div>
                   </td>
                 </tr>
