@@ -128,9 +128,6 @@
   <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}">
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}">
-    <span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents
-  </a>
   {% if not _is_hr %}
   <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}">
     <span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics

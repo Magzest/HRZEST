@@ -362,7 +362,6 @@
       <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}"><span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off</a>
       <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
       <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
-      <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}"><span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents</a>
       <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
   {% if session.get('admin_role') == 'superadmin' %}
   <a class="nav-item" href="/super_admin/login" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal</a>
@@ -560,7 +559,7 @@
             </div>
           </a>
 
-          <a class="u-tdec-none" href="{{ tpath('/performance?tab=announcements') }}">
+          <a class="u-tdec-none" href="{{ tpath('/leave_holidays?tab=announcements') }}">
             <div class="u-bg-fff1f2 u-bd-1d5-solid-fda4af u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(190,18,60,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div class="u-w-46 u-h-46 u-bg-ffe4e6 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-speakerphone" style="color:#be123c"></i></div>
               <div>
@@ -956,7 +955,7 @@
       {label: 'Salary & Payslips', sub: 'Payroll & payslips', url: '/salary_report', icon: 'coin'},
       {label: 'Leaves & Holidays', sub: 'Leave requests, holidays', url: '/leave_holidays', icon: 'calendar-event'},
       {label: 'OT & Comp-off', sub: 'Overtime, comp-off', url: '/overtime', icon: 'clock-bolt'},
-      {label: 'Performance & Comms', sub: 'Reviews, announcements', url: '/performance', icon: 'chart-line'},
+      {label: 'Performance & Comms', sub: 'Reviews, KPIs, hikes', url: '/performance', icon: 'chart-line'},
       {label: 'Onboarding', sub: 'New-hire onboarding', url: '/onboarding', icon: 'checklist'},
       {label: 'Analytics', sub: 'Charts & insights', url: '/analytics', icon: 'chart-bar'},
       {label: 'Org Chart', sub: 'Reporting structure', url: '/org_chart', icon: 'hierarchy'},
