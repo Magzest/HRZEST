@@ -150,6 +150,8 @@ def admin_action():
 
     cursor.close()
     db.close()
+    if request.form.get("next") == "settings":
+        return redirect(tpath("/settings?tab=email"))
     return redirect(tpath("/admin"))
 
 

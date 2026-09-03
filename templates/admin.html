@@ -252,16 +252,9 @@
       /* ── BUTTONS ── */
       .btn { width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 14px; transition: 0.2s; }
       .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
-      .btn-navy   { background: #1e3a8a; color: white; }
       .btn-green  { background: #16a34a; color: white; }
-      .btn-amber  { background: #d97706; color: white; }
       .btn-indigo { background: #6366f1; color: white; }
       .btn-blue   { background: #2563eb; color: white; }
-      .btn-outline { background: #1e293b; color: white; border: none; width: auto; padding: 6px 14px; font-size: 12px; border-radius: 7px; }
-      .btn-outline:hover { background: #0f172a; }
-
-      /* ── CHANGE PASSWORD ── */
-      .pwd-form .field input[type="password"] { letter-spacing: 1px; }
 
       /* ── ANIMATIONS ── */
       @keyframes pulse {
@@ -564,22 +557,6 @@
         </div>
       </div>
 
-      <!-- ATTENDANCE CHARTS -->
-      <div class="u-d-grid u-gtc-2fr-1fr u-gap-16 u-mb-20">
-
-        <div class="section u-mb-0">
-          <div class="section-title"><i class="ti ti-trending-up"></i> Attendance Trend — Last 30 Days</div>
-          <canvas id="trendChart" height="90"></canvas>
-        </div>
-
-        <div class="section u-mb-0">
-          <div class="section-title"><i class="ti ti-building"></i> Today by Department</div>
-          <canvas id="deptChart" height="90"></canvas>
-        </div>
-
-      </div>
-
-
       <!-- QUICK ACTIONS -->
       <div class="section">
         <div class="section-title"><i class="ti ti-bolt"></i> Quick Actions</div>
@@ -619,82 +596,17 @@
         </div>
       </div>
 
-      <!-- PASSWORD MANAGEMENT -->
-      <div class="section">
-        <div class="section-title"><i class="ti ti-lock"></i> Password Management</div>
+      <!-- ATTENDANCE CHARTS -->
+      <div class="u-d-grid u-gtc-2fr-1fr u-gap-16 u-mb-20">
 
-        {% if request.args.get('pwd_ok') %}
-          <div class="flash flash-success u-maxw-420"><i class="ti ti-circle-check"></i> Password updated successfully.</div>
-        {% elif request.args.get('pwd_error') == 'wrong' %}
-          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> Current password is incorrect.</div>
-        {% elif request.args.get('pwd_error') == 'mismatch' %}
-          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> New passwords do not match.</div>
-        {% elif request.args.get('pwd_error') == 'weak' %}
-          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> Password must be at least 8 characters.</div>
-        {% endif %}
-
-        <div class="u-d-grid u-gtc-1fr-1fr u-gap-24 u-ai-start">
-
-          <!-- Change Admin Password -->
-          <div class="u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-14 u-p-22">
-            <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-16"><i class="ti ti-lock"></i> Change Admin Password</div>
-            <form action="{{ tpath('/change_admin_password') }}" method="POST" class="pwd-form">
-              <input type="hidden" autocomplete="username" value="admin" />
-              <div class="field">
-                <label>Current Password</label>
-                <input type="password" name="current_password" placeholder="Enter current password" autocomplete="current-password" required />
-              </div>
-              <div class="field">
-                <label>New Password</label>
-                <input type="password" name="new_password" placeholder="Enter new password" autocomplete="new-password" required />
-              </div>
-              <div class="field">
-                <label>Confirm New Password</label>
-                <input type="password" name="confirm_password" placeholder="Re-enter new password" autocomplete="new-password" required />
-              </div>
-              <button type="submit" class="btn btn-navy u-maxw-200"><i class="ti ti-lock"></i> Update Password</button>
-            </form>
-          </div>
-
-          <!-- Reset Employee Password -->
-          <div class="u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-14 u-p-22">
-            <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-4"><i class="ti ti-key"></i> Reset Employee Password</div>
-            <div class="u-fs-12 u-c-94a3b8 u-mb-18">Resets the employee's PIN back to their Employee ID</div>
-            <form action="{{ tpath('/admin_action') }}" method="POST">
-              <input type="hidden" name="action" value="reset_password" />
-              <div class="field">
-                <label>Employee ID</label>
-                <input type="text" name="emp_id" placeholder="e.g. EMP001" required />
-              </div>
-              <button type="submit" class="btn btn-amber u-maxw-200"
-                onclick="return confirm('Reset this employee\'s password to their Employee ID?')">
-                <i class="ti ti-key"></i> Reset Password
-              </button>
-            </form>
-          </div>
-
+        <div class="section u-mb-0">
+          <div class="section-title"><i class="ti ti-trending-up"></i> Attendance Trend — Last 30 Days</div>
+          <canvas id="trendChart" height="90"></canvas>
         </div>
 
-        <!-- Set Admin Recovery Email -->
-        <div class="u-mt-20 u-bg-eff6ff u-bd-1-solid-bfdbfe u-br-14 u-p-22">
-          <div class="u-fs-13 u-fw-700 u-c-1e3a8a u-mb-4"><i class="ti ti-mail"></i> Admin Recovery Email</div>
-          <div class="u-fs-12 u-c-64748b u-mb-16">Set the email address used to receive password reset links when you forget your admin password.</div>
-
-          <div id="recoveryEmailView" class="u-d-flex u-ai-center u-gap-12 u-fxw-wrap{% if not admin_recovery_email %} u-d-none{% endif %}">
-            <div class="u-fx-1 u-minw-200 u-fs-14 u-fw-600 u-c-1e293b">{{ admin_recovery_email }}</div>
-            <button type="button" class="btn btn-outline u-maxw-120 u-mb-0" onclick="document.getElementById('recoveryEmailView').classList.add('u-d-none');document.getElementById('recoveryEmailForm').classList.remove('u-d-none');document.getElementById('recoveryEmailInput').focus();"><i class="ti ti-edit"></i> Edit</button>
-          </div>
-
-          <form id="recoveryEmailForm" class="u-d-flex u-ai-flex-end u-gap-12 u-fxw-wrap{% if admin_recovery_email %} u-d-none{% endif %}" action="{{ tpath('/admin_set_recovery_email') }}" method="POST">
-            <div class="field u-fx-1 u-minw-200 u-mb-0">
-              <label>Recovery Email</label>
-              <input type="email" id="recoveryEmailInput" name="recovery_email" placeholder="admin@example.com" value="{{ admin_recovery_email or '' }}" required />
-            </div>
-            <button type="submit" class="btn btn-navy u-maxw-180 u-mb-0"><i class="ti ti-device-floppy"></i> Save Email</button>
-          </form>
-          {% if request.args.get('email_ok') %}
-            <div class="u-mt-12 u-c-15803d u-fs-13"><i class="ti ti-circle-check"></i> Recovery email saved successfully.</div>
-          {% endif %}
+        <div class="section u-mb-0">
+          <div class="section-title"><i class="ti ti-building"></i> Today by Department</div>
+          <canvas id="deptChart" height="90"></canvas>
         </div>
 
       </div>

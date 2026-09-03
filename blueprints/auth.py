@@ -343,13 +343,13 @@ def change_admin_password():
     # if they know its current value -- a cross-account privilege escalation.
     logged_in_as = session.get("admin_username", "admin")
     if not new_pw or new_pw != confirm_pw:
-        return redirect(tpath("/admin?pwd_error=mismatch"))
+        return redirect(tpath("/settings?tab=email&pwd_error=mismatch"))
     _pw_ok, _pw_err = validate_new_password(new_pw)
     if not _pw_ok:
-        return redirect(tpath("/admin?pwd_error=weak"))
+        return redirect(tpath("/settings?tab=email&pwd_error=weak"))
     if not verify_and_update_password("admin_users", "username", logged_in_as, current_pw, new_pw):
-        return redirect(tpath("/admin?pwd_error=wrong"))
-    return redirect(tpath("/admin?pwd_ok=1"))
+        return redirect(tpath("/settings?tab=email&pwd_error=wrong"))
+    return redirect(tpath("/settings?tab=email&pwd_ok=1"))
 
 
 @auth_bp.route("/api/admin/password", methods=["POST"])
@@ -393,7 +393,7 @@ def admin_set_recovery_email():
         db.commit()
         cursor.close()
         db.close()
-    return redirect(tpath("/admin?email_ok=1#password-management"))
+    return redirect(tpath("/settings?tab=email&email_ok=1#password-management"))
 
 
 def _new_reset_token():

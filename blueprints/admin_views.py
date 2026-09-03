@@ -154,10 +154,6 @@ def admin():
         ob_active = ob_completed = ob_overdue = 0
         ob_overdue_list = []
 
-    cursor.execute("SELECT email FROM admin_users WHERE username=%s", (session.get("admin_username"),))
-    _admin_row = cursor.fetchone()
-    admin_recovery_email = _admin_row[0] if _admin_row else ""
-
     cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active FROM break_config ORDER BY break_time")
     break_rows = cursor.fetchall()
     breaks_display = []
@@ -205,7 +201,6 @@ def admin():
                            ob_completed=ob_completed,
                            ob_overdue=ob_overdue,
                            ob_overdue_list=ob_overdue_list,
-                           admin_recovery_email=admin_recovery_email,
                            )
 
 
@@ -431,6 +426,10 @@ def settings_page():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
+    cursor.execute("SELECT email FROM admin_users WHERE username=%s", (session.get("admin_username"),))
+    _admin_row = cursor.fetchone()
+    admin_recovery_email = _admin_row[0] if _admin_row else ""
+
     # Email config: intentionally NOT fetched here. The Email Settings tab
     # sits behind a 2FA step-up gate (utils/auth.py:require_email_2fa) and is
     # loaded client-side via /api/settings/email only after verification --
@@ -635,6 +634,7 @@ def settings_page():
     db.close()
     return render_template("settings.html",
                            tab=tab,
+                           admin_recovery_email=admin_recovery_email,
                            company_code=company_code,
                            total_employees=total_employees,
                            active_employees=active_employees,
