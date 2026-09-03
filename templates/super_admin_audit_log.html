@@ -9,25 +9,28 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <style>
       :root {
-        --bg-main: #ffffff; --bg-card: #ffffff;
-        --border-color: #e2e8f0;
-        --primary: #1d4ed8; --primary-dark: #1e3a8a; --primary-soft: #eff6ff; --primary-soft-border: #bfdbfe;
-        --danger: #dc2626; --warning: #b45309; --success: #059669;
-        --text-bright: #0f172a; --text-muted: #475569; --text-dim: #94a3b8;
+        --bg-main: #f3f4f8; --bg-card: #ffffff; --surface-2: #f8f9fc;
+        --border-color: #e3e5ec;
+        --primary: #3538cd; --primary-dark: #23268f; --primary-light: #6366f1;
+        --primary-soft: #eef0fd; --primary-soft-border: #c7ccf5;
+        --danger: #dc2626; --warning: #b45309; --success: #15803d;
+        --text-bright: #0b1220; --text-muted: #4b5568; --text-dim: #8991a6;
         --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
+        --radius-lg: 14px; --radius-md: 10px;
       }
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
       body {
-        background: radial-gradient(1100px 520px at 50% -12%, #eaf2ff 0%, #ffffff 55%) fixed, var(--bg-main);
+        background: radial-gradient(1200px 560px at 50% -14%, #eef0fb 0%, var(--bg-main) 55%) fixed, var(--bg-main);
         color: var(--text-bright); min-height: 100vh; padding: 24px;
       }
       .container { max-width: 1180px; margin: 0 auto; }
       .header {
         display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
-        padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
-        border-radius: 16px; margin-bottom: 24px; box-shadow: var(--shadow-sm);
+        padding: 18px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg); margin-bottom: 24px; box-shadow: var(--shadow-sm);
+        border-top: 3px solid var(--primary);
       }
-      .header h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+      .header h1 { font-size: 19px; font-weight: 800; letter-spacing: -.2px; display: flex; align-items: center; gap: 10px; }
       .header h1 i { color: var(--primary); }
       .back-link { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: color .15s; }
       .back-link:hover { color: var(--primary); }
@@ -35,34 +38,34 @@
       .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
       .filter-bar input[type="search"] {
         background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
-        border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 260px;
+        border-radius: var(--radius-md); padding: 8px 12px; font-size: 13px; min-width: 260px;
       }
       .filter-bar select {
         background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
-        border-radius: 8px; padding: 8px 10px; font-size: 13px;
+        border-radius: var(--radius-md); padding: 8px 10px; font-size: 13px;
       }
       .filter-bar input:focus, .filter-bar select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
       .mini-btn {
-        background: var(--primary); border: 1px solid var(--primary); color: #fff; border-radius: 8px;
+        background: var(--primary); border: 1px solid var(--primary); color: #fff; border-radius: var(--radius-md);
         padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: none;
         display: inline-flex; align-items: center; gap: 6px; transition: background-color .15s;
       }
       .mini-btn:hover { background: var(--primary-dark); }
-      .mini-btn-link { background: #f1f5f9; border-color: #e2e8f0; color: #475569; }
-      .mini-btn-link:hover { background: #e2e8f0; }
-      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; overflow-x: auto; box-shadow: var(--shadow-sm); }
+      .mini-btn-link { background: var(--surface-2); border-color: var(--border-color); color: var(--text-muted); }
+      .mini-btn-link:hover { background: var(--border-color); }
+      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; overflow-x: auto; box-shadow: var(--shadow-sm); }
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th { text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border-color); }
-      td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-      tbody tr:hover td { background: #f8fafc; }
+      th { text-align: left; padding: 11px 12px; color: var(--text-dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; font-weight: 800; background: var(--surface-2); border-bottom: 1px solid var(--border-color); }
+      td { padding: 12px; border-bottom: 1px solid #f0f1f6; vertical-align: middle; }
+      tbody tr:hover td { background: var(--surface-2); }
       .subdomain { color: var(--text-muted); font-size: 12px; }
       .msg { color: var(--text-bright); max-width: 460px; }
       .level-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
       .level-dot.INFO { background: var(--success); }
       .level-dot.WARNING { background: var(--warning); }
       .level-dot.ERROR { background: var(--danger); }
-      .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-      .badge-type { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700; letter-spacing: .3px; }
+      .badge-type { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border-color); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
       .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
       .pagination-bar { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 16px; }
       .pagination-info { font-size: 12px; color: var(--text-dim); }
