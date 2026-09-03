@@ -61,16 +61,8 @@
     .quota-bar span{font-size:13px;font-weight:700;color:#1e3a8a;margin-right:4px}
     .quota-chip{background:#eff6ff;border:1px solid #dbeafe;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:#1e3a8a}
 
-    /* INNER TABS (leaves / tickets / resignations) */
-    .tab-nav{display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:20px}
-    .tab-btn{padding:10px 20px;border:none;background:none;cursor:pointer;font-size:14px;font-weight:600;color:#64748b;border-bottom:3px solid transparent;margin-bottom:-2px;display:flex;align-items:center;gap:8px;transition:0.18s}
-    .tab-btn:hover{color:#1e3a8a}
-    .tab-btn.active{color:#1e3a8a;border-bottom-color:#3b82f6}
-    .tab-badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;line-height:1.4}
     .tb-resign{background:#fee2e2;color:#dc2626}
     .tb-none{background:#f1f5f9;color:#64748b}
-    .tab-pane{display:none}
-    .tab-pane.active{display:block}
 
     /* REQUEST CARDS */
     .req-card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px 22px;margin-bottom:14px;border-left:4px solid #e2e8f0;transition:box-shadow 0.2s}
@@ -194,11 +186,38 @@
     .modal-box h3{font-size:16px;font-weight:800;color:#1e293b;margin-bottom:18px}
     .form-group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
     .form-group label{font-size:12px;color:#475569;font-weight:600;text-transform:uppercase;letter-spacing:0.4px}
-    .form-group input,.form-group select{padding:10px 13px;border:1px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:14px;outline:none;transition:0.2s}
-    .form-group input:focus,.form-group select:focus{background:#fff;border-color:#93c5fd}
+    .form-group input,.form-group select,.form-group textarea{padding:10px 13px;border:1px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:14px;outline:none;transition:0.2s;font-family:inherit}
+    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{background:#fff;border-color:#93c5fd}
+    .form-group textarea{resize:vertical;min-height:80px}
     .modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
     .btn-cancel{padding:9px 20px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc;color:#64748b;font-weight:600;cursor:pointer;font-size:13px}
     .btn-save{padding:9px 20px;border:none;border-radius:9px;background:#22c55e;color:#fff;font-weight:700;cursor:pointer;font-size:13px}
+
+    /* ── Announcements panel ── */
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .ann-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px}
+    .ann-card.priority-urgent{border-left:4px solid #ef4444}
+    .ann-card.priority-important{border-left:4px solid #f59e0b}
+    .ann-card.priority-normal{border-left:4px solid #3b82f6}
+    .ann-icon{font-size:24px;flex-shrink:0;margin-top:2px}
+    .ann-body{flex:1}
+    .ann-title{font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px}
+    .ann-content{font-size:13px;color:#475569;line-height:1.6}
+    .ann-meta{font-size:11px;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:10px}
+    .badge-pri{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+    .pri-urgent{background:#fee2e2;color:#dc2626}
+    .pri-important{background:#fef9c3;color:#92400e}
+    .pri-normal{background:#dbeafe;color:#1e40af}
+    .badge-vis{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
+    .vis-public{background:#dcfce7;color:#166534}
+    .vis-private{background:#fef3c7;color:#92400e}
+    .ann-sec-label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;padding:8px 0 6px;border-bottom:1px solid #e2e8f0;margin-bottom:12px}
+    .vis-toggle{display:flex;gap:0;border:1.5px solid #dbeafe;border-radius:10px;overflow:hidden;margin-bottom:2px}
+    .vis-toggle label{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;color:#64748b}
+    .vis-toggle input{display:none}
+    .vis-toggle input:checked+span{background:#1e3a8a;color:#fff}
+    .vis-toggle label span{display:block;width:100%;padding:9px 0;border-radius:0;transition:.15s}
+    #privateEmpRow{display:none}
 
     @media(max-width:768px){body{flex-direction:column}.sidebar{width:100%;height:auto}}
 
@@ -220,10 +239,6 @@
     body.dark-mode .quota-bar{background:#161b22!important;border-color:#30363d!important}
     body.dark-mode .quota-bar span{color:#93c5fd!important}
     body.dark-mode .quota-chip{background:#1e3a8a!important;border-color:#3b82f6!important;color:#93c5fd!important}
-    body.dark-mode .tab-nav{border-color:#30363d!important}
-    body.dark-mode .tab-btn{color:#768390!important}
-    body.dark-mode .tab-btn:hover{color:#cdd9e5!important}
-    body.dark-mode .tab-btn.active{color:#cdd9e5!important;border-color:#4d9de0!important}
     body.dark-mode .req-card{background:#161b22!important;border-color:#30363d!important}
     body.dark-mode .emp-name{color:#cdd9e5!important}
     body.dark-mode .card-meta{color:#768390!important}
@@ -258,7 +273,15 @@
     body.dark-mode .modal-box h3{color:#cdd9e5!important}
     body.dark-mode .form-group label{color:#768390!important}
     body.dark-mode .form-group input,.dark-mode .form-group select{background:#0d1117!important;border-color:#30363d!important;color:#cdd9e5!important}
+    body.dark-mode .form-group textarea{background:#0d1117!important;border-color:#30363d!important;color:#cdd9e5!important}
     body.dark-mode .btn-cancel{background:#1c2128!important;border-color:#30363d!important;color:#94a3b8!important}
+    body.dark-mode .ann-card{background:#161b22!important;border-color:#30363d!important}
+    body.dark-mode .ann-title{color:#cdd9e5!important}
+    body.dark-mode .ann-content{color:#768390!important}
+    body.dark-mode .ann-meta{color:#768390!important}
+    body.dark-mode .pri-urgent{background:#7f1d1d!important;color:#fca5a5!important}
+    body.dark-mode .pri-important{background:#713f12!important;color:#fbbf24!important}
+    body.dark-mode .pri-normal{background:#1e3a8a!important;color:#93c5fd!important}
   </style>
 {% endblock %}
 
@@ -269,7 +292,7 @@
     <div class="topbar-heading">
       <div>
         <h1><i class="ti ti-calendar-event u-c-6366f1"></i> Leaves &amp; Holidays</h1>
-        <div class="sub">Manage leave requests, tickets, resignations and public holidays</div>
+        <div class="sub">Manage leave requests, tickets, resignations, public holidays and announcements</div>
       </div>
       <div class="topbar-actions">
         <a href="{{ tpath('/leave_balance') }}" class="btn-leave-balance"><i class="ti ti-calendar-stats"></i> Leave Balance</a>
@@ -278,12 +301,23 @@
     </div>
     <div class="module-tabs">
       <button class="mtab-btn {% if tab == 'leaves' %}active{% endif %}" onclick="switchModule('leaves')">
-        <i class="ti ti-ticket"></i> Leaves &amp; Tickets
-        {% set _tp = (pending_leaves|default(0))+(pending_tickets|default(0))+(pending_resignations|default(0)) %}
-        {% if _tp > 0 %}<span class="mtab-badge tb-pending">{{ _tp }} pending</span>{% endif %}
+        <i class="ti ti-calendar-minus"></i> Leaves
+        {% if pending_leaves > 0 %}<span class="mtab-badge tb-pending">{{ pending_leaves }}</span>{% endif %}
+      </button>
+      <button class="mtab-btn {% if tab == 'tickets' %}active{% endif %}" onclick="switchModule('tickets')">
+        <i class="ti ti-help-circle"></i> Tickets
+        {% if pending_tickets > 0 %}<span class="mtab-badge tb-open">{{ pending_tickets }}</span>{% endif %}
+      </button>
+      <button class="mtab-btn {% if tab == 'resignations' %}active{% endif %}" onclick="switchModule('resignations')">
+        <i class="ti ti-user-minus"></i> Resignations
+        {% if pending_resignations > 0 %}<span class="mtab-badge tb-resign">{{ pending_resignations }}</span>{% endif %}
       </button>
       <button class="mtab-btn {% if tab == 'holidays' %}active{% endif %}" onclick="switchModule('holidays')">
         <i class="ti ti-calendar-event"></i> Holidays
+      </button>
+      <button class="mtab-btn {% if tab == 'announcements' %}active{% endif %}" onclick="switchModule('announcements')">
+        <i class="ti ti-speakerphone"></i> Announcements
+        {% if ann_list %}<span class="mtab-badge u-bg-dbeafe u-c-1e3a8a">{{ ann_list|length }}</span>{% endif %}
       </button>
     </div>
   </div>
@@ -292,7 +326,7 @@
   <div class="u-p-0-28">
   </div>
 
-  <!-- ════════════ LEAVES & TICKETS PANEL ════════════ -->
+  <!-- ════════════ LEAVES PANEL ════════════ -->
   <div id="panel-leaves" class="module-panel {% if tab == 'leaves' %}active{% endif %}">
 
     {% if leave_types_list %}
@@ -304,25 +338,7 @@
     </div>
     {% endif %}
 
-    <!-- Inner tabs -->
-    <div class="tab-nav">
-      <button class="tab-btn active" onclick="showTab('leaves', this)">
-        <i class="ti ti-calendar-minus"></i> Leave Requests
-        {% if pending_leaves > 0 %}<span class="tab-badge tb-pending">{{ pending_leaves }} pending</span>{% endif %}
-      </button>
-      <button class="tab-btn" onclick="showTab('tickets', this)">
-        <i class="ti ti-help-circle"></i> Tickets
-        {% if pending_tickets > 0 %}<span class="tab-badge tb-open">{{ pending_tickets }} open</span>{% endif %}
-      </button>
-      <button class="tab-btn" onclick="showTab('resignations', this)">
-        <i class="ti ti-user-minus"></i> Resignations
-        {% if pending_resignations > 0 %}<span class="tab-badge tb-resign">{{ pending_resignations }}</span>{% endif %}
-      </button>
-    </div>
-
-    <!-- Leave Requests -->
-    <div id="tab-leaves" class="tab-pane active">
-      <div id="bulkBar" class="bulk-bar">
+    <div id="bulkBar" class="bulk-bar">
         <span id="bulkCount" class="bulk-count">0 selected</span>
         <form id="bulkForm" action="{{ tpath('/bulk_leave_action') }}" method="POST" class="bulk-form">
           <div id="bulkIdInputs"></div>
@@ -373,10 +389,11 @@
       {% else %}
         <div class="empty-state"><i class="ti ti-calendar-off"></i><p>No leave requests yet.</p></div>
       {% endif %}
-    </div>
 
-    <!-- Tickets -->
-    <div id="tab-tickets" class="tab-pane">
+  </div><!-- end leaves panel -->
+
+  <!-- ════════════ TICKETS PANEL ════════════ -->
+  <div id="panel-tickets" class="module-panel {% if tab == 'tickets' %}active{% endif %}">
       {% set av_colors = ['#6366f1','#3b82f6','#14b8a6','#22c55e','#f59e0b','#ef4444','#a855f7','#ec4899','#06b6d4','#f97316'] %}
       {% if all_tickets %}
         {% for tk in all_tickets %}
@@ -416,10 +433,10 @@
       {% else %}
         <div class="empty-state"><i class="ti ti-ticket-off"></i><p>No tickets raised yet.</p></div>
       {% endif %}
-    </div>
+  </div><!-- end tickets panel -->
 
-    <!-- Resignations -->
-    <div id="tab-resignations" class="tab-pane">
+  <!-- ════════════ RESIGNATIONS PANEL ════════════ -->
+  <div id="panel-resignations" class="module-panel {% if tab == 'resignations' %}active{% endif %}">
       {% set av_colors = ['#6366f1','#3b82f6','#14b8a6','#22c55e','#f59e0b','#ef4444','#a855f7','#ec4899','#06b6d4','#f97316'] %}
       {% if resignations %}
         {% for row in resignations %}
@@ -458,9 +475,7 @@
       {% else %}
         <div class="empty-state"><i class="ti ti-user-minus"></i><p>No resignation requests.</p></div>
       {% endif %}
-    </div>
-
-  </div><!-- end leaves panel -->
+  </div><!-- end resignations panel -->
 
   <!-- ════════════ HOLIDAYS PANEL ════════════ -->
   <div id="panel-holidays" class="module-panel {% if tab == 'holidays' %}active{% endif %}">
@@ -571,6 +586,128 @@
 
   </div><!-- end holidays panel -->
 
+  <!-- ════════════ ANNOUNCEMENTS PANEL ════════════ -->
+  <div id="panel-announcements" class="module-panel {% if tab == 'announcements' %}active{% endif %}">
+
+    <!-- Post form -->
+    <div class="section">
+      <h3><i class="ti ti-plus"></i> Post New Announcement</h3>
+      <form action="{{ tpath('/announcements') }}" method="POST">
+        <input type="hidden" name="action" value="add"/>
+        <div class="form-row u-mb-12">
+          <div class="form-group u-gc-span-2">
+            <label>Title</label>
+            <input type="text" name="title" placeholder="Announcement title…" required maxlength="255"/>
+          </div>
+          <div class="form-group u-gc-span-2">
+            <label>Content</label>
+            <textarea name="content" placeholder="Write the announcement details…" required rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Priority</label>
+            <select name="priority">
+              <option value="Normal">Normal</option>
+              <option value="Important">Important</option>
+              <option value="Urgent">Urgent</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Visibility</label>
+            <div class="vis-toggle">
+              <label>
+                <input type="radio" name="visibility" value="public" checked onchange="annVisChange(this)"/>
+                <span><i class="ti ti-world u-fs-13 u-va-middle u-mr-4"></i>Public</span>
+              </label>
+              <label>
+                <input type="radio" name="visibility" value="private" onchange="annVisChange(this)"/>
+                <span><i class="ti ti-lock u-fs-13 u-va-middle u-mr-4"></i>Private</span>
+              </label>
+            </div>
+          </div>
+          <div class="form-group u-gc-span-2" id="privateEmpRow">
+            <label>Send To (Employee)</label>
+            <select name="target_employee_id" id="annTargetEmp">
+              <option value="">— Select employee —</option>
+              {% for eid, ename in ann_emp_list %}
+              <option value="{{ eid }}">{{ ename }} ({{ eid }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="u-ta-right">
+          <button type="submit" class="btn-save"><i class="ti ti-speakerphone"></i> Post Announcement</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- List -->
+    <div class="section">
+      <h3><i class="ti ti-list"></i> All Announcements ({{ ann_list|length }})</h3>
+      {% if ann_list %}
+        {% if pub_anns %}
+        <div class="ann-sec-label"><i class="ti ti-world u-va-middle u-mr-4"></i>Public ({{ pub_anns|length }})</div>
+        {% for aid, atitle, acontent, apri, adate, avis, atgt_id, atgt_name in pub_anns %}
+        <div class="ann-card priority-{{ apri|lower }}">
+          <div class="ann-icon">
+            {% if apri == 'Urgent' %}<i class="ti ti-alert-circle u-c-ef4444 u-fs-22"></i>
+            {% elif apri == 'Important' %}<i class="ti ti-alert-triangle u-c-f59e0b u-fs-22"></i>
+            {% else %}<i class="ti ti-speakerphone u-c-3b82f6 u-fs-22"></i>{% endif %}
+          </div>
+          <div class="ann-body">
+            <div class="ann-title">{{ atitle }}</div>
+            <div class="ann-content">{{ acontent }}</div>
+            <div class="ann-meta">
+              <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
+              <span class="badge-vis vis-public"><i class="ti ti-world u-fs-10"></i> Public</span>
+              <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
+              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
+                <input type="hidden" name="action" value="delete"/>
+                <input type="hidden" name="ann_id" value="{{ aid }}"/>
+                <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
+                  <i class="ti ti-trash"></i> Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if priv_anns %}
+        <div class="ann-sec-label u-mt-18"><i class="ti ti-lock u-va-middle u-mr-4"></i>Private ({{ priv_anns|length }})</div>
+        {% for aid, atitle, acontent, apri, adate, avis, atgt_id, atgt_name in priv_anns %}
+        <div class="ann-card priority-{{ apri|lower }}">
+          <div class="ann-icon">
+            {% if apri == 'Urgent' %}<i class="ti ti-alert-circle u-c-ef4444 u-fs-22"></i>
+            {% elif apri == 'Important' %}<i class="ti ti-alert-triangle u-c-f59e0b u-fs-22"></i>
+            {% else %}<i class="ti ti-lock u-c-f59e0b u-fs-22"></i>{% endif %}
+          </div>
+          <div class="ann-body">
+            <div class="ann-title">{{ atitle }}</div>
+            <div class="ann-content">{{ acontent }}</div>
+            <div class="ann-meta">
+              <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
+              <span class="badge-vis vis-private"><i class="ti ti-lock u-fs-10"></i> Private</span>
+              {% if atgt_name %}<span class="u-c-64748b u-fs-11"><i class="ti ti-user u-fs-10"></i> To: {{ atgt_name }}</span>{% endif %}
+              <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
+              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
+                <input type="hidden" name="action" value="delete"/>
+                <input type="hidden" name="ann_id" value="{{ aid }}"/>
+                <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
+                  <i class="ti ti-trash"></i> Delete
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+      {% else %}
+        <div class="empty-state"><i class="ti ti-speakerphone u-fs-40 u-d-block u-mb-12"></i>No announcements posted yet.</div>
+      {% endif %}
+    </div>
+  </div><!-- end announcements panel -->
+
 
 {% endblock %}
 
@@ -605,22 +742,19 @@ function switchModule(name) {
   history.replaceState(null, '', '/leave_holidays?tab=' + name);
 }
 
-// Inner leave tabs
-function showTab(name, btn) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
-}
-
-// Open inner tab from URL hash
-(function() {
-  var hash = location.hash.replace('#', '');
-  if (hash === 'tickets' || hash === 'resignations') {
-    var btn = document.querySelector('.tab-btn[onclick*="' + hash + '"]');
-    if (btn) showTab(hash, btn);
+// Announcements: public/private visibility toggle
+function annVisChange(radio) {
+  var row = document.getElementById('privateEmpRow');
+  var sel = document.getElementById('annTargetEmp');
+  if (radio.value === 'private') {
+    row.style.display = 'flex';
+    sel.required = true;
+  } else {
+    row.style.display = 'none';
+    sel.required = false;
+    sel.value = '';
   }
-})();
+}
 
 // Bulk leave actions
 function updateBulk() {
