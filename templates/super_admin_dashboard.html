@@ -589,7 +589,7 @@
                     <div class="row-actions">
                       <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard"><img class="icon-photo-sm" src="{{ static_url('icons/photos/layout-dashboard.jpg') }}" alt=""> Admin</a>
                       <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page"><img class="icon-photo-sm" src="{{ static_url('icons/photos/users.jpg') }}" alt=""> Employees</a>
-                      <button type="button" class="mini-btn mini-btn-link" onclick="tenantChatOpen({{ t.id }}, {{ t.company_name | tojson }})" title="Chat with this company's admin/HR"><img class="icon-photo-sm" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Chat</button>
+                      <button type="button" class="mini-btn mini-btn-link" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)" title="Chat with this company's admin/HR"><img class="icon-photo-sm" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Chat</button>
                       <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
                         {% if t.status == 'active' %}

@@ -260,6 +260,35 @@ class TestDashboard:
             cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE id=%s", (alert_id,))
             cur.close()
 
+    def test_chat_button_onclick_survives_quotes_in_company_name(self, client, db_engine):
+        """Regression test: the Chat button used to build its onclick via
+        `tenantChatOpen({{ t.id }}, {{ t.company_name | tojson }})` --
+        tojson emits literal double quotes (valid JSON), which collided with
+        the onclick="..." attribute's own double-quote delimiter and
+        truncated it mid-string for every company, not just ones with an
+        actual quote in the name (see the fix: data-tenant-id/data-company-name
+        attributes, Jinja-default-escaped, read via element.dataset instead)."""
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ('Quote"Co', "quote-co-chat-test", "att_quote_co_chat_test"),
+        )
+        tenant_id = cur.fetchone()[0]
+        try:
+            _login_platform_admin(client)
+            resp = client.get("/super_admin")
+            assert resp.status_code == 200
+            html_text = resp.data.decode("utf-8")
+            assert f'data-tenant-id="{tenant_id}"' in html_text
+            assert "&#34;" in html_text or "&quot;" in html_text  # the embedded quote, safely escaped
+            assert 'onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)"' in html_text
+            # The old bug: a literal, unescaped `"` breaking out of the onclick attribute.
+            assert f'onclick="tenantChatOpen({tenant_id}, "' not in html_text
+        finally:
+            cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+            cur.close()
+
 
 # ===========================================================================
 # Costs
