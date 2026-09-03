@@ -9,36 +9,47 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <style>
       :root {
-        --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.85);
-        --border-color: rgba(51, 65, 85, 0.6);
-        --primary: #6366f1; --danger: #ef4444; --warning: #f59e0b; --success: #10b981;
-        --text-bright: #f8fafc; --text-muted: #94a3b8; --text-dim: #64748b;
+        --bg-main: #ffffff; --bg-card: #ffffff;
+        --border-color: #e2e8f0;
+        --primary: #1d4ed8; --primary-dark: #1e3a8a; --primary-soft: #eff6ff; --primary-soft-border: #bfdbfe;
+        --danger: #dc2626; --warning: #b45309; --success: #059669;
+        --text-bright: #0f172a; --text-muted: #475569; --text-dim: #94a3b8;
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
       }
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
-      body { background: var(--bg-main); color: var(--text-bright); min-height: 100vh; padding: 24px; }
+      body {
+        background: radial-gradient(1100px 520px at 50% -12%, #eaf2ff 0%, #ffffff 55%) fixed, var(--bg-main);
+        color: var(--text-bright); min-height: 100vh; padding: 24px;
+      }
       .container { max-width: 1180px; margin: 0 auto; }
       .header {
         display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
         padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
-        border-radius: 16px; margin-bottom: 24px;
+        border-radius: 16px; margin-bottom: 24px; box-shadow: var(--shadow-sm);
       }
       .header h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
       .header h1 i { color: var(--danger); }
-      .back-link { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
-      .back-link:hover { color: var(--text-bright); }
+      .back-link { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: color .15s; }
+      .back-link:hover { color: var(--primary); }
       .intro-note { font-size: 12.5px; color: var(--text-dim); margin-bottom: 18px; line-height: 1.6; }
-      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; overflow-x: auto; }
+      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 20px; overflow-x: auto; box-shadow: var(--shadow-sm); }
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
       th { text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border-color); }
-      td { padding: 12px; border-bottom: 1px solid rgba(51, 65, 85, .3); vertical-align: middle; }
+      td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+      tbody tr { transition: background-color .15s; }
+      tbody tr:not(.row-new):hover td { background: var(--primary-soft); }
       .co-name { font-weight: 700; }
       .subdomain { color: var(--text-muted); font-size: 12px; }
       .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-      .badge-ack { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
-      .badge-new { background: rgba(239, 68, 68, .15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .35); }
-      .mini-btn { background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright); border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+      .badge-ack { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
+      .badge-new { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      .mini-btn {
+        background: var(--primary); border: 1px solid var(--primary); color: #fff; border-radius: 8px;
+        padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color .15s;
+      }
+      .mini-btn:hover { background: var(--primary-dark); }
       .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
-      .row-new { background: rgba(239, 68, 68, .05); }
+      .row-new { background: #fef2f2; }
     </style>
   </head>
   <body>
@@ -50,7 +61,7 @@
 
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}
-        <div style="padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:18px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.35);color:#6ee7b7;">{{ msg }}</div>
+        <div style="padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:18px;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857;">{{ msg }}</div>
         {% endfor %}
       {% endwith %}
 

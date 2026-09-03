@@ -25,8 +25,8 @@ from database import get_master_db, get_db_connection
 from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
-from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
-from utils.helpers import coerce_datetime
+from utils.plan_limits import get_per_employee_paise, invalidate_rate_paise_cache, calculate_price, format_price_inr, get_tenant_employee_count
+from utils.helpers import coerce_datetime, _safe_app_url
 from utils.analytics import get_traffic_stats
 from utils.device_utils import (
     get_or_create_device_token, set_device_cookie, record_login_device,
@@ -440,7 +440,8 @@ def platform_admin_dashboard():
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "SELECT id, company_name, subdomain, db_name, payment_option, status, created_at "
+        "SELECT id, company_name, subdomain, db_name, payment_option, status, created_at, "
+        "billing_state, grace_period_ends_at "
         "FROM tenants ORDER BY created_at DESC"
     )
     rows = cur.fetchall()
@@ -452,7 +453,8 @@ def platform_admin_dashboard():
     mrr_paise = 0
     active_employee_count = 0
     for r in rows:
-        tid, company_name, subdomain, db_name, payment_option, status, created_at = r
+        (tid, company_name, subdomain, db_name, payment_option, status, created_at,
+         billing_state, grace_period_ends_at) = r
         employee_count = _tenant_employee_count(db_name)
         monthly_bill_paise = calculate_price(employee_count)
         if status == "active":
@@ -465,6 +467,8 @@ def platform_admin_dashboard():
             "employee_count": employee_count,
             "monthly_bill_display": format_price_inr(monthly_bill_paise),
             "self_signup": tid in self_signup_ids,
+            "billing_state": billing_state or "current",
+            "grace_period_ends_at": coerce_datetime(grace_period_ends_at),
         })
 
     costs = _get_platform_costs()
@@ -481,7 +485,8 @@ def platform_admin_dashboard():
 
     return render_template(
         "super_admin_dashboard.html", tenants=tenants,
-        per_employee_paise=PER_EMPLOYEE_PAISE,
+        portal_base_url=_safe_app_url(),
+        per_employee_paise=get_per_employee_paise(),
         mrr_display=format_price_inr(mrr_paise),
         active_tenant_count=sum(1 for t in tenants if t["status"] == "active"),
         total_employee_count=sum(t["employee_count"] for t in tenants),
@@ -536,6 +541,74 @@ def platform_admin_set_costs():
         level="INFO", identifier=session.get("platform_admin_username"),
     )
     flash("Operating costs updated.", "success")
+    return redirect("/super_admin")
+
+
+@platform_admin_bp.route("/super_admin/rate", methods=["POST"])
+@_platform_admin_required
+def platform_admin_set_rate():
+    """Updates the flat per-employee monthly rate every price calculation
+    in the app reads (utils/plan_limits.py's get_per_employee_paise()) --
+    takes effect for new signups, seat top-ups, and manual/dunning bills on
+    the very next calculation (invalidate_rate_paise_cache() below), no
+    redeploy needed.
+
+    Existing recurring auto-debit subscribers are migrated at their own
+    next renewal, not immediately: a fresh Razorpay Plan is created here at
+    the new rate (Plans are immutable, so the old one keeps its old price
+    forever) and every currently-active mandate is flagged
+    needs_rate_migration -- blueprints/auto_debit.py's
+    _handle_subscription_charged() checks that flag after each successful
+    charge, cancels that subscription once its current (old-rate) cycle is
+    paid, and emails the tenant to re-authorize a new one. Nobody is
+    charged mid-cycle or has a payment silently change amount."""
+    from utils.razorpay_utils import create_plan, razorpay_configured
+    from blueprints.auto_debit import _PLAN_ITEM_NAME
+
+    raw = request.form.get("per_employee_rupees", "").strip()
+    try:
+        rupees = float(raw)
+    except ValueError:
+        flash("Enter a valid rate in rupees.", "error")
+        return redirect("/super_admin")
+    if rupees <= 0:
+        flash("The rate must be greater than zero.", "error")
+        return redirect("/super_admin")
+
+    new_paise = round(rupees * 100)
+    old_paise = get_per_employee_paise()
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE platform_costs SET per_employee_paise=%s, updated_at=CURRENT_TIMESTAMP WHERE id=1",
+        (new_paise,)
+    )
+
+    migration_note = ""
+    if razorpay_configured():
+        new_plan_id, plan_error = create_plan(new_paise, _PLAN_ITEM_NAME)
+        if plan_error:
+            app_log.error("platform_admin.set_rate: failed to create new Razorpay plan: %s", plan_error)
+            migration_note = " Warning: creating the new Razorpay plan failed, so auto-debit migration could not be armed -- existing subscribers will keep their old rate until this is retried."
+        else:
+            cur.execute("UPDATE billing_config SET razorpay_plan_id=%s WHERE id=1", (new_plan_id,))
+            cur.execute("UPDATE auto_debit_mandates SET needs_rate_migration=TRUE WHERE status='active'")
+            migrated_count = cur.rowcount
+            if migrated_count:
+                migration_note = f" {migrated_count} active auto-debit subscriber(s) will be migrated to the new rate at their next renewal."
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    invalidate_rate_paise_cache()
+
+    log_security_event(
+        "platform_admin.rate_updated",
+        f"Per-employee rate changed from {format_price_inr(old_paise)} to {format_price_inr(new_paise)}",
+        level="WARNING", identifier=session.get("platform_admin_username"),
+    )
+    flash(f"Rate updated to {format_price_inr(new_paise)}/employee/month.{migration_note}", "success")
     return redirect("/super_admin")
 
 

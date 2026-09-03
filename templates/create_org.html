@@ -38,35 +38,35 @@
       transition: var(--transition-fast);
     }
     .nav-link-btn:hover { box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4); transform: translateY(-1px); }
-    .page-container { max-width: 560px; margin: 0 auto; padding: 56px 24px 72px; }
-    .page-intro { text-align: center; margin-bottom: 32px; }
+    .page-container { max-width: 480px; margin: 0 auto; padding: 36px 20px 56px; }
+    .page-intro { text-align: center; margin-bottom: 22px; }
     .page-intro .intro-icon {
-      width: 52px; height: 52px; margin: 0 auto 18px; border-radius: var(--radius-md); background: var(--gradient-brand);
-      display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
-      box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+      width: 40px; height: 40px; margin: 0 auto 12px; border-radius: var(--radius-md); background: var(--gradient-brand);
+      display: flex; align-items: center; justify-content: center; font-size: 19px; color: #fff;
+      box-shadow: 0 6px 18px rgba(79, 70, 229, 0.30);
     }
-    .page-intro h1 { font-family: var(--font-heading); font-size: 28px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-main); margin-bottom: 8px; }
-    .page-intro p { font-size: 14.5px; color: var(--text-muted); }
+    .page-intro h1 { font-family: var(--font-heading); font-size: 20px; font-weight: 800; letter-spacing: -0.3px; color: var(--text-main); margin-bottom: 5px; }
+    .page-intro p { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
     .card {
       background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
-      padding: 32px 32px 28px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden;
+      padding: 22px 22px 20px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden;
     }
-    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--gradient-brand); }
+    .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--gradient-brand); }
     .verify-note {
-      display: flex; align-items: flex-start; gap: 10px; background: rgba(79, 70, 229, 0.06);
-      border: 1px solid var(--border-color-glow); border-radius: var(--radius-sm); padding: 12px 14px;
-      font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 22px;
+      display: flex; align-items: flex-start; gap: 8px; background: rgba(79, 70, 229, 0.06);
+      border: 1px solid var(--border-color-glow); border-radius: var(--radius-sm); padding: 10px 12px;
+      font-size: 11.5px; color: var(--text-muted); line-height: 1.45; margin-bottom: 16px;
     }
-    .verify-note i { color: var(--accent-cyan); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-    .field-group { margin-bottom: 18px; }
+    .verify-note i { color: var(--accent-cyan); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+    .field-group { margin-bottom: 13px; }
     .field-label {
-      display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 7px;
+      display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.4px; color: var(--text-muted); margin-bottom: 5px;
     }
-    .field-label i { font-size: 14px; color: var(--accent-cyan); }
+    .field-label i { font-size: 12px; color: var(--accent-cyan); }
     .field-input {
-      width: 100%; padding: 12px 15px; background: var(--bg-secondary); border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm); color: var(--text-main); font-size: 14px; outline: none; transition: var(--transition-fast);
+      width: 100%; padding: 9px 12px; background: var(--bg-secondary); border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm); color: var(--text-main); font-size: 13px; outline: none; transition: var(--transition-fast);
     }
     .field-input::placeholder { color: var(--text-subtle); }
     .field-input:focus { background: var(--bg-card); border-color: var(--accent-cyan); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
@@ -75,22 +75,22 @@
       border-radius: var(--radius-sm); overflow: hidden; transition: var(--transition-fast);
     }
     .subdomain-container:focus-within { border-color: var(--accent-cyan); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12); }
-    .subdomain-prefix { padding: 12px 14px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 13px; font-weight: 600; border-right: 1px solid var(--border-color); white-space: nowrap; user-select: none; }
+    .subdomain-prefix { padding: 9px 11px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 12px; font-weight: 600; border-right: 1px solid var(--border-color); white-space: nowrap; user-select: none; }
     .subdomain-input { border: none !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; flex: 1; }
-    .field-hint { font-size: 11.5px; color: var(--text-subtle); margin-top: 6px; line-height: 1.4; }
+    .field-hint { font-size: 10.5px; color: var(--text-subtle); margin-top: 5px; line-height: 1.4; }
     .btn-submit {
-      width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm); background: var(--gradient-brand);
-      color: #ffffff; font-size: 14.5px; font-weight: 700; letter-spacing: 0.2px; cursor: pointer;
-      transition: var(--transition-fast); box-shadow: var(--shadow-md); display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%; padding: 12px; border: none; border-radius: var(--radius-sm); background: var(--gradient-brand);
+      color: #ffffff; font-size: 13px; font-weight: 700; letter-spacing: 0.2px; cursor: pointer;
+      transition: var(--transition-fast); box-shadow: var(--shadow-md); display: flex; align-items: center; justify-content: center; gap: 7px;
     }
     .btn-submit:hover { box-shadow: var(--shadow-lg); transform: translateY(-1px); }
     .alert {
-      padding: 13px 15px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600;
-      margin-bottom: 18px; display: flex; align-items: center; gap: 10px;
+      padding: 10px 13px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
     }
     .alert-error { background: rgba(225, 29, 72, 0.08); border: 1px solid rgba(225, 29, 72, 0.25); color: var(--accent-rose); }
     .alert-success { background: rgba(5, 150, 105, 0.08); border: 1px solid rgba(5, 150, 105, 0.25); color: var(--accent-emerald); }
-    .footer-login-link { display: block; text-align: center; font-size: 13px; color: var(--text-muted); text-decoration: none; margin-top: 18px; transition: var(--transition-fast); }
+    .footer-login-link { display: block; text-align: center; font-size: 12px; color: var(--text-muted); text-decoration: none; margin-top: 14px; transition: var(--transition-fast); }
     .footer-login-link:hover { color: var(--accent-cyan); }
   </style>
 </head>
@@ -153,7 +153,15 @@
           <input class="field-input" type="email" name="admin_email" id="admin_email_input"
                  placeholder="admin@acme.com" required autocomplete="email"
                  oninput="deriveFromEmail(this.value)" onblur="deriveFromEmail(this.value)" />
-          <div class="field-hint">We'll send your verification code here. Also used as your admin login (username: <strong id="derivedUsername">—</strong>).</div>
+          <div class="field-hint">We'll send your verification code here.</div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="admin_username_input"><i class="ti ti-user"></i> Admin Name (login username)</label>
+          <input class="field-input" type="text" name="admin_username" id="admin_username_input"
+                 placeholder="e.g. john" required minlength="2" pattern="[a-zA-Z0-9_.\-]+"
+                 title="Letters, numbers, dots, hyphens and underscores only" oninput="usernameUserEdited = true;" />
+          <div class="field-hint">This is what you and your team sign in with — pick anything memorable, no need to match your email.</div>
         </div>
 
         <div class="field-group">
@@ -169,7 +177,6 @@
         </div>
 
         <input type="hidden" name="email_domain" id="email_domain_input" />
-        <input type="hidden" name="admin_username" id="admin_username_input" />
 
         {% if show_captcha %}
         <div class="cf-turnstile" data-sitekey="{{ turnstile_site_key }}" style="margin-bottom:20px;"></div>
@@ -186,6 +193,7 @@
 
   <script>
   let subdomainUserEdited = false;
+  let usernameUserEdited = false;
 
   function cleanSubdomainInput(el) {
     subdomainUserEdited = true;
@@ -217,9 +225,12 @@
     if (at < 1) return;
     const localPart = email.slice(0, at).toLowerCase().replace(/[^a-z0-9_.\-]/g, '');
     const domainPart = email.slice(at + 1).toLowerCase();
-    document.getElementById('admin_username_input').value = localPart;
+    // Suggest a username from the email only until the visitor types their
+    // own into that field -- once they have, their choice always wins.
+    if (!usernameUserEdited) {
+      document.getElementById('admin_username_input').value = localPart;
+    }
     document.getElementById('email_domain_input').value = domainPart;
-    document.getElementById('derivedUsername').textContent = localPart || '—';
   }
   </script>
 </body>
