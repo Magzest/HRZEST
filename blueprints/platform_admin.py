@@ -16,6 +16,7 @@ session key means those hooks simply no-op here, and this blueprint
 enforces its own (lighter) idle timeout below.
 """
 import io
+import re
 import csv
 import time
 import datetime
@@ -844,6 +845,84 @@ def platform_admin_bulk_set_status():
         identifier=session.get("platform_admin_username"), status=status, tenant_ids=tenant_ids,
     )
     flash(f"{updated} compan{'y' if updated == 1 else 'ies'} updated.", "success")
+    return redirect("/super_admin")
+
+
+# schema names are always "att_" + a subdomain slug limited to [a-z0-9-]
+# (blueprints/org.py's _clean_subdomain_slug + provision_tenant's
+# db_name = "att_" + subdomain.replace("-", "_")) -- this is a hard gate on
+# top of that existing guarantee, checked immediately before the one place
+# in this codebase that runs DROP SCHEMA, so a latent bug anywhere upstream
+# in slug generation can never turn into arbitrary DDL here.
+_SAFE_SCHEMA_NAME_RE = re.compile(r"^att_[a-z0-9_]+$")
+
+
+@platform_admin_bp.route("/super_admin/tenants/<int:tenant_id>/delete", methods=["POST"])
+@_platform_admin_required
+def platform_admin_delete_tenant(tenant_id):
+    """Permanently deletes a tenant: DROP SCHEMA on its entire Postgres
+    schema (every employee, attendance/payroll/leave record, uploaded
+    document -- everything company-specific), then removes its att_master
+    row. Irreversible, so the UI only ever reaches this route after the
+    admin has typed the company's exact subdomain into a confirmation
+    field -- re-checked here server-side too, never trusted from a hidden
+    field alone.
+
+    Billing/payment history (payment_orders, seat_topup_orders,
+    monthly_invoices, auto_debit_mandates) is untouched: those tables
+    already carry their own denormalized company_name/subdomain columns
+    rather than a live foreign key to tenants (see _recent_payments()'s
+    docstring), specifically so the Payments feed keeps showing a
+    deleted company's transaction history correctly after this runs."""
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT company_name, subdomain, db_name FROM tenants WHERE id=%s", (tenant_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+    company_name, subdomain, db_name = row
+
+    confirm = (request.form.get("confirm_subdomain") or "").strip().lower()
+    if confirm != subdomain.lower():
+        cur.close()
+        conn.close()
+        flash(f"Deletion cancelled: you must type '{subdomain}' exactly to confirm.", "error")
+        return redirect("/super_admin")
+
+    if not _SAFE_SCHEMA_NAME_RE.match(db_name):
+        cur.close()
+        conn.close()
+        app_log.error("platform_admin.delete_tenant: refusing to drop schema with unexpected name %r", db_name)
+        flash("Could not delete this company: its schema name failed a safety check. Contact engineering.", "error")
+        return redirect("/super_admin")
+
+    try:
+        cur.execute(f'DROP SCHEMA IF EXISTS "{db_name}" CASCADE')  # nosec B608 -- db_name is read back from the tenants row (never from this request) and re-validated against _SAFE_SCHEMA_NAME_RE immediately above
+    except Exception as exc:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        app_log.error("platform_admin.delete_tenant: schema drop failed for %s: %s", db_name, exc, exc_info=True)
+        flash(f"Could not delete company data: {exc}", "error")
+        return redirect("/super_admin")
+
+    cur.execute("DELETE FROM tenants WHERE id=%s", (tenant_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    _employee_count_cache.pop(db_name, None)
+
+    log_security_event(
+        "platform_admin.tenant_deleted",
+        f"Tenant '{company_name}' (subdomain={subdomain}, schema={db_name}) permanently deleted -- "
+        f"all company data removed; payment/billing history retained",
+        level="WARNING", identifier=session.get("platform_admin_username"),
+        tenant_id=tenant_id, subdomain=subdomain,
+    )
+    flash(f"'{company_name}' and all its company data have been permanently deleted. Its payment history is still visible below.", "success")
     return redirect("/super_admin")
 
 

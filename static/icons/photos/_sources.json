@@ -93,5 +93,10 @@
     "file": "download.jpg",
     "source_title": "File:USB flash drive.jpg",
     "bytes": 5859
+  },
+  "trash": {
+    "file": "trash.jpg",
+    "source_title": "File:Trash can in Monterey, California, USA.jpg",
+    "bytes": 12121
   }
 }

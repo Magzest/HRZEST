@@ -600,6 +600,7 @@
                         <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
                         {% endif %}
                       </form>
+                      <button type="button" class="mini-btn mini-btn-danger" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" data-subdomain="{{ t.subdomain }}" onclick="openDeleteModal(this)" title="Permanently delete this company and all its data"><img class="icon-photo-sm" src="{{ static_url('icons/photos/trash.jpg') }}" alt=""> Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -746,6 +747,34 @@
         </div>
       </div>
 
+      <div class="pay-modal-overlay" id="deleteModalOverlay" role="dialog" aria-modal="true" aria-label="Delete company" onclick="if(event.target===this)closeDeleteModal()">
+        <div class="pay-modal-sheet">
+          <div class="pay-modal-head">
+            <h3><img class="icon-photo" src="{{ static_url('icons/photos/trash.jpg') }}" alt=""> Delete Company</h3>
+            <button type="button" class="pay-modal-close" onclick="closeDeleteModal()" aria-label="Close">&times;</button>
+          </div>
+          <div class="pay-modal-body">
+            <p style="font-size:13px;color:var(--text-bright);line-height:1.6;">
+              This permanently deletes <strong id="delCompanyName"></strong>'s entire database schema --
+              every employee, attendance/payroll/leave record, and uploaded document. <strong>This cannot be undone.</strong>
+              Its payment/billing history is kept and will still appear in the Payments feed below.
+            </p>
+            <form id="deleteTenantForm" method="POST" style="margin-top:14px;">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+              <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:700;margin-bottom:6px;">
+                Type <strong id="delSubdomainLabel" style="color:var(--danger);"></strong> to confirm
+              </label>
+              <input type="text" id="delConfirmInput" oninput="checkDeleteConfirm()" autocomplete="off"
+                     style="width:100%;background:#fff;border:1px solid var(--border-color);border-radius:8px;padding:9px 12px;font-size:13.5px;margin-bottom:14px;" />
+              <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="mini-btn" onclick="closeDeleteModal()">Cancel</button>
+                <button type="submit" id="delSubmitBtn" class="mini-btn mini-btn-danger" disabled>Permanently Delete</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <section class="page-section">
         <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/history.jpg') }}" alt=""> Activity</div>
         <div class="section-body">
@@ -791,6 +820,26 @@
         document.getElementById('payModalOverlay').classList.remove('open');
       }
 
+      function openDeleteModal(btn) {
+        var d = btn.dataset;
+        document.getElementById('delCompanyName').textContent = d.companyName;
+        document.getElementById('delSubdomainLabel').textContent = d.subdomain;
+        document.getElementById('deleteTenantForm').action = '/super_admin/tenants/' + d.tenantId + '/delete';
+        var input = document.getElementById('delConfirmInput');
+        input.value = '';
+        document.getElementById('delSubmitBtn').disabled = true;
+        input.dataset.expected = d.subdomain;
+        document.getElementById('deleteModalOverlay').classList.add('open');
+        input.focus();
+      }
+      function closeDeleteModal() {
+        document.getElementById('deleteModalOverlay').classList.remove('open');
+      }
+      function checkDeleteConfirm() {
+        var input = document.getElementById('delConfirmInput');
+        document.getElementById('delSubmitBtn').disabled = input.value.trim().toLowerCase() !== (input.dataset.expected || '').toLowerCase();
+      }
+
       function toggleAllTenants(master) {
         document.querySelectorAll('.tenant-select').forEach(function (cb) { cb.checked = master.checked; });
         updateBulkBar();
@@ -809,7 +858,7 @@
         return true;
       }
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closePaymentModal();
+        if (e.key === 'Escape') { closePaymentModal(); closeDeleteModal(); }
       });
     </script>
 

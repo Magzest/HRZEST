@@ -573,6 +573,120 @@ class TestBulkTenantStatus:
         cur.close()
 
 
+class TestDeleteTenant:
+    @pytest.fixture
+    def deletable_tenant(self, db_engine):
+        """A tenant with a REAL schema (not just a tenants row) so the test
+        can verify DROP SCHEMA actually ran, not just that the tenants row
+        disappeared."""
+        schema = "att_delete_test_co"
+        cur = db_engine.cursor()
+        cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        cur.execute(f'CREATE SCHEMA "{schema}"')
+        cur.execute(f'CREATE TABLE "{schema}".marker (id SERIAL PRIMARY KEY, note TEXT)')
+        cur.execute(f'INSERT INTO "{schema}".marker (note) VALUES (%s)', ("still here",))
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ("Delete Test Co", "delete-test-co", schema),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id, "delete-test-co", schema
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        cur.close()
+
+    def test_requires_login(self, client, deletable_tenant):
+        tenant_id, subdomain, _schema = deletable_tenant
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": subdomain}, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_wrong_confirmation_text_is_refused(self, client, db_engine, deletable_tenant):
+        tenant_id, subdomain, schema = deletable_tenant
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": "not-the-right-subdomain"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"you must type" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT 1 FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        assert cur.fetchone() is not None
+        cur.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s", (schema,))
+        assert cur.fetchone() is not None, "schema must survive a rejected confirmation"
+        cur.close()
+
+    def test_correct_confirmation_drops_schema_and_tenant_row(self, client, db_engine, deletable_tenant):
+        tenant_id, subdomain, schema = deletable_tenant
+        _login_platform_admin(client, username="delete_test_admin")
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": subdomain}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"permanently deleted" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT 1 FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        assert cur.fetchone() is None, "tenants row must be gone"
+        cur.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s", (schema,))
+        assert cur.fetchone() is None, "the tenant's actual Postgres schema must be dropped"
+        cur.close()
+
+    def test_confirmation_is_case_insensitive(self, client, db_engine, deletable_tenant):
+        tenant_id, subdomain, schema = deletable_tenant
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": subdomain.upper()}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"permanently deleted" in resp.data
+
+    def test_unknown_tenant_flashes_not_found(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/999999999/delete",
+                            data={"confirm_subdomain": "whatever"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Company not found." in resp.data
+
+    def test_payment_history_survives_deletion(self, client, db_engine, deletable_tenant):
+        """The whole point of this feature: billing/transaction records
+        must keep showing correctly in the Payments feed after the tenant
+        (and all its own data) is gone -- payment_orders/seat_topup_orders/
+        monthly_invoices carry their own company_name/subdomain rather than
+        depending on a live tenants row."""
+        tenant_id, subdomain, schema = deletable_tenant
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.payment_orders "
+            "(razorpay_order_id, plan, employee_count, amount_paise, company_name, subdomain, "
+            "admin_username, admin_email, status, tenant_id) "
+            "VALUES (%s,'starter',10,9900,%s,%s,'del_admin','del_admin@test.local','paid',%s)",
+            (f"demo_order_del_test_{tenant_id}", "Delete Test Co", subdomain, tenant_id),
+        )
+        db_engine.commit()
+        try:
+            _login_platform_admin(client, username="payment_survives_admin")
+            resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                                data={"confirm_subdomain": subdomain}, follow_redirects=True)
+            assert resp.status_code == 200
+
+            cur.execute(
+                "SELECT company_name, subdomain, status FROM att_master.payment_orders WHERE tenant_id=%s",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            assert row is not None, "payment_orders row must survive tenant deletion"
+            assert row[0] == "Delete Test Co"
+            assert row[1] == subdomain
+            assert row[2] == "paid"
+
+            dashboard_resp = client.get("/super_admin")
+            assert b"Delete Test Co" in dashboard_resp.data  # still shown in the Payments feed
+        finally:
+            cur.execute("DELETE FROM att_master.payment_orders WHERE tenant_id=%s", (tenant_id,))
+            cur.close()
+
+
 class TestDashboardSearchPaginationAndExport:
     @pytest.fixture
     def searchable_tenant(self, db_engine):
