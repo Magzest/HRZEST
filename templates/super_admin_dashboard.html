@@ -9,41 +9,62 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <style>
       :root {
-        --bg-main: #070b14; --bg-card: rgba(15, 23, 42, 0.85);
-        --border-color: rgba(51, 65, 85, 0.6);
-        --primary: #6366f1; --danger: #ef4444; --warning: #f59e0b; --success: #10b981;
-        --text-bright: #f8fafc; --text-muted: #94a3b8; --text-dim: #64748b;
+        --bg-main: #ffffff; --bg-card: #ffffff;
+        --border-color: #e2e8f0;
+        --primary: #1d4ed8; --primary-dark: #1e3a8a; --primary-soft: #eff6ff; --primary-soft-border: #bfdbfe;
+        --danger: #dc2626; --warning: #b45309; --success: #059669;
+        --text-bright: #0f172a; --text-muted: #475569; --text-dim: #94a3b8;
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
+        --shadow-md: 0 12px 28px rgba(29, 78, 216, .10), 0 2px 6px rgba(15, 23, 42, .04);
       }
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
-      body { background: var(--bg-main); color: var(--text-bright); min-height: 100vh; padding: 24px; }
+      body {
+        background: radial-gradient(1100px 520px at 50% -12%, #eaf2ff 0%, #ffffff 55%) fixed, var(--bg-main);
+        color: var(--text-bright); min-height: 100vh; padding: 24px;
+      }
       .container { max-width: 1280px; margin: 0 auto; }
+      a { color: var(--primary); }
+      button, a, input, select, summary { transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .15s ease; }
+      button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+        outline: 2px solid var(--primary); outline-offset: 2px;
+      }
       .header {
         display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
         padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
-        border-radius: 16px; margin-bottom: 24px;
+        border-radius: 16px; margin-bottom: 24px; box-shadow: var(--shadow-sm);
       }
       .header h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
       .header h1 i { color: var(--primary); }
+      /* ── Photo icons (real photographs standing in for the old icon font) ── */
+      .icon-photo {
+        width: 16px; height: 16px; object-fit: cover; border-radius: 4px;
+        vertical-align: -3px; display: inline-block; border: 1px solid rgba(15, 23, 42, .08);
+      }
+      .icon-photo-lg { width: 26px; height: 26px; border-radius: 7px; vertical-align: -7px; }
+      .icon-photo-sm { width: 13px; height: 13px; border-radius: 3px; vertical-align: -2px; }
       .logout-btn {
-        background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.35); color: #fca5a5;
+        background: #f8fafc; border: 1px solid var(--border-color); color: var(--text-muted);
         padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
       }
+      .logout-btn:hover { background: #fef2f2; border-color: #fecaca; color: var(--danger); }
       .alert {
         padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; margin-bottom: 18px;
         display: flex; align-items: center; gap: 8px;
       }
-      .alert-error { background: rgba(239, 68, 68, .15); border: 1px solid rgba(239, 68, 68, .35); color: #fca5a5; }
-      .alert-success { background: rgba(16, 185, 129, .15); border: 1px solid rgba(16, 185, 129, .35); color: #6ee7b7; }
+      .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+      .alert-success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; }
       .card {
         background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px;
-        padding: 20px; overflow-x: auto;
+        padding: 20px; overflow-x: auto; box-shadow: var(--shadow-sm);
       }
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
       th {
         text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 11px;
         text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border-color);
       }
-      td { padding: 12px; border-bottom: 1px solid rgba(51, 65, 85, .3); vertical-align: middle; }
+      td { padding: 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+      tbody tr { transition: background-color .15s ease; }
+      tbody tr:hover td { background: var(--primary-soft); }
       .co-name { font-weight: 700; }
       .subdomain { color: var(--text-muted); font-size: 12px; }
       .bill { font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -51,27 +72,28 @@
         display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
         text-transform: uppercase;
       }
-      .badge-active { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
-      .badge-suspended { background: rgba(239, 68, 68, .15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, .35); }
-      .badge-payment-online { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
-      .badge-payment-manual { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
-      .badge-payment-trial { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
+      .badge-active { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+      .badge-suspended { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      .badge-payment-online { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+      .badge-payment-manual { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+      .badge-payment-trial { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
       .mini-btn {
-        background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright);
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
         border-radius: 8px; padding: 5px 8px; font-size: 12px; font-weight: 600; cursor: pointer;
       }
-      .mini-btn-danger { border-color: rgba(239, 68, 68, .4); color: #fca5a5; }
-      .mini-btn-success { border-color: rgba(16, 185, 129, .4); color: #6ee7b7; }
+      .mini-btn:hover { background: var(--primary-soft); border-color: var(--primary-soft-border); color: var(--primary-dark); }
+      .mini-btn-danger { border-color: #fecaca; color: var(--danger); }
+      .mini-btn-danger:hover { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+      .mini-btn-success { border-color: #a7f3d0; color: var(--success); }
+      .mini-btn-success:hover { background: #ecfdf5; border-color: #6ee7b7; color: #047857; }
       .mini-btn-link { display: inline-block; text-decoration: none; margin: 0 4px 4px 0; }
       .row-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0; }
       .empty-state { text-align: center; padding: 40px; color: var(--text-dim); }
       .new-co-btn {
-        background: rgba(99, 102, 241, .15); border: 1px solid rgba(99, 102, 241, .4); color: #a5b4fc;
+        background: var(--primary); border: 1px solid var(--primary); color: #fff;
         padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
       }
-      details.new-co { margin-bottom: 20px; }
-      details.new-co summary { list-style: none; cursor: pointer; }
-      details.new-co summary::-webkit-details-marker { display: none; }
+      .new-co-btn:hover { background: var(--primary-dark); border-color: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-1px); }
       .new-co-form {
         margin-top: 12px; padding: 20px; display: grid; grid-template-columns: repeat(2, 1fr);
         gap: 14px 16px;
@@ -80,41 +102,84 @@
       .new-co-form .field.span2 { grid-column: 1 / -1; }
       .new-co-form label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; }
       .new-co-form input, .new-co-form select {
-        background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright);
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
         border-radius: 8px; padding: 9px 10px; font-size: 13.5px;
       }
+      .new-co-form input:hover, .new-co-form select:hover { border-color: #cbd5e1; }
+      .new-co-form input:focus, .new-co-form select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
       .new-co-form .actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
       .new-co-form .submit-btn {
         background: var(--primary); border: none; color: white; padding: 10px 20px;
         border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
       }
+      .new-co-form .submit-btn:hover { background: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+      /* ── Page sections ── */
+      .page-section { margin-bottom: 36px; }
+      .page-section:last-child { margin-bottom: 0; }
+      .section-heading {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+        font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; color: var(--text-dim);
+      }
+      .section-heading i { color: var(--primary); font-size: 15px; }
+      .section-heading .section-count {
+        font-weight: 700; color: var(--primary-dark); background: var(--primary-soft);
+        border-radius: 999px; padding: 1px 9px; font-size: 11px; letter-spacing: 0;
+        text-transform: none;
+      }
+      .section-body { display: flex; flex-direction: column; gap: 16px; }
+      .section-toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
+
+      /* ── Tenant search/filter, bulk actions, pagination ── */
+      .tenant-filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+      .tenant-filter-bar input[type="search"] {
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 8px 12px; font-size: 13px; min-width: 220px;
+      }
+      .tenant-filter-bar select {
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
+        border-radius: 8px; padding: 8px 10px; font-size: 13px;
+      }
+      .tenant-filter-bar input[type="search"]:focus, .tenant-filter-bar select:focus {
+        border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none;
+      }
+      .bulk-action-bar {
+        display: flex; align-items: center; gap: 10px; background: var(--primary-soft);
+        border: 1px solid var(--primary-soft-border); border-radius: 10px; padding: 10px 14px; font-size: 13px;
+      }
+      .bulk-action-bar span { color: var(--primary-dark); }
+      .pagination-bar { display: flex; align-items: center; gap: 12px; justify-content: center; margin-top: 16px; }
+      .pagination-info { font-size: 12px; color: var(--text-dim); }
+      .mini-btn-disabled { opacity: .4; pointer-events: none; }
 
       /* ── Stats row ── */
-      .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+      .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
       .stat-card {
         background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 16px 18px;
+        box-shadow: var(--shadow-sm); transition: box-shadow .2s ease, transform .2s ease, border-color .2s ease;
       }
+      .stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-3px); border-color: var(--primary-soft-border); }
       .stat-card .stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--text-dim); font-weight: 700; margin-bottom: 6px; }
-      .stat-card .stat-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+      .stat-card .stat-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--primary-dark); }
       .stat-card .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
       .op-price-summary {
         grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
-        border: 1px dashed var(--border-color); border-radius: 10px; padding: 10px 14px;
-        background: rgba(99, 102, 241, .06);
+        border: 1px dashed var(--primary-soft-border); border-radius: 10px; padding: 10px 14px;
+        background: var(--primary-soft);
       }
       .op-price-summary .op-price-amount { font-size: 17px; font-weight: 800; }
       .op-price-summary .op-price-note { font-size: 11px; color: var(--text-dim); }
 
       /* ── Activity feed ── */
-      .activity-card { margin-top: 20px; }
       .activity-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
       .activity-card > h2 i { color: var(--primary); }
       .activity-list { display: flex; flex-direction: column; gap: 0; }
       .activity-row {
         display: flex; align-items: baseline; gap: 10px; padding: 9px 0;
-        border-bottom: 1px solid rgba(51, 65, 85, .3); font-size: 12.5px;
+        border-bottom: 1px solid #f1f5f9; font-size: 12.5px; border-radius: 6px; transition: background-color .15s ease;
       }
+      .activity-row:hover { background: #f8fafc; }
       .activity-row:last-child { border-bottom: none; }
       .activity-row .a-level { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; }
       .activity-row .a-level.INFO { background: var(--success); }
@@ -126,15 +191,16 @@
 
       /* ── Traffic sparkline ── */
       .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 24px; margin-top: 8px; }
-      .sparkline .bar { flex: 1; background: var(--primary); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .8; }
+      .sparkline .bar { flex: 1; background: var(--primary); border-radius: 2px 2px 0 0; min-height: 2px; opacity: .55; transition: opacity .15s ease; }
       .sparkline .bar:last-child { opacity: 1; }
+      .sparkline:hover .bar { opacity: .9; }
+      .sparkline:hover .bar:last-child { opacity: 1; }
 
       /* ── Source badge ── */
-      .badge-source-self { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .35); }
-      .badge-source-manual { background: rgba(148, 163, 184, .15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, .35); }
+      .badge-source-self { background: var(--primary-soft); color: var(--primary-dark); border: 1px solid var(--primary-soft-border); }
+      .badge-source-manual { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
 
       /* ── Profit & Loss card ── */
-      .pnl-card { margin-bottom: 20px; }
       .pnl-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
       .pnl-card > h2 i { color: var(--primary); }
       .pnl-figures { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -147,48 +213,50 @@
       .pnl-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
       .pnl-bar-row { display: flex; align-items: center; gap: 10px; }
       .pnl-bar-row .pnl-bar-tag { width: 64px; flex-shrink: 0; font-size: 11px; color: var(--text-muted); font-weight: 700; }
-      .pnl-bar-row .pnl-bar-track { flex: 1; height: 14px; background: #090d16; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-color); }
+      .pnl-bar-row .pnl-bar-track { flex: 1; height: 14px; background: #f1f5f9; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-color); }
       .pnl-bar-row .pnl-bar-fill { height: 100%; border-radius: 7px; transition: width .3s; }
       .pnl-bar-row .pnl-bar-fill.revenue { background: var(--success); }
       .pnl-bar-row .pnl-bar-fill.cost { background: var(--warning); }
       .pnl-bar-row .pnl-bar-amount { width: 110px; flex-shrink: 0; text-align: right; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
       .pnl-suggestion {
-        margin-top: 16px; border: 1px solid rgba(239, 68, 68, .35); background: rgba(239, 68, 68, .08);
+        margin-top: 16px; border: 1px solid #fecaca; background: #fef2f2;
         border-radius: 10px; padding: 14px 16px; font-size: 12.5px; color: var(--text-bright);
       }
-      .pnl-suggestion strong { color: #fca5a5; }
+      .pnl-suggestion strong { color: var(--danger); }
       .pnl-suggestion .pnl-suggestion-math { color: var(--text-muted); font-size: 11.5px; margin-top: 6px; }
       .pnl-cost-form { margin-top: 16px; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
       .pnl-cost-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); font-weight: 700; }
       .pnl-cost-form input {
-        background: #090d16; border: 1px solid var(--border-color); color: var(--text-bright);
+        background: #fff; border: 1px solid var(--border-color); color: var(--text-bright);
         border-radius: 8px; padding: 9px 10px; font-size: 13.5px; width: 140px;
       }
+      .pnl-cost-form input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); outline: none; }
       .pnl-cost-form button {
         background: var(--primary); border: none; color: white; padding: 10px 18px;
         border-radius: 9px; font-size: 13px; font-weight: 700; cursor: pointer;
       }
+      .pnl-cost-form button:hover { background: var(--primary-dark); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 
       /* ── Leads / payments panels ── */
-      .section-card { margin-top: 20px; }
       .section-card > h2 { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
       .section-card > h2 i { color: var(--primary); }
       .lead-msg { max-width: 280px; color: var(--text-muted); font-size: 12.5px; white-space: normal; }
-      .badge-lead-new { background: rgba(99, 102, 241, .15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, .35); }
-      .badge-lead-contacted { background: rgba(245, 158, 11, .15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, .35); }
-      .badge-lead-converted { background: rgba(16, 185, 129, .15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, .35); }
+      .badge-lead-new { background: var(--primary-soft); color: var(--primary-dark); border: 1px solid var(--primary-soft-border); }
+      .badge-lead-contacted { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+      .badge-lead-converted { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
 
       /* ── Payment row → transaction detail modal ── */
       .pay-row { cursor: pointer; }
-      .pay-row:hover, .pay-row:focus-visible { background: rgba(99, 102, 241, .08); outline: none; }
+      .pay-row:hover, .pay-row:focus-visible { outline: none; }
       .pay-modal-overlay {
-        display: none; position: fixed; inset: 0; background: rgba(7, 11, 20, .72); z-index: 60;
+        display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, .45); z-index: 60;
         align-items: center; justify-content: center; padding: 20px;
       }
       .pay-modal-overlay.open { display: flex; }
       .pay-modal-sheet {
         width: 100%; max-width: 440px; max-height: 85vh; overflow-y: auto;
         background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .18);
       }
       .pay-modal-head {
         display: flex; align-items: center; justify-content: space-between; padding: 16px 20px;
@@ -198,13 +266,13 @@
       .pay-modal-head h3 i { color: var(--primary); }
       .pay-modal-close {
         background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1;
-        cursor: pointer; padding: 0 4px;
+        cursor: pointer; padding: 0 4px; border-radius: 6px;
       }
-      .pay-modal-close:hover { color: var(--text-bright); }
+      .pay-modal-close:hover { color: var(--danger); background: #fef2f2; }
       .pay-modal-body { padding: 8px 20px 20px; }
       .pay-modal-row {
         display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
-        padding: 9px 0; border-bottom: 1px solid rgba(51, 65, 85, .3); font-size: 12.5px;
+        padding: 9px 0; border-bottom: 1px solid #f1f5f9; font-size: 12.5px;
       }
       .pay-modal-row:last-child { border-bottom: none; }
       .pay-modal-row span { color: var(--text-dim); flex-shrink: 0; }
@@ -215,28 +283,11 @@
   <body>
     <div class="container">
       <div class="header">
-        <h1><i class="ti ti-building-fortress"></i> Platform Admin Console</h1>
+        <h1><img class="icon-photo-lg" src="{{ static_url('icons/photos/building-fortress.jpg') }}" alt=""> Platform Admin Console</h1>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').open = !document.getElementById('newCoPanel').open;">
-            <i class="ti ti-plus"></i> New Company (Free)
-          </button>
-          <a href="/create_org" target="_blank" rel="noopener" title="Opens the same public registration + Razorpay checkout a self-service customer would use — hand this to a client to pay on the spot."
-             style="display:inline-flex;align-items:center;gap:6px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
-            <i class="ti ti-credit-card"></i> New Company (Paid Signup)
-          </a>
-          <a href="/super_admin/applications" title="Review pending company-signup applications (OTP-verified, documents uploaded, awaiting your approval)"
-             style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fcd34d;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;position:relative;">
-            <i class="ti ti-clipboard-check"></i> Applications
-            {% if pending_applications_count %}<span style="background:#f59e0b;color:#1e293b;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ pending_applications_count }}</span>{% endif %}
-          </a>
-          <a href="/super_admin/duplicate-alerts" title="Signups blocked because the company name matched an existing tenant"
-             style="display:inline-flex;align-items:center;gap:6px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">
-            <i class="ti ti-alert-triangle"></i> Duplicate Alerts
-            {% if unacknowledged_alerts_count %}<span style="background:#ef4444;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ unacknowledged_alerts_count }}</span>{% endif %}
-          </a>
           <form action="/super_admin/logout" method="POST" style="margin:0;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="logout-btn"><i class="ti ti-logout"></i> Sign Out</button>
+            <button type="submit" class="logout-btn"><img class="icon-photo" src="{{ static_url('icons/photos/logout.jpg') }}" alt=""> Sign Out</button>
           </form>
         </div>
       </div>
@@ -244,220 +295,351 @@
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for cat, msg in messages %}
         <div class="alert alert-{{ 'error' if cat == 'error' else 'success' }}">
-          <i class="ti ti-{{ 'circle-x' if cat == 'error' else 'circle-check' }}"></i> {{ msg }}
+          <img class="icon-photo" src="{{ static_url('icons/photos/circle-x.jpg' if cat == 'error' else 'icons/photos/circle-check.png') }}" alt=""> {{ msg }}
         </div>
         {% endfor %}
       {% endwith %}
 
-      <div class="stats-row">
-        <div class="stat-card">
-          <div class="stat-label">Monthly Recurring Revenue</div>
-          <div class="stat-value">{{ mrr_display }}</div>
-          <div class="stat-sub">Active tenants only</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Active Companies</div>
-          <div class="stat-value">{{ active_tenant_count }}</div>
-          <div class="stat-sub">of {{ tenants|length }} total</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Total Employees Billed</div>
-          <div class="stat-value">{{ total_employee_count }}</div>
-          <div class="stat-sub">across every tenant</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Rate</div>
-          <div class="stat-value">{{ per_employee_paise | plan_price }}</div>
-          <div class="stat-sub">per employee / month, flat</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Website Visits Today</div>
-          <div class="stat-value">{{ traffic.today_total }}</div>
-          <div class="stat-sub">landing + get-started + create_org</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">Visits (7 Days)</div>
-          <div class="stat-value">{{ traffic.week_total }}</div>
-          <div class="sparkline">
-            {% set max_v = (traffic.trend | max) or 1 %}
-            {% for v in traffic.trend %}
-            <div class="bar" style="height:{{ [4, (v / max_v * 24) | round(0, 'floor')] | max }}px;" title="{{ v }} visits"></div>
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-
-      <div class="card pnl-card">
-        <h2><i class="ti ti-chart-bar"></i> Profit &amp; Loss</h2>
-        <div class="pnl-figures">
-          <div class="pnl-figure">
-            <div class="pnl-figure-label">Revenue (MRR)</div>
-            <div class="pnl-figure-value revenue">{{ pnl.revenue_display }}</div>
-          </div>
-          <div class="pnl-figure">
-            <div class="pnl-figure-label">Operating Costs</div>
-            <div class="pnl-figure-value cost">{{ pnl.cost_display }}</div>
-          </div>
-          <div class="pnl-figure">
-            <div class="pnl-figure-label">{{ 'Net Loss' if pnl.is_loss else 'Net Profit' }}</div>
-            <div class="pnl-figure-value net {{ 'loss' if pnl.is_loss else 'profit' }}">
-              {{ '-' if pnl.is_loss else '+' }}{{ pnl.net_display }}
+      <section class="page-section">
+        <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/layout-dashboard.jpg') }}" alt=""> Overview</div>
+        <div class="section-body">
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-label">Monthly Recurring Revenue</div>
+              <div class="stat-value">{{ mrr_display }}</div>
+              <div class="stat-sub">Active tenants only</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Active Companies</div>
+              <div class="stat-value">{{ active_tenant_count }}</div>
+              <div class="stat-sub">of {{ total_tenant_count }} total</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Employees Billed</div>
+              <div class="stat-value">{{ total_employee_count }}</div>
+              <div class="stat-sub">across every tenant</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Rate</div>
+              <div class="stat-value">{{ per_employee_paise | plan_price }}</div>
+              <div class="stat-sub">per employee / month, flat</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Website Visits Today</div>
+              <div class="stat-value">{{ traffic.today_total }}</div>
+              <div class="stat-sub">landing + get-started + create_org</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Visits (7 Days)</div>
+              <div class="stat-value">{{ traffic.week_total }}</div>
+              <div class="sparkline">
+                {% set max_v = (traffic.trend | max) or 1 %}
+                {% for v in traffic.trend %}
+                <div class="bar" style="height:{{ [4, (v / max_v * 24) | round(0, 'floor')] | max }}px;" title="{{ v }} visits"></div>
+                {% endfor %}
+              </div>
             </div>
           </div>
         </div>
-        <div class="pnl-bars">
-          <div class="pnl-bar-row">
-            <div class="pnl-bar-tag">Revenue</div>
-            <div class="pnl-bar-track"><div class="pnl-bar-fill revenue" style="width:{{ pnl.revenue_pct }}%;"></div></div>
-            <div class="pnl-bar-amount">{{ pnl.revenue_display }}</div>
-          </div>
-          <div class="pnl-bar-row">
-            <div class="pnl-bar-tag">Costs</div>
-            <div class="pnl-bar-track"><div class="pnl-bar-fill cost" style="width:{{ pnl.cost_pct }}%;"></div></div>
-            <div class="pnl-bar-amount">{{ pnl.cost_display }}</div>
-          </div>
-        </div>
+      </section>
 
-        {% if pnl.is_loss %}
-        <div class="pnl-suggestion">
-          <i class="ti ti-alert-triangle"></i>
-          <strong>Operating at a loss.</strong>
-          {% if pnl.suggested_rate_display %}
-          Consider raising the per-employee rate to <strong>{{ pnl.suggested_rate_display }}/employee/month</strong>
-          (currently {{ per_employee_paise | plan_price }}) to cover AWS + maintenance costs with a
-          {{ pnl.suggested_margin_pct }}% margin.
-          <div class="pnl-suggestion-math">
-            Break-even needs {{ pnl.cost_display }}/month spread across {{ total_employee_count }} billed employees.
-          </div>
-          {% else %}
-          No billed employees to base a rate suggestion on yet — costs exceed revenue with zero active billing base.
-          {% endif %}
-        </div>
-        {% endif %}
-
-        <form class="pnl-cost-form" action="/super_admin/costs" method="POST">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
-          <label>Monthly AWS Cost (₹)
-            <input type="number" name="monthly_aws" min="0" step="0.01" value="{{ '%.2f' | format(costs.aws_paise / 100) }}" placeholder="0.00" />
-          </label>
-          <label>Monthly Maintenance Cost (₹)
-            <input type="number" name="monthly_maintenance" min="0" step="0.01" value="{{ '%.2f' | format(costs.maintenance_paise / 100) }}" placeholder="0.00" />
-          </label>
-          <button type="submit"><i class="ti ti-device-floppy"></i> Save Costs</button>
-        </form>
-      </div>
-
-      <details class="new-co card" id="newCoPanel">
-        <summary><strong><i class="ti ti-building-plus"></i> Create a new company (free / manual)</strong></summary>
-        <p style="margin:10px 4px 0;font-size:12px;color:var(--text-muted);">
-          Provisions immediately at no charge — for sales-assisted or trial onboarding. To actually
-          charge a client via Razorpay instead, use <strong>New Company (Paid Signup)</strong> above.
-          Billing for every tenant is {{ per_employee_paise | plan_price }}/employee/month, live-computed
-          from headcount — there's nothing to select here.
-        </p>
-        <form class="new-co-form" action="/super_admin/tenants/create" method="POST" enctype="multipart/form-data">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
-          <div class="field">
-            <label>Company Name</label>
-            <input type="text" name="company_name" required />
-          </div>
-          <div class="field">
-            <label>Company Logo (optional)</label>
-            <input type="file" name="logo" accept="image/jpeg,image/png,image/webp,image/bmp" />
-          </div>
-          <div class="field">
-            <label>Subdomain</label>
-            <input type="text" name="subdomain" pattern="[a-z0-9\-]+" placeholder="acme-corp" required />
-          </div>
-          <div class="field">
-            <label>Employee Email Domain</label>
-            <input type="text" name="email_domain" placeholder="acme.com" required title="e.g. acme.com" />
-          </div>
-          <div class="field">
-            <label>Admin Username</label>
-            <input type="text" name="admin_username" required />
-          </div>
-          <div class="field">
-            <label>Admin Email</label>
-            <input type="email" name="admin_email" required />
-          </div>
-          <div class="field">
-            <label>Admin Password</label>
-            <input type="password" name="admin_password" minlength="8" required />
-          </div>
-          <div class="field">
-            <label>Payment Option</label>
-            <select name="payment_option">
-              <option value="online">Online (Razorpay)</option>
-              <option value="manual" selected>Bank Transfer / Manual Invoice</option>
-              <option value="trial">Free / Trial</option>
-            </select>
-          </div>
-          <div class="actions">
-            <button type="submit" class="submit-btn"><i class="ti ti-check"></i> Create Company</button>
-          </div>
-        </form>
-      </details>
-
-      <div class="card">
-        {% if tenants %}
-        <table>
-          <thead>
-            <tr>
-              <th>Company</th><th>Source</th><th>Payment</th><th>Employees</th><th>Monthly Bill</th><th>Status</th><th>Created</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for t in tenants %}
-            <tr>
-              <td>
-                <div class="co-name">{{ t.company_name }}</div>
-                <a class="subdomain" href="https://www.hrzest.com/{{ t.subdomain }}/login" target="_blank" rel="noopener" style="text-decoration:underline;">www.hrzest.com/{{ t.subdomain }}</a>
-              </td>
-              <td>
-                {% if t.self_signup %}
-                <span class="badge badge-source-self" title="Registered themselves via the public landing page"><i class="ti ti-user"></i> Self-Signup</span>
-                {% else %}
-                <span class="badge badge-source-manual" title="Created directly by a platform admin">Platform Admin</span>
-                {% endif %}
-              </td>
-              <td>
-                <span class="badge badge-payment-{{ t.payment_option }}">
-                  {{ {'online': 'Online', 'manual': 'Manual', 'trial': 'Trial'}.get(t.payment_option, t.payment_option) }}
-                </span>
-              </td>
-              <td>{{ t.employee_count }}</td>
-              <td class="bill">{{ t.monthly_bill_display }}</td>
-              <td><span class="badge badge-{{ t.status }}">{{ t.status }}</span></td>
-              <td class="subdomain">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</td>
-              <td>
-                <div class="row-actions">
-                  <a class="mini-btn mini-btn-link" href="https://www.hrzest.com/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard"><i class="ti ti-layout-dashboard"></i> Admin</a>
-                  <a class="mini-btn mini-btn-link" href="https://www.hrzest.com/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page"><i class="ti ti-users"></i> Employees</a>
-                  <button type="button" class="mini-btn mini-btn-link" onclick="tenantChatOpen({{ t.id }}, {{ t.company_name | tojson }})" title="Chat with this company's admin/HR"><i class="ti ti-message-2"></i> Chat</button>
-                  <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
-                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
-                    {% if t.status == 'active' %}
-                    <input type="hidden" name="status" value="suspended" />
-                    <button type="submit" class="mini-btn mini-btn-danger">Suspend</button>
-                    {% else %}
-                    <input type="hidden" name="status" value="active" />
-                    <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
-                    {% endif %}
-                  </form>
+      <section class="page-section">
+        <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/chart-bar.png') }}" alt=""> Finance</div>
+        <div class="section-body">
+          <div class="card pnl-card">
+            <h2><img class="icon-photo" src="{{ static_url('icons/photos/chart-bar.png') }}" alt=""> Profit &amp; Loss</h2>
+            <div class="pnl-figures">
+              <div class="pnl-figure">
+                <div class="pnl-figure-label">Revenue (MRR)</div>
+                <div class="pnl-figure-value revenue">{{ pnl.revenue_display }}</div>
+              </div>
+              <div class="pnl-figure">
+                <div class="pnl-figure-label">Operating Costs</div>
+                <div class="pnl-figure-value cost">{{ pnl.cost_display }}</div>
+              </div>
+              <div class="pnl-figure">
+                <div class="pnl-figure-label">{{ 'Net Loss' if pnl.is_loss else 'Net Profit' }}</div>
+                <div class="pnl-figure-value net {{ 'loss' if pnl.is_loss else 'profit' }}">
+                  {{ '-' if pnl.is_loss else '+' }}{{ pnl.net_display }}
                 </div>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <div class="empty-state"><i class="ti ti-building-off" style="font-size:32px;"></i><p style="margin-top:8px;">No companies registered yet.</p></div>
-        {% endif %}
-      </div>
+              </div>
+            </div>
+            <div class="pnl-bars">
+              <div class="pnl-bar-row">
+                <div class="pnl-bar-tag">Revenue</div>
+                <div class="pnl-bar-track"><div class="pnl-bar-fill revenue" style="width:{{ pnl.revenue_pct }}%;"></div></div>
+                <div class="pnl-bar-amount">{{ pnl.revenue_display }}</div>
+              </div>
+              <div class="pnl-bar-row">
+                <div class="pnl-bar-tag">Costs</div>
+                <div class="pnl-bar-track"><div class="pnl-bar-fill cost" style="width:{{ pnl.cost_pct }}%;"></div></div>
+                <div class="pnl-bar-amount">{{ pnl.cost_display }}</div>
+              </div>
+            </div>
 
+            {% if pnl.is_loss %}
+            <div class="pnl-suggestion">
+              <img class="icon-photo" src="{{ static_url('icons/photos/alert-triangle.jpg') }}" alt="">
+              <strong>Operating at a loss.</strong>
+              {% if pnl.suggested_rate_display %}
+              Consider raising the per-employee rate to <strong>{{ pnl.suggested_rate_display }}/employee/month</strong>
+              (currently {{ per_employee_paise | plan_price }}) to cover AWS + maintenance costs with a
+              {{ pnl.suggested_margin_pct }}% margin.
+              <div class="pnl-suggestion-math">
+                Break-even needs {{ pnl.cost_display }}/month spread across {{ total_employee_count }} billed employees.
+              </div>
+              {% else %}
+              No billed employees to base a rate suggestion on yet — costs exceed revenue with zero active billing base.
+              {% endif %}
+            </div>
+            {% endif %}
+
+            <form class="pnl-cost-form" action="/super_admin/costs" method="POST">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+              <label>Monthly AWS Cost (₹)
+                <input type="number" name="monthly_aws" min="0" step="0.01" value="{{ '%.2f' | format(costs.aws_paise / 100) }}" placeholder="0.00" />
+              </label>
+              <label>Monthly Maintenance Cost (₹)
+                <input type="number" name="monthly_maintenance" min="0" step="0.01" value="{{ '%.2f' | format(costs.maintenance_paise / 100) }}" placeholder="0.00" />
+              </label>
+              <button type="submit"><img class="icon-photo" src="{{ static_url('icons/photos/device-floppy.jpg') }}" alt=""> Save Costs</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section">
+        <div class="section-heading">
+          <img class="icon-photo" src="{{ static_url('icons/photos/building.jpg') }}" alt=""> Companies
+          <span class="section-count">{{ filtered_tenant_count }}{% if filtered_tenant_count != total_tenant_count %} of {{ total_tenant_count }}{% endif %}</span>
+        </div>
+        <div class="section-body">
+          <div class="section-toolbar">
+            <button type="button" class="new-co-btn" onclick="document.getElementById('newCoPanel').hidden = !document.getElementById('newCoPanel').hidden;">
+              <img class="icon-photo" src="{{ static_url('icons/photos/plus.jpg') }}" alt=""> New Company (Free)
+            </button>
+            <button type="button" class="new-co-btn" onclick="document.getElementById('editRatePanel').hidden = !document.getElementById('editRatePanel').hidden;"
+                    title="Change the flat per-employee monthly rate — applies to every new signup, top-up, and bill immediately">
+              <img class="icon-photo" src="{{ static_url('icons/photos/credit-card.jpg') }}" alt=""> Edit Rate ({{ per_employee_paise | plan_price }})
+            </button>
+            <a href="/create_org" target="_blank" rel="noopener" title="Opens the same public registration + Razorpay checkout a self-service customer would use — hand this to a client to pay on the spot."
+               style="display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);border:1px solid var(--primary-soft-border);color:var(--primary-dark);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
+               onmouseover="this.style.background='#dbeafe';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='var(--primary-soft)';this.style.boxShadow='none';this.style.transform='none';">
+              <img class="icon-photo" src="{{ static_url('icons/photos/credit-card.jpg') }}" alt=""> New Company (Paid Signup)
+            </a>
+            <a href="/super_admin/applications" title="Review pending company-signup applications (OTP-verified, documents uploaded, awaiting your approval)"
+               style="display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);border:1px solid var(--primary-soft-border);color:var(--primary-dark);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;position:relative;transition:background-color .15s,box-shadow .15s,transform .15s;"
+               onmouseover="this.style.background='#dbeafe';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='var(--primary-soft)';this.style.boxShadow='none';this.style.transform='none';">
+              <img class="icon-photo" src="{{ static_url('icons/photos/clipboard-check.jpg') }}" alt=""> Applications
+              {% if pending_applications_count %}<span style="background:var(--warning);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ pending_applications_count }}</span>{% endif %}
+            </a>
+            <a href="/super_admin/duplicate-alerts" title="Signups blocked because the company name matched an existing tenant"
+               style="display:inline-flex;align-items:center;gap:6px;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
+               onmouseover="this.style.background='#fee2e2';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='#fef2f2';this.style.boxShadow='none';this.style.transform='none';">
+              <img class="icon-photo" src="{{ static_url('icons/photos/alert-triangle.jpg') }}" alt=""> Duplicate Alerts
+              {% if unacknowledged_alerts_count %}<span style="background:var(--danger);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ unacknowledged_alerts_count }}</span>{% endif %}
+            </a>
+            <a href="/super_admin/audit-log" title="Search and browse the full history of platform admin actions"
+               style="display:inline-flex;align-items:center;gap:6px;background:#f1f5f9;border:1px solid #e2e8f0;color:#475569;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
+               onmouseover="this.style.background='#e2e8f0';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='#f1f5f9';this.style.boxShadow='none';this.style.transform='none';">
+              <img class="icon-photo" src="{{ static_url('icons/photos/history.jpg') }}" alt=""> Audit Log
+            </a>
+          </div>
+
+          <form class="tenant-filter-bar" method="GET" action="/super_admin">
+            <input type="search" name="q" value="{{ q }}" placeholder="Search company or subdomain…" aria-label="Search companies" />
+            <select name="status" aria-label="Filter by status">
+              <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All statuses</option>
+              <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+              <option value="suspended" {% if status_filter == 'suspended' %}selected{% endif %}>Deactivated</option>
+            </select>
+            <button type="submit" class="mini-btn"><img class="icon-photo-sm" src="{{ static_url('icons/photos/search.jpg') }}" alt=""> Search</button>
+            {% if q or status_filter != 'all' %}<a href="/super_admin" class="mini-btn mini-btn-link">Clear</a>{% endif %}
+            <a href="/super_admin/export/tenants.csv?q={{ q | urlencode }}&amp;status={{ status_filter }}" class="mini-btn mini-btn-link" style="margin-left:auto;" title="Export the current search/filter results as CSV">
+              <img class="icon-photo-sm" src="{{ static_url('icons/photos/download.jpg') }}" alt=""> Export CSV
+            </a>
+          </form>
+
+          <div class="new-co card" id="newCoPanel" hidden>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">
+              Provisions immediately at no charge — for sales-assisted or trial onboarding. To actually
+              charge a client via Razorpay instead, use <strong>New Company (Paid Signup)</strong> above.
+              Billing for every tenant is {{ per_employee_paise | plan_price }}/employee/month, live-computed
+              from headcount — there's nothing to select here.
+            </p>
+            <form class="new-co-form" action="/super_admin/tenants/create" method="POST" enctype="multipart/form-data">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+              <div class="field">
+                <label>Company Name</label>
+                <input type="text" name="company_name" required />
+              </div>
+              <div class="field">
+                <label>Company Logo (optional)</label>
+                <input type="file" name="logo" accept="image/jpeg,image/png,image/webp,image/bmp" />
+              </div>
+              <div class="field">
+                <label>Subdomain</label>
+                <input type="text" name="subdomain" pattern="[a-z0-9\-]+" placeholder="acme-corp" required />
+              </div>
+              <div class="field">
+                <label>Employee Email Domain</label>
+                <input type="text" name="email_domain" placeholder="acme.com" required title="e.g. acme.com" />
+              </div>
+              <div class="field">
+                <label>Admin Username</label>
+                <input type="text" name="admin_username" required />
+              </div>
+              <div class="field">
+                <label>Admin Email</label>
+                <input type="email" name="admin_email" required />
+              </div>
+              <div class="field">
+                <label>Admin Password</label>
+                <input type="password" name="admin_password" minlength="8" required />
+              </div>
+              <div class="field">
+                <label>Payment Option</label>
+                <select name="payment_option">
+                  <option value="online">Online (Razorpay)</option>
+                  <option value="manual" selected>Bank Transfer / Manual Invoice</option>
+                  <option value="trial">Free / Trial</option>
+                </select>
+              </div>
+              <div class="actions">
+                <button type="submit" class="submit-btn"><img class="icon-photo" src="{{ static_url('icons/photos/check.png') }}" alt=""> Create Company</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="new-co card" id="editRatePanel" hidden>
+            <p style="margin:0;font-size:12px;color:var(--text-muted);">
+              Current rate: <strong>{{ per_employee_paise | plan_price }}/employee/month</strong>. Changing this applies
+              to every new signup, seat top-up, and manual/dunning bill on the next calculation — no redeploy needed.
+              It does <strong>not</strong> retroactively reprice tenants already on recurring auto-debit (Razorpay
+              subscriptions can't be changed after creation).
+            </p>
+            <form class="new-co-form" action="/super_admin/rate" method="POST" style="grid-template-columns:1fr;max-width:280px;">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+              <div class="field">
+                <label>New Rate (₹ per employee / month)</label>
+                <input type="number" name="per_employee_rupees" min="0.01" step="0.01" value="{{ '%.2f' | format(per_employee_paise / 100) }}" required />
+              </div>
+              <div class="actions">
+                <button type="submit" class="submit-btn"><img class="icon-photo" src="{{ static_url('icons/photos/check.png') }}" alt=""> Save Rate</button>
+              </div>
+            </form>
+          </div>
+
+          <form id="bulkTenantForm" action="/super_admin/tenants/bulk-status" method="POST" style="display:none;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+            <input type="hidden" name="status" id="bulkStatusInput" value="" />
+          </form>
+
+          <div class="bulk-action-bar" id="bulkActionBar" hidden>
+            <span><strong id="bulkSelectedCount">0</strong> selected</span>
+            <button type="submit" form="bulkTenantForm" class="mini-btn mini-btn-success" onclick="document.getElementById('bulkStatusInput').value='active';">Activate Selected</button>
+            <button type="submit" form="bulkTenantForm" class="mini-btn mini-btn-danger" onclick="return bulkDeactivateConfirm();">Deactivate Selected</button>
+          </div>
+
+          <div class="card">
+            {% if tenants %}
+            <table>
+              <thead>
+                <tr>
+                  <th><input type="checkbox" id="selectAllTenants" onchange="toggleAllTenants(this)" aria-label="Select all companies" /></th>
+                  <th>Company</th><th>Source</th><th>Payment</th><th>Employees</th><th>Monthly Bill</th><th>Status</th><th>Created</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in tenants %}
+                <tr>
+                  <td><input type="checkbox" class="tenant-select" form="bulkTenantForm" name="tenant_ids" value="{{ t.id }}" onchange="updateBulkBar()" aria-label="Select {{ t.company_name }}" /></td>
+                  <td>
+                    <div class="co-name">{{ t.company_name }}</div>
+                    <a class="subdomain" href="{{ portal_base_url }}/{{ t.subdomain }}/login" target="_blank" rel="noopener" style="text-decoration:underline;">{{ t.subdomain }}</a>
+                  </td>
+                  <td>
+                    {% if t.self_signup %}
+                    <span class="badge badge-source-self" title="Registered themselves via the public landing page"><img class="icon-photo-sm" src="{{ static_url('icons/photos/user.jpg') }}" alt=""> Self-Signup</span>
+                    {% else %}
+                    <span class="badge badge-source-manual" title="Created directly by a platform admin">Platform Admin</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="badge badge-payment-{{ t.payment_option }}">
+                      {{ {'online': 'Online', 'manual': 'Manual', 'trial': 'Trial'}.get(t.payment_option, t.payment_option) }}
+                    </span>
+                  </td>
+                  <td>{{ t.employee_count }}</td>
+                  <td class="bill">{{ t.monthly_bill_display }}</td>
+                  <td>
+                    <span class="badge badge-{{ t.status }}">{{ t.status }}</span>
+                    {% if t.billing_state == 'grace' %}
+                    <span class="badge badge-payment-manual" title="{{ 'Unpaid, due ' + t.grace_period_ends_at.strftime('%d %b') if t.grace_period_ends_at else 'Payment overdue' }}">Grace period</span>
+                    {% elif t.billing_state == 'locked' %}
+                    <span class="badge badge-suspended" title="Locked for non-payment -- unlocks automatically once paid">Billing locked</span>
+                    {% endif %}
+                  </td>
+                  <td class="subdomain">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</td>
+                  <td>
+                    <div class="row-actions">
+                      <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard"><img class="icon-photo-sm" src="{{ static_url('icons/photos/layout-dashboard.jpg') }}" alt=""> Admin</a>
+                      <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page"><img class="icon-photo-sm" src="{{ static_url('icons/photos/users.jpg') }}" alt=""> Employees</a>
+                      <button type="button" class="mini-btn mini-btn-link" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)" title="Chat with this company's admin/HR"><img class="icon-photo-sm" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Chat</button>
+                      <form action="/super_admin/tenants/{{ t.id }}/status" method="POST" style="margin:0;">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+                        {% if t.status == 'active' %}
+                        <input type="hidden" name="status" value="suspended" />
+                        <button type="submit" class="mini-btn mini-btn-danger">Deactivate</button>
+                        {% else %}
+                        <input type="hidden" name="status" value="active" />
+                        <button type="submit" class="mini-btn mini-btn-success">Reactivate</button>
+                        {% endif %}
+                      </form>
+                      <button type="button" class="mini-btn mini-btn-danger" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" data-subdomain="{{ t.subdomain }}" onclick="openDeleteModal(this)" title="Permanently delete this company and all its data"><img class="icon-photo-sm" src="{{ static_url('icons/photos/trash.jpg') }}" alt=""> Delete</button>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% if total_pages > 1 %}
+            <div class="pagination-bar">
+              {% if page > 1 %}
+              <a class="mini-btn" href="/super_admin?q={{ q | urlencode }}&amp;status={{ status_filter }}&amp;page={{ page - 1 }}">&laquo; Prev</a>
+              {% else %}
+              <span class="mini-btn mini-btn-disabled">&laquo; Prev</span>
+              {% endif %}
+              <span class="pagination-info">Page {{ page }} of {{ total_pages }}</span>
+              {% if page < total_pages %}
+              <a class="mini-btn" href="/super_admin?q={{ q | urlencode }}&amp;status={{ status_filter }}&amp;page={{ page + 1 }}">Next &raquo;</a>
+              {% else %}
+              <span class="mini-btn mini-btn-disabled">Next &raquo;</span>
+              {% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state">
+              {% if q or status_filter != 'all' %}
+              <img class="icon-photo-lg" src="{{ static_url('icons/photos/search.jpg') }}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;"><p style="margin-top:8px;">No companies match your search.</p>
+              {% else %}
+              <img src="{{ static_url('icons/photos/building-off.jpg') }}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px;"><p style="margin-top:8px;">No companies registered yet.</p>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+
+      <section class="page-section">
+        <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Leads</div>
+        <div class="section-body">
       <div class="card section-card">
-        <h2><i class="ti ti-message-2"></i> Leads — "Talk to Us" Requests</h2>
+        <h2><img class="icon-photo" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> "Talk to Us" Requests</h2>
         {% if leads %}
         <table>
           <thead>
@@ -491,9 +673,19 @@
         <div class="empty-state" style="padding:20px;"><p>No inquiries yet — submissions from the landing page's "Talk to Us" form will show up here.</p></div>
         {% endif %}
       </div>
+        </div>
+      </section>
 
+      <section class="page-section">
+        <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/receipt.jpg') }}" alt=""> Payments</div>
+        <div class="section-body">
       <div class="card section-card">
-        <h2><i class="ti ti-receipt"></i> Recent Payments</h2>
+        <h2 style="display:flex;align-items:center;justify-content:space-between;">
+          <span><img class="icon-photo" src="{{ static_url('icons/photos/receipt.jpg') }}" alt=""> Recent Payments</span>
+          <a href="/super_admin/export/payments.csv" class="mini-btn mini-btn-link" style="font-size:11px;" title="Export full payment history as CSV">
+            <img class="icon-photo-sm" src="{{ static_url('icons/photos/download.jpg') }}" alt=""> Export CSV
+          </a>
+        </h2>
         {% if recent_payments %}
         <table>
           <thead>
@@ -529,11 +721,13 @@
         <div class="empty-state" style="padding:20px;"><p>No payments yet.</p></div>
         {% endif %}
       </div>
+        </div>
+      </section>
 
       <div class="pay-modal-overlay" id="payModalOverlay" role="dialog" aria-modal="true" aria-label="Transaction details" onclick="if(event.target===this)closePaymentModal()">
         <div class="pay-modal-sheet">
           <div class="pay-modal-head">
-            <h3><i class="ti ti-receipt-2"></i> Transaction Details</h3>
+            <h3><img class="icon-photo" src="{{ static_url('icons/photos/receipt-2.jpg') }}" alt=""> Transaction Details</h3>
             <button type="button" class="pay-modal-close" onclick="closePaymentModal()" aria-label="Close">&times;</button>
           </div>
           <div class="pay-modal-body">
@@ -553,8 +747,39 @@
         </div>
       </div>
 
+      <div class="pay-modal-overlay" id="deleteModalOverlay" role="dialog" aria-modal="true" aria-label="Delete company" onclick="if(event.target===this)closeDeleteModal()">
+        <div class="pay-modal-sheet">
+          <div class="pay-modal-head">
+            <h3><img class="icon-photo" src="{{ static_url('icons/photos/trash.jpg') }}" alt=""> Delete Company</h3>
+            <button type="button" class="pay-modal-close" onclick="closeDeleteModal()" aria-label="Close">&times;</button>
+          </div>
+          <div class="pay-modal-body">
+            <p style="font-size:13px;color:var(--text-bright);line-height:1.6;">
+              This permanently deletes <strong id="delCompanyName"></strong>'s entire database schema --
+              every employee, attendance/payroll/leave record, and uploaded document. <strong>This cannot be undone.</strong>
+              Its payment/billing history is kept and will still appear in the Payments feed below.
+            </p>
+            <form id="deleteTenantForm" method="POST" style="margin-top:14px;">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+              <label style="display:block;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:700;margin-bottom:6px;">
+                Type <strong id="delSubdomainLabel" style="color:var(--danger);"></strong> to confirm
+              </label>
+              <input type="text" id="delConfirmInput" oninput="checkDeleteConfirm()" autocomplete="off"
+                     style="width:100%;background:#fff;border:1px solid var(--border-color);border-radius:8px;padding:9px 12px;font-size:13.5px;margin-bottom:14px;" />
+              <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="mini-btn" onclick="closeDeleteModal()">Cancel</button>
+                <button type="submit" id="delSubmitBtn" class="mini-btn mini-btn-danger" disabled>Permanently Delete</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <section class="page-section">
+        <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/history.jpg') }}" alt=""> Activity</div>
+        <div class="section-body">
       <div class="card activity-card">
-        <h2><i class="ti ti-history"></i> Recent Activity</h2>
+        <h2><img class="icon-photo" src="{{ static_url('icons/photos/history.jpg') }}" alt=""> Recent Activity</h2>
         {% if recent_activity %}
         <div class="activity-list">
           {% for ev in recent_activity %}
@@ -570,6 +795,8 @@
         <div class="empty-state" style="padding:20px;"><p>No recent platform admin activity.</p></div>
         {% endif %}
       </div>
+        </div>
+      </section>
     </div>
 
     <script>
@@ -592,23 +819,61 @@
       function closePaymentModal() {
         document.getElementById('payModalOverlay').classList.remove('open');
       }
+
+      function openDeleteModal(btn) {
+        var d = btn.dataset;
+        document.getElementById('delCompanyName').textContent = d.companyName;
+        document.getElementById('delSubdomainLabel').textContent = d.subdomain;
+        document.getElementById('deleteTenantForm').action = '/super_admin/tenants/' + d.tenantId + '/delete';
+        var input = document.getElementById('delConfirmInput');
+        input.value = '';
+        document.getElementById('delSubmitBtn').disabled = true;
+        input.dataset.expected = d.subdomain;
+        document.getElementById('deleteModalOverlay').classList.add('open');
+        input.focus();
+      }
+      function closeDeleteModal() {
+        document.getElementById('deleteModalOverlay').classList.remove('open');
+      }
+      function checkDeleteConfirm() {
+        var input = document.getElementById('delConfirmInput');
+        document.getElementById('delSubmitBtn').disabled = input.value.trim().toLowerCase() !== (input.dataset.expected || '').toLowerCase();
+      }
+
+      function toggleAllTenants(master) {
+        document.querySelectorAll('.tenant-select').forEach(function (cb) { cb.checked = master.checked; });
+        updateBulkBar();
+      }
+      function updateBulkBar() {
+        var checked = document.querySelectorAll('.tenant-select:checked').length;
+        document.getElementById('bulkSelectedCount').textContent = checked;
+        document.getElementById('bulkActionBar').hidden = checked === 0;
+      }
+      function bulkDeactivateConfirm() {
+        var checked = document.querySelectorAll('.tenant-select:checked').length;
+        if (!confirm('Deactivate ' + checked + ' compan' + (checked === 1 ? 'y' : 'ies') + '? They will be locked out of their portal until reactivated.')) {
+          return false;
+        }
+        document.getElementById('bulkStatusInput').value = 'suspended';
+        return true;
+      }
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') closePaymentModal();
+        if (e.key === 'Escape') { closePaymentModal(); closeDeleteModal(); }
       });
     </script>
 
     <!-- ═══ PER-TENANT CHAT ═══ -->
-    <div id="tcOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.6);z-index:99998;align-items:center;justify-content:center;padding:20px;">
-      <div style="background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:100%;max-width:420px;height:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Segoe UI',sans-serif;box-shadow:0 24px 60px rgba(0,0,0,0.5);">
-        <div style="background:linear-gradient(135deg,#1a3a8f,#4f46e5);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+    <div id="tcOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:99998;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;width:100%;max-width:420px;height:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Segoe UI',sans-serif;box-shadow:0 24px 60px rgba(15,23,42,0.18);">
+        <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
           <div style="font-size:13px;font-weight:800;" id="tcCompanyName">Chat</div>
-          <button onclick="tenantChatClose()" style="border:none;background:rgba(255,255,255,0.15);color:#fff;width:24px;height:24px;border-radius:7px;cursor:pointer;">&#10005;</button>
+          <button onclick="tenantChatClose()" style="border:none;background:rgba(255,255,255,0.18);color:#fff;width:24px;height:24px;border-radius:7px;cursor:pointer;">&#10005;</button>
         </div>
-        <div id="tcMsgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;"></div>
-        <form id="tcSendForm" style="display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,0.1);" onsubmit="return tenantChatSend(event)">
+        <div id="tcMsgs" style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#f8fafc;"></div>
+        <form id="tcSendForm" style="display:flex;gap:8px;padding:10px;border-top:1px solid #e2e8f0;background:#fff;" onsubmit="return tenantChatSend(event)">
           <input id="tcInput" placeholder="Message this company's admin/HR&hellip;" autocomplete="off"
-                 style="flex:1;padding:9px 12px;border:1px solid rgba(255,255,255,0.15);border-radius:20px;font-size:13px;outline:none;background:rgba(255,255,255,0.06);color:#e2e8f0;">
-          <button type="submit" style="border:none;background:#4f46e5;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;">&#10148;</button>
+                 style="flex:1;padding:9px 12px;border:1px solid #e2e8f0;border-radius:20px;font-size:13px;outline:none;background:#fff;color:#0f172a;">
+          <button type="submit" style="border:none;background:#1d4ed8;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;">&#10148;</button>
         </form>
       </div>
     </div>
@@ -626,7 +891,7 @@
         var mine = m.sender_kind === 'platform_admin';
         return (
           '<div style="max-width:82%;align-self:' + (mine ? 'flex-end' : 'flex-start') + ';">' +
-            '<div style="background:' + (mine ? '#4f46e5' : 'rgba(255,255,255,0.08)') + ';color:#f1f5f9;border-radius:14px;' +
+            '<div style="background:' + (mine ? '#1d4ed8' : '#fff') + ';color:' + (mine ? '#fff' : '#0f172a') + ';border:' + (mine ? 'none' : '1px solid #e2e8f0') + ';border-radius:14px;' +
               (mine ? 'border-bottom-right-radius:4px;' : 'border-bottom-left-radius:4px;') +
               'padding:8px 12px;font-size:13px;word-break:break-word;">' + tcEscape(m.message) + '</div>' +
             '<div style="font-size:10px;color:#64748b;margin-top:2px;' + (mine ? 'text-align:right;' : '') + '">' + tcEscape(m.sender_name) + '</div>' +

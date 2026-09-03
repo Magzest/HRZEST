@@ -82,7 +82,7 @@ from utils.email_utils import (
 from utils.auth import generate_password_hash, check_password_hash
 from utils.helpers import (
     _error_page, invalidate_settings_cache, get_company_settings,
-    get_companies_list, get_overdue_onboarding_count,
+    get_companies_list, get_overdue_onboarding_count, coerce_datetime,
 )
 # Shift timings / deduction rates / office geo-fence -- app.py used to carry
 # its own separate SHIFT_START / LATE_DEDUCTION_RATE / OFFICE_LAT etc.
@@ -226,6 +226,35 @@ def inject_overdue_onboardings():
         return {"overdue_onboardings": 0}
 
 
+@app.context_processor
+def inject_billing_lock_status():
+    """Lets templates/admin_base.html show a proactive grace/locked banner
+    without every route handler having to fetch it -- _enforce_billing_lock()
+    only warns reactively (on the first blocked write attempt), this is what
+    lets an admin see the deadline *before* they hit that block. Cheap
+    single-row lookup, same posture as inject_overdue_onboardings above
+    (only runs for a logged-in admin session, fails soft to "nothing to
+    show" rather than ever breaking a page render)."""
+    if not session.get("admin_logged_in"):
+        return {}
+    try:
+        from flask import g as _g
+        db = get_master_db()
+        cur = db.cursor(buffered=True)
+        cur.execute(
+            "SELECT billing_state, grace_period_ends_at FROM tenants WHERE db_name=%s",
+            (_g.tenant_db,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        db.close()
+        if not row or row[0] == "current":
+            return {"billing_lock_status": None}
+        return {"billing_lock_status": {"state": row[0], "grace_period_ends_at": coerce_datetime(row[1])}}
+    except Exception:
+        return {"billing_lock_status": None}
+
+
 _SESSION_MAX_AGE = 8 * 3600  # 8 hours absolute -- stolen cookie cannot be used indefinitely
 # How often _resolve_tenant() re-checks tenants.status for an
 # already-session-cached tenant. Bounds how long a platform-admin
@@ -299,11 +328,12 @@ def _resolve_tenant():
         last_checked = session.get("_tenant_status_checked_at", 0)
         if (time.time() - last_checked) < _TENANT_STATUS_RECHECK_SEC:
             _g.tenant_db = session["tenant_db"]
+            _g.billing_locked = session.get("_billing_locked", False)
             return
         try:
             conn = get_master_db()
             cur = conn.cursor()
-            cur.execute("SELECT status FROM tenants WHERE db_name=%s", (session["tenant_db"],))
+            cur.execute("SELECT status, billing_state FROM tenants WHERE db_name=%s", (session["tenant_db"],))
             row = cur.fetchone()
             cur.close()
             conn.close()
@@ -311,7 +341,12 @@ def _resolve_tenant():
             row = None  # master DB unreachable -- don't punish the session for it, just skip the recheck this time
         if row is None or row[0] == "active":
             session["_tenant_status_checked_at"] = time.time()
+            # billing_state='locked' does NOT block resolution/login here --
+            # only _enforce_billing_lock() (below) blocks state-changing
+            # requests, per this feature's "can log in, can't act" design.
+            session["_billing_locked"] = bool(row) and row[1] == "locked"
             _g.tenant_db = session["tenant_db"]
+            _g.billing_locked = session["_billing_locked"]
             return
         session.clear()
         return jsonify({"ok": False, "msg": "This organisation's access has been suspended. Contact support."}), 403
@@ -321,15 +356,18 @@ def _resolve_tenant():
     # reuse its lookup instead of querying the master DB a second time.
     if url_slug and url_tenant_db:
         _g.tenant_db = url_tenant_db
+        _g.billing_locked = bool(request.environ.get("hrz.billing_locked"))
         session["tenant_db"] = url_tenant_db
         session["tenant_slug"] = url_slug
         session["_tenant_status_checked_at"] = time.time()
+        session["_billing_locked"] = _g.billing_locked
         return
 
     # 3. Default single-tenant fallback (local dev/test, or any request
     # that never carried a company slug: marketing pages, token-based
     # API/mobile-app calls, the platform-admin console).
     _g.tenant_db = os.environ.get("DB_NAME", "employee_attendance")
+    _g.billing_locked = False
 
 
 @app.after_request
@@ -357,7 +395,44 @@ def _restamp_tenant_session(response):
         session["tenant_db"] = tenant_db
         session["tenant_slug"] = url_slug
         session["_tenant_status_checked_at"] = time.time()
+        session["_billing_locked"] = getattr(_g, "billing_locked", False)
     return response
+
+
+# Exempt from the billing-lock write-block below: the pages/actions a
+# locked tenant must still be able to reach to pay their way back out
+# (blueprints/billing_dunning.py), plus the universal login/logout/static
+# exemptions every other gate in this file also carries.
+_BILLING_LOCK_EXEMPT_PATHS = {
+    "/logout", "/login", "/admin_login", "/employee_login",
+    "/pay_overdue_bill", "/api/billing/overdue/create_order", "/api/billing/overdue/verify",
+}
+
+
+@app.before_request
+def _enforce_billing_lock():
+    """A tenant past its 5-day payment grace period (billing_state='locked',
+    set by blueprints/billing_dunning.py's daily check) can still log in and
+    browse -- _resolve_tenant() above deliberately doesn't block resolution
+    on this -- but every state-changing request is refused here until a
+    payment clears it, automatically, via that module's Razorpay webhook.
+    No admin action is needed on either side of that transition.
+
+    GET/HEAD/OPTIONS always pass (read-only viewing, including payroll
+    pages themselves -- the user's requirement is "can't make changes",
+    not "can't see the page"); only mutating methods on non-exempt paths
+    are refused."""
+    if not getattr(_g, "billing_locked", False):
+        return
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    if request.path.startswith("/static/") or request.path == "/healthz" or request.path in _BILLING_LOCK_EXEMPT_PATHS:
+        return
+    msg = "Your account is locked because of an overdue payment. Pay your outstanding bill to unlock it."
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "msg": msg, "billing_locked": True}), 402
+    flash(msg, "error")
+    return redirect(_tpath("/pay_overdue_bill"))
 
 
 @app.before_request
@@ -2227,6 +2302,18 @@ def init_master_db():
         # Pre-existing masters created before payment_option existed --
         # CREATE TABLE IF NOT EXISTS above is a no-op against them.
         cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS payment_option VARCHAR(20) DEFAULT 'online'")
+        # Payment-dunning state, separate from `status` (which stays purely
+        # admin-initiated active/suspended). 'current' = paid up; 'grace' =
+        # unpaid past the due date but still inside the 5-day deadline
+        # (fully functional, just warned); 'locked' = grace period expired
+        # with no payment -- login still works (_resolve_tenant() below
+        # doesn't gate on this) but _enforce_billing_lock() blocks every
+        # state-changing request until a payment clears it automatically
+        # (blueprints/billing_dunning.py's Razorpay webhook), no admin
+        # action required either way.
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_state VARCHAR(20) NOT NULL DEFAULT 'current'")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS grace_period_ends_at TIMESTAMP DEFAULT NULL")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP DEFAULT NULL")
         # Platform-operator identity (blueprints/platform_admin.py) --
         # lives in att_master, not any tenant schema, since tenant
         # admin_users rows only exist inside their own schema and this
@@ -2454,6 +2541,17 @@ def init_master_db():
                 cancelled_at TIMESTAMP DEFAULT NULL
             )
         """)
+        # Set TRUE on every currently-active mandate when the platform admin
+        # changes the per-employee rate (blueprints/platform_admin.py's
+        # platform_admin_set_rate()) -- Razorpay Plans are immutable, so an
+        # existing subscription keeps charging its original rate forever
+        # otherwise. Checked by the subscription.charged webhook handler
+        # (blueprints/auto_debit.py's _handle_subscription_charged()): once
+        # a flagged mandate's current cycle is paid, that subscription is
+        # cancelled and the tenant is emailed to re-authorize a fresh one on
+        # the new rate -- migration happens at the subscriber's own next
+        # renewal, never mid-cycle.
+        cur.execute("ALTER TABLE auto_debit_mandates ADD COLUMN IF NOT EXISTS needs_rate_migration BOOLEAN NOT NULL DEFAULT FALSE")
         # One row per successfully (or unsuccessfully) collected monthly
         # auto-debit charge -- written by the Razorpay webhook
         # (subscription.charged / payment.failed) in real mode, or by the
@@ -2476,6 +2574,12 @@ def init_master_db():
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_monthly_invoices_tenant ON monthly_invoices (tenant_schema, billing_period)")
+        # Lets blueprints/billing_dunning.py's payment.captured webhook find
+        # the pending row it staged at order-creation time before a
+        # razorpay_payment_id even exists yet -- the recurring auto-debit
+        # path above never needed this column since its webhook arrives
+        # already carrying a subscription_id to look up by instead.
+        cur.execute("ALTER TABLE monthly_invoices ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100) DEFAULT NULL")
         # Which tenant a physical biometric terminal (fingerprint/face
         # attendance device) belongs to -- looked up by device_serial, the
         # only identifier the device itself sends. Lives in the master
@@ -2543,6 +2647,14 @@ def init_master_db():
             )
         """)
         cur.execute("INSERT INTO platform_costs (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
+        # Same singleton row now also carries the flat per-employee billing
+        # rate -- was a hardcoded Python constant (utils/plan_limits.py's
+        # PER_EMPLOYEE_PAISE, kept as the DEFAULT/seed value and as a
+        # fail-safe fallback), moved here so the platform admin can change
+        # it at runtime and have every price calculation pick it up on the
+        # next read (utils/plan_limits.py's get_per_employee_paise(), 30s
+        # cache) -- no redeploy needed.
+        cur.execute("ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS per_employee_paise INT NOT NULL DEFAULT 9900")
         db.commit()
         cur.close()
         db.close()
@@ -3512,6 +3624,7 @@ if "core.home" not in app.view_functions:
     from blueprints.webhooks import webhooks_bp
     from blueprints.seats import seats_bp
     from blueprints.auto_debit import auto_debit_bp
+    from blueprints.billing_dunning import billing_dunning_bp
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.honeypot_routes import honeypot_bp
     from blueprints.biometric import biometric_bp
@@ -3519,7 +3632,7 @@ if "core.home" not in app.view_functions:
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                platform_admin_bp, honeypot_bp, biometric_bp):
+                billing_dunning_bp, platform_admin_bp, honeypot_bp, biometric_bp):
         app.register_blueprint(_bp)
 
 
@@ -3528,12 +3641,12 @@ if "core.home" not in app.view_functions:
 def inject_billing_context():
     try:
         from flask import g as _g
-        from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, PER_EMPLOYEE_PAISE
+        from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, get_per_employee_paise
         employee_count = get_tenant_employee_count(_g.tenant_db)
         monthly_bill_paise = calculate_price(employee_count)
         return dict(
             employee_count=employee_count,
-            per_employee_paise=PER_EMPLOYEE_PAISE,
+            per_employee_paise=get_per_employee_paise(),
             monthly_bill_display=format_price_inr(monthly_bill_paise),
         )
     except Exception:
@@ -3549,6 +3662,15 @@ if __name__ == "__main__":
     init_db()
     cfg.load_default_shift()
     cfg.load_salary_rules()
+    # wsgi.py wraps app.wsgi_app with this at import time -- running app.py
+    # directly (`python app.py`) never goes through wsgi.py, so without this
+    # every path-based tenant link (/<company-slug>/...) 404s: nothing ever
+    # strips the slug into SCRIPT_NAME for Flask's router to see the bare
+    # route underneath. Guarded so re-running this block (shouldn't happen,
+    # but __main__ only executes once anyway) can't double-wrap.
+    from utils.tenant_routing import TenantPrefixMiddleware
+    if not isinstance(app.wsgi_app, TenantPrefixMiddleware):
+        app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
     # Only started here -- when app.py is run directly (`python app.py`,
     # local dev). wsgi.py (the real production entrypoint) already starts
     # this exact worker itself before importing app.py; starting it again
