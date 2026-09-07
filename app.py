@@ -339,6 +339,9 @@ def _resolve_tenant():
             conn.close()
         except Exception:
             row = None  # master DB unreachable -- don't punish the session for it, just skip the recheck this time
+            app_log.warning(
+                "tenant.status_recheck_failed: tenant_db=%s", session.get("tenant_db"), exc_info=True
+            )
         if row is None or row[0] == "active":
             session["_tenant_status_checked_at"] = time.time()
             # billing_state='locked' does NOT block resolution/login here --

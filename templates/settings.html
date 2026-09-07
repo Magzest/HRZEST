@@ -458,9 +458,9 @@
         <div class="s3-tab-icon u-bg-eff6ff"><i class="ti ti-building u-c-1e3a8a"></i></div>
         <div class="s3-tab-text">
           <div class="s3-tab-title">Organisation</div>
-          <div class="s3-tab-sub">Attendance</div>
+          <div class="s3-tab-sub">Attendance · Company</div>
         </div>
-        <span class="s3-tab-count">1</span>
+        <span class="s3-tab-count">2</span>
       </button>
       <button class="s3-tab" id="s3tab-fin" onclick="switchGroup('fin')">
         <div class="s3-tab-icon u-bg-fefce8"><i class="ti ti-coin u-c-ca8a04"></i></div>
@@ -492,6 +492,7 @@
         </button>
         <div class="subnav-dd-menu" id="dd-org">
           <button class="subnav-dd-item active" id="ddi-attendance" onclick="switchSub('org','attendance')"><i class="ti ti-fingerprint"></i> Attendance</button>
+          <button class="subnav-dd-item" id="ddi-company" onclick="switchSub('org','company')"><i class="ti ti-building"></i> Company</button>
         </div>
       </div>
     </div>
@@ -568,6 +569,75 @@
             </div>
           </div>
 
+          <!-- COMPANY -->
+          <div class="s3-section" id="ss-company">
+            <div class="sec-header">
+              <div class="sec-icon u-bg-eff6ff"><i class="ti ti-building u-c-1e3a8a u-fs-20"></i></div>
+              <div><div class="sec-title">Company Management</div><div class="sec-sub">Every company under this organisation</div></div>
+              <button type="button" class="u-ml-auto u-p-7-12 u-bd-none u-br-9 u-bg-1e3a8a u-c-fff u-fs-13 u-fw-700 u-cur-pointer u-ff-inherit" onclick="acOpenModal()"><i class="ti ti-plus"></i> Add Company</button>
+            </div>
+
+            {% if companies %}
+            <div class="u-d-flex u-fxd-column u-gap-12">
+              {% for cid, cname, ccode, ccreated, cempcount, cworkdays, chaspin, clogo, chasid, caddress, cwebsite, cemail, cphone in companies %}
+              <div class="u-bg-fff u-bd-1d5-solid-e2e8f0 u-br-14 u-p-18" id="co-view-{{ cid }}">
+                <div class="u-d-flex u-ai-flex-start u-jc-space-between u-gap-12">
+                  <div class="u-d-flex u-ai-center u-gap-12">
+                    {% if clogo %}
+                    <img src="{{ url_for('static', filename=clogo) }}" alt="" class="u-w-44 u-h-44 u-br-12 u-fxs-0" style="object-fit:cover;" />
+                    {% else %}
+                    <div class="u-w-44 u-h-44 u-br-12 u-bg-eff6ff u-d-flex u-ai-center u-jc-center u-fxs-0"><i class="ti ti-building u-fs-20 u-c-1e3a8a"></i></div>
+                    {% endif %}
+                    <div>
+                      <div class="u-fs-14 u-fw-700 u-c-0f172a">{{ cname }}{% if ccode %} <span class="u-fs-11 u-c-94a3b8 u-ff-monospace">({{ ccode }})</span>{% endif %}</div>
+                      <div class="u-fs-12 u-c-64748b u-mt-2">{{ cempcount }} employee{{ 's' if cempcount != 1 else '' }}{% if caddress %} · {{ caddress }}{% endif %}</div>
+                    </div>
+                  </div>
+                  <div class="u-d-flex u-gap-8 u-fxs-0">
+                    <button type="button" class="u-p-7-12 u-bd-1d5-solid-e2e8f0 u-br-9 u-bg-f8fafc u-c-1e293b u-fs-13 u-fw-700 u-cur-pointer u-ff-inherit" onclick="openSetPin({{ cid }}, {{ cname|tojson }}, {{ 'true' if chaspin else 'false' }})"><i class="ti ti-lock"></i> {{ 'PIN set' if chaspin else 'Set PIN' }}</button>
+                    <button type="button" class="u-p-7-12 u-bd-1d5-solid-e2e8f0 u-br-9 u-bg-f8fafc u-c-1e293b u-fs-13 u-fw-700 u-cur-pointer u-ff-inherit" onclick="openEditCompany({{ cid }})"><i class="ti ti-pencil"></i> Edit</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="u-bg-fff u-bd-1d5-solid-e2e8f0 u-br-14 u-p-18" id="co-edit-{{ cid }}" style="display:none;">
+                <form method="POST" action="{{ tpath('/companies/' ~ cid ~ '/edit') }}" enctype="multipart/form-data">
+                  <input type="hidden" name="redirect_to" value="settings" />
+                  <div class="u-d-grid u-gtc-1fr-160 u-gap-10">
+                    <div class="field"><label>Company Name</label><input type="text" name="name" value="{{ cname }}" required /></div>
+                    <div class="field"><label>Code</label><input class="u-ff-monospace u-ls-1" type="text" name="code" value="{{ ccode }}" maxlength="20" /></div>
+                  </div>
+                  <div class="field"><label>Office Address</label><input type="text" name="address" value="{{ caddress }}" /></div>
+                  <div class="u-d-grid u-gtc-1fr-1fr u-gap-10">
+                    <div class="field"><label>Website</label><input type="text" name="website" value="{{ cwebsite }}" /></div>
+                    <div class="field"><label>Contact Email</label><input type="email" name="email" value="{{ cemail }}" /></div>
+                  </div>
+                  <div class="field"><label>Contact Phone</label><input type="text" name="phone" value="{{ cphone }}" /></div>
+                  <div class="field"><label>Logo <span class="u-fs-11 u-c-94a3b8">(optional — replaces current)</span></label><input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/bmp" /></div>
+                  <div class="field">
+                    <label>Working Days</label>
+                    <div class="u-d-flex u-fxw-wrap u-gap-6 u-mt-4">
+                      {% set cwd = cworkdays.split(',') %}
+                      {% for _d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+                      <label class="u-cur-pointer">
+                        <input class="u-d-none" type="checkbox" name="working_days" value="{{ _d }}" {% if _d in cwd %}checked{% endif %} onchange="styleCoWd(this)" />
+                        <span style="display:inline-block;padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid {% if _d in cwd %}#1e3a8a{% else %}#e2e8f0{% endif %};background:{% if _d in cwd %}#eff6ff{% else %}#f8fafc{% endif %};color:{% if _d in cwd %}#1e3a8a{% else %}#94a3b8{% endif %};">{{ _d }}</span>
+                      </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div class="u-d-flex u-gap-8 u-mt-10">
+                    <button type="button" class="u-fx-1 u-p-11 u-bd-1d5-solid-e2e8f0 u-br-10 u-bg-f8fafc u-c-64748b u-fs-14 u-fw-600 u-cur-pointer u-ff-inherit" onclick="closeEditCompany({{ cid }})">Cancel</button>
+                    <button class="u-fx-2 btn-submit" type="submit">Save Changes</button>
+                  </div>
+                </form>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="u-ta-center u-p-40 u-c-94a3b8">No companies yet. Click "Add Company" to create the first one.</div>
+            {% endif %}
+          </div>
 
     </div>
 
@@ -1335,11 +1405,12 @@
 
   <script>
     /* ── 3-TAB + DROPDOWN SUB-NAV ── */
-    var groupMap  = { attendance:'org',payroll:'fin',salary:'fin',email:'sys',appearance:'sys' };
+    var groupMap  = { attendance:'org',company:'org',payroll:'fin',salary:'fin',email:'sys',appearance:'sys' };
     var firstSub  = { org:'attendance', fin:'payroll', sys:'email' };
     var crumbData = {
       appearance: { icon:'<i class="ti ti-palette u-c-7c3aed"></i>',     bg:'#f5f3ff', title:'Appearance',     sub:'Theme and display' },
       attendance: { icon:'<i class="ti ti-fingerprint u-c-16a34a"></i>', bg:'#f0fdf4', title:'Attendance',     sub:'Punch-in methods' },
+      company:    { icon:'<i class="ti ti-building u-c-1e3a8a"></i>',    bg:'#eff6ff', title:'Company',        sub:'Company management' },
       payroll:    { icon:'<i class="ti ti-coin u-c-ca8a04"></i>',        bg:'#fefce8', title:'Payroll',        sub:'Salary rules' },
       salary:     { icon:'<i class="ti ti-cash u-c-16a34a"></i>',        bg:'#f0fdf4', title:'Salary',         sub:'Per-employee rates' },
       email:      { icon:'<i class="ti ti-mail u-c-0284c7"></i>',        bg:'#f0f9ff', title:'Email',          sub:'SMTP and notifications' }

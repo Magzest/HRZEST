@@ -18,7 +18,7 @@ real consumer today. A handler receives the parsed JSON payload and
 returns nothing; this module doesn't care what it does with it.
 """
 from flask import Blueprint, request, jsonify
-from extensions import limiter, log_security_event
+from extensions import limiter, log_security_event, app_log
 from utils.razorpay_utils import verify_webhook_signature
 
 webhooks_bp = Blueprint("webhooks", __name__)
@@ -75,7 +75,18 @@ def receive_webhook(provider):
     event = payload.get("event", "")
     handler = _HANDLERS.get((provider, event))
     if handler:
-        handler(payload)
+        try:
+            handler(payload)
+        except Exception:
+            # Previously an unhandled exception here surfaced only as a
+            # bare 500 to the provider, with zero signal on our side --
+            # log before re-raising so Flask's normal error handling still
+            # returns 500 (providers retry on that), but the failure is
+            # now visible to monitoring instead of silently disappearing.
+            app_log.error(
+                "webhooks.handler_failed: provider=%s event=%s", provider, event, exc_info=True
+            )
+            raise
     # 200 regardless of whether an event had a registered handler --
     # an unhandled-but-authentic event (one we simply don't act on yet)
     # is not a delivery failure Razorpay should retry.
