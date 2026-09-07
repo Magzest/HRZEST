@@ -498,7 +498,7 @@ describe('POST with positional-args body', () => {
     });
   });
 
-  it('submitPerformanceReview builds the review upsert body with its default status', async () => {
+  it('submitPerformanceReview builds the review upsert body with its default status/rating', async () => {
     mockAxiosInstance.post.mockResolvedValue({ data: {} });
     await client.submitPerformanceReview('EMP1', 'Q1', 2026, 'Great work');
     expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/performance/review', {
@@ -506,6 +506,7 @@ describe('POST with positional-args body', () => {
       quarter: 'Q1',
       year: 2026,
       reviewer_feedback: 'Great work',
+      potential_rating: 0,
       status: 'Draft',
     });
   });
