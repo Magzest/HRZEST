@@ -54,25 +54,6 @@ from database import get_db_connection
 from extensions import app_log, log_security_event
 
 
-def coerce_datetime(value):
-    """Normalize a DB-returned timestamp to a real datetime.datetime.
-
-    Postgres/psycopg2 already returns a datetime object for a TIMESTAMP
-    column; the SQLite dev fallback (database.py) has no such type and
-    hands back the raw "YYYY-MM-DD[ HH:MM:SS[.ffffff]]" string instead,
-    which breaks any template calling .strftime() on it (e.g. an
-    announcement's created_at). Returns None, unchanged, or a parsed
-    datetime -- never raises."""
-    if not value or not isinstance(value, str):
-        return value
-    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
-        try:
-            return datetime.datetime.strptime(value, fmt)
-        except ValueError:
-            continue
-    return None
-
-
 def tpath(path: str) -> str:
     """Prefix an absolute-path link/redirect target with the current
     tenant's URL prefix (request.script_root -- "" on marketing/platform-
