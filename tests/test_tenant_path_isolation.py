@@ -200,3 +200,56 @@ class TestCrossTenantSessionIsolation:
         with client.session_transaction() as sess:
             assert sess.get("admin_logged_in") is True
             assert sess.get("tenant_slug") == slug_a
+
+
+class TestFormFieldCannotSelectTenant:
+    """Defense-in-depth regression coverage: a POST body field that happens
+    to look like a tenant/company identifier (company_id) must never be able
+    to select a *different* tenant's schema than the one already bound by
+    the session/URL slug. g.tenant_db is resolved once per request by
+    app.py's _resolve_tenant() from the URL slug alone (see module docstring
+    above); nothing downstream re-derives it from request.form. This test
+    proves that property holds for a real handler (set_company_pin) rather
+    than just asserting it by reading the code."""
+
+    def test_company_id_form_field_cannot_write_into_other_tenant_schema(
+        self, client, db_engine, two_tenants
+    ):
+        slug_a, schema_a, slug_b, schema_b = two_tenants
+
+        # A company row that lives only in tenant B's schema.
+        cur = db_engine.cursor()
+        cur.execute(f'SET search_path TO "{schema_b}", public')
+        cur.execute("INSERT INTO companies (name, code) VALUES (%s, %s) RETURNING id",
+                    ("Tenant B Co", "TBC"))
+        company_id_in_b = cur.fetchone()[0]
+        cur.execute("SET search_path TO public")
+        cur.close()
+
+        # Log in as tenant A's admin -- session/tenant_db is now bound to
+        # schema_a, exactly like every other request in this file.
+        client.post(f"/{slug_a}/login", data={
+            "identifier": "tpi_admin_a", "password": "password123",
+        }, follow_redirects=False)
+        with client.session_transaction() as sess:
+            assert sess.get("tenant_db") == schema_a  # sanity check
+
+        # Try to set a PIN on tenant B's company by id, from tenant A's
+        # session. If g.tenant_db were ever derived from this form field
+        # instead of the session, this write would land in schema_b.
+        resp = client.post("/set_company_pin", data={
+            "company_id": str(company_id_in_b), "pin": "9999",
+        }, follow_redirects=False)
+        assert resp.status_code == 302
+
+        # Tenant B's row must be untouched -- the request executed (if at
+        # all) against schema_a, where this id doesn't correspond to any
+        # row tenant B owns.
+        cur = db_engine.cursor()
+        cur.execute(f'SET search_path TO "{schema_b}", public')
+        cur.execute("SELECT pin FROM companies WHERE id=%s", (company_id_in_b,))
+        row = cur.fetchone()
+        cur.execute("SET search_path TO public")
+        cur.close()
+        assert row is not None
+        assert row[0] is None, "cross-tenant company_id form field wrote into another tenant's schema"
