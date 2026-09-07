@@ -305,7 +305,9 @@ def _seed_sqlite_db(raw_conn):
             attendance_type TEXT,
             att_type TEXT,
             date TEXT,
-            company_id INTEGER DEFAULT 1
+            company_id INTEGER DEFAULT 1,
+            worked_minutes INTEGER,
+            last_relogin TEXT
         );
         ''')
         cur.execute('''
@@ -313,7 +315,11 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id TEXT UNIQUE,
             salary_per_day REAL DEFAULT 1000.0,
-            monthly_ctc REAL DEFAULT 30000.0
+            monthly_ctc REAL DEFAULT 30000.0,
+            basic_pct INTEGER DEFAULT 50,
+            last_revised TEXT,
+            last_hike_quarter INTEGER,
+            last_hike_year INTEGER
         );
         ''')
         cur.execute('''
@@ -321,27 +327,46 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT DEFAULT 'General Shift',
             start_time TEXT DEFAULT '09:00:00',
-            end_time TEXT DEFAULT '18:00:00'
+            half_time TEXT DEFAULT '13:00:00',
+            end_time TEXT DEFAULT '18:00:00',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            company_id INTEGER
         );
         ''')
         cur.execute('''
         CREATE TABLE IF NOT EXISTS leave_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id TEXT,
-            leave_type TEXT,
-            start_date TEXT,
-            end_date TEXT,
+            leave_date TEXT,
             reason TEXT,
             status TEXT DEFAULT 'Pending',
-            company_id INTEGER DEFAULT 1
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            leave_type_id INTEGER,
+            is_half_day INTEGER DEFAULT 0,
+            half_day_session TEXT,
+            cancelled_at TEXT
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS employee_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT NOT NULL,
+            doc_type TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            stored_name TEXT NOT NULL,
+            uploaded_by TEXT DEFAULT 'admin',
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expiry_date TEXT
         );
         ''')
         cur.execute('''
         CREATE TABLE IF NOT EXISTS resignation_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id TEXT,
+            last_working_day TEXT,
             reason TEXT,
             status TEXT DEFAULT 'Pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             company_id INTEGER DEFAULT 1
         );
         ''')
@@ -352,7 +377,12 @@ def _seed_sqlite_db(raw_conn):
             subject TEXT,
             description TEXT,
             status TEXT DEFAULT 'Open',
-            company_id INTEGER DEFAULT 1
+            company_id INTEGER DEFAULT 1,
+            category TEXT,
+            priority TEXT DEFAULT 'Medium',
+            admin_response TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ''')
         cur.execute('''
@@ -395,7 +425,14 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
             code TEXT,
-            pin TEXT
+            pin TEXT,
+            logo_path TEXT,
+            address TEXT,
+            website TEXT,
+            email TEXT,
+            phone TEXT,
+            working_days TEXT DEFAULT 'Mon,Tue,Wed,Thu,Fri',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ''')
         cur.execute('''
@@ -410,7 +447,40 @@ def _seed_sqlite_db(raw_conn):
             work_start TEXT DEFAULT '09:00',
             work_end TEXT DEFAULT '18:00',
             setup_done INTEGER DEFAULT 0,
-            compoff_minutes_per_day INTEGER DEFAULT 480
+            compoff_minutes_per_day INTEGER DEFAULT 480,
+            shift_start TEXT DEFAULT '09:00:00',
+            shift_half TEXT DEFAULT '13:00:00',
+            shift_end TEXT DEFAULT '18:00:00',
+            email_domain TEXT,
+            paid_employee_slots INTEGER,
+            compoff_min_ot_minutes INTEGER DEFAULT 120,
+            late_deduction_pct REAL DEFAULT 10.00,
+            half_day_deduction_pct REAL DEFAULT 50.00,
+            grace_minutes INTEGER DEFAULT 15,
+            holiday_pay TEXT DEFAULT 'paid',
+            leave_pay TEXT DEFAULT 'exclude',
+            default_onboarding_template_id INTEGER,
+            fingerprint_enabled INTEGER DEFAULT 0,
+            qr_enabled INTEGER DEFAULT 1,
+            face_enabled INTEGER DEFAULT 1,
+            location_enabled INTEGER DEFAULT 1,
+            employee_password_auth INTEGER DEFAULT 1,
+            face_auth_enabled INTEGER DEFAULT 0,
+            geo_enabled INTEGER DEFAULT 0,
+            geo_radius INTEGER DEFAULT 100,
+            office_lat REAL,
+            office_lon REAL,
+            pin_enabled INTEGER DEFAULT 1,
+            biometric_enabled INTEGER DEFAULT 0,
+            notify_leave INTEGER DEFAULT 1,
+            notify_payslip INTEGER DEFAULT 1,
+            notify_resignation INTEGER DEFAULT 1,
+            notify_doc_expiry INTEGER DEFAULT 1,
+            session_timeout INTEGER DEFAULT 30,
+            working_days TEXT DEFAULT 'Mon,Tue,Wed,Thu,Fri',
+            company_logo TEXT,
+            timezone TEXT DEFAULT 'Asia/Kolkata',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ''')
 

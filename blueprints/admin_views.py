@@ -560,7 +560,7 @@ def settings_page():
 
     cursor.execute("""
         SELECT c.id, c.name, COALESCE(c.code,''), c.created_at,
-               COUNT(e.id) AS emp_count,
+               COUNT(e.employee_id) AS emp_count,
                COALESCE(c.working_days,'Mon,Tue,Wed,Thu,Fri'),
                CASE WHEN c.pin IS NOT NULL AND c.pin != '' THEN 1 ELSE 0 END AS has_pin,
                COALESCE(c.logo_path,''),
@@ -2223,6 +2223,11 @@ def analytics():
     # up front so the alert-building logic below just reads the results.
     week_start = today - datetime.timedelta(days=today.weekday())
     last_week_start = week_start - datetime.timedelta(days=7)
+    # expiry_date bounds computed in Python (today / today+30d) rather than
+    # Postgres's CURRENT_DATE + INTERVAL '30 days' -- the latter has no
+    # SQLite equivalent, so under the local dev fallback (database.py) this
+    # whole 4-column query silently failed and fetchone() returned None.
+    thirty_days_out = today + datetime.timedelta(days=30)
     cursor.execute("""
         SELECT
             (SELECT COUNT(*) FROM leave_requests WHERE leave_date >= %s),
@@ -2230,9 +2235,9 @@ def analytics():
             (SELECT COUNT(*) FROM overtime_records WHERE status='Pending'),
             (SELECT COUNT(*) FROM employee_documents
                 WHERE expiry_date IS NOT NULL
-                  AND expiry_date >= CURRENT_DATE
-                  AND expiry_date <= CURRENT_DATE + INTERVAL '30 days')
-    """, (week_start, last_week_start, week_start))
+                  AND expiry_date >= %s
+                  AND expiry_date <= %s)
+    """, (week_start, last_week_start, week_start, today, thirty_days_out))
     (leaves_this_week, leaves_last_week,
      ot_pending_count, expiring_docs) = cursor.fetchone()
 
