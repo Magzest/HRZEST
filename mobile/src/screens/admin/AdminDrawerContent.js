@@ -125,17 +125,6 @@ export default function AdminDrawerContent(props) {
       route: "Documents",
       section: "HR OPERATIONS",
     },
-    // Admin-only, matching the web's role_required("admin") on /hr_accounts
-    // -- an HR-role user tapping this would just get a 403 from the
-    // backend, so it's hidden rather than shown-then-rejected.
-    ...(user?.adminRole === "admin" ? [{
-      title: "HR Accounts",
-      icon: "shield-outline",
-      iconFocused: "shield",
-      route: "HrAccounts",
-      section: "HR OPERATIONS",
-    }] : []),
-
     // PAYROLL & COMPENSATION
     {
       title: "Salary & Payslips",
