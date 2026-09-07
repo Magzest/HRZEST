@@ -308,16 +308,16 @@
         <i class="ti ti-help-circle"></i> Tickets
         {% if pending_tickets > 0 %}<span class="mtab-badge tb-open">{{ pending_tickets }}</span>{% endif %}
       </button>
-      <button class="mtab-btn {% if tab == 'resignations' %}active{% endif %}" onclick="switchModule('resignations')">
-        <i class="ti ti-user-minus"></i> Resignations
-        {% if pending_resignations > 0 %}<span class="mtab-badge tb-resign">{{ pending_resignations }}</span>{% endif %}
+      <button class="mtab-btn {% if tab == 'announcements' %}active{% endif %}" onclick="switchModule('announcements')">
+        <i class="ti ti-speakerphone"></i> Announcements
+        {% if ann_list %}<span class="mtab-badge u-bg-dbeafe u-c-1e3a8a">{{ ann_list|length }}</span>{% endif %}
       </button>
       <button class="mtab-btn {% if tab == 'holidays' %}active{% endif %}" onclick="switchModule('holidays')">
         <i class="ti ti-calendar-event"></i> Holidays
       </button>
-      <button class="mtab-btn {% if tab == 'announcements' %}active{% endif %}" onclick="switchModule('announcements')">
-        <i class="ti ti-speakerphone"></i> Announcements
-        {% if ann_list %}<span class="mtab-badge u-bg-dbeafe u-c-1e3a8a">{{ ann_list|length }}</span>{% endif %}
+      <button class="mtab-btn {% if tab == 'resignations' %}active{% endif %}" onclick="switchModule('resignations')">
+        <i class="ti ti-user-minus"></i> Resignations
+        {% if pending_resignations > 0 %}<span class="mtab-badge tb-resign">{{ pending_resignations }}</span>{% endif %}
       </button>
     </div>
   </div>
@@ -434,157 +434,6 @@
         <div class="empty-state"><i class="ti ti-ticket-off"></i><p>No tickets raised yet.</p></div>
       {% endif %}
   </div><!-- end tickets panel -->
-
-  <!-- ════════════ RESIGNATIONS PANEL ════════════ -->
-  <div id="panel-resignations" class="module-panel {% if tab == 'resignations' %}active{% endif %}">
-      {% set av_colors = ['#6366f1','#3b82f6','#14b8a6','#22c55e','#f59e0b','#ef4444','#a855f7','#ec4899','#06b6d4','#f97316'] %}
-      {% if resignations %}
-        {% for row in resignations %}
-          {% set rid, r_name, r_emp_id, r_lwd, r_reason, r_status, r_created = row %}
-          {% set _parts = r_name.split() %}
-          {% set _initials = (_parts[0][0] + (_parts[1][0] if _parts|length > 1 else '')) | upper %}
-          {% set _color = av_colors[loop.index0 % (av_colors|length)] %}
-          {% set _days_left = (r_lwd - today).days if r_lwd else 0 %}
-          <div class="req-card card-resign">
-            <div class="card-top">
-              <div class="avatar" style="background:{{ _color }};">{{ _initials }}</div>
-              <div class="card-info">
-                <div class="emp-name">{{ r_name }}<span class="emp-id-tag">{{ r_emp_id }}</span></div>
-                <div class="card-meta">Resignation &nbsp;·&nbsp; Last working day: {{ r_lwd.strftime('%d %b %Y') if r_lwd else '—' }}</div>
-              </div>
-              {% if r_status == 'Accepted' %}<span class="status-badge sb-accepted">Accepted</span>
-              {% elif r_status == 'Declined' %}<span class="status-badge sb-declined">Declined</span>
-              {% else %}<span class="status-badge sb-resign">Resignation</span>{% endif %}
-            </div>
-            {% if _days_left > 0 %}
-            <div class="notice-box"><i class="ti ti-alert-triangle"></i><span><strong>{{ _days_left }} day{{ 's' if _days_left != 1 else '' }} notice period.</strong> Ensure handover plan and exit documents are prepared.</span></div>
-            {% elif _days_left == 0 %}
-            <div class="notice-box u-bg-fee2e2 u-bdc-fca5a5 u-c-dc2626"><i class="ti ti-alert-triangle u-c-dc2626"></i><span><strong>Last working day is today.</strong> Ensure all handover is complete.</span></div>
-            {% endif %}
-            <div class="reason-quote">"{{ r_reason }}"</div>
-            <div class="balance-row"><span class="dot-sep"></span>Submitted on {{ r_created.strftime('%d %b %Y') if r_created else '—' }}</div>
-            <div class="card-actions">
-              {% if r_status == 'Pending' %}
-                <form action="/resignation_action/{{ rid }}" method="POST" class="form-inline"><input type="hidden" name="action" value="Accepted"><button type="submit" class="btn-approve">✓ Accept</button></form>
-                <form action="/resignation_action/{{ rid }}" method="POST" class="form-inline"><input type="hidden" name="action" value="Declined"><button type="submit" class="btn-reject">✗ Decline</button></form>
-              {% else %}<span class="done-label">{{ r_status }}</span>{% endif %}
-              <a href="/employee_profile/{{ r_emp_id }}" class="btn-profile"><i class="ti ti-user u-fs-13"></i> View profile</a>
-            </div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="empty-state"><i class="ti ti-user-minus"></i><p>No resignation requests.</p></div>
-      {% endif %}
-  </div><!-- end resignations panel -->
-
-  <!-- ════════════ HOLIDAYS PANEL ════════════ -->
-  <div id="panel-holidays" class="module-panel {% if tab == 'holidays' %}active{% endif %}">
-
-    <div class="hol-header">
-      <div>
-        <h2>📅 Holiday Calendar</h2>
-        <p>Manage public holidays &amp; leaves. Sunday is the weekly off.</p>
-      </div>
-      <div class="year-nav">
-        <a href="/leave_holidays?tab=holidays&year={{ year - 1 }}">&#8592; {{ year - 1 }}</a>
-        <span class="cur-year">{{ year }}</span>
-        <a href="/leave_holidays?tab=holidays&year={{ year + 1 }}">{{ year + 1 }} &#8594;</a>
-      </div>
-    </div>
-
-    <div class="toolbar">
-      <form class="u-d-inline" action="{{ tpath('/import_indian_holidays') }}" method="POST">
-        <input type="hidden" name="year" value="{{ year }}">
-        <button type="submit" class="btn-import" onclick="return confirm('Import Indian public holidays for {{ year }}? Existing entries will not be overwritten.')">
-          🇮🇳 Import Indian Holidays for {{ year }}
-        </button>
-      </form>
-      <button class="btn-add-custom" onclick="openAddModal()">➕ Add Custom Holiday</button>
-    </div>
-
-    <div class="legend">
-      <div class="leg"><div class="leg-dot leg-holiday"></div>Public Holiday</div>
-      <div class="leg"><div class="leg-dot leg-sunday"></div>Sunday (Weekly Off)</div>
-      <div class="leg"><div class="leg-dot leg-today"></div>Today</div>
-      <div class="leg"><div class="leg-dot leg-normal"></div>Working Day</div>
-      <span class="u-fs-11 u-c-94a3b8">Click a working day to add holiday &bull; Click a holiday to remove it</span>
-    </div>
-
-    <div class="info-note">ℹ️ <span><strong>Saturday is a working day.</strong> Only Sunday is marked as weekly off. Holidays are paid days — they count toward salary calculation.</span></div>
-
-    <div class="month-nav-bar">
-      <button type="button" class="mnav-btn" onclick="changeMonth(-1)">&#8592; Prev</button>
-      <span class="mnav-label" id="mnav-label"></span>
-      <button type="button" class="mnav-btn" onclick="changeMonth(1)">Next &#8594;</button>
-    </div>
-
-    <div class="cal-single-wrap" id="cal-wrap" data-year="{{ year }}">
-      {% for m in cal_data %}
-      <div class="cal-month-panel" id="mpanel-{{ m.month_num }}" data-name="{{ m.month_name }}">
-        <div class="cal-headers"><span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span></div>
-        {% for week in m.weeks %}
-        <div class="cal-week">
-          {% for day in week %}
-            {% set col = loop.index0 %}
-            {% if day == 0 %}
-              <div class="cal-day empty"></div>
-            {% else %}
-              {% set is_sun = (col == 0) %}
-              {% set is_holiday = (day in m.holidays) %}
-              {% set is_today = (today.year == year and today.month == m.month_num and today.day == day) %}
-              {% set hol_name = m.holidays[day][1] if is_holiday else '' %}
-              {% set hol_id = m.holidays[day][0] if is_holiday else 0 %}
-              {% set date_str = '%d-%02d-%02d' | format(year, m.month_num, day) %}
-              <div class="cal-day {% if is_holiday %}day-holiday{% elif is_sun %}day-sunday{% elif is_today %}day-today{% else %}day-normal{% endif %}"
-                   title="{% if is_holiday %}{{ hol_name }}{% elif is_sun %}Sunday (Weekly Off){% else %}{{ m.month_name }} {{ day }}, {{ year }}{% endif %}"
-                   data-holiday="{{ is_holiday|tojson }}" data-hname="{{ hol_name|e }}" data-hid="{{ hol_id }}"
-                   data-date="{{ date_str }}" data-year="{{ year }}" onclick="dayClick(this)">
-                {{ day }}
-                {% if is_holiday %}<span class="hol-name">{{ hol_name }}</span>{% endif %}
-              </div>
-            {% endif %}
-          {% endfor %}
-        </div>
-        {% endfor %}
-      </div>
-      {% endfor %}
-    </div>
-
-    <div class="section">
-      <h3>📋 All Holidays &amp; Leaves ({{ year }})</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>#</th><th>Date</th><th>Day</th><th>Name</th><th>Action</th></tr></thead>
-          <tbody>
-            {% set ns = namespace(count=0) %}
-            {% for h in holidays %}
-              {% if h[1].year == year %}
-              {% set ns.count = ns.count + 1 %}
-              <tr>
-                <td>{{ ns.count }}</td>
-                <td>{{ h[1].strftime('%d %b %Y') }}</td>
-                <td class="u-c-64748b u-fs-12">{{ h[1].strftime('%A') }}</td>
-                <td>{% if h[2].startswith('Leave:') %}<span class="badge-leave">🌿 {{ h[2][6:] }}</span>{% else %}<span class="badge-holiday">🎉 {{ h[2] }}</span>{% endif %}</td>
-                <td>
-                  <form action="/delete_holiday/{{ h[0] }}" method="POST" onsubmit="return confirm('Delete this entry?');" class="form-inline">
-                    <input type="hidden" name="year" value="{{ year }}">
-                    <button type="submit" class="btn-del">🗑 Remove</button>
-                  </form>
-                </td>
-              </tr>
-              {% endif %}
-            {% else %}
-            <tr><td colspan="5" class="empty-cell">No holidays added for {{ year }}.</td></tr>
-            {% endfor %}
-            {% if ns.count == 0 %}
-            <tr><td colspan="5" class="empty-cell">No holidays added for {{ year }}. Use "Import Indian Holidays" to get started.</td></tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-  </div><!-- end holidays panel -->
 
   <!-- ════════════ ANNOUNCEMENTS PANEL ════════════ -->
   <div id="panel-announcements" class="module-panel {% if tab == 'announcements' %}active{% endif %}">
@@ -721,6 +570,157 @@
       {% endif %}
     </div>
   </div><!-- end announcements panel -->
+
+  <!-- ════════════ HOLIDAYS PANEL ════════════ -->
+  <div id="panel-holidays" class="module-panel {% if tab == 'holidays' %}active{% endif %}">
+
+    <div class="hol-header">
+      <div>
+        <h2>📅 Holiday Calendar</h2>
+        <p>Manage public holidays &amp; leaves. Sunday is the weekly off.</p>
+      </div>
+      <div class="year-nav">
+        <a href="/leave_holidays?tab=holidays&year={{ year - 1 }}">&#8592; {{ year - 1 }}</a>
+        <span class="cur-year">{{ year }}</span>
+        <a href="/leave_holidays?tab=holidays&year={{ year + 1 }}">{{ year + 1 }} &#8594;</a>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <form class="u-d-inline" action="{{ tpath('/import_indian_holidays') }}" method="POST">
+        <input type="hidden" name="year" value="{{ year }}">
+        <button type="submit" class="btn-import" onclick="return confirm('Import Indian public holidays for {{ year }}? Existing entries will not be overwritten.')">
+          🇮🇳 Import Indian Holidays for {{ year }}
+        </button>
+      </form>
+      <button class="btn-add-custom" onclick="openAddModal()">➕ Add Custom Holiday</button>
+    </div>
+
+    <div class="legend">
+      <div class="leg"><div class="leg-dot leg-holiday"></div>Public Holiday</div>
+      <div class="leg"><div class="leg-dot leg-sunday"></div>Sunday (Weekly Off)</div>
+      <div class="leg"><div class="leg-dot leg-today"></div>Today</div>
+      <div class="leg"><div class="leg-dot leg-normal"></div>Working Day</div>
+      <span class="u-fs-11 u-c-94a3b8">Click a working day to add holiday &bull; Click a holiday to remove it</span>
+    </div>
+
+    <div class="info-note">ℹ️ <span><strong>Saturday is a working day.</strong> Only Sunday is marked as weekly off. Holidays are paid days — they count toward salary calculation.</span></div>
+
+    <div class="month-nav-bar">
+      <button type="button" class="mnav-btn" onclick="changeMonth(-1)">&#8592; Prev</button>
+      <span class="mnav-label" id="mnav-label"></span>
+      <button type="button" class="mnav-btn" onclick="changeMonth(1)">Next &#8594;</button>
+    </div>
+
+    <div class="cal-single-wrap" id="cal-wrap" data-year="{{ year }}">
+      {% for m in cal_data %}
+      <div class="cal-month-panel" id="mpanel-{{ m.month_num }}" data-name="{{ m.month_name }}">
+        <div class="cal-headers"><span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span></div>
+        {% for week in m.weeks %}
+        <div class="cal-week">
+          {% for day in week %}
+            {% set col = loop.index0 %}
+            {% if day == 0 %}
+              <div class="cal-day empty"></div>
+            {% else %}
+              {% set is_sun = (col == 0) %}
+              {% set is_holiday = (day in m.holidays) %}
+              {% set is_today = (today.year == year and today.month == m.month_num and today.day == day) %}
+              {% set hol_name = m.holidays[day][1] if is_holiday else '' %}
+              {% set hol_id = m.holidays[day][0] if is_holiday else 0 %}
+              {% set date_str = '%d-%02d-%02d' | format(year, m.month_num, day) %}
+              <div class="cal-day {% if is_holiday %}day-holiday{% elif is_sun %}day-sunday{% elif is_today %}day-today{% else %}day-normal{% endif %}"
+                   title="{% if is_holiday %}{{ hol_name }}{% elif is_sun %}Sunday (Weekly Off){% else %}{{ m.month_name }} {{ day }}, {{ year }}{% endif %}"
+                   data-holiday="{{ is_holiday|tojson }}" data-hname="{{ hol_name|e }}" data-hid="{{ hol_id }}"
+                   data-date="{{ date_str }}" data-year="{{ year }}" onclick="dayClick(this)">
+                {{ day }}
+                {% if is_holiday %}<span class="hol-name">{{ hol_name }}</span>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="section">
+      <h3>📋 All Holidays &amp; Leaves ({{ year }})</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Date</th><th>Day</th><th>Name</th><th>Action</th></tr></thead>
+          <tbody>
+            {% set ns = namespace(count=0) %}
+            {% for h in holidays %}
+              {% if h[1].year == year %}
+              {% set ns.count = ns.count + 1 %}
+              <tr>
+                <td>{{ ns.count }}</td>
+                <td>{{ h[1].strftime('%d %b %Y') }}</td>
+                <td class="u-c-64748b u-fs-12">{{ h[1].strftime('%A') }}</td>
+                <td>{% if h[2].startswith('Leave:') %}<span class="badge-leave">🌿 {{ h[2][6:] }}</span>{% else %}<span class="badge-holiday">🎉 {{ h[2] }}</span>{% endif %}</td>
+                <td>
+                  <form action="/delete_holiday/{{ h[0] }}" method="POST" onsubmit="return confirm('Delete this entry?');" class="form-inline">
+                    <input type="hidden" name="year" value="{{ year }}">
+                    <button type="submit" class="btn-del">🗑 Remove</button>
+                  </form>
+                </td>
+              </tr>
+              {% endif %}
+            {% else %}
+            <tr><td colspan="5" class="empty-cell">No holidays added for {{ year }}.</td></tr>
+            {% endfor %}
+            {% if ns.count == 0 %}
+            <tr><td colspan="5" class="empty-cell">No holidays added for {{ year }}. Use "Import Indian Holidays" to get started.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- end holidays panel -->
+
+  <!-- ════════════ RESIGNATIONS PANEL ════════════ -->
+  <div id="panel-resignations" class="module-panel {% if tab == 'resignations' %}active{% endif %}">
+      {% set av_colors = ['#6366f1','#3b82f6','#14b8a6','#22c55e','#f59e0b','#ef4444','#a855f7','#ec4899','#06b6d4','#f97316'] %}
+      {% if resignations %}
+        {% for row in resignations %}
+          {% set rid, r_name, r_emp_id, r_lwd, r_reason, r_status, r_created = row %}
+          {% set _parts = r_name.split() %}
+          {% set _initials = (_parts[0][0] + (_parts[1][0] if _parts|length > 1 else '')) | upper %}
+          {% set _color = av_colors[loop.index0 % (av_colors|length)] %}
+          {% set _days_left = (r_lwd - today).days if r_lwd else 0 %}
+          <div class="req-card card-resign">
+            <div class="card-top">
+              <div class="avatar" style="background:{{ _color }};">{{ _initials }}</div>
+              <div class="card-info">
+                <div class="emp-name">{{ r_name }}<span class="emp-id-tag">{{ r_emp_id }}</span></div>
+                <div class="card-meta">Resignation &nbsp;·&nbsp; Last working day: {{ r_lwd.strftime('%d %b %Y') if r_lwd else '—' }}</div>
+              </div>
+              {% if r_status == 'Accepted' %}<span class="status-badge sb-accepted">Accepted</span>
+              {% elif r_status == 'Declined' %}<span class="status-badge sb-declined">Declined</span>
+              {% else %}<span class="status-badge sb-resign">Resignation</span>{% endif %}
+            </div>
+            {% if _days_left > 0 %}
+            <div class="notice-box"><i class="ti ti-alert-triangle"></i><span><strong>{{ _days_left }} day{{ 's' if _days_left != 1 else '' }} notice period.</strong> Ensure handover plan and exit documents are prepared.</span></div>
+            {% elif _days_left == 0 %}
+            <div class="notice-box u-bg-fee2e2 u-bdc-fca5a5 u-c-dc2626"><i class="ti ti-alert-triangle u-c-dc2626"></i><span><strong>Last working day is today.</strong> Ensure all handover is complete.</span></div>
+            {% endif %}
+            <div class="reason-quote">"{{ r_reason }}"</div>
+            <div class="balance-row"><span class="dot-sep"></span>Submitted on {{ r_created.strftime('%d %b %Y') if r_created else '—' }}</div>
+            <div class="card-actions">
+              {% if r_status == 'Pending' %}
+                <form action="/resignation_action/{{ rid }}" method="POST" class="form-inline"><input type="hidden" name="action" value="Accepted"><button type="submit" class="btn-approve">✓ Accept</button></form>
+                <form action="/resignation_action/{{ rid }}" method="POST" class="form-inline"><input type="hidden" name="action" value="Declined"><button type="submit" class="btn-reject">✗ Decline</button></form>
+              {% else %}<span class="done-label">{{ r_status }}</span>{% endif %}
+              <a href="/employee_profile/{{ r_emp_id }}" class="btn-profile"><i class="ti ti-user u-fs-13"></i> View profile</a>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state"><i class="ti ti-user-minus"></i><p>No resignation requests.</p></div>
+      {% endif %}
+  </div><!-- end resignations panel -->
 
 
 {% endblock %}

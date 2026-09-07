@@ -108,15 +108,9 @@
       .ag-send:disabled { color: #cbd5e1; cursor: not-allowed; background: #fff; }
       .no-email { font-size: 11px; color: #94a3b8; }
 
-      /* Toast notification */
-      #toast { position: fixed; bottom: 28px; right: 28px; padding: 14px 20px; border-radius: 10px; font-size: 14px; font-weight: 600; color: white; display: none; z-index: 9999; max-width: 360px; box-shadow: 0 6px 20px rgba(0,0,0,0.18); }
-      #toast.success { background: #22c55e; }
-      #toast.error   { background: #ef4444; }
-      #toast.info    { background: #6366f1; }
-
       @media (max-width: 768px) { body { flex-direction: column; } .sidebar { width: 100%; min-height: auto; } }
       @media print {
-        .sidebar, .filter-bar, .btn-action, .btn-send-email, .btn-view-slip, #toast { display: none !important; }
+        .sidebar, .filter-bar, .btn-action, .btn-send-email, .btn-view-slip, #toast-container { display: none !important; }
         body { background: white; color: black; }
         .section { background: white; box-shadow: none; }
         .main { padding: 0; }
@@ -385,20 +379,9 @@
 
 {% block scripts %}
 
-    <!-- TOAST -->
-    <div id="toast"></div>
-
     <script>
       const YEAR  = {{ year }};
       const MONTH = {{ month }};
-
-      function showToast(msg, type) {
-        const t = document.getElementById('toast');
-        t.textContent = msg;
-        t.className = type;
-        t.style.display = 'block';
-        setTimeout(() => { t.style.display = 'none'; }, 4000);
-      }
 
       function sendEmail(empId, empName, btn) {
         btn.disabled = true;

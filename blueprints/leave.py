@@ -26,45 +26,6 @@ import utils.config as cfg
 leave_bp = Blueprint("leave", __name__)
 
 
-# ---------------- VIEW HOLIDAYS ----------------
-@leave_bp.route("/view_holidays")
-@admin_required
-def view_holidays():
-    year = int(request.args.get("year", datetime.date.today().year))
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT * FROM holidays ORDER BY date")
-    data = cursor.fetchall()
-    cursor.close()
-    db.close()
-
-    # Build holiday map: date -> (id, name)
-    holiday_map = {}
-    for row in data:
-        date_val = row[1]
-        if isinstance(date_val, datetime.date):
-            holiday_map[date_val] = (row[0], row[2])
-
-    # Build calendar data, weeks starting Sunday (firstweekday=6)
-    sun_cal = calendar.Calendar(firstweekday=6)
-    today = datetime.date.today()
-    cal_data = []
-    for month in range(1, 13):
-        month_holidays = {}  # day_number -> (id, name)
-        for date_obj, (hid, hname) in holiday_map.items():
-            if date_obj.year == year and date_obj.month == month:
-                month_holidays[date_obj.day] = (hid, hname)
-        cal_data.append({
-            'month_num': month,
-            'month_name': calendar.month_name[month],
-            'weeks': sun_cal.monthdayscalendar(year, month),
-            'holidays': month_holidays,
-        })
-
-    return render_template("holidays.html", holidays=data, cal_data=cal_data,
-                           year=year, today=today)
-
-
 @leave_bp.route("/add_holiday", methods=["POST"])
 @admin_required
 def add_holiday():
@@ -132,7 +93,7 @@ def admin_leave_types():
     cursor.close()
     db.close()
     return render_template("leave_types_admin.html", leave_types=leave_types,
-        active_nav="leaves",
+        active_nav="leave_types",
     )
 
 
@@ -744,7 +705,7 @@ def resignation_requests_view():
     cursor.close()
     db.close()
     return render_template("resignation_requests.html", resignations=resignations,
-        active_nav="leaves",
+        active_nav="resignations",
     )
 
 
@@ -998,20 +959,62 @@ def api_resignation_action(rid):
         return jsonify({"ok": False, "msg": "action must be Accepted or Declined"}), 400
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT employee_id, last_working_day FROM resignation_requests WHERE id=%s", (rid,))
-    row = cursor.fetchone()
+    cursor.execute("""
+        SELECT rr.employee_id, rr.last_working_day, rr.reason,
+               e.name, e.email, COALESCE(e.email_alerts_enabled, 1)
+        FROM resignation_requests rr
+        JOIN employees e ON e.employee_id = rr.employee_id
+        WHERE rr.id = %s
+    """, (rid,))
+    resign_row = cursor.fetchone()
     cursor.execute("UPDATE resignation_requests SET status=%s WHERE id=%s", (action, rid))
     db.commit()
     cursor.close()
     db.close()
-    if row:
-        icon = "✅" if action == "Accepted" else "❌"
-        _create_notification(
-            'employee',
-            f"{icon} Resignation {action}",
-            f"Your resignation request (last working day: {row[1]}) has been {action.lower()}.",
-            row[0]
-        )
+    if not resign_row:
+        return jsonify({"ok": True, "status": action})
+
+    emp_id, lwd, reason, emp_name, emp_email, email_alerts_enabled = resign_row
+    _audit(f"resignation_{action.lower()}", "resignation_requests", rid,
+           f"Employee {emp_id} resignation {action}")
+    icon = "✅" if action == "Accepted" else "❌"
+    _create_notification(
+        'employee',
+        f"{icon} Resignation {action}",
+        f"Your resignation request has been {action.lower()}.",
+        emp_id
+    )
+    if emp_email and email_alerts_enabled:
+        cfg_row = get_email_config()
+        if cfg_row:
+            color = "#16a34a" if action == "Accepted" else "#dc2626"
+            lwd_str = lwd.strftime('%d %b %Y') if hasattr(lwd, 'strftime') else str(lwd)
+            _safe_name = _html.escape(str(emp_name))
+            _safe_reason = _html.escape(str(reason)) if reason else '--'
+            html_body = f"""
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+  <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
+    <h2 style="margin:0;font-size:22px;">{icon} Resignation {action}</h2>
+    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
+  </div>
+  <div style="padding:28px 32px;">
+    <p style="font-size:15px;color:#1e293b;">Hi <strong>{_safe_name}</strong>,</p>
+    <p style="font-size:14px;color:#475569;margin-top:10px;">
+      Your resignation request has been <strong style="color:{color};">{action.lower()}</strong>.
+    </p>
+    <div style="background:#f8fafc;border-left:4px solid {color};border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#64748b;">📅 <strong>Last Working Day:</strong> {lwd_str}</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#64748b;">📝 <strong>Reason:</strong> {_safe_reason}</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#64748b;">📌 <strong>Status:</strong> <span style="color:{color};font-weight:700;">{action}</span></p>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-top:20px;">For queries, contact your HR administrator.</p>
+  </div>
+  <div style="background:#f1f5f9;padding:14px;text-align:center;font-size:11px;color:#94a3b8;">
+    HRzest.com &bull; Automated Notification
+  </div>
+</div>"""
+            send_email_async(emp_email, f"Resignation {action} -- {emp_name}", html_body, cfg_row)
+
     return jsonify({"ok": True, "status": action})
 
 

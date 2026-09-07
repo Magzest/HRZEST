@@ -64,6 +64,7 @@ def documents():
                            employees=employees, docs=docs,
                            sel_emp=sel_emp, sel_emp_name=sel_emp_name,
                            today=datetime.date.today(),
+                           active_nav="documents",
                            )
 
 

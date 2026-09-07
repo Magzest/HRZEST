@@ -16,6 +16,8 @@
   <title>{% block title %}Admin{% endblock %} — {{ co.company_name }}</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
   <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('toast.css') }}" />
+  <script src="{{ static_url('toast.js') }}"></script>
   <style>
     /* ── Reset & base ── */
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
@@ -108,6 +110,9 @@
   <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}">
     <span class="nav-icon"><i class="ti ti-users"></i></span>Employees
   </a>
+  <a class="nav-item {{ 'active' if active_nav == 'photos' }}" href="{{ tpath('/view_photos') }}">
+    <span class="nav-icon"><i class="ti ti-photo"></i></span>Employee Photos
+  </a>
   <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}">
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>
@@ -119,14 +124,26 @@
   <a class="nav-item {{ 'active' if active_nav == 'leaves' }}" href="{{ tpath('/leave_holidays') }}">
     <span class="nav-icon"><i class="ti ti-calendar-event"></i></span>Leaves &amp; Holidays{% if _tp > 0 %}<span class="badge-count">{{ _tp }}</span>{% endif %}
   </a>
+  <a class="nav-item {{ 'active' if active_nav == 'leave_types' }}" href="{{ tpath('/admin_leave_types') }}">
+    <span class="nav-icon"><i class="ti ti-list-details"></i></span>Leave Types
+  </a>
+  <a class="nav-item {{ 'active' if active_nav == 'resignations' }}" href="{{ tpath('/resignation_requests') }}">
+    <span class="nav-icon"><i class="ti ti-door-exit"></i></span>Resignation Requests
+  </a>
   <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}">
     <span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off
+  </a>
+  <a class="nav-item {{ 'active' if active_nav == 'shift_swaps' }}" href="{{ tpath('/admin_shift_swaps') }}">
+    <span class="nav-icon"><i class="ti ti-arrows-exchange"></i></span>Shift Swaps
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}">
     <span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}">
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
+  </a>
+  <a class="nav-item {{ 'active' if active_nav == 'recruitment' }}" href="{{ tpath('/recruitment') }}">
+    <span class="nav-icon"><i class="ti ti-user-search"></i></span>Recruitment
   </a>
   {% if not _is_hr %}
   <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}">
@@ -137,8 +154,8 @@
     <span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal
   </a>
   {% endif %}
-  <a class="nav-item {{ 'active' if active_nav == 'hr_accounts' }}" href="{{ tpath('/hr_accounts') }}">
-    <span class="nav-icon"><i class="ti ti-user-shield"></i></span>HR Accounts
+  <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}">
+    <span class="nav-icon"><i class="ti ti-folder"></i></span>Documents
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'admin_tools' }}" href="{{ tpath('/admin_tools') }}">
     <span class="nav-icon"><i class="ti ti-tool"></i></span>Admin Tools
@@ -187,34 +204,11 @@
   {% block main %}{% endblock %}
 </div>
 
-<!-- Real-Time Toast Container -->
-<div id="rt-toast-container" style="position: fixed; bottom: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; max-width: 380px; pointer-events: none;"></div>
-
 <script src="{{ static_url('darkmode.min.js') }}"></script>
 <script>
   (function() {
     let _lastLate = null;
     let _lastPresent = null;
-    function showRtToast(msg, type = 'info', icon = 'bell') {
-      const container = document.getElementById('rt-toast-container');
-      if (!container) return;
-      const t = document.createElement('div');
-      t.style.cssText = `
-        pointer-events: auto; background: ${type==='alert'?'#7f1d1d':type==='success'?'#14532d':'#1e293b'};
-        color: #fff; padding: 12px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
-        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.15);
-        display: flex; align-items: center; gap: 10px; opacity: 0; transform: translateY(12px);
-        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      `;
-      t.innerHTML = `<i class="ti ti-${icon}" style="font-size: 18px; color: ${type==='alert'?'#fca5a5':type==='success'?'#4ade80':'#60a5fa'};"></i> <span>${msg}</span>`;
-      container.appendChild(t);
-      requestAnimationFrame(() => { t.style.opacity = '1'; t.style.transform = 'translateY(0)'; });
-      setTimeout(() => {
-        t.style.opacity = '0'; t.style.transform = 'translateY(12px)';
-        setTimeout(() => t.remove(), 300);
-      }, 5000);
-    }
-    window.showRtToast = showRtToast;
 
     function pollLiveStats() {
       fetch('/api/dashboard_live')
@@ -222,7 +216,7 @@
         .then(d => {
           if (!d) return;
           if (_lastLate !== null && d.late > _lastLate) {
-            showRtToast(`New Late Check-in Recorded (${d.late} total today)`, 'alert', 'clock-alert');
+            showToast(`New Late Check-in Recorded (${d.late} total today)`, 'alert', 'clock-alert');
           }
           _lastLate = d.late;
           _lastPresent = d.present;

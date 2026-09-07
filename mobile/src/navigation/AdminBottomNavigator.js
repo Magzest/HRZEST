@@ -23,7 +23,6 @@ import DepartmentsScreen from "../screens/admin/DepartmentsScreen";
 import LeavesHolidaysScreen from "../screens/admin/LeavesHolidaysScreen";
 import SeatsBillingScreen from "../screens/admin/SeatsBillingScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
-import HrAccountsScreen from "../screens/admin/HrAccountsScreen";
 import DocumentsScreen from "../screens/admin/DocumentsScreen";
 import RecruitmentScreen from "../screens/admin/RecruitmentScreen";
 
@@ -214,12 +213,6 @@ export default function AdminBottomNavigator() {
       <Tab.Screen
         name="Notifications"
         component={NotificationsScreen}
-        options={{ tabBarItemStyle: { display: "none" } }}
-      />
-
-      <Tab.Screen
-        name="HrAccounts"
-        component={HrAccountsScreen}
         options={{ tabBarItemStyle: { display: "none" } }}
       />
 

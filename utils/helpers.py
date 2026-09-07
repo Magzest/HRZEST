@@ -1251,30 +1251,64 @@ def _error_page(code, icon, title, subtitle, hint):
     back_emp = session.get("employee_id")
     back_link = "/admin" if back_admin else ("/employee_portal" if back_emp else "/")
     back_label = "Go to Admin Dashboard" if back_admin else ("Go to My Portal" if back_emp else "Go to Home")
+    # Same landing_v2.css design system as admin_login.html/create_org.html
+    # (see admin_login.html's header comment) -- this page used to be the
+    # last one still on the old plain blue-and-white style.
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en" data-theme="light"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{code} – {title}</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+<link rel="stylesheet" href="{static_url('shared.min.css')}" />
+<link rel="stylesheet" href="{static_url('landing_v2.css')}" />
 <style>
-  *{{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}}
-  body{{min-height:100vh;background:#f1f5f9;display:flex;align-items:center;justify-content:center;}}
-  .box{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:52px 44px;text-align:center;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.08);}}
-  .icon{{font-size:72px;margin-bottom:18px;}}
-  .code{{font-size:80px;font-weight:900;line-height:1;color:#1e3a8a;margin-bottom:6px;}}
-  .title{{font-size:22px;font-weight:700;color:#1e293b;margin-bottom:8px;}}
-  .sub{{font-size:14px;color:#64748b;margin-bottom:6px;line-height:1.6;}}
-  .hint{{font-size:12px;color:#94a3b8;margin-bottom:28px;}}
-  a.btn{{display:inline-block;padding:12px 28px;background:#1e3a8a;color:#fff;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;transition:0.2s;margin:4px;}}
-  a.btn:hover{{background:#1d4ed8;}}
-  a.sec{{display:inline-block;padding:12px 20px;background:#f1f5f9;color:#374151;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;transition:0.2s;margin:4px;border:1px solid #e2e8f0;}}
-  a.sec:hover{{background:#e2e8f0;}}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }}
+  html, body {{ min-height: 100vh; color: var(--text-main); }}
+  body {{
+    background: linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+    background-attachment: fixed;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }}
+  .box {{
+    width: 100%; max-width: 460px; text-align: center;
+    background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+    padding: 48px 40px 40px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden;
+  }}
+  .box::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--gradient-brand); }}
+  .icon {{
+    width: 68px; height: 68px; margin: 0 auto 18px; border-radius: var(--radius-md);
+    background: var(--gradient-brand); display: flex; align-items: center; justify-content: center;
+    font-size: 32px; box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+  }}
+  .code {{ font-family: var(--font-heading); font-size: 15px; font-weight: 800; letter-spacing: 2px; color: var(--accent-cyan); margin-bottom: 8px; text-transform: uppercase; }}
+  .title {{ font-family: var(--font-heading); font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 10px; }}
+  .sub {{ font-size: 14px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.6; }}
+  .hint {{ font-size: 12.5px; color: var(--text-subtle); margin-bottom: 28px; }}
+  .actions {{ display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }}
+  a.btn {{
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 26px; border-radius: var(--radius-sm); background: var(--gradient-brand);
+    color: #fff; font-size: 14px; font-weight: 700; text-decoration: none;
+    transition: var(--transition-fast); box-shadow: var(--shadow-md);
+  }}
+  a.btn:hover {{ box-shadow: var(--shadow-lg); transform: translateY(-1px); }}
+  a.sec {{
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 22px; border-radius: var(--radius-sm); background: var(--bg-secondary);
+    color: var(--text-main); font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: var(--transition-fast); border: 1px solid var(--border-color);
+  }}
+  a.sec:hover {{ background: var(--bg-tertiary); }}
+  @media (max-width: 480px) {{ .box {{ padding: 36px 26px 30px; }} }}
 </style></head><body>
 <div class="box">
   <div class="icon">{icon}</div>
-  <div class="code">{code}</div>
+  <div class="code">Error {code}</div>
   <div class="title">{title}</div>
   <div class="sub">{subtitle}</div>
   <div class="hint">{hint}</div>
-  <a href="{back_link}" class="btn">{back_label}</a>
-  <a href="javascript:history.back()" class="sec">← Go Back</a>
+  <div class="actions">
+    <a href="{back_link}" class="btn">{back_label}</a>
+    <a href="javascript:history.back()" class="sec">← Go Back</a>
+  </div>
 </div>
 </body></html>""", code

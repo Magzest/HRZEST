@@ -158,18 +158,22 @@
         .app-content { padding: 16px; }
       }
 
-      /* ── TOAST ── */
-      @keyframes toastHide {
+      /* ── ONE-SHOT CONFIRMATION BANNER (server-rendered post-redirect
+         message, e.g. "Leave request submitted") -- named flash-banner*
+         rather than toast* so it doesn't collide with static/toast.css's
+         floating .toast/.toast-container, which this page also loads (for
+         window.alert()'s toast override -- see static/toast.js). ── */
+      @keyframes flashBannerHide {
         0%,90%  { opacity:1; max-height:80px; margin-bottom:20px; padding:12px 18px; }
         100%    { opacity:0; max-height:0;   margin-bottom:0;    padding:0 18px; overflow:hidden; }
       }
-      .toast {
+      .flash-banner {
         border-radius: 10px; padding: 12px 18px;
         font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
-        animation: toastHide 30s forwards;
+        animation: flashBannerHide 30s forwards;
       }
-      .toast-green { background: #dcfce7; border: 1px solid #86efac; color: #15803d; }
-      .toast-red   { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; }
+      .flash-banner-green { background: #dcfce7; border: 1px solid #86efac; color: #15803d; }
+      .flash-banner-red   { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; }
 
       /* CARDS ROW */
       .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
@@ -405,7 +409,7 @@
         font-size: 10px; font-weight: 700; padding: 2px 6px;
         border-radius: 20px; min-width: 18px; text-align: center;
       }
-      .toast-blue { background: #ede9fe; border: 1px solid #c4b5fd; color: #4c1d95; }
+      .flash-banner-blue { background: #ede9fe; border: 1px solid #c4b5fd; color: #4c1d95; }
       .ticket-raise-form { margin-bottom: 28px; }
       .ticket-field { margin-bottom: 0; }
       .ticket-history-label { font-size: 14px; color: #64748b; margin-bottom: 12px; }
@@ -528,8 +532,8 @@
       body.dark-mode .hol-list-table th{background:#1e3a8a!important;color:#93c5fd!important}
       body.dark-mode .hol-list-table td{border-color:#30363d!important;color:#cdd9e5!important}
       body.dark-mode .hol-list-table tr:hover td{background:#1c2128!important}
-      body.dark-mode .toast-green{background:#14532d!important;border-color:#166534!important;color:#4ade80!important}
-      body.dark-mode .toast-red{background:#7f1d1d!important;border-color:#991b1b!important;color:#f87171!important}
+      body.dark-mode .flash-banner-green{background:#14532d!important;border-color:#166534!important;color:#4ade80!important}
+      body.dark-mode .flash-banner-red{background:#7f1d1d!important;border-color:#991b1b!important;color:#f87171!important}
       body.dark-mode .badge-role{background:#1e3a8a!important;color:#60a5fa!important;border-color:#3b82f6!important}
     </style>
   <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
@@ -556,13 +560,13 @@
     <div class="app-content" id="appContent">
 
       {% if leave_sent %}
-      <div class="toast toast-green">✅ Leave request submitted! Admin has been notified by email.</div>
+      <div class="flash-banner flash-banner-green">✅ Leave request submitted! Admin has been notified by email.</div>
       {% endif %}
       {% if resigned %}
-      <div class="toast toast-red">📤 Resignation submitted. Admin has been notified by email.</div>
+      <div class="flash-banner flash-banner-red">📤 Resignation submitted. Admin has been notified by email.</div>
       {% endif %}
       {% if ticket_sent %}
-      <div class="toast toast-blue">🎫 Ticket raised successfully! Admin will respond shortly.</div>
+      <div class="flash-banner flash-banner-blue">🎫 Ticket raised successfully! Admin will respond shortly.</div>
       {% endif %}
 
       <!-- ═══ VIEW: DASHBOARD ═══ -->
@@ -1184,19 +1188,19 @@
       <div class="section">
 
         {% if swap_sent %}
-        <div class="toast toast-green">✅ Swap request sent! Waiting for your colleague to respond.</div>
+        <div class="flash-banner flash-banner-green">✅ Swap request sent! Waiting for your colleague to respond.</div>
         {% endif %}
         {% if swap_responded %}
-        <div class="toast toast-green">✅ Response submitted successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Response submitted successfully.</div>
         {% endif %}
         {% if swap_error == 'invalid_target' %}
-        <div class="toast toast-red">❌ Invalid target employee selected.</div>
+        <div class="flash-banner flash-banner-red">❌ Invalid target employee selected.</div>
         {% elif swap_error == 'no_shift' %}
-        <div class="toast toast-red">❌ You or the selected employee doesn't have a shift assigned.</div>
+        <div class="flash-banner flash-banner-red">❌ You or the selected employee doesn't have a shift assigned.</div>
         {% elif swap_error == 'same_shift' %}
-        <div class="toast toast-red">❌ You're already on the same shift — no swap needed.</div>
+        <div class="flash-banner flash-banner-red">❌ You're already on the same shift — no swap needed.</div>
         {% elif swap_error == 'duplicate' %}
-        <div class="toast toast-red">❌ You already have a pending swap request with this employee.</div>
+        <div class="flash-banner flash-banner-red">❌ You already have a pending swap request with this employee.</div>
         {% endif %}
 
         <!-- Current shift card -->
@@ -1893,30 +1897,30 @@
         <div class="mod-title">👤 My Profile <span>View and update your personal details</span></div>
 
         {% if request.args.get('profile_saved') %}
-        <div class="toast toast-green">✅ Profile updated successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Profile updated successfully.</div>
         {% endif %}
         {% if request.args.get('bank_saved') %}
-        <div class="toast toast-green">✅ Bank & ID details saved successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Bank & ID details saved successfully.</div>
         {% endif %}
         {% if request.args.get('photo_saved') %}
-        <div class="toast toast-green">✅ Profile photo updated successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Profile photo updated successfully.</div>
         {% endif %}
         {% if request.args.get('photo_error') == 'no_face' %}
-        <div class="toast toast-red">❌ No face detected. Please upload a clear front-facing photo.</div>
+        <div class="flash-banner flash-banner-red">❌ No face detected. Please upload a clear front-facing photo.</div>
         {% elif request.args.get('photo_error') %}
-        <div class="toast toast-red">❌ Photo upload failed. Please try again.</div>
+        <div class="flash-banner flash-banner-red">❌ Photo upload failed. Please try again.</div>
         {% endif %}
         {% if request.args.get('exp_saved') %}
-        <div class="toast toast-green">✅ Work experience entry added.</div>
+        <div class="flash-banner flash-banner-green">✅ Work experience entry added.</div>
         {% endif %}
         {% if request.args.get('edu_saved') %}
-        <div class="toast toast-green">✅ Education entry added.</div>
+        <div class="flash-banner flash-banner-green">✅ Education entry added.</div>
         {% endif %}
         {% if request.args.get('exp_error') %}
-        <div class="toast toast-red">❌ Please fill Company, Designation and From Year.</div>
+        <div class="flash-banner flash-banner-red">❌ Please fill Company, Designation and From Year.</div>
         {% endif %}
         {% if request.args.get('edu_error') %}
-        <div class="toast toast-red">❌ Please fill Degree and Institution.</div>
+        <div class="flash-banner flash-banner-red">❌ Please fill Degree and Institution.</div>
         {% endif %}
 
         <!-- PROFILE COMPLETION -->
@@ -2400,13 +2404,13 @@
         <div class="section u-mt-22">
           <h3>🔒 Change Password</h3>
           {% if request.args.get('pwd_ok') %}
-            <div class="toast toast-green">✅ Password changed successfully.</div>
+            <div class="flash-banner flash-banner-green">✅ Password changed successfully.</div>
           {% elif request.args.get('pwd_error') == 'wrong' %}
-            <div class="toast toast-red">❌ Current password is incorrect.</div>
+            <div class="flash-banner flash-banner-red">❌ Current password is incorrect.</div>
           {% elif request.args.get('pwd_error') == 'short' %}
-            <div class="toast toast-red">❌ New password must be at least 6 characters.</div>
+            <div class="flash-banner flash-banner-red">❌ New password must be at least 6 characters.</div>
           {% elif request.args.get('pwd_error') == 'mismatch' %}
-            <div class="toast toast-red">❌ New passwords do not match.</div>
+            <div class="flash-banner flash-banner-red">❌ New passwords do not match.</div>
           {% endif %}
           <form class="u-d-grid u-gtc-1fr-1fr-1fr u-gap-14 u-ai-end u-maxw-760" action="{{ tpath('/change_password') }}" method="POST">
             <input type="text" name="username" value="{{ session.get('employee_id', '') }}" autocomplete="username" style="display:none" aria-hidden="true" />

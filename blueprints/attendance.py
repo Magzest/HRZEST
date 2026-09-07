@@ -396,7 +396,7 @@ def admin_shift_swaps():
     db.close()
     return render_template("admin_shift_swaps.html", swap_rows=swap_rows,
                            ok=request.args.get("ok"),
-                           active_nav="employees",
+                           active_nav="shift_swaps",
                            error=request.args.get("error"))
 
 

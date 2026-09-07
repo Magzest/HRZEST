@@ -41,17 +41,6 @@ def _wait_for_async_writes():
     _write_queue.join()
 
 
-class TestViewHolidays:
-    def test_renders_for_admin(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/view_holidays")
-        assert resp.status_code == 200
-
-    def test_requires_admin(self, client):
-        resp = client.get("/view_holidays", follow_redirects=False)
-        assert resp.status_code in (302, 401)
-
-
 class TestAddHoliday:
     def test_adds_new_holiday(self, client, seed_admin, db_engine):
         _admin_session(client, seed_admin["username"])
