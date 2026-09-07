@@ -1151,3 +1151,334 @@ class TestAuditLog:
         _login_platform_admin(client)
         resp = client.get("/super_admin/audit-log?page=99999")
         assert resp.status_code == 200
+
+
+# ===========================================================================
+# Mini-CRM: company profile (financial history + contacts + notes + tickets)
+# ===========================================================================
+
+class TestCompanyProfile:
+    @pytest.fixture
+    def crm_tenant(self, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status, admin_email) "
+            "VALUES (%s,%s,%s,'active',%s) RETURNING id",
+            ("CRM Test Co", "crm-test-co", "att_crm_test_co", "admin@crmtestco.local"),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id
+        cur.execute("DELETE FROM att_master.tenant_notes WHERE tenant_id=%s", (tenant_id,))
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.close()
+
+    def test_requires_login(self, client, crm_tenant):
+        resp = client.get(f"/super_admin/companies/{crm_tenant}", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_unknown_company_flashes_not_found(self, client):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/companies/999999999", follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Company not found." in resp.data
+
+    def test_profile_shows_company_details(self, client, crm_tenant):
+        _login_platform_admin(client)
+        resp = client.get(f"/super_admin/companies/{crm_tenant}")
+        assert resp.status_code == 200
+        assert b"CRM Test Co" in resp.data
+        assert b"admin@crmtestco.local" in resp.data
+
+    def test_profile_shows_only_this_companys_payments(self, client, db_engine, crm_tenant):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.payment_orders "
+            "(razorpay_order_id, plan, employee_count, amount_paise, company_name, subdomain, "
+            "admin_username, admin_email, status, tenant_id) "
+            "VALUES (%s,'starter',5,4950,'CRM Test Co','crm-test-co','crm_admin','a@crmtestco.local','paid',%s)",
+            (f"demo_order_crm_profile_{crm_tenant}", crm_tenant),
+        )
+        cur.execute(
+            "INSERT INTO att_master.payment_orders "
+            "(razorpay_order_id, plan, employee_count, amount_paise, company_name, subdomain, "
+            "admin_username, admin_email, status, tenant_id) "
+            "VALUES (%s,'starter',5,4950,'Some Other Co','some-other-co','x','x@test.local','paid',%s)",
+            (f"demo_order_crm_other_{crm_tenant}", crm_tenant + 1000000),
+        )
+        db_engine.commit()
+        try:
+            _login_platform_admin(client)
+            resp = client.get(f"/super_admin/companies/{crm_tenant}")
+            assert resp.status_code == 200
+            assert b"CRM Test Co" in resp.data
+            assert b"Some Other Co" not in resp.data
+        finally:
+            cur.execute("DELETE FROM att_master.payment_orders WHERE tenant_id IN (%s, %s)",
+                        (crm_tenant, crm_tenant + 1000000))
+            cur.close()
+
+
+class TestTenantNotes:
+    @pytest.fixture
+    def crm_tenant(self, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ("Notes Test Co", "notes-test-co", "att_notes_test_co"),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id
+        cur.execute("DELETE FROM att_master.tenant_notes WHERE tenant_id=%s", (tenant_id,))
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.close()
+
+    def test_requires_login(self, client, crm_tenant):
+        resp = client.post(f"/super_admin/companies/{crm_tenant}/notes", data={"note": "hi"},
+                            follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_add_note(self, client, db_engine, crm_tenant):
+        _login_platform_admin(client, username="notes_admin")
+        resp = client.post(f"/super_admin/companies/{crm_tenant}/notes",
+                            data={"note": "Called about their overdue invoice."}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Note added." in resp.data
+        assert b"Called about their overdue invoice." in resp.data
+        assert b"notes_admin" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT author, note FROM att_master.tenant_notes WHERE tenant_id=%s", (crm_tenant,))
+        row = cur.fetchone()
+        assert row[0] == "notes_admin"
+        assert row[1] == "Called about their overdue invoice."
+        cur.close()
+
+    def test_empty_note_rejected(self, client, crm_tenant):
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/companies/{crm_tenant}/notes", data={"note": "   "},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Note cannot be empty." in resp.data
+
+    def test_unknown_company_rejected(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/companies/999999999/notes", data={"note": "hi"},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Company not found." in resp.data
+
+
+# ===========================================================================
+# Mini-CRM: support ticket queue
+# ===========================================================================
+
+class TestSupportTickets:
+    @pytest.fixture
+    def ticket_tenant(self, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ("Ticket Test Co", "ticket-test-co", "att_ticket_test_co"),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id
+        cur.execute("DELETE FROM att_master.tenant_ticket_comments WHERE ticket_id IN "
+                     "(SELECT id FROM att_master.tenant_support_tickets WHERE tenant_id=%s)", (tenant_id,))
+        cur.execute("DELETE FROM att_master.tenant_support_tickets WHERE tenant_id=%s", (tenant_id,))
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.close()
+
+    @pytest.fixture
+    def open_ticket(self, db_engine, ticket_tenant):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenant_support_tickets (tenant_id, subject, description, priority, created_by) "
+            "VALUES (%s,%s,%s,'high','fixture_admin') RETURNING id",
+            (ticket_tenant, "Payroll export is broken", "CSV export times out for this company."),
+        )
+        ticket_id = cur.fetchone()[0]
+        db_engine.commit()
+        cur.close()
+        return ticket_id
+
+    def test_create_ticket_requires_login(self, client, ticket_tenant):
+        resp = client.post(f"/super_admin/companies/{ticket_tenant}/tickets",
+                            data={"subject": "x", "description": "y"}, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_create_ticket(self, client, db_engine, ticket_tenant):
+        _login_platform_admin(client, username="ticket_creator_admin")
+        resp = client.post(
+            f"/super_admin/companies/{ticket_tenant}/tickets",
+            data={"subject": "Login not working", "description": "Admin can't sign in since yesterday.",
+                  "priority": "urgent"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        assert b"Ticket created." in resp.data
+        assert b"Login not working" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT subject, description, status, priority, created_by FROM att_master.tenant_support_tickets "
+            "WHERE tenant_id=%s", (ticket_tenant,)
+        )
+        row = cur.fetchone()
+        assert row[0] == "Login not working"
+        assert row[2] == "open"
+        assert row[3] == "urgent"
+        assert row[4] == "ticket_creator_admin"
+        cur.close()
+
+    def test_create_ticket_missing_fields_rejected(self, client, ticket_tenant):
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/companies/{ticket_tenant}/tickets",
+                            data={"subject": "", "description": ""}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Subject and description are required." in resp.data
+
+    def test_create_ticket_invalid_priority_falls_back_to_normal(self, client, db_engine, ticket_tenant):
+        _login_platform_admin(client)
+        resp = client.post(
+            f"/super_admin/companies/{ticket_tenant}/tickets",
+            data={"subject": "Test", "description": "Test desc", "priority": "not-a-real-priority"},
+            follow_redirects=True,
+        )
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT priority FROM att_master.tenant_support_tickets WHERE tenant_id=%s", (ticket_tenant,))
+        assert cur.fetchone()[0] == "normal"
+        cur.close()
+
+    def test_queue_requires_login(self, client):
+        resp = client.get("/super_admin/tickets", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_queue_default_filter_shows_open_ticket(self, client, open_ticket):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/tickets")
+        assert resp.status_code == 200
+        assert b"Payroll export is broken" in resp.data
+        assert b"Ticket Test Co" in resp.data
+
+    def test_queue_status_filter_excludes_non_matching(self, client, open_ticket):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/tickets?status=resolved")
+        assert resp.status_code == 200
+        assert b"Payroll export is broken" not in resp.data
+
+    def test_dashboard_shows_open_ticket_count(self, client, open_ticket):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin")
+        assert resp.status_code == 200
+        m = re.search(rb'Support Tickets\s*<span[^>]*>(\d+)</span>', resp.data)
+        assert m, "open-tickets badge not found on dashboard"
+        assert int(m.group(1)) >= 1
+
+    def test_detail_requires_login(self, client, open_ticket):
+        resp = client.get(f"/super_admin/tickets/{open_ticket}", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_detail_shows_ticket(self, client, open_ticket):
+        _login_platform_admin(client)
+        resp = client.get(f"/super_admin/tickets/{open_ticket}")
+        assert resp.status_code == 200
+        assert b"Payroll export is broken" in resp.data
+        assert b"CSV export times out for this company." in resp.data
+
+    def test_detail_unknown_ticket_flashes_and_redirects(self, client):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/tickets/999999999", follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Ticket not found." in resp.data
+
+    def test_update_status_and_priority(self, client, db_engine, open_ticket):
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
+                            data={"status": "in_progress", "priority": "urgent"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Ticket updated." in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT status, priority, resolved_at FROM att_master.tenant_support_tickets WHERE id=%s",
+                    (open_ticket,))
+        row = cur.fetchone()
+        assert row[0] == "in_progress"
+        assert row[1] == "urgent"
+        assert row[2] is None
+        cur.close()
+
+    def test_resolving_a_ticket_stamps_resolved_at(self, client, db_engine, open_ticket):
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
+                            data={"status": "resolved", "priority": "high"}, follow_redirects=True)
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT status, resolved_at FROM att_master.tenant_support_tickets WHERE id=%s", (open_ticket,))
+        row = cur.fetchone()
+        assert row[0] == "resolved"
+        assert row[1] is not None
+        cur.close()
+
+    def test_reopening_a_resolved_ticket_clears_resolved_at(self, client, db_engine, open_ticket):
+        _login_platform_admin(client)
+        client.post(f"/super_admin/tickets/{open_ticket}/update", data={"status": "resolved", "priority": "high"})
+        resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
+                            data={"status": "open", "priority": "high"}, follow_redirects=True)
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT resolved_at FROM att_master.tenant_support_tickets WHERE id=%s", (open_ticket,))
+        assert cur.fetchone()[0] is None
+        cur.close()
+
+    def test_update_invalid_status_rejected(self, client, open_ticket):
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
+                            data={"status": "not-a-status", "priority": "high"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Invalid status or priority." in resp.data
+
+    def test_update_unknown_ticket_flashes_not_found(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tickets/999999999/update",
+                            data={"status": "open", "priority": "high"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Ticket not found." in resp.data
+
+    def test_add_comment(self, client, db_engine, open_ticket):
+        _login_platform_admin(client, username="comment_admin")
+        resp = client.post(f"/super_admin/tickets/{open_ticket}/comment",
+                            data={"comment": "Escalated to engineering."}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Comment added." in resp.data
+        assert b"Escalated to engineering." in resp.data
+        assert b"comment_admin" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT author, comment FROM att_master.tenant_ticket_comments WHERE ticket_id=%s",
+                    (open_ticket,))
+        row = cur.fetchone()
+        assert row[0] == "comment_admin"
+        assert row[1] == "Escalated to engineering."
+        cur.close()
+
+    def test_empty_comment_rejected(self, client, open_ticket):
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tickets/{open_ticket}/comment", data={"comment": "  "},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Comment cannot be empty." in resp.data
+
+    def test_comment_on_unknown_ticket_rejected(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tickets/999999999/comment", data={"comment": "hi"},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Ticket not found." in resp.data

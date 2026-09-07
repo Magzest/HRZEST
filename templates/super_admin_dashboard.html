@@ -460,6 +460,13 @@
                onmouseout="this.style.background='#f1f5f9';this.style.boxShadow='none';this.style.transform='none';">
               Audit Log
             </a>
+            <a href="/super_admin/tickets" title="Trackable support tickets across every company"
+               style="display:inline-flex;align-items:center;gap:6px;background:var(--primary-soft);border:1px solid var(--primary-soft-border);color:var(--primary-dark);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;transition:background-color .15s,box-shadow .15s,transform .15s;"
+               onmouseover="this.style.background='#e0e2fa';this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)';"
+               onmouseout="this.style.background='var(--primary-soft)';this.style.boxShadow='none';this.style.transform='none';">
+              Support Tickets
+              {% if open_tickets_count %}<span style="background:var(--warning);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:2px;">{{ open_tickets_count }}</span>{% endif %}
+            </a>
           </div>
 
           <form class="tenant-filter-bar" method="GET" action="/super_admin">
@@ -599,6 +606,7 @@
                   <td class="subdomain">{{ t.created_at.strftime('%Y-%m-%d') if t.created_at else '—' }}</td>
                   <td>
                     <div class="row-actions">
+                      <a class="mini-btn mini-btn-link" href="/super_admin/companies/{{ t.id }}" title="Financials, notes, and support tickets for this company">Profile</a>
                       <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/admin" target="_blank" rel="noopener" title="Open this company's Admin Dashboard">Admin</a>
                       <a class="mini-btn mini-btn-link" href="{{ portal_base_url }}/{{ t.subdomain }}/employees" target="_blank" rel="noopener" title="Open this company's Employees page">Employees</a>
                       <button type="button" class="mini-btn mini-btn-link" data-tenant-id="{{ t.id }}" data-company-name="{{ t.company_name }}" onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)" title="Chat with this company's admin/HR">Chat</button>

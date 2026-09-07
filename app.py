@@ -2690,6 +2690,60 @@ def init_master_db():
         # next read (utils/plan_limits.py's get_per_employee_paise(), 30s
         # cache) -- no redeploy needed.
         cur.execute("ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS per_employee_paise INT NOT NULL DEFAULT 9900")
+        # ── Mini-CRM: per-company internal notes + a support-ticket queue ──
+        # (blueprints/platform_admin.py's company profile / tickets pages).
+        # Both key off tenants.id, not tenant_schema, so a note/ticket
+        # survives even if the tenant itself is later deleted (platform_
+        # admin_delete_tenant()) -- same "billing history outlives the
+        # tenant row" posture payment_orders etc. already have, useful for
+        # "why did we delete this account" context later.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_notes (
+                id SERIAL PRIMARY KEY,
+                tenant_id INT NOT NULL,
+                author VARCHAR(100) NOT NULL,
+                note VARCHAR(4000) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_notes_tenant ON tenant_notes (tenant_id, created_at DESC)")
+        # Trackable support requests, distinct from the existing real-time
+        # chat_messages panel (that's for back-and-forth conversation; this
+        # is for something with a lifecycle -- status, priority, and a
+        # resolution timestamp -- that the platform admin can report on
+        # across every company, not just read in the moment).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_support_tickets (
+                id SERIAL PRIMARY KEY,
+                tenant_id INT NOT NULL,
+                subject VARCHAR(200) NOT NULL,
+                description VARCHAR(4000) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'open',
+                priority VARCHAR(10) NOT NULL DEFAULT 'normal',
+                created_by VARCHAR(100) DEFAULT NULL,
+                resolved_at TIMESTAMP DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_tickets_tenant ON tenant_support_tickets (tenant_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_tickets_status ON tenant_support_tickets (status, created_at DESC)")
+        # _set_updated_at() is normally only created per-tenant-schema (init_db()
+        # above) -- att_master needs its own copy before a trigger here can
+        # reference it, since Postgres resolves the function name via
+        # att_master's own search_path, not a tenant schema's.
+        cur.execute(_UPDATED_AT_TRIGGER_FN)
+        _attach_updated_at_trigger(cur, "tenant_support_tickets")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_ticket_comments (
+                id SERIAL PRIMARY KEY,
+                ticket_id INT NOT NULL,
+                author VARCHAR(100) NOT NULL,
+                comment VARCHAR(2000) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ticket_comments_ticket ON tenant_ticket_comments (ticket_id, created_at)")
         db.commit()
         cur.close()
         db.close()

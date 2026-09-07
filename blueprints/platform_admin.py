@@ -24,7 +24,7 @@ import secrets
 import functools
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify, current_app, Response
 
-from database import get_master_db, get_db_connection
+from database import get_master_db, get_db_connection, get_tenant_db
 from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
@@ -260,26 +260,40 @@ def _self_signup_tenant_ids():
         return set()
 
 
-def _recent_payments(limit=20):
-    """Payment history across every tenant -- real and demo-mode orders
-    alike (payment_orders.razorpay_order_id starts with "demo_order_" for
-    the latter, same table either way per blueprints/billing.py). Also
-    merges in seat_topup_orders (blueprints/seats.py) -- an existing
-    tenant paying to raise its paid_employee_slots cap -- and
-    monthly_invoices (blueprints/auto_debit.py) -- a tenant's recurring
-    per-employee auto-debit charge, collected automatically each cycle --
-    so the Platform Admin sees every payment reaching them through any of
-    the three flows in one feed."""
+def _recent_payments(limit=20, tenant_id=None, tenant_schema=None):
+    """Payment history -- real and demo-mode orders alike
+    (payment_orders.razorpay_order_id starts with "demo_order_" for the
+    latter, same table either way per blueprints/billing.py). Also merges
+    in seat_topup_orders (blueprints/seats.py) -- an existing tenant paying
+    to raise its paid_employee_slots cap -- and monthly_invoices
+    (blueprints/auto_debit.py) -- a tenant's recurring per-employee
+    auto-debit charge, collected automatically each cycle -- so the
+    Platform Admin sees every payment reaching them through any of the
+    three flows in one feed.
+
+    Across every tenant by default; pass tenant_id + tenant_schema (both --
+    payment_orders keys off the former, seat_topup_orders/monthly_invoices
+    off the latter) to scope this to one company's financial history
+    instead, for the company profile page."""
     try:
         conn = get_master_db()
         cur = conn.cursor(buffered=True)
-        cur.execute(
-            "SELECT company_name, subdomain, employee_count, amount_paise, status, "
-            "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
-            "admin_username, admin_email "
-            "FROM payment_orders ORDER BY created_at DESC LIMIT %s",
-            (limit,)
-        )
+        if tenant_id is not None:
+            cur.execute(
+                "SELECT company_name, subdomain, employee_count, amount_paise, status, "
+                "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
+                "admin_username, admin_email "
+                "FROM payment_orders WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s",
+                (tenant_id, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT company_name, subdomain, employee_count, amount_paise, status, "
+                "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
+                "admin_username, admin_email "
+                "FROM payment_orders ORDER BY created_at DESC LIMIT %s",
+                (limit,)
+            )
         signup_payments = [
             {
                 "company_name": r[0], "subdomain": r[1], "employee_count": r[2],
@@ -291,14 +305,24 @@ def _recent_payments(limit=20):
             for r in cur.fetchall()
         ]
 
-        cur.execute(
-            "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
-            "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
-            "s.company_name AS fallback_company_name "
-            "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
-            "ORDER BY s.created_at DESC LIMIT %s",
-            (limit,)
-        )
+        if tenant_schema is not None:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
+                "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
+                "s.company_name AS fallback_company_name "
+                "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
+                "WHERE s.tenant_schema=%s ORDER BY s.created_at DESC LIMIT %s",
+                (tenant_schema, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
+                "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
+                "s.company_name AS fallback_company_name "
+                "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
+                "ORDER BY s.created_at DESC LIMIT %s",
+                (limit,)
+            )
         seat_payments = [
             {
                 "company_name": r[0] or r[10], "subdomain": r[1] or "—", "employee_count": r[2],
@@ -309,13 +333,22 @@ def _recent_payments(limit=20):
             }
             for r in cur.fetchall()
         ]
-        cur.execute(
-            "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
-            "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
-            "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
-            "ORDER BY m.created_at DESC LIMIT %s",
-            (limit,)
-        )
+        if tenant_schema is not None:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
+                "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
+                "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
+                "WHERE m.tenant_schema=%s ORDER BY m.created_at DESC LIMIT %s",
+                (tenant_schema, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
+                "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
+                "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
+                "ORDER BY m.created_at DESC LIMIT %s",
+                (limit,)
+            )
         auto_debit_payments = [
             {
                 "company_name": r[0] or r[8], "subdomain": r[1] or "—", "employee_count": r[2],
@@ -522,6 +555,8 @@ def platform_admin_dashboard():
     pending_applications_count = cur2.fetchone()[0]
     cur2.execute("SELECT COUNT(*) FROM tenant_duplicate_alerts WHERE acknowledged=0")
     unacknowledged_alerts_count = cur2.fetchone()[0]
+    cur2.execute("SELECT COUNT(*) FROM tenant_support_tickets WHERE status IN ('open','in_progress')")
+    open_tickets_count = cur2.fetchone()[0]
     cur2.close()
     conn2.close()
 
@@ -544,6 +579,7 @@ def platform_admin_dashboard():
         costs=costs,
         pending_applications_count=pending_applications_count,
         unacknowledged_alerts_count=unacknowledged_alerts_count,
+        open_tickets_count=open_tickets_count,
     )
 
 
@@ -1264,6 +1300,312 @@ def platform_admin_audit_log():
         "super_admin_audit_log.html", events=events, q=q, level_filter=level_filter,
         page=page, total_pages=total_pages, total=total,
     )
+
+
+# ── Mini-CRM: company profile (financials + notes + tickets) ───────────────
+# One page per company pulling together everything the Platform Admin
+# already tracks about them (payment history, live billing state) plus two
+# new things: free-text internal notes, and a trackable support-ticket
+# queue -- distinct from the real-time chat below, which has no status or
+# history a report could be built on.
+
+_TICKET_STATUSES = ("open", "in_progress", "resolved", "closed")
+_TICKET_PRIORITIES = ("low", "normal", "high", "urgent")
+
+
+def _fetch_tenant(tenant_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, company_name, subdomain, db_name, payment_option, status, created_at, "
+        "billing_state, grace_period_ends_at, admin_email FROM tenants WHERE id=%s",
+        (tenant_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    (tid, company_name, subdomain, db_name, payment_option, status, created_at,
+     billing_state, grace_period_ends_at, admin_email) = row
+    employee_count = _tenant_employee_count(db_name)
+    return {
+        "id": tid, "company_name": company_name, "subdomain": subdomain, "db_name": db_name,
+        "payment_option": payment_option or "online", "status": status, "created_at": created_at,
+        "billing_state": billing_state or "current", "grace_period_ends_at": coerce_datetime(grace_period_ends_at),
+        "admin_email": admin_email, "employee_count": employee_count,
+        "monthly_bill_display": format_price_inr(calculate_price(employee_count)),
+    }
+
+
+def _load_tenant_admins(schema):
+    """Best-effort list of this company's own portal admin accounts, for
+    the profile page's Contacts card. Never raises -- a schema that's
+    since been deleted (platform_admin_delete_tenant()), or a transient DB
+    hiccup, just shows an empty contacts list instead of breaking the
+    page the platform admin is trying to view."""
+    try:
+        conn = get_tenant_db(schema)
+        cur = conn.cursor(buffered=True)
+        cur.execute("SELECT username, email FROM admin_users ORDER BY id ASC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [{"username": r[0], "email": r[1]} for r in rows]
+    except Exception as exc:
+        app_log.warning("platform_admin: tenant admin lookup failed for schema %s: %s", schema, exc)
+        return []
+
+
+def _load_tenant_notes(tenant_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, author, note, created_at FROM tenant_notes WHERE tenant_id=%s ORDER BY created_at DESC",
+        (tenant_id,)
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{"id": r[0], "author": r[1], "note": r[2], "created_at": r[3]} for r in rows]
+
+
+@platform_admin_bp.route("/super_admin/companies/<int:tenant_id>", methods=["GET"])
+@_platform_admin_required
+def platform_admin_company_profile(tenant_id):
+    tenant = _fetch_tenant(tenant_id)
+    if not tenant:
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, subject, status, priority, created_at, updated_at FROM tenant_support_tickets "
+        "WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 50",
+        (tenant_id,)
+    )
+    tickets = [
+        {"id": r[0], "subject": r[1], "status": r[2], "priority": r[3], "created_at": r[4], "updated_at": r[5]}
+        for r in cur.fetchall()
+    ]
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "super_admin_company_profile.html",
+        tenant=tenant,
+        portal_base_url=_safe_app_url(),
+        contacts=_load_tenant_admins(tenant["db_name"]),
+        notes=_load_tenant_notes(tenant_id),
+        payments=_recent_payments(limit=200, tenant_id=tenant_id, tenant_schema=tenant["db_name"]),
+        tickets=tickets,
+        ticket_priorities=_TICKET_PRIORITIES,
+    )
+
+
+@platform_admin_bp.route("/super_admin/companies/<int:tenant_id>/notes", methods=["POST"])
+@_platform_admin_required
+def platform_admin_add_tenant_note(tenant_id):
+    note = (request.form.get("note") or "").strip()[:4000]
+    if not note:
+        flash("Note cannot be empty.", "error")
+        return redirect(f"/super_admin/companies/{tenant_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT 1 FROM tenants WHERE id=%s", (tenant_id,))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+    cur.execute(
+        "INSERT INTO tenant_notes (tenant_id, author, note) VALUES (%s,%s,%s)",
+        (tenant_id, session.get("platform_admin_username"), note),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash("Note added.", "success")
+    return redirect(f"/super_admin/companies/{tenant_id}")
+
+
+@platform_admin_bp.route("/super_admin/companies/<int:tenant_id>/tickets", methods=["POST"])
+@_platform_admin_required
+def platform_admin_create_ticket(tenant_id):
+    tenant = _fetch_tenant(tenant_id)
+    if not tenant:
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+
+    subject = (request.form.get("subject") or "").strip()[:200]
+    description = (request.form.get("description") or "").strip()[:4000]
+    priority = request.form.get("priority", "normal").strip()
+    if priority not in _TICKET_PRIORITIES:
+        priority = "normal"
+    if not subject or not description:
+        flash("Subject and description are required.", "error")
+        return redirect(f"/super_admin/companies/{tenant_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "INSERT INTO tenant_support_tickets (tenant_id, subject, description, priority, created_by) "
+        "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+        (tenant_id, subject, description, priority, session.get("platform_admin_username")),
+    )
+    ticket_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_security_event(
+        "platform_admin.ticket_created", f"Support ticket #{ticket_id} opened for '{tenant['company_name']}': {subject}",
+        level="INFO", identifier=session.get("platform_admin_username"), tenant_id=tenant_id,
+    )
+    flash("Ticket created.", "success")
+    return redirect(f"/super_admin/tickets/{ticket_id}")
+
+
+def _fetch_ticket(ticket_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT tk.id, tk.tenant_id, t.company_name, t.subdomain, tk.subject, tk.description, tk.status, "
+        "tk.priority, tk.created_by, tk.resolved_at, tk.created_at, tk.updated_at "
+        "FROM tenant_support_tickets tk LEFT JOIN tenants t ON t.id = tk.tenant_id WHERE tk.id=%s",
+        (ticket_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0], "tenant_id": row[1], "company_name": row[2] or "(deleted company)", "subdomain": row[3] or "—",
+        "subject": row[4], "description": row[5], "status": row[6], "priority": row[7], "created_by": row[8],
+        "resolved_at": row[9], "created_at": row[10], "updated_at": row[11],
+    }
+
+
+@platform_admin_bp.route("/super_admin/tickets", methods=["GET"])
+@_platform_admin_required
+def platform_admin_tickets_queue():
+    status_filter = request.args.get("status", "open")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    if status_filter == "all":
+        cur.execute(
+            "SELECT tk.id, tk.tenant_id, t.company_name, t.subdomain, tk.subject, tk.status, tk.priority, "
+            "tk.created_at, tk.updated_at FROM tenant_support_tickets tk "
+            "LEFT JOIN tenants t ON t.id = tk.tenant_id ORDER BY tk.created_at DESC"
+        )
+    else:
+        cur.execute(
+            "SELECT tk.id, tk.tenant_id, t.company_name, t.subdomain, tk.subject, tk.status, tk.priority, "
+            "tk.created_at, tk.updated_at FROM tenant_support_tickets tk "
+            "LEFT JOIN tenants t ON t.id = tk.tenant_id WHERE tk.status=%s ORDER BY tk.created_at DESC",
+            (status_filter,)
+        )
+    rows = cur.fetchall()
+    cur.execute("SELECT COUNT(*) FROM tenant_support_tickets WHERE status IN ('open','in_progress')")
+    open_count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    tickets = [
+        {"id": r[0], "tenant_id": r[1], "company_name": r[2] or "(deleted company)", "subdomain": r[3] or "—",
+         "subject": r[4], "status": r[5], "priority": r[6], "created_at": r[7], "updated_at": r[8]}
+        for r in rows
+    ]
+    return render_template(
+        "super_admin_tickets.html", tickets=tickets, status_filter=status_filter, open_count=open_count,
+    )
+
+
+@platform_admin_bp.route("/super_admin/tickets/<int:ticket_id>", methods=["GET"])
+@_platform_admin_required
+def platform_admin_ticket_detail(ticket_id):
+    ticket = _fetch_ticket(ticket_id)
+    if not ticket:
+        flash("Ticket not found.", "error")
+        return redirect("/super_admin/tickets")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT author, comment, created_at FROM tenant_ticket_comments WHERE ticket_id=%s ORDER BY created_at ASC",
+        (ticket_id,)
+    )
+    comments = [{"author": r[0], "comment": r[1], "created_at": r[2]} for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return render_template(
+        "super_admin_ticket_detail.html", ticket=ticket, comments=comments,
+        statuses=_TICKET_STATUSES, priorities=_TICKET_PRIORITIES,
+    )
+
+
+@platform_admin_bp.route("/super_admin/tickets/<int:ticket_id>/update", methods=["POST"])
+@_platform_admin_required
+def platform_admin_update_ticket(ticket_id):
+    status = request.form.get("status", "").strip()
+    priority = request.form.get("priority", "").strip()
+    if status not in _TICKET_STATUSES or priority not in _TICKET_PRIORITIES:
+        flash("Invalid status or priority.", "error")
+        return redirect(f"/super_admin/tickets/{ticket_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    if status in ("resolved", "closed"):
+        cur.execute(
+            "UPDATE tenant_support_tickets SET status=%s, priority=%s, resolved_at=NOW() WHERE id=%s",
+            (status, priority, ticket_id)
+        )
+    else:
+        cur.execute(
+            "UPDATE tenant_support_tickets SET status=%s, priority=%s, resolved_at=NULL WHERE id=%s",
+            (status, priority, ticket_id)
+        )
+    updated = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+    if not updated:
+        flash("Ticket not found.", "error")
+        return redirect("/super_admin/tickets")
+    log_security_event(
+        "platform_admin.ticket_updated", f"Ticket #{ticket_id} set to status={status}, priority={priority}",
+        level="INFO", identifier=session.get("platform_admin_username"),
+    )
+    flash("Ticket updated.", "success")
+    return redirect(f"/super_admin/tickets/{ticket_id}")
+
+
+@platform_admin_bp.route("/super_admin/tickets/<int:ticket_id>/comment", methods=["POST"])
+@_platform_admin_required
+def platform_admin_add_ticket_comment(ticket_id):
+    comment = (request.form.get("comment") or "").strip()[:2000]
+    if not comment:
+        flash("Comment cannot be empty.", "error")
+        return redirect(f"/super_admin/tickets/{ticket_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT 1 FROM tenant_support_tickets WHERE id=%s", (ticket_id,))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        flash("Ticket not found.", "error")
+        return redirect("/super_admin/tickets")
+    cur.execute(
+        "INSERT INTO tenant_ticket_comments (ticket_id, author, comment) VALUES (%s,%s,%s)",
+        (ticket_id, session.get("platform_admin_username"), comment),
+    )
+    cur.execute("UPDATE tenant_support_tickets SET updated_at=NOW() WHERE id=%s", (ticket_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash("Comment added.", "success")
+    return redirect(f"/super_admin/tickets/{ticket_id}")
 
 
 # ── Internal chat with a company's admin/HR (utils/chat_utils.py) ──────────
