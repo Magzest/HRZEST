@@ -8,7 +8,7 @@ import datetime
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log, limiter, log_security_event
 from utils.auth import generate_password_hash, _hash_token, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY, validate_new_password
-from utils.plan_limits import PLAN_LABEL, PER_EMPLOYEE_PAISE, format_price_inr
+from utils.plan_limits import PLAN_LABEL, get_per_employee_paise, format_price_inr
 from utils.email_utils import get_email_config, send_email_async
 from utils.tenant_routing import RESERVED_PATH_SEGMENTS
 from utils.helpers import clean_email_domain, validate_email_domain_format, _safe_app_url, save_application_document
@@ -322,7 +322,7 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url,
             return False
         import datetime as _dt
         amount_display = format_price_inr(amount_paise)
-        plan_display_name = f"₹{PER_EMPLOYEE_PAISE // 100}/employee × {employee_count}"
+        plan_display_name = f"₹{get_per_employee_paise() // 100}/employee × {employee_count}"
         paid_on = _dt.datetime.now().strftime("%d %b %Y")
         checkin_block = ""
         if checkin_url:
@@ -574,7 +574,7 @@ def create_org_page():
     track_page_view("/create_org")
     return render_template(
         "create_org.html",
-        per_employee_paise=PER_EMPLOYEE_PAISE,
+        per_employee_paise=get_per_employee_paise(),
         show_captcha=turnstile_enabled(),
         turnstile_site_key=_TURNSTILE_SITE_KEY,
     )
@@ -892,7 +892,7 @@ def create_org_pay_page(application_id):
         return redirect(f"/create_org/status/{application_id}")
     return render_template(
         "create_org_pay.html", application_id=application_id, company_name=company_name,
-        per_employee_paise=PER_EMPLOYEE_PAISE,
+        per_employee_paise=get_per_employee_paise(),
     )
 
 

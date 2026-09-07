@@ -40,7 +40,7 @@
 
       /* ── SIDEBAR ── */
       .sidebar {
-        width: 240px; height: 100vh; position: sticky; top: 0; overflow: hidden;
+        width: 240px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
         background: linear-gradient(180deg, #0f2460 0%, #1a3a8f 100%);
         padding: 20px 14px; color: white;
         display: flex; flex-direction: column; flex-shrink: 0;
@@ -108,11 +108,9 @@
       .sb-item.danger { color: rgba(252,165,165,0.85); }
       .sb-item.danger:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
       .sb-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
-      .sb-scroll-nav {
-        flex: 1; overflow-y: auto; min-height: 0;
-      }
-      .sb-scroll-nav::-webkit-scrollbar { width: 3px; }
-      .sb-scroll-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+      .sb-scroll-nav { flex: 1; }
+      .sidebar::-webkit-scrollbar { width: 3px; }
+      .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
       .sb-bottom {
         flex-shrink: 0; padding-top: 4px;
       }
@@ -590,50 +588,6 @@
       .hol-year-nav a { padding: 7px 14px; border-radius: 9px; text-decoration: none; background: #dbeafe; color: #1e40af; font-weight: 700; font-size: 13px; transition: 0.2s; }
       .hol-year-nav a:hover { background: #bfdbfe; }
       .hol-year-nav .hol-cur-yr { font-size: 20px; font-weight: 900; color: #1e3a8a; min-width: 60px; text-align: center; }
-      .hol-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; font-size: 12px; color: #475569; }
-      .hol-leg { display: flex; align-items: center; gap: 5px; }
-      .hol-leg-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
-      /* ── HOL MONTH NAVIGATION ── */
-      .hol-month-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
-      .hol-mnav-btn {
-        padding: 9px 22px; border: none; border-radius: 10px;
-        background: #dbeafe; color: #1e40af; font-size: 14px; font-weight: 700;
-        cursor: pointer; transition: 0.2s;
-      }
-      .hol-mnav-btn:hover { background: #bfdbfe; transform: translateY(-1px); }
-      .hol-mnav-label {
-        font-size: 20px; font-weight: 900; color: #1e3a8a;
-        min-width: 220px; text-align: center;
-      }
-      .hol-cal-single-wrap {
-        max-width: 660px; margin: 0 auto 28px;
-        background: #fff; border: 1px solid #dbeafe; border-radius: 16px;
-        padding: 20px 20px 14px; box-shadow: 0 2px 8px rgba(30,58,138,0.06);
-      }
-      .hol-cal-month { display: none; }
-      .hol-cal-hdrs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
-      .hol-cal-hdrs span { text-align: center; font-size: 12px; font-weight: 700; color: #94a3b8; padding: 4px 0; letter-spacing: 0.5px; }
-      .hol-cal-hdrs span:first-child { color: #ef4444; }
-      .hol-cal-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
-      .hol-cal-day {
-        height: 66px; display: flex; flex-direction: column;
-        align-items: center; justify-content: flex-start;
-        padding-top: 10px; border-radius: 9px;
-        font-size: 15px; font-weight: 700; color: #1e293b;
-        border: 1.5px solid transparent; overflow: hidden;
-      }
-      .hol-cal-day.hd-empty   { background: transparent; border-color: transparent; }
-      .hol-cal-day.hd-sunday  { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
-      .hol-cal-day.hd-holiday { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-      .hol-cal-day.hd-today   { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
-      .hol-cal-day.hd-normal  { background: #f8fafc; border-color: #e2e8f0; }
-      .hol-cal-day.hd-sunday.hd-holiday { background: #fee2e2; border-color: #f59e0b; color: #b45309; }
-      .hol-name-lbl {
-        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-        line-clamp: 2; overflow: hidden;
-        font-size: 9px; font-weight: 700; color: #92400e;
-        line-height: 1.2; width: 100%; text-align: center; padding: 0 3px; margin-top: 3px;
-      }
       .hol-list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
       .hol-list-table th { background: #dbeafe; color: #1e3a8a; padding: 9px 13px; text-align: left; font-weight: 700; }
       .hol-list-table td { padding: 8px 13px; border-bottom: 1px solid #e2e8f0; color: #1e293b; }
@@ -692,12 +646,6 @@
       body.dark-mode .page-header p{color:#768390!important}
       body.dark-mode .hol-year-nav a{background:#1e3a8a!important;color:#60a5fa!important}
       body.dark-mode .hol-year-nav .hol-cur-yr{color:#cdd9e5!important}
-      body.dark-mode .hol-legend{color:#768390!important}
-      body.dark-mode .hol-mnav-btn{background:#1e3a8a!important;color:#60a5fa!important}
-      body.dark-mode .hol-mnav-label{color:#cdd9e5!important}
-      body.dark-mode .hol-cal-single-wrap{background:#161b22!important;border-color:#30363d!important}
-      body.dark-mode .hol-cal-day.hd-normal{background:#1c2128!important;border-color:#30363d!important;color:#cdd9e5!important}
-      body.dark-mode .hol-cal-hdrs span{color:#768390!important}
       body.dark-mode .hol-list-table th{background:#1e3a8a!important;color:#93c5fd!important}
       body.dark-mode .hol-list-table td{border-color:#30363d!important;color:#cdd9e5!important}
       body.dark-mode .hol-list-table tr:hover td{background:#1c2128!important}
@@ -727,7 +675,7 @@
       <div class="sb-profile">
         <div class="sb-avatar">
           {% if emp[4] %}
-            <img src="/my_photo" alt="{{ emp[1] }}"
+            <img src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}"
                  onerror="this.parentNode.innerHTML='{{ emp[1][0] | upper }}'" />
           {% else %}
             {{ emp[1][0] | upper }}
@@ -740,20 +688,6 @@
         </div>
       </div>
 
-      <!-- Language Switcher, Touch ID & Theme Toggle -->
-      <div style="display:flex;gap:6px;margin-bottom:14px;padding:0 2px;">
-        <select id="langSelector" onchange="i18n.setLanguage(this.value)" style="flex:1;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.2);font-size:11px;font-weight:700;outline:none;cursor:pointer;">
-          <option value="en" style="color:#000;">🌐 EN (English)</option>
-          <option value="es" style="color:#000;">🌐 ES (Español)</option>
-          <option value="hi" style="color:#000;">🌐 HI (हिन्दी)</option>
-        </select>
-        <button type="button" onclick="enrollTouchID()" style="padding:6px 8px;border-radius:8px;background:rgba(34,197,94,0.25);color:#86efac;border:1px solid rgba(34,197,94,0.4);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;" title="Register Touch ID / Biometric">
-          <i class="ti ti-fingerprint"></i>
-        </button>
-        <button type="button" onclick="toggleTheme()" style="padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-size:12px;font-weight:700;cursor:pointer;" id="themeToggleBtn" title="Toggle Light/Dark Theme">
-          🌙
-        </button>
-      </div>
 
       <div class="sb-scroll-nav">
         <div class="sb-nav-label">Main</div>
@@ -801,11 +735,13 @@
       </div><!-- /sb-scroll-nav -->
 
       <div class="sb-bottom">
-        <hr class="sb-sep" />
+        <button type="button" class="sb-item danger" id="sbn-resign" onclick="openResignGate()">
+          <span class="sb-icon"><i class="ti ti-alert-triangle"></i></span>Resignation
+        </button>
         <a class="sb-item danger" href="{{ tpath('/employee_logout') }}">
           <span class="sb-icon"><i class="ti ti-logout"></i></span>Logout
         </a>
-  
+
         <div class="sb-footer"><i class="ti ti-clock u-fs-13"></i> <span class="sb-live-clock"></span></div>
       </div>
     </nav>
@@ -842,7 +778,7 @@
           <div class="u-d-flex u-ai-center u-gap-18 u-mb-14">
             <div class="profile-avatar u-mb-0 u-fxs-0">
               {% if emp[4] %}
-                <img src="/my_photo" alt="{{ emp[1] }}"
+                <img src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}"
                      onerror="this.parentNode.innerHTML='{{ emp[1][0] | upper }}'" />
               {% else %}
                 {{ emp[1][0] | upper }}
@@ -1015,9 +951,6 @@
             📍 Mark Attendance
           </button>
           {% endif %}
-          <button class="u-mt-8 u-w-100pct u-p-11 u-bd-1-solid-dbeafe u-br-10 u-bg-fff u-c-1e3a8a u-fs-13 u-fw-700 u-cur-pointer u-d-flex u-ai-center u-jc-center u-gap-8" onclick="dmOpen()">
-            💻 My Devices
-          </button>
         </div>
         <script>
           (function(){
@@ -1376,42 +1309,6 @@
 
           <button type="submit" class="btn-leave">Submit Leave Request</button>
         </form>
-      </div>
-
-      <!-- Upcoming Holidays for Leave Planning -->
-      <div class="section u-mt-20 u-bg-linear-gradien139ca0 u-bd-1-solid-fcd34d u-br-14 u-p-18-20">
-        <div class="u-d-flex u-ai-center u-gap-8 u-mb-14">
-          <span class="u-fs-18">🎉</span>
-          <div>
-            <div class="u-fs-14 u-fw-700 u-c-78350f">Upcoming Holidays</div>
-            <div class="u-fs-11 u-c-92400e u-mt-1">No need to apply leave on these dates</div>
-          </div>
-        </div>
-        {% if leave_holidays %}
-        <div class="u-d-flex u-fxd-column u-gap-8">
-          {% for hdate, hname in leave_holidays %}
-          <div class="u-d-flex u-ai-center u-jc-space-between u-bg-rgba255_255_255_0d7 u-bd-1-solid-fde68a u-br-9 u-p-9-13">
-            <div class="u-d-flex u-ai-center u-gap-10">
-              <div class="u-bg-f59e0b u-c-fff u-fs-11 u-fw-700 u-br-6 u-p-3-8 u-minw-40 u-ta-center">
-                {{ hdate.strftime('%d') }}
-              </div>
-              <div>
-                <div class="u-fs-13 u-fw-600 u-c-1c1917">{{ hname }}</div>
-                <div class="u-fs-11 u-c-78350f">{{ hdate.strftime('%A, %B %Y') }}</div>
-              </div>
-            </div>
-            {% set days_left = (hdate - today_date).days %}
-            <div class="u-fs-11 u-c-92400e u-fw-600 u-ta-right u-ws-nowrap">
-              {% if days_left == 0 %}Today{% elif days_left == 1 %}Tomorrow{% else %}in {{ days_left }} days{% endif %}
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="u-ta-center u-c-92400e u-fs-13 u-p-12-0">
-          No upcoming holidays for the rest of this year.
-        </div>
-        {% endif %}
       </div>
 
       <div class="section u-mt-24">
@@ -2132,52 +2029,6 @@
           <a href="/employee_portal?hol_year={{ hol_year + 1 }}#holidays">{{ hol_year + 1 }} &#8594;</a>
         </div>
 
-        <!-- Legend -->
-        <div class="hol-legend">
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-fef3c7 u-bd-1d5-solid-f59e0b"></div>Public Holiday</div>
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-fee2e2 u-bd-1d5-solid-fca5a5"></div>Sunday (Weekly Off)</div>
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-dbeafe u-bd-1d5-solid-3b82f6"></div>Today</div>
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-f8fafc u-bd-1d5-solid-e2e8f0"></div>Working Day</div>
-        </div>
-
-        <!-- Month navigation -->
-        <div class="hol-month-nav">
-          <button type="button" class="hol-mnav-btn" onclick="changeHolMonth(-1)">&#8592; Prev</button>
-          <span class="hol-mnav-label" id="hol-mnav-label"></span>
-          <button type="button" class="hol-mnav-btn" onclick="changeHolMonth(1)">Next &#8594;</button>
-        </div>
-
-        <!-- Single-month calendar -->
-        <div class="hol-cal-single-wrap" id="hol-cal-wrap" data-year="{{ hol_year }}">
-          {% for m in emp_hol_cal %}
-          <div class="hol-cal-month" id="hmpanel-{{ m.month_num }}" data-name="{{ m.month_name }}">
-            <div class="hol-cal-hdrs">
-              <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
-            </div>
-            {% for week in m.weeks %}
-            <div class="hol-cal-week">
-              {% for day in week %}
-                {% set col = loop.index0 %}
-                {% if day == 0 %}
-                  <div class="hol-cal-day hd-empty"></div>
-                {% else %}
-                  {% set is_sun     = (col == 0) %}
-                  {% set is_holiday = (day in m.holidays) %}
-                  {% set is_today   = (today_date.year == hol_year and today_date.month == m.month_num and today_date.day == day) %}
-                  {% set hname      = m.holidays[day][1] if is_holiday else '' %}
-                  <div class="hol-cal-day {% if is_holiday %}hd-holiday{% elif is_sun %}hd-sunday{% elif is_today %}hd-today{% else %}hd-normal{% endif %}"
-                       title="{{ hname if is_holiday else ('Sunday' if is_sun else (m.month_name + ' ' + day|string + ', ' + hol_year|string)) }}">
-                    {{ day }}
-                    {% if is_holiday %}<span class="hol-name-lbl">{{ hname }}</span>{% endif %}
-                  </div>
-                {% endif %}
-              {% endfor %}
-            </div>
-            {% endfor %}
-          </div>
-          {% endfor %}
-        </div>
-
         <!-- Holidays list -->
         <div class="section">
           <h3>📋 All Holidays &amp; Leaves ({{ hol_year }})</h3>
@@ -2313,8 +2164,8 @@
             <div class="u-pos-relative u-w-100 u-h-100 u-fxs-0">
               <div class="profile-avatar u-w-100 u-h-100 u-fs-36 u-mb-0">
                 {% if emp[4] %}
-                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}" title="View full photo">
-                    <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo" alt="{{ emp[1] }}" id="profilePreview"
+                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}?v={{ photo_v }}" title="View full photo">
+                    <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}" id="profilePreview"
                          onerror="this.parentNode.parentNode.innerHTML='{{ emp[1][0]|upper }}'" />
                   </a>
                 {% else %}
@@ -2330,9 +2181,6 @@
               <form class="u-mt-10 u-d-flex u-ai-center u-gap-10" action="{{ tpath('/update_my_photo') }}" method="POST" enctype="multipart/form-data" id="photoForm">
                 <input class="u-d-none" type="file" name="photo" id="photoUpload" accept=".jpg,.jpeg,.png" onchange="previewPhoto(this)" />
                 <span class="u-fs-12 u-c-94a3b8" id="photoFileName">No file chosen</span>
-                <button class="u-d-none u-p-6-14 u-bd-none u-br-8 u-bg-3b82f6 u-c-white u-fs-12 u-fw-600 u-cur-pointer" type="submit" id="photoSubmitBtn">
-                  Upload
-                </button>
               </form>
             </div>
             <!-- Download buttons -->
@@ -2511,7 +2359,7 @@
           </div>
 
           <!-- Upload form -->
-          <form class="u-d-flex u-gap-10 u-fxw-wrap u-ai-flex-end u-mb-16" action="{{ tpath('/upload_my_document') }}" method="POST" enctype="multipart/form-data">
+          <form class="u-d-flex u-gap-10 u-fxw-wrap u-ai-flex-end u-mb-16" action="{{ tpath('/upload_my_document') }}" method="POST" enctype="multipart/form-data" onsubmit="this.querySelector('button[type=submit]').disabled=true;">
             <div class="u-fx-1 u-minw-160">
               <label class="u-fs-11 u-fw-700 u-c-475569 u-ttr-uppercase u-ls-d4 u-d-block u-mb-5">Document Type</label>
               <select class="u-w-100pct u-p-9-12 u-bd-1-solid-dbeafe u-br-9 u-bg-f8fafc u-c-1e293b u-fs-13 u-out-none" name="doc_type" required>
@@ -3480,29 +3328,6 @@
       }
 
       /* ── VIEW SWITCHER ── */
-      /* ── HOL MONTH NAVIGATION ── */
-      var holCalYear = (function() {
-        var w = document.getElementById('hol-cal-wrap');
-        return w ? parseInt(w.dataset.year, 10) : new Date().getFullYear();
-      })();
-      var _nowDate = new Date();
-      var currentHolMonth = (_nowDate.getFullYear() === holCalYear) ? _nowDate.getMonth() + 1 : 1;
-
-      function showHolMonth(m) {
-        if (m < 1) m = 12;
-        if (m > 12) m = 1;
-        document.querySelectorAll('.hol-cal-month').forEach(function(el) { el.style.display = 'none'; });
-        var panel = document.getElementById('hmpanel-' + m);
-        if (panel) {
-          panel.style.display = 'block';
-          var lbl = document.getElementById('hol-mnav-label');
-          if (lbl) lbl.textContent = panel.dataset.name + ' ' + holCalYear;
-        }
-        currentHolMonth = m;
-      }
-
-      function changeHolMonth(dir) { showHolMonth(currentHolMonth + dir); }
-
       function showView(viewId) {
         document.querySelectorAll('.view').forEach(function(v) {
           v.classList.remove('active');
@@ -3514,8 +3339,6 @@
         document.querySelectorAll('.sb-item').forEach(function(b) { b.classList.remove('active'); });
         var sbnEl = document.getElementById('sbn-' + viewId);
         if (sbnEl) sbnEl.classList.add('active');
-
-        if (viewId === 'holidays') { showHolMonth(currentHolMonth); }
 
         var ac = document.getElementById('appContent');
         if (ac) ac.scrollTo({ top: 0, behavior: 'smooth' });
@@ -4156,8 +3979,7 @@
       function previewPhoto(input) {
         if (!input.files || !input.files[0]) return;
         var file = input.files[0];
-        document.getElementById('photoFileName').textContent = file.name;
-        document.getElementById('photoSubmitBtn').style.display = 'inline-block';
+        document.getElementById('photoFileName').textContent = 'Uploading ' + file.name + '…';
         var reader = new FileReader();
         reader.onload = function(e) {
           var prev = document.getElementById('profilePreview');
@@ -4173,6 +3995,15 @@
           }
         };
         reader.readAsDataURL(file);
+        // Submit immediately instead of waiting on a separate "Upload"
+        // click -- the photo picker is a single <label>-triggered file
+        // input with no visible affordance suggesting a second step is
+        // needed, so requiring one meant a selected photo could look
+        // "changed" here (via the local preview above) while never
+        // actually reaching the server -- explaining reports of a photo
+        // update that showed in Profile but never appeared anywhere else
+        // (sidebar, Dashboard), because it was never actually saved.
+        document.getElementById('photoForm').submit();
       }
     </script>
 
@@ -4716,7 +4547,5 @@
       }
     });
   </script>
-  <script>var DEVICE_API_BASE = '/api/employee/devices';</script>
-  {% include '_device_manager.html' %}
 </body>
 </html>

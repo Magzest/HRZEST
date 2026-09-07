@@ -53,6 +53,7 @@ from blueprints.billing import billing_bp
 from blueprints.webhooks import webhooks_bp
 from blueprints.seats import seats_bp
 from blueprints.auto_debit import auto_debit_bp
+from blueprints.billing_dunning import billing_dunning_bp
 from blueprints.platform_admin import platform_admin_bp
 from blueprints.honeypot_routes import honeypot_bp
 from blueprints.biometric import biometric_bp
@@ -78,6 +79,7 @@ flask_app.register_blueprint(billing_bp)
 flask_app.register_blueprint(webhooks_bp)
 flask_app.register_blueprint(seats_bp)
 flask_app.register_blueprint(auto_debit_bp)
+flask_app.register_blueprint(billing_dunning_bp)
 flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(honeypot_bp)
 flask_app.register_blueprint(biometric_bp)

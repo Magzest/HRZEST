@@ -75,40 +75,6 @@
     .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:.15s}
     .btn-primary{background:#1e3a8a;color:#fff}
     .btn-primary:hover{background:#1e40af}
-    /* Announcement styles */
-    .ann-form-card{background:#fff;border:1px solid #dbeafe;border-radius:14px;padding:22px;margin-bottom:18px}
-    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .form-group{display:flex;flex-direction:column;gap:6px}
-    .form-group label{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
-    .form-group input,.form-group select,.form-group textarea{padding:10px 12px;border:1.5px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:13px;outline:none;font-family:inherit}
-    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#3b82f6}
-    .form-group textarea{resize:vertical;min-height:80px}
-    .ann-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px}
-    .ann-card.priority-urgent{border-left:4px solid #ef4444}
-    .ann-card.priority-important{border-left:4px solid #f59e0b}
-    .ann-card.priority-normal{border-left:4px solid #3b82f6}
-    .ann-icon{font-size:24px;flex-shrink:0;margin-top:2px}
-    .ann-body{flex:1}
-    .ann-title{font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px}
-    .ann-content{font-size:13px;color:#475569;line-height:1.6}
-    .ann-meta{font-size:11px;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:10px}
-    .badge-pri{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
-    .pri-urgent{background:#fee2e2;color:#dc2626}
-    .pri-important{background:#fef9c3;color:#92400e}
-    .pri-normal{background:#dbeafe;color:#1e40af}
-    .btn-del{padding:5px 12px;border:none;border-radius:7px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;font-size:12px;cursor:pointer}
-    .btn-del:hover{background:#ef4444;color:#fff}
-    .empty-state{text-align:center;padding:40px;color:#94a3b8;font-size:13px}
-    .badge-vis{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
-    .vis-public{background:#dcfce7;color:#166534}
-    .vis-private{background:#fef3c7;color:#92400e}
-    .ann-sec-label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;padding:8px 0 6px;border-bottom:1px solid #e2e8f0;margin-bottom:12px}
-    .vis-toggle{display:flex;gap:0;border:1.5px solid #dbeafe;border-radius:10px;overflow:hidden;margin-bottom:2px}
-    .vis-toggle label{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;color:#64748b}
-    .vis-toggle input{display:none}
-    .vis-toggle input:checked+span{background:#1e3a8a;color:#fff}
-    .vis-toggle label span{display:block;width:100%;padding:9px 0;border-radius:0;transition:.15s}
-    #privateEmpRow{display:none}
     /* ── Dark mode ── */
     body.dark-mode{background:#0d1117 !important}
     body.dark-mode .main{background:#0d1117 !important;color:#cdd9e5 !important}
@@ -134,7 +100,6 @@
     body.dark-mode .stat-card .lbl{color:#768390 !important}
     body.dark-mode .stat-card .num{color:#cdd9e5 !important}
     body.dark-mode .card{background:#161b22 !important;border-color:#30363d !important}
-    body.dark-mode .ann-form-card{background:#161b22 !important;border-color:#30363d !important}
     body.dark-mode .sec-title{color:#4d9de0 !important}
     /* Table */
     body.dark-mode th{background:#1c2128 !important;color:#768390 !important;border-color:#30363d !important}
@@ -147,24 +112,6 @@
     body.dark-mode .b-none{background:#1c2128 !important;color:#768390 !important}
     /* Star rating */
     body.dark-mode .star.empty{color:#30363d !important}
-    /* Form inputs */
-    body.dark-mode .form-group label{color:#768390 !important}
-    body.dark-mode .form-group input,
-    body.dark-mode .form-group select,
-    body.dark-mode .form-group textarea{background:#0d1117 !important;border-color:#30363d !important;color:#cdd9e5 !important}
-    /* Announcement cards */
-    body.dark-mode .ann-card{background:#161b22 !important;border-color:#30363d !important}
-    body.dark-mode .ann-title{color:#cdd9e5 !important}
-    body.dark-mode .ann-content{color:#768390 !important}
-    body.dark-mode .ann-meta{color:#768390 !important}
-    /* Priority badges */
-    body.dark-mode .pri-urgent{background:#7f1d1d !important;color:#fca5a5 !important}
-    body.dark-mode .pri-important{background:#713f12 !important;color:#fbbf24 !important}
-    body.dark-mode .pri-normal{background:#1e3a8a !important;color:#93c5fd !important}
-    /* Delete btn */
-    body.dark-mode .btn-del{background:#7f1d1d !important;border-color:#991b1b !important;color:#fca5a5 !important}
-    /* Empty state */
-    body.dark-mode .empty-state{color:#768390 !important}
     /* Flash */
     body.dark-mode .flash-success{background:#14532d !important;border-color:#166534 !important;color:#86efac !important}
     body.dark-mode .flash-danger{background:#7f1d1d !important;border-color:#991b1b !important;color:#fca5a5 !important}
@@ -176,8 +123,8 @@
 
   <div class="page-hdr">
     <div>
-      <h1><i class="ti ti-chart-line u-c-3b82f6"></i> Performance &amp; Announcements</h1>
-      <p>Quarterly KPI reviews, ratings, and company-wide communications</p>
+      <h1><i class="ti ti-chart-line u-c-3b82f6"></i> Performance &amp; Comms</h1>
+      <p>Quarterly KPI reviews, ratings, hikes and incentives</p>
     </div>
     <div class="u-d-flex u-gap-10 u-ai-center u-fxw-wrap">
       <button type="button" onclick="openImportModal()" class="btn u-bg-f0fdf4 u-c-15803d u-bd-1d5-solid-86efac u-fs-13 u-p-9-16">
@@ -263,10 +210,6 @@
        style="text-decoration:none;">
       <i class="ti ti-grid-dots"></i> 9-Box Talent Matrix
     </a>
-    <div class="tab {% if active_tab == 'announcements' %}active{% endif %}" onclick="switchTab('announcements',this)">
-      <i class="ti ti-speakerphone"></i> Announcements
-      {% if ann_list %}<span class="u-bg-3b82f6 u-c-fff u-br-20 u-p-1-7 u-fs-10 u-fw-700">{{ ann_list|length }}</span>{% endif %}
-    </div>
   </div>
 
   <!-- ═══════════════ TAB: PERFORMANCE ═══════════════ -->
@@ -642,146 +585,11 @@
     {% endif %}
   </div>
 
-  <!-- ═══════════════ TAB: ANNOUNCEMENTS ═══════════════ -->
-  <div class="tab-content {% if active_tab == 'announcements' %}active{% endif %}" id="tab-announcements">
-
-    <!-- Post form -->
-    <div class="ann-form-card">
-      <div class="sec-title"><i class="ti ti-plus"></i> Post New Announcement</div>
-      <form action="{{ tpath('/announcements') }}" method="POST">
-        <input type="hidden" name="action" value="add"/>
-        <div class="form-row u-mb-12">
-          <div class="form-group u-gc-span-2">
-            <label>Title</label>
-            <input type="text" name="title" placeholder="Announcement title…" required maxlength="255"/>
-          </div>
-          <div class="form-group u-gc-span-2">
-            <label>Content</label>
-            <textarea name="content" placeholder="Write the announcement details…" required rows="3"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Priority</label>
-            <select name="priority">
-              <option value="Normal">Normal</option>
-              <option value="Important">Important</option>
-              <option value="Urgent">Urgent</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Visibility</label>
-            <div class="vis-toggle">
-              <label>
-                <input type="radio" name="visibility" value="public" checked onchange="annVisChange(this)"/>
-                <span><i class="ti ti-world u-fs-13 u-va-middle u-mr-4"></i>Public</span>
-              </label>
-              <label>
-                <input type="radio" name="visibility" value="private" onchange="annVisChange(this)"/>
-                <span><i class="ti ti-lock u-fs-13 u-va-middle u-mr-4"></i>Private</span>
-              </label>
-            </div>
-          </div>
-          <div class="form-group u-gc-span-2" id="privateEmpRow">
-            <label>Send To (Employee)</label>
-            <select name="target_employee_id" id="annTargetEmp">
-              <option value="">— Select employee —</option>
-              {% for eid, ename in ann_emp_list %}
-              <option value="{{ eid }}">{{ ename }} ({{ eid }})</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="u-ta-right">
-          <button type="submit" class="btn btn-primary"><i class="ti ti-speakerphone"></i> Post Announcement</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- List -->
-    <div class="card card-pad">
-      <div class="sec-title"><i class="ti ti-list"></i> All Announcements ({{ ann_list|length }})</div>
-      {% if ann_list %}
-        {% if pub_anns %}
-        <div class="ann-sec-label"><i class="ti ti-world u-va-middle u-mr-4"></i>Public ({{ pub_anns|length }})</div>
-        {% for aid, atitle, acontent, apri, adate, avis, atgt_id, atgt_name in pub_anns %}
-        <div class="ann-card priority-{{ apri|lower }}">
-          <div class="ann-icon">
-            {% if apri == 'Urgent' %}<i class="ti ti-alert-circle u-c-ef4444 u-fs-22"></i>
-            {% elif apri == 'Important' %}<i class="ti ti-alert-triangle u-c-f59e0b u-fs-22"></i>
-            {% else %}<i class="ti ti-speakerphone u-c-3b82f6 u-fs-22"></i>{% endif %}
-          </div>
-          <div class="ann-body">
-            <div class="ann-title">{{ atitle }}</div>
-            <div class="ann-content">{{ acontent }}</div>
-            <div class="ann-meta">
-              <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
-              <span class="badge-vis vis-public"><i class="ti ti-world u-fs-10"></i> Public</span>
-              <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
-              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
-                <input type="hidden" name="action" value="delete"/>
-                <input type="hidden" name="ann_id" value="{{ aid }}"/>
-                <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
-                  <i class="ti ti-trash"></i> Delete
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        {% if priv_anns %}
-        <div class="ann-sec-label u-mt-18"><i class="ti ti-lock u-va-middle u-mr-4"></i>Private ({{ priv_anns|length }})</div>
-        {% for aid, atitle, acontent, apri, adate, avis, atgt_id, atgt_name in priv_anns %}
-        <div class="ann-card priority-{{ apri|lower }}">
-          <div class="ann-icon">
-            {% if apri == 'Urgent' %}<i class="ti ti-alert-circle u-c-ef4444 u-fs-22"></i>
-            {% elif apri == 'Important' %}<i class="ti ti-alert-triangle u-c-f59e0b u-fs-22"></i>
-            {% else %}<i class="ti ti-lock u-c-f59e0b u-fs-22"></i>{% endif %}
-          </div>
-          <div class="ann-body">
-            <div class="ann-title">{{ atitle }}</div>
-            <div class="ann-content">{{ acontent }}</div>
-            <div class="ann-meta">
-              <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
-              <span class="badge-vis vis-private"><i class="ti ti-lock u-fs-10"></i> Private</span>
-              {% if atgt_name %}<span class="u-c-64748b u-fs-11"><i class="ti ti-user u-fs-10"></i> To: {{ atgt_name }}</span>{% endif %}
-              <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
-              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
-                <input type="hidden" name="action" value="delete"/>
-                <input type="hidden" name="ann_id" value="{{ aid }}"/>
-                <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
-                  <i class="ti ti-trash"></i> Delete
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-        {% endif %}
-      {% else %}
-        <div class="empty-state"><i class="ti ti-speakerphone u-fs-40 u-d-block u-mb-12"></i>No announcements posted yet.</div>
-      {% endif %}
-    </div>
-  </div>
-
 {% endblock %}
 
 {% block scripts %}
 
 <script>
-function annVisChange(radio) {
-  var row = document.getElementById('privateEmpRow');
-  var sel = document.getElementById('annTargetEmp');
-  if (radio.value === 'private') {
-    row.style.display = 'flex';
-    sel.required = true;
-  } else {
-    row.style.display = 'none';
-    sel.required = false;
-    sel.value = '';
-  }
-}
-
 function switchTab(id, el) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

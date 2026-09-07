@@ -65,9 +65,9 @@ def home():
     # visits used to be auto-redirected straight to their portal/login;
     # now everyone lands here first and clicks through themselves.
     from utils.analytics import track_page_view
-    from utils.plan_limits import PER_EMPLOYEE_PAISE
+    from utils.plan_limits import get_per_employee_paise
     track_page_view("/")
-    return render_template("landing.html", per_employee_paise=PER_EMPLOYEE_PAISE)
+    return render_template("landing.html", per_employee_paise=get_per_employee_paise())
 
 
 @core_bp.route("/checkin")

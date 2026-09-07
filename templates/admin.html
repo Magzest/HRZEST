@@ -252,16 +252,9 @@
       /* ── BUTTONS ── */
       .btn { width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 14px; transition: 0.2s; }
       .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
-      .btn-navy   { background: #1e3a8a; color: white; }
       .btn-green  { background: #16a34a; color: white; }
-      .btn-amber  { background: #d97706; color: white; }
       .btn-indigo { background: #6366f1; color: white; }
       .btn-blue   { background: #2563eb; color: white; }
-      .btn-outline { background: #1e293b; color: white; border: none; width: auto; padding: 6px 14px; font-size: 12px; border-radius: 7px; }
-      .btn-outline:hover { background: #0f172a; }
-
-      /* ── CHANGE PASSWORD ── */
-      .pwd-form .field input[type="password"] { letter-spacing: 1px; }
 
       /* ── ANIMATIONS ── */
       @keyframes pulse {
@@ -369,7 +362,6 @@
       <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}"><span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off</a>
       <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}"><span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms</a>
       <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}"><span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}</a>
-      <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}"><span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents</a>
       <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}"><span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics</a>
   {% if session.get('admin_role') == 'superadmin' %}
   <a class="nav-item" href="/super_admin/login" style="background: linear-gradient(90deg, #7c3aed, #4f46e5); color: #fff; font-weight:700;"><span class="nav-icon"><i class="ti ti-crown"></i></span>Super Admin Portal</a>
@@ -385,6 +377,22 @@
 
     <!-- ═══ MAIN ═══ -->
     <div class="main">
+
+      {% if billing_lock_status %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+                  padding:12px 18px;border-radius:10px;margin-bottom:14px;font-size:13px;font-weight:600;
+                  {% if billing_lock_status.state == 'locked' %}background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;
+                  {% else %}background:#fef9c3;border:1px solid #fde68a;color:#854d0e;{% endif %}">
+        <span>
+          {% if billing_lock_status.state == 'locked' %}
+          <i class="ti ti-lock"></i> Account locked due to an overdue payment — no changes (including payroll) can be made until it's paid.
+          {% else %}
+          <i class="ti ti-alert-triangle"></i> Payment overdue{% if billing_lock_status.grace_period_ends_at %} — pay by {{ billing_lock_status.grace_period_ends_at.strftime('%d %b, %I:%M %p') }} to avoid your account being locked{% endif %}.
+          {% endif %}
+        </span>
+        <a href="{{ tpath('/pay_overdue_bill') }}" style="background:{% if billing_lock_status.state == 'locked' %}#dc2626{% else %}#b45309{% endif %};color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-weight:700;white-space:nowrap;">Pay Now</a>
+      </div>
+      {% endif %}
 
       <!-- Flash messages -->
       {% with messages = get_flashed_messages(with_categories=true) %}
@@ -551,7 +559,7 @@
             </div>
           </a>
 
-          <a class="u-tdec-none" href="{{ tpath('/performance?tab=announcements') }}">
+          <a class="u-tdec-none" href="{{ tpath('/leave_holidays?tab=announcements') }}">
             <div class="u-bg-fff1f2 u-bd-1d5-solid-fda4af u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(190,18,60,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
               <div class="u-w-46 u-h-46 u-bg-ffe4e6 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-speakerphone" style="color:#be123c"></i></div>
               <div>
@@ -563,22 +571,6 @@
 
         </div>
       </div>
-
-      <!-- ATTENDANCE CHARTS -->
-      <div class="u-d-grid u-gtc-2fr-1fr u-gap-16 u-mb-20">
-
-        <div class="section u-mb-0">
-          <div class="section-title"><i class="ti ti-trending-up"></i> Attendance Trend — Last 30 Days</div>
-          <canvas id="trendChart" height="90"></canvas>
-        </div>
-
-        <div class="section u-mb-0">
-          <div class="section-title"><i class="ti ti-building"></i> Today by Department</div>
-          <canvas id="deptChart" height="90"></canvas>
-        </div>
-
-      </div>
-
 
       <!-- QUICK ACTIONS -->
       <div class="section">
@@ -619,82 +611,17 @@
         </div>
       </div>
 
-      <!-- PASSWORD MANAGEMENT -->
-      <div class="section">
-        <div class="section-title"><i class="ti ti-lock"></i> Password Management</div>
+      <!-- ATTENDANCE CHARTS -->
+      <div class="u-d-grid u-gtc-2fr-1fr u-gap-16 u-mb-20">
 
-        {% if request.args.get('pwd_ok') %}
-          <div class="flash flash-success u-maxw-420"><i class="ti ti-circle-check"></i> Password updated successfully.</div>
-        {% elif request.args.get('pwd_error') == 'wrong' %}
-          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> Current password is incorrect.</div>
-        {% elif request.args.get('pwd_error') == 'mismatch' %}
-          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> New passwords do not match.</div>
-        {% elif request.args.get('pwd_error') == 'weak' %}
-          <div class="flash flash-error u-maxw-420"><i class="ti ti-circle-x"></i> Password must be at least 8 characters.</div>
-        {% endif %}
-
-        <div class="u-d-grid u-gtc-1fr-1fr u-gap-24 u-ai-start">
-
-          <!-- Change Admin Password -->
-          <div class="u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-14 u-p-22">
-            <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-16"><i class="ti ti-lock"></i> Change Admin Password</div>
-            <form action="{{ tpath('/change_admin_password') }}" method="POST" class="pwd-form">
-              <input type="hidden" autocomplete="username" value="admin" />
-              <div class="field">
-                <label>Current Password</label>
-                <input type="password" name="current_password" placeholder="Enter current password" autocomplete="current-password" required />
-              </div>
-              <div class="field">
-                <label>New Password</label>
-                <input type="password" name="new_password" placeholder="Enter new password" autocomplete="new-password" required />
-              </div>
-              <div class="field">
-                <label>Confirm New Password</label>
-                <input type="password" name="confirm_password" placeholder="Re-enter new password" autocomplete="new-password" required />
-              </div>
-              <button type="submit" class="btn btn-navy u-maxw-200"><i class="ti ti-lock"></i> Update Password</button>
-            </form>
-          </div>
-
-          <!-- Reset Employee Password -->
-          <div class="u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-14 u-p-22">
-            <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-4"><i class="ti ti-key"></i> Reset Employee Password</div>
-            <div class="u-fs-12 u-c-94a3b8 u-mb-18">Resets the employee's PIN back to their Employee ID</div>
-            <form action="{{ tpath('/admin_action') }}" method="POST">
-              <input type="hidden" name="action" value="reset_password" />
-              <div class="field">
-                <label>Employee ID</label>
-                <input type="text" name="emp_id" placeholder="e.g. EMP001" required />
-              </div>
-              <button type="submit" class="btn btn-amber u-maxw-200"
-                onclick="return confirm('Reset this employee\'s password to their Employee ID?')">
-                <i class="ti ti-key"></i> Reset Password
-              </button>
-            </form>
-          </div>
-
+        <div class="section u-mb-0">
+          <div class="section-title"><i class="ti ti-trending-up"></i> Attendance Trend — Last 30 Days</div>
+          <canvas id="trendChart" height="90"></canvas>
         </div>
 
-        <!-- Set Admin Recovery Email -->
-        <div class="u-mt-20 u-bg-eff6ff u-bd-1-solid-bfdbfe u-br-14 u-p-22">
-          <div class="u-fs-13 u-fw-700 u-c-1e3a8a u-mb-4"><i class="ti ti-mail"></i> Admin Recovery Email</div>
-          <div class="u-fs-12 u-c-64748b u-mb-16">Set the email address used to receive password reset links when you forget your admin password.</div>
-
-          <div id="recoveryEmailView" class="u-d-flex u-ai-center u-gap-12 u-fxw-wrap{% if not admin_recovery_email %} u-d-none{% endif %}">
-            <div class="u-fx-1 u-minw-200 u-fs-14 u-fw-600 u-c-1e293b">{{ admin_recovery_email }}</div>
-            <button type="button" class="btn btn-outline u-maxw-120 u-mb-0" onclick="document.getElementById('recoveryEmailView').classList.add('u-d-none');document.getElementById('recoveryEmailForm').classList.remove('u-d-none');document.getElementById('recoveryEmailInput').focus();"><i class="ti ti-edit"></i> Edit</button>
-          </div>
-
-          <form id="recoveryEmailForm" class="u-d-flex u-ai-flex-end u-gap-12 u-fxw-wrap{% if admin_recovery_email %} u-d-none{% endif %}" action="{{ tpath('/admin_set_recovery_email') }}" method="POST">
-            <div class="field u-fx-1 u-minw-200 u-mb-0">
-              <label>Recovery Email</label>
-              <input type="email" id="recoveryEmailInput" name="recovery_email" placeholder="admin@example.com" value="{{ admin_recovery_email or '' }}" required />
-            </div>
-            <button type="submit" class="btn btn-navy u-maxw-180 u-mb-0"><i class="ti ti-device-floppy"></i> Save Email</button>
-          </form>
-          {% if request.args.get('email_ok') %}
-            <div class="u-mt-12 u-c-15803d u-fs-13"><i class="ti ti-circle-check"></i> Recovery email saved successfully.</div>
-          {% endif %}
+        <div class="section u-mb-0">
+          <div class="section-title"><i class="ti ti-building"></i> Today by Department</div>
+          <canvas id="deptChart" height="90"></canvas>
         </div>
 
       </div>
@@ -1028,14 +955,14 @@
       {label: 'Salary & Payslips', sub: 'Payroll & payslips', url: '/salary_report', icon: 'coin'},
       {label: 'Leaves & Holidays', sub: 'Leave requests, holidays', url: '/leave_holidays', icon: 'calendar-event'},
       {label: 'OT & Comp-off', sub: 'Overtime, comp-off', url: '/overtime', icon: 'clock-bolt'},
-      {label: 'Performance & Comms', sub: 'Reviews, announcements', url: '/performance', icon: 'chart-line'},
+      {label: 'Performance & Comms', sub: 'Reviews, KPIs, hikes', url: '/performance', icon: 'chart-line'},
       {label: 'Onboarding', sub: 'New-hire onboarding', url: '/onboarding', icon: 'checklist'},
       {label: 'Analytics', sub: 'Charts & insights', url: '/analytics', icon: 'chart-bar'},
       {label: 'Org Chart', sub: 'Reporting structure', url: '/org_chart', icon: 'hierarchy'},
       {label: 'Admin Tools', sub: 'System tools', url: '/admin_tools', icon: 'tool'},
       {label: 'Settings', sub: 'Company settings', url: '/settings', icon: 'settings'},
       {label: 'Companies', sub: 'Manage companies', url: '/companies', icon: 'building'},
-      {label: 'Tickets', sub: 'Support tickets', url: '/leave_holidays?tab=leaves#tickets', icon: 'ticket'},
+      {label: 'Tickets', sub: 'Support tickets', url: '/leave_holidays?tab=tickets', icon: 'ticket'},
     ];
     var GROUP_LABELS = {employee: 'Employees', ticket: 'Tickets', leave: 'Leave Requests', page: 'Pages'};
     var GROUP_ICONS  = {employee: 'user', ticket: 'ticket', leave: 'calendar-event', page: 'apps'};

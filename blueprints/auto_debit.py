@@ -32,7 +32,7 @@ from extensions import app_log, limiter, log_security_event
 from database import get_db_connection, get_master_db
 from utils.auth import admin_required
 from utils.helpers import get_company_settings, coerce_datetime
-from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
+from utils.plan_limits import get_per_employee_paise, calculate_price, format_price_inr, get_tenant_employee_count
 from utils.razorpay_utils import (
     create_plan, create_customer, create_subscription, update_subscription_quantity,
     cancel_subscription as razorpay_cancel_subscription, verify_subscription_signature,
@@ -62,7 +62,16 @@ def _get_or_create_plan_id():
         conn.close()
         return existing, None
 
-    plan_id, error = create_plan(PER_EMPLOYEE_PAISE, _PLAN_ITEM_NAME)
+    # NOTE: Razorpay Plans are immutable once created -- this only picks up
+    # the admin's current rate the FIRST time any tenant enrolls in
+    # auto-debit (which is when this Plan gets created and cached in
+    # billing_config.razorpay_plan_id, below, forever after). A rate change
+    # made after that point does NOT retroactively reprice existing
+    # auto-debit subscribers; they'd need a new Plan + subscription
+    # migration, which is out of scope here. Every other billing path
+    # (signup checkout, seat top-ups, manual/dunning bills, the Platform
+    # Admin P&L) reads the live rate on every calculation, no such caveat.
+    plan_id, error = create_plan(get_per_employee_paise(), _PLAN_ITEM_NAME)
     if error:
         cur.close()
         conn.close()
@@ -237,6 +246,94 @@ def _handle_subscription_charged(payload):
     payment_id = payment_entity.get("id")
     if subscription_id:
         _record_charge(subscription_id, amount_paise, payment_id, status="paid")
+        _migrate_mandate_if_needed(subscription_id)
+
+
+def _migrate_mandate_if_needed(subscription_id):
+    """Called right after a subscription.charged webhook records a paid
+    cycle -- if the platform admin changed the rate since this mandate's
+    last renewal (needs_rate_migration, set by blueprints/platform_admin.py's
+    platform_admin_set_rate()), the cycle that was JUST paid was still
+    correctly billed at the old rate (never touch an in-flight charge);
+    this is the safe moment to cancel the subscription so it can't silently
+    renew again at that stale price, and prompt the tenant to re-authorize
+    a fresh one on the new rate. No-ops for every mandate not flagged."""
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, tenant_schema, company_name FROM auto_debit_mandates "
+        "WHERE razorpay_subscription_id=%s AND status='active' AND needs_rate_migration=TRUE",
+        (subscription_id,)
+    )
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        return
+    mandate_id, tenant_schema, company_name = row
+
+    ok, error = razorpay_cancel_subscription(subscription_id, cancel_at_cycle_end=False)
+    if not ok:
+        app_log.error("auto_debit._migrate_mandate_if_needed: failed to cancel %s: %s", subscription_id, error)
+        cur.close()
+        conn.close()
+        return
+
+    cur.execute(
+        "UPDATE auto_debit_mandates SET status='rate_changed', needs_rate_migration=FALSE, "
+        "cancelled_at=NOW() WHERE id=%s",
+        (mandate_id,)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    log_security_event(
+        "auto_debit.rate_migration_cancelled",
+        f"Auto-debit subscription for '{tenant_schema}' cancelled for rate-change migration",
+        level="WARNING", subscription_id=subscription_id,
+    )
+    _notify_rate_change(tenant_schema, company_name)
+
+
+def _notify_rate_change(tenant_schema, company_name):
+    """Switches g.tenant_db to the target tenant's schema for the duration
+    of the send (get_admin_emails()/get_email_config() both resolve against
+    whichever schema get_db_connection() currently points to), same
+    pattern as blueprints/billing_dunning.py's _notify_tenant()."""
+    from flask import g as _g
+    from utils.email_utils import get_email_config, get_admin_emails, send_email_async
+    from utils.plan_limits import get_per_employee_paise
+    prev_tenant_db = getattr(_g, "tenant_db", None)
+    try:
+        _g.tenant_db = tenant_schema
+        config = get_email_config()
+        if not config:
+            return
+        recipients = get_admin_emails()
+        if not recipients:
+            return
+        rate_display = format_price_inr(get_per_employee_paise())
+        subject = "Your HRzest auto-debit rate has changed -- please re-authorize"
+        html = f"""
+<div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
+  <div style="background:#1e3a8a;padding:24px 28px;color:white;">
+    <div style="font-size:20px;font-weight:700;">HRzest.com</div>
+    <div style="font-size:13px;opacity:0.75;margin-top:4px;">Billing notice</div>
+  </div>
+  <div style="padding:28px;font-size:14px;color:#1e293b;line-height:1.6;">
+    <p>The per-employee rate for <strong>{company_name}</strong> has changed to <strong>{rate_display}/employee/month</strong>.</p>
+    <p>Your previous auto-debit authorization has ended, right after your last successful payment at the old rate --
+    no partial or surprise charge. To keep billing automatic, log in and re-enable auto-debit from
+    <strong>Settings &rarr; Seats &amp; Billing</strong>. If you'd rather pay manually going forward, no action is needed.</p>
+  </div>
+</div>"""
+        for email in recipients:
+            send_email_async(email, subject, html, config)
+    except Exception:
+        app_log.exception(f"auto_debit._notify_rate_change failed for '{tenant_schema}'")
+    finally:
+        _g.tenant_db = prev_tenant_db
 
 
 def _handle_subscription_cancelled(payload):

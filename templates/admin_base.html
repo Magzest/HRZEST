@@ -47,7 +47,6 @@
     .nav-icon { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); }
     .nav-item.active .nav-icon { background: rgba(96,165,250,0.2); }
     .nav-item:hover  .nav-icon { background: rgba(255,255,255,0.12); }
-    .nav-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
     .badge-count { margin-left: auto; background: #ef4444; color: white; border-radius: 20px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
 
     /* ── Main area ── */
@@ -72,7 +71,6 @@
       body { flex-direction: column; }
       .sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; padding: 10px; }
       .sidebar .brand, .sidebar .brand-sub, .sidebar-footer { display: none; }
-      .nav-sep { display: none; }
     }
   </style>
   <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
@@ -110,10 +108,6 @@
   <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}">
     <span class="nav-icon"><i class="ti ti-users"></i></span>Employees
   </a>
-  <a class="nav-item {{ 'active' if active_nav == 'seats' }}" href="{{ tpath('/settings/seats') }}">
-    <span class="nav-icon"><i class="ti ti-ticket"></i></span>Seats &amp; Billing
-    {% if co.paid_employee_slots is not none and employee_count is defined and employee_count >= co.paid_employee_slots %}<span class="badge-count">Full</span>{% endif %}
-  </a>
   <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}">
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>
@@ -125,9 +119,6 @@
   <a class="nav-item {{ 'active' if active_nav == 'leaves' }}" href="{{ tpath('/leave_holidays') }}">
     <span class="nav-icon"><i class="ti ti-calendar-event"></i></span>Leaves &amp; Holidays{% if _tp > 0 %}<span class="badge-count">{{ _tp }}</span>{% endif %}
   </a>
-
-  <hr class="nav-sep u-mt-12" />
-
   <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}">
     <span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off
   </a>
@@ -136,15 +127,6 @@
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}">
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
-  </a>
-  <a class="nav-item {{ 'active' if active_nav == 'documents' }}" href="{{ tpath('/documents') }}">
-    <span class="nav-icon"><i class="ti ti-file-text"></i></span>Documents
-  </a>
-  <a class="nav-item {{ 'active' if active_nav == 'biometric_devices' }}" href="{{ tpath('/biometric_devices') }}">
-    <span class="nav-icon"><i class="ti ti-fingerprint"></i></span>Biometric Devices
-  </a>
-  <a class="nav-item" href="javascript:void(0)" onclick="dmOpen()">
-    <span class="nav-icon"><i class="ti ti-device-laptop"></i></span>My Devices
   </a>
   {% if not _is_hr %}
   <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}">
@@ -174,6 +156,21 @@
 
 <!-- ── MAIN ── -->
 <div class="main">
+  {% if billing_lock_status %}
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+              padding:12px 18px;border-radius:10px;margin-bottom:14px;font-size:13px;font-weight:600;
+              {% if billing_lock_status.state == 'locked' %}background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;
+              {% else %}background:#fef9c3;border:1px solid #fde68a;color:#854d0e;{% endif %}">
+    <span>
+      {% if billing_lock_status.state == 'locked' %}
+      <i class="ti ti-lock"></i> Account locked due to an overdue payment — no changes (including payroll) can be made until it's paid.
+      {% else %}
+      <i class="ti ti-alert-triangle"></i> Payment overdue{% if billing_lock_status.grace_period_ends_at %} — pay by {{ billing_lock_status.grace_period_ends_at.strftime('%d %b, %I:%M %p') }} to avoid your account being locked{% endif %}.
+      {% endif %}
+    </span>
+    <a href="{{ tpath('/pay_overdue_bill') }}" style="background:{% if billing_lock_status.state == 'locked' %}#dc2626{% else %}#b45309{% endif %};color:#fff;padding:6px 14px;border-radius:8px;text-decoration:none;font-weight:700;white-space:nowrap;">Pay Now</a>
+  </div>
+  {% endif %}
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <ul class="flash-list">
@@ -236,8 +233,6 @@
     setInterval(pollLiveStats, 20000);
   })();
 </script>
-<script>var DEVICE_API_BASE = '/api/admin/devices';</script>
-{% include '_device_manager.html' %}
 {% include '_admin_chat_widget.html' %}
 {% block scripts %}{% endblock %}
 </body>

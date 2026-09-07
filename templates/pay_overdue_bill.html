@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pay Overdue Bill — {{ company_name }}</title>
+    <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+      body { background: #f5f7fb; color: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+      .card {
+        width: 100%; max-width: 460px; background: #fff; border: 1px solid #e2e8f0; border-radius: 18px;
+        padding: 32px; box-shadow: 0 12px 32px rgba(15, 23, 42, .08);
+      }
+      .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px; }
+      .badge-grace { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+      .badge-locked { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      h1 { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+      p.sub { font-size: 13px; color: #475569; margin-bottom: 24px; line-height: 1.6; }
+      .amount-box {
+        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px;
+        text-align: center; margin-bottom: 24px;
+      }
+      .amount-box .amount { font-size: 32px; font-weight: 800; color: #1d4ed8; }
+      .amount-box .meta { font-size: 12px; color: #64748b; margin-top: 4px; }
+      .pay-btn {
+        width: 100%; padding: 14px; border: none; border-radius: 10px; background: #1d4ed8; color: #fff;
+        font-size: 15px; font-weight: 700; cursor: pointer;
+      }
+      .pay-btn:hover { background: #1e3a8a; }
+      .pay-btn:disabled { opacity: .6; cursor: not-allowed; }
+      .error-box {
+        background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; border-radius: 10px;
+        padding: 10px 14px; font-size: 13px; margin-top: 16px; display: none;
+      }
+      .success-box {
+        background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857; border-radius: 10px;
+        padding: 10px 14px; font-size: 13px; margin-top: 16px; display: none;
+      }
+      .demo-note { margin-top: 16px; font-size: 12px; color: #94a3b8; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      {% if billing_state == 'locked' %}
+      <span class="badge badge-locked">Account Locked</span>
+      <h1>Your account is locked</h1>
+      <p class="sub">
+        {{ company_name }}'s account was locked on {{ locked_at.strftime('%d %b %Y') if locked_at else 'the grace deadline' }}
+        because this month's bill wasn't paid in time. You can still view pages, but no changes
+        (including payroll) can be made until the bill below is paid — it unlocks automatically the moment payment clears.
+      </p>
+      {% else %}
+      <span class="badge badge-grace">Payment Due</span>
+      <h1>Your bill is overdue</h1>
+      <p class="sub">
+        {{ company_name }}'s bill for this month hasn't been paid yet.
+        {% if grace_period_ends_at %}Pay by <strong>{{ grace_period_ends_at.strftime('%d %b %Y, %I:%M %p') }}</strong> to avoid your account being locked.{% endif %}
+      </p>
+      {% endif %}
+
+      <div class="amount-box">
+        <div class="amount">{{ amount_display }}</div>
+        <div class="meta">{{ employee_count }} employee{{ 's' if employee_count != 1 else '' }} this month</div>
+      </div>
+
+      <button type="button" class="pay-btn" id="payBtn">Pay Now</button>
+      <div class="error-box" id="errorBox"></div>
+      <div class="success-box" id="successBox"></div>
+      {% if not razorpay_configured %}
+      <p class="demo-note">Payments aren't live-configured yet — this will run in demo/test mode.</p>
+      {% endif %}
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+      const payBtn = document.getElementById('payBtn');
+      const errorBox = document.getElementById('errorBox');
+      const successBox = document.getElementById('successBox');
+
+      function showError(msg) {
+        errorBox.textContent = msg;
+        errorBox.style.display = 'block';
+      }
+
+      function resetBtn() {
+        payBtn.disabled = false;
+        payBtn.textContent = 'Pay Now';
+      }
+
+      payBtn.addEventListener('click', async function () {
+        errorBox.style.display = 'none';
+        payBtn.disabled = true;
+        payBtn.textContent = 'Starting checkout…';
+        try {
+          const res = await fetch('{{ tpath("/api/billing/overdue/create_order") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const json = await res.json();
+          if (!json.ok) {
+            showError(json.msg || 'Could not start checkout.');
+            resetBtn();
+            return;
+          }
+          if (json.demo) {
+            payBtn.textContent = 'Confirming (demo)…';
+            await finalize({
+              razorpay_order_id: json.order_id,
+              razorpay_payment_id: 'demo_payment',
+              razorpay_signature: '',
+            });
+            return;
+          }
+          openCheckout(json);
+        } catch (ex) {
+          showError('Network error. Please try again.');
+          resetBtn();
+        }
+      });
+
+      function openCheckout(order) {
+        const rzp = new Razorpay({
+          key: order.key_id,
+          amount: order.amount_paise,
+          currency: order.currency,
+          order_id: order.order_id,
+          name: 'HRzest.com',
+          description: 'Overdue monthly bill — {{ company_name }}',
+          handler: function (response) {
+            finalize({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+          },
+          modal: { ondismiss: function () { resetBtn(); } },
+          theme: { color: '#1d4ed8' },
+        });
+        rzp.on('payment.failed', function () {
+          showError('Payment failed. Please try again.');
+          resetBtn();
+        });
+        rzp.open();
+      }
+
+      async function finalize(paymentPayload) {
+        try {
+          const res = await fetch('{{ tpath("/api/billing/overdue/verify") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(paymentPayload),
+          });
+          const json = await res.json();
+          if (json.ok) {
+            successBox.textContent = 'Payment received — your account is active again. Redirecting…';
+            successBox.style.display = 'block';
+            setTimeout(function () { window.location.href = '{{ tpath("/admin") }}'; }, 1800);
+          } else {
+            showError(json.msg || 'Payment received, but activation failed. Contact support.');
+            resetBtn();
+          }
+        } catch (ex) {
+          showError('Network error while confirming payment. Contact support if you were charged.');
+          resetBtn();
+        }
+      }
+    </script>
+  </body>
+</html>

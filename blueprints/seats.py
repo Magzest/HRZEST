@@ -22,7 +22,7 @@ from database import get_db_connection, get_master_db
 from utils.auth import admin_required
 from utils.helpers import get_company_settings, invalidate_settings_cache
 from utils.plan_limits import (
-    calculate_price, format_price_inr, PER_EMPLOYEE_PAISE, get_tenant_employee_count, get_billing_snapshot,
+    calculate_price, format_price_inr, get_per_employee_paise, get_tenant_employee_count, get_billing_snapshot,
 )
 from utils.razorpay_utils import (
     create_order as razorpay_create_order, verify_payment_signature,
@@ -55,8 +55,8 @@ def seats_page():
         active_nav="seats",
         employee_count=employee_count,
         paid_employee_slots=co.get("paid_employee_slots"),
-        per_employee_paise=PER_EMPLOYEE_PAISE,
-        per_employee_display=format_price_inr(PER_EMPLOYEE_PAISE),
+        per_employee_paise=get_per_employee_paise(),
+        per_employee_display=format_price_inr(get_per_employee_paise()),
         monthly_bill_display=format_price_inr(calculate_price(employee_count)),
         razorpay_configured=razorpay_configured(),
         auto_debit_status=auto_debit_status,

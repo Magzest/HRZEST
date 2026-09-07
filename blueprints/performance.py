@@ -193,21 +193,6 @@ def performance():
             "SELECT department FROM employees WHERE is_active=1 AND department IS NOT NULL AND department!='' GROUP BY department ORDER BY MIN(id) ASC")
     departments = [r[0] for r in cursor.fetchall()]
 
-    # Announcements (admin sees all)
-    cursor.execute("""
-        SELECT a.id, a.title, a.content, a.priority, a.created_at,
-               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,'')
-        FROM announcements a
-        LEFT JOIN employees e ON e.employee_id = a.target_employee_id
-        ORDER BY a.created_at DESC
-    """)
-    ann_list = cursor.fetchall()
-    pub_anns = [r for r in ann_list if r[5] == 'public']
-    priv_anns = [r for r in ann_list if r[5] == 'private']
-
-    cursor.execute("SELECT employee_id, name FROM employees WHERE is_active=1 ORDER BY name")
-    ann_emp_list = cursor.fetchall()
-
     pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     co = get_company_settings()
 
@@ -280,10 +265,6 @@ def performance():
                            pending_resignations=pending_resignations,
                            pending_tickets=pending_tickets, co=co,
                            today=today,
-                           ann_list=ann_list,
-                           pub_anns=pub_anns,
-                           priv_anns=priv_anns,
-                           ann_emp_list=ann_emp_list,
                            active_tab=active_tab,
                            hike_bands=hike_bands,
                            hike_employees=hike_employees,

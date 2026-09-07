@@ -444,6 +444,24 @@ def leave_holidays():
                          'weeks': sun_cal.monthdayscalendar(year, month), 'holidays': month_holidays})
 
     co = get_company_settings()
+
+    # Announcements (admin sees all) -- same shared table/route as
+    # blueprints/performance.py's Announcements tab (blueprints/
+    # admin_views.py's announcements_admin() handles create/delete for both).
+    cursor.execute("""
+        SELECT a.id, a.title, a.content, a.priority, a.created_at,
+               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,'')
+        FROM announcements a
+        LEFT JOIN employees e ON e.employee_id = a.target_employee_id
+        ORDER BY a.created_at DESC
+    """)
+    ann_list = cursor.fetchall()
+    pub_anns = [r for r in ann_list if r[5] == 'public']
+    priv_anns = [r for r in ann_list if r[5] == 'private']
+
+    cursor.execute("SELECT employee_id, name FROM employees WHERE is_active=1 ORDER BY name")
+    ann_emp_list = cursor.fetchall()
+
     cursor.close()
     db.close()
     return render_template("leave_holidays.html",
@@ -453,6 +471,8 @@ def leave_holidays():
                            pending_leaves=pending_leaves, pending_tickets=pending_tickets,
                            pending_resignations=pending_resignations,
                            holidays=holidays_data, cal_data=cal_data, year=year, today=today,
+                           ann_list=ann_list, pub_anns=pub_anns, priv_anns=priv_anns,
+                           ann_emp_list=ann_emp_list,
                            active_nav="leaves",
                            )
 

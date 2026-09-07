@@ -9,14 +9,66 @@ always written as PLAN_LABEL below) rather than dropped, since altering
 it out is a destructive migration with no functional upside -- nothing
 reads it as a live feature/pricing switch anymore.
 """
+import time
 from database import get_tenant_db
 
 # ₹99/employee/month, flat. No minimum charge, no employee cap, no tiers.
+# Seed/fallback value only now -- the live rate lives in att_master.
+# platform_costs.per_employee_paise (editable from the Platform Admin
+# dashboard) and is what get_per_employee_paise()/calculate_price() below
+# actually use. This constant still matters as: (1) that column's DEFAULT
+# for a fresh install, and (2) the fallback if the DB read itself fails.
 PER_EMPLOYEE_PAISE = 9900
 
 # Written into att_master.tenants.plan on every new tenant -- a fixed
 # audit-trail label, not a lookup key into any tier table (there isn't one).
 PLAN_LABEL = "per_employee"
+
+# Short TTL cache so every calculate_price()/display call doesn't hit the
+# master DB -- same idea as utils/helpers.py's company-settings cache.
+# invalidate_rate_paise_cache() (called right after the platform admin
+# saves a new rate) means a change is live on the very next read rather
+# than waiting out the TTL.
+_RATE_CACHE_TTL_SEC = 30
+_rate_cache = {"value": None, "checked_at": 0.0}
+
+
+def get_per_employee_paise() -> int:
+    """The live flat per-employee rate, admin-editable at
+    /super_admin -- every price calculation in the app (signup checkout,
+    seat top-ups, recurring auto-debit plan creation, dunning bills, the
+    Platform Admin P&L) goes through this (directly or via calculate_price()
+    below), so a rate change the platform admin saves takes effect
+    everywhere on the next read, no redeploy needed. Falls back to the
+    last-known-good cached value, then to PER_EMPLOYEE_PAISE, if the DB
+    read itself fails -- billing must never hard-fail because this one
+    lookup hiccuped."""
+    now = time.time()
+    if _rate_cache["value"] is not None and (now - _rate_cache["checked_at"]) < _RATE_CACHE_TTL_SEC:
+        return _rate_cache["value"]
+    try:
+        from database import get_master_db
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute("SELECT per_employee_paise FROM platform_costs WHERE id=1")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        value = row[0] if row and row[0] else PER_EMPLOYEE_PAISE
+    except Exception:
+        value = _rate_cache["value"] if _rate_cache["value"] is not None else PER_EMPLOYEE_PAISE
+    _rate_cache["value"] = value
+    _rate_cache["checked_at"] = now
+    return value
+
+
+def invalidate_rate_paise_cache():
+    """Called right after the platform admin saves a new rate
+    (blueprints/platform_admin.py's platform_admin_set_rate()) so the
+    change is visible on the very next read instead of waiting out
+    _RATE_CACHE_TTL_SEC."""
+    _rate_cache["value"] = None
+    _rate_cache["checked_at"] = 0.0
 
 
 def get_tenant_employee_count(schema_name: str) -> int:
@@ -37,14 +89,15 @@ def get_tenant_employee_count(schema_name: str) -> int:
 
 
 def calculate_price(employee_count: int) -> int:
-    """Price in paise for `employee_count` employees -- flat rate, no
+    """Price in paise for `employee_count` employees -- flat rate (the
+    current admin-set value, via get_per_employee_paise() above), no
     bands, no tiers. Single source of truth for both display (create_org,
     Platform Admin dashboard) and the Razorpay order amount
     (blueprints/billing.py's create_order), so those never compute
     different numbers for the same input."""
     if employee_count < 0:
         employee_count = 0
-    return employee_count * PER_EMPLOYEE_PAISE
+    return employee_count * get_per_employee_paise()
 
 
 def format_price_inr(paise: int) -> str:

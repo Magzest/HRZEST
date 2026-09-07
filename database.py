@@ -406,8 +406,20 @@ def _create_pool(retries=1, delay=0.1):
     for attempt in range(1, retries + 1):
         try:
             _pool = psycopg2.pool.ThreadedConnectionPool(
-                minconn=1,
-                maxconn=20,
+                # psycopg2's pool only *keeps* up to `minconn` idle connections on
+                # putconn() -- anything returned past that count is closed outright
+                # (see psycopg2.pool.AbstractConnectionPool._putconn), so minconn
+                # isn't just a startup warm-up size, it's the ongoing retention
+                # floor. At minconn=1, any request that legitimately needs 2+
+                # simultaneous connections (a route holding its own connection
+                # open while calling a helper like fetch_holidays_set()/
+                # get_co_features() that borrows another) was constantly
+                # thrashing the pool back down to 1 idle connection, forcing a
+                # brand-new TCP+auth handshake to Postgres (tens of ms) on the
+                # next such request instead of reusing an idle one -- this is
+                # what made admin pages intermittently feel slow to load.
+                minconn=int(os.environ.get("DB_POOL_MIN_CONN", "5")),
+                maxconn=int(os.environ.get("DB_POOL_MAX_CONN", "20")),
                 **_DB_CONFIG,
             )
             _log.info('"Connected to PostgreSQL (attempt %d)"', attempt)

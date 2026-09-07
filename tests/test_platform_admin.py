@@ -10,7 +10,7 @@ pipelines. It covers everything else in the blueprint: the real
 login+MFA+logout flow, the dashboard's summary counts, cost/lead/tenant
 management, the applications queue/detail/document-streaming views (access
 control specifically), the duplicate-alerts admin-facing list/acknowledge
-flow, device inventory management, and the per-tenant support chat.
+flow, and the per-tenant support chat.
 
 Most routes only need `_platform_admin_required` to see
 session["platform_admin_logged_in"]/["platform_admin_username"] truthy --
@@ -174,17 +174,6 @@ class TestLoginFlow:
             assert sess.get("platform_admin_username") == self.LOGIN_USERNAME
             assert sess.get("platform_admin_last_activity")
 
-        # _complete_platform_admin_login also records a device row.
-        cur = db_engine.cursor()
-        cur.execute(
-            "SELECT COUNT(*) FROM att_master.user_devices WHERE owner_kind='platform_admin' AND owner_id=%s",
-            (self.LOGIN_USERNAME,),
-        )
-        assert cur.fetchone()[0] >= 1
-        cur.execute("DELETE FROM att_master.user_devices WHERE owner_kind='platform_admin' AND owner_id=%s",
-                    (self.LOGIN_USERNAME,))
-        cur.close()
-
     def test_mfa_code_expires_after_ttl(self, client, platform_admin_row, monkeypatch):
         self._capture_otp(monkeypatch)
         client.post("/super_admin/login", data={
@@ -269,6 +258,35 @@ class TestDashboard:
         finally:
             cur.execute("DELETE FROM att_master.tenant_applications WHERE id=%s", (app_id,))
             cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE id=%s", (alert_id,))
+            cur.close()
+
+    def test_chat_button_onclick_survives_quotes_in_company_name(self, client, db_engine):
+        """Regression test: the Chat button used to build its onclick via
+        `tenantChatOpen({{ t.id }}, {{ t.company_name | tojson }})` --
+        tojson emits literal double quotes (valid JSON), which collided with
+        the onclick="..." attribute's own double-quote delimiter and
+        truncated it mid-string for every company, not just ones with an
+        actual quote in the name (see the fix: data-tenant-id/data-company-name
+        attributes, Jinja-default-escaped, read via element.dataset instead)."""
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ('Quote"Co', "quote-co-chat-test", "att_quote_co_chat_test"),
+        )
+        tenant_id = cur.fetchone()[0]
+        try:
+            _login_platform_admin(client)
+            resp = client.get("/super_admin")
+            assert resp.status_code == 200
+            html_text = resp.data.decode("utf-8")
+            assert f'data-tenant-id="{tenant_id}"' in html_text
+            assert "&#34;" in html_text or "&quot;" in html_text  # the embedded quote, safely escaped
+            assert 'onclick="tenantChatOpen(this.dataset.tenantId, this.dataset.companyName)"' in html_text
+            # The old bug: a literal, unescaped `"` breaking out of the onclick attribute.
+            assert f'onclick="tenantChatOpen({tenant_id}, "' not in html_text
+        finally:
+            cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
             cur.close()
 
 
@@ -491,6 +509,233 @@ class TestTenantStatus:
         cur.execute("SELECT status FROM att_master.tenants WHERE id=%s", (tenant_row,))
         assert cur.fetchone()[0] == "active"
         cur.close()
+
+
+class TestBulkTenantStatus:
+    @pytest.fixture
+    def two_tenant_rows(self, db_engine):
+        cur = db_engine.cursor()
+        ids = []
+        for i in range(2):
+            cur.execute(
+                "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+                "VALUES (%s,%s,%s,'active') RETURNING id",
+                (f"Bulk Test Co {i}", f"bulk-test-co-{i}", f"att_bulk_test_co_{i}"),
+            )
+            ids.append(cur.fetchone()[0])
+        yield ids
+        cur.execute("DELETE FROM att_master.tenants WHERE id=ANY(%s)", (ids,))
+        cur.close()
+
+    def test_requires_login(self, client, two_tenant_rows):
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                            follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_bulk_deactivate_and_reactivate(self, client, db_engine, two_tenant_rows):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"2 companies updated." in resp.data
+        cur = db_engine.cursor()
+        cur.execute("SELECT status FROM att_master.tenants WHERE id=ANY(%s)", (two_tenant_rows,))
+        assert [r[0] for r in cur.fetchall()] == ["suspended", "suspended"]
+
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "active", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        cur.execute("SELECT status FROM att_master.tenants WHERE id=ANY(%s)", (two_tenant_rows,))
+        assert [r[0] for r in cur.fetchall()] == ["active", "active"]
+        cur.close()
+
+    def test_no_selection_rejected(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/bulk-status", data={"status": "suspended"},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"No companies were selected." in resp.data
+
+    def test_invalid_status_rejected(self, client, db_engine, two_tenant_rows):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/bulk-status",
+                            data={"status": "deleted", "tenant_ids": [str(two_tenant_rows[0])]},
+                            follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Invalid status." in resp.data
+        cur = db_engine.cursor()
+        cur.execute("SELECT status FROM att_master.tenants WHERE id=%s", (two_tenant_rows[0],))
+        assert cur.fetchone()[0] == "active"
+        cur.close()
+
+
+class TestDeleteTenant:
+    @pytest.fixture
+    def deletable_tenant(self, db_engine):
+        """A tenant with a REAL schema (not just a tenants row) so the test
+        can verify DROP SCHEMA actually ran, not just that the tenants row
+        disappeared."""
+        schema = "att_delete_test_co"
+        cur = db_engine.cursor()
+        cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        cur.execute(f'CREATE SCHEMA "{schema}"')
+        cur.execute(f'CREATE TABLE "{schema}".marker (id SERIAL PRIMARY KEY, note TEXT)')
+        cur.execute(f'INSERT INTO "{schema}".marker (note) VALUES (%s)', ("still here",))
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ("Delete Test Co", "delete-test-co", schema),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id, "delete-test-co", schema
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        cur.close()
+
+    def test_requires_login(self, client, deletable_tenant):
+        tenant_id, subdomain, _schema = deletable_tenant
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": subdomain}, follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_wrong_confirmation_text_is_refused(self, client, db_engine, deletable_tenant):
+        tenant_id, subdomain, schema = deletable_tenant
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": "not-the-right-subdomain"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"you must type" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT 1 FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        assert cur.fetchone() is not None
+        cur.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s", (schema,))
+        assert cur.fetchone() is not None, "schema must survive a rejected confirmation"
+        cur.close()
+
+    def test_correct_confirmation_drops_schema_and_tenant_row(self, client, db_engine, deletable_tenant):
+        tenant_id, subdomain, schema = deletable_tenant
+        _login_platform_admin(client, username="delete_test_admin")
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": subdomain}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"permanently deleted" in resp.data
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT 1 FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        assert cur.fetchone() is None, "tenants row must be gone"
+        cur.execute("SELECT schema_name FROM information_schema.schemata WHERE schema_name=%s", (schema,))
+        assert cur.fetchone() is None, "the tenant's actual Postgres schema must be dropped"
+        cur.close()
+
+    def test_confirmation_is_case_insensitive(self, client, db_engine, deletable_tenant):
+        tenant_id, subdomain, schema = deletable_tenant
+        _login_platform_admin(client)
+        resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                            data={"confirm_subdomain": subdomain.upper()}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"permanently deleted" in resp.data
+
+    def test_unknown_tenant_flashes_not_found(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/tenants/999999999/delete",
+                            data={"confirm_subdomain": "whatever"}, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"Company not found." in resp.data
+
+    def test_payment_history_survives_deletion(self, client, db_engine, deletable_tenant):
+        """The whole point of this feature: billing/transaction records
+        must keep showing correctly in the Payments feed after the tenant
+        (and all its own data) is gone -- payment_orders/seat_topup_orders/
+        monthly_invoices carry their own company_name/subdomain rather than
+        depending on a live tenants row."""
+        tenant_id, subdomain, schema = deletable_tenant
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.payment_orders "
+            "(razorpay_order_id, plan, employee_count, amount_paise, company_name, subdomain, "
+            "admin_username, admin_email, status, tenant_id) "
+            "VALUES (%s,'starter',10,9900,%s,%s,'del_admin','del_admin@test.local','paid',%s)",
+            (f"demo_order_del_test_{tenant_id}", "Delete Test Co", subdomain, tenant_id),
+        )
+        db_engine.commit()
+        try:
+            _login_platform_admin(client, username="payment_survives_admin")
+            resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
+                                data={"confirm_subdomain": subdomain}, follow_redirects=True)
+            assert resp.status_code == 200
+
+            cur.execute(
+                "SELECT company_name, subdomain, status FROM att_master.payment_orders WHERE tenant_id=%s",
+                (tenant_id,),
+            )
+            row = cur.fetchone()
+            assert row is not None, "payment_orders row must survive tenant deletion"
+            assert row[0] == "Delete Test Co"
+            assert row[1] == subdomain
+            assert row[2] == "paid"
+
+            dashboard_resp = client.get("/super_admin")
+            assert b"Delete Test Co" in dashboard_resp.data  # still shown in the Payments feed
+        finally:
+            cur.execute("DELETE FROM att_master.payment_orders WHERE tenant_id=%s", (tenant_id,))
+            cur.close()
+
+
+class TestDashboardSearchPaginationAndExport:
+    @pytest.fixture
+    def searchable_tenant(self, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, status) "
+            "VALUES (%s,%s,%s,'active') RETURNING id",
+            ("Zephyr Search Target Co", "zephyr-search-target", "att_zephyr_search_target"),
+        )
+        tenant_id = cur.fetchone()[0]
+        yield tenant_id
+        cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
+        cur.close()
+
+    def test_search_filters_to_matching_company(self, client, searchable_tenant):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin?q=Zephyr+Search+Target")
+        assert resp.status_code == 200
+        assert b"Zephyr Search Target Co" in resp.data
+
+        resp = client.get("/super_admin?q=NoSuchCompanyXYZ123")
+        assert resp.status_code == 200
+        assert b"Zephyr Search Target Co" not in resp.data
+        assert b"No companies match your search." in resp.data
+
+    def test_out_of_range_page_clamps_instead_of_erroring(self, client, searchable_tenant):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin?page=99999")
+        assert resp.status_code == 200
+
+    def test_export_tenants_csv(self, client, searchable_tenant):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/export/tenants.csv?q=Zephyr+Search+Target")
+        assert resp.status_code == 200
+        assert resp.headers["Content-Type"].startswith("text/csv")
+        assert b"Zephyr Search Target Co" in resp.data
+        assert resp.data.startswith(b"Company,Subdomain,Status")
+
+    def test_export_payments_csv_requires_login(self, client):
+        resp = client.get("/super_admin/export/payments.csv", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_export_payments_csv(self, client):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/export/payments.csv")
+        assert resp.status_code == 200
+        assert resp.headers["Content-Type"].startswith("text/csv")
+        assert resp.data.startswith(b"Kind,Company,Subdomain")
 
 
 # ===========================================================================
@@ -740,154 +985,50 @@ class TestDuplicateAlerts:
         cur.close()
 
 
-# ===========================================================================
-# Device inventory management (att_master.user_devices)
-# ===========================================================================
+class TestBulkAcknowledgeDuplicateAlerts:
+    @pytest.fixture
+    def two_alert_rows(self, db_engine):
+        cur = db_engine.cursor()
+        ids = []
+        for i in range(2):
+            cur.execute(
+                "INSERT INTO att_master.tenant_duplicate_alerts "
+                "(attempted_company_name, attempted_admin_email, conflicting_tenant_id, conflicting_company_name) "
+                "VALUES (%s,%s,%s,%s) RETURNING id",
+                (f"Bulk Ack Impersonator {i}", f"bulk-ack-{i}@test.local", 999999, "Bulk Ack Real Co"),
+            )
+            ids.append(cur.fetchone()[0])
+        yield ids
+        cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE id=ANY(%s)", (ids,))
+        cur.close()
 
-class TestDevices:
-    DEVICE_USER = "pa_device_test_admin"
-
-    def test_list_requires_login(self, client):
-        resp = client.get("/super_admin/devices", follow_redirects=False)
+    def test_requires_login(self, client, two_alert_rows):
+        resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge",
+                            data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
-    def test_list_returns_only_this_admins_devices(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute("DELETE FROM att_master.user_devices WHERE owner_kind='platform_admin' AND owner_id=%s",
-                    (self.DEVICE_USER,))
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', %s, %s, 'login', 'Chrome on Windows') RETURNING id",
-            (self.DEVICE_USER, secrets.token_hex(24)),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.get("/super_admin/devices")
-            assert resp.status_code == 200
-            payload = resp.get_json()
-            assert payload["ok"] is True
-            assert any(d["id"] == device_id for d in payload["devices"])
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_rename_requires_login(self, client):
-        resp = client.post("/super_admin/devices/1/rename", json={"name": "x"}, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_rename_device(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', %s, %s, 'login', 'Old Name') RETURNING id",
-            (self.DEVICE_USER, secrets.token_hex(24)),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.post(f"/super_admin/devices/{device_id}/rename", json={"name": "My Laptop"})
-            assert resp.status_code == 200
-            assert resp.get_json()["ok"] is True
-            cur.execute("SELECT device_name FROM att_master.user_devices WHERE id=%s", (device_id,))
-            assert cur.fetchone()[0] == "My Laptop"
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_rename_another_admins_device_fails(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', 'someone_else_pa', %s, 'login', 'Other Name') RETURNING id",
-            (secrets.token_hex(24),),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.post(f"/super_admin/devices/{device_id}/rename", json={"name": "Hijacked"})
-            assert resp.status_code == 200
-            assert resp.get_json()["ok"] is False
-            cur.execute("SELECT device_name FROM att_master.user_devices WHERE id=%s", (device_id,))
-            assert cur.fetchone()[0] == "Other Name"
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_revoke_requires_login(self, client):
-        resp = client.post("/super_admin/devices/1/revoke", follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_revoke_device_removes_it_from_list(self, client, db_engine):
-        import secrets
-        cur = db_engine.cursor()
-        cur.execute(
-            "INSERT INTO att_master.user_devices (owner_kind, owner_id, device_token, kind, device_name) "
-            "VALUES ('platform_admin', %s, %s, 'login', 'To Revoke') RETURNING id",
-            (self.DEVICE_USER, secrets.token_hex(24)),
-        )
-        device_id = cur.fetchone()[0]
-        try:
-            _login_platform_admin(client, username=self.DEVICE_USER)
-            resp = client.post(f"/super_admin/devices/{device_id}/revoke")
-            assert resp.status_code == 200
-            assert resp.get_json()["ok"] is True
-            cur.execute("SELECT is_revoked FROM att_master.user_devices WHERE id=%s", (device_id,))
-            assert cur.fetchone()[0] == 1
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (device_id,))
-            cur.close()
-
-    def test_add_and_delete_asset_device(self, client, db_engine):
-        _login_platform_admin(client, username=self.DEVICE_USER)
-        resp = client.post("/super_admin/devices/asset", json={
-            "device_name": "Office Laptop #3", "asset_model": "Dell Latitude", "asset_serial": "SN12345",
-        })
+    def test_bulk_acknowledge_marks_all_selected(self, client, db_engine, two_alert_rows):
+        _login_platform_admin(client, username="bulk_ack_admin")
+        resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge",
+                            data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=True)
         assert resp.status_code == 200
-        payload = resp.get_json()
-        assert payload["ok"] is True
-        asset_id = payload["id"]
-        assert asset_id is not None
-
+        assert b"2 alert(s) acknowledged." in resp.data
         cur = db_engine.cursor()
-        try:
-            cur.execute("SELECT kind, device_name, asset_model, asset_serial FROM att_master.user_devices WHERE id=%s",
-                        (asset_id,))
-            row = cur.fetchone()
-            assert row == ("asset", "Office Laptop #3", "Dell Latitude", "SN12345")
+        cur.execute(
+            "SELECT acknowledged, acknowledged_by FROM att_master.tenant_duplicate_alerts WHERE id=ANY(%s)",
+            (two_alert_rows,),
+        )
+        rows = cur.fetchall()
+        assert all(r[0] == 1 for r in rows)
+        assert all(r[1] == "bulk_ack_admin" for r in rows)
+        cur.close()
 
-            del_resp = client.post(f"/super_admin/devices/asset/{asset_id}/delete")
-            assert del_resp.status_code == 200
-            assert del_resp.get_json()["ok"] is True
-            cur.execute("SELECT 1 FROM att_master.user_devices WHERE id=%s", (asset_id,))
-            assert cur.fetchone() is None
-        finally:
-            cur.execute("DELETE FROM att_master.user_devices WHERE id=%s", (asset_id,))
-            cur.close()
-
-    def test_add_asset_device_requires_login(self, client):
-        resp = client.post("/super_admin/devices/asset", json={"device_name": "x"}, follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
-
-    def test_add_asset_device_missing_name_fails(self, client):
-        _login_platform_admin(client, username=self.DEVICE_USER)
-        resp = client.post("/super_admin/devices/asset", json={"device_name": "  "})
+    def test_no_selection_rejected(self, client):
+        _login_platform_admin(client)
+        resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge", data={}, follow_redirects=True)
         assert resp.status_code == 200
-        payload = resp.get_json()
-        assert payload["ok"] is False
-        assert payload["id"] is None
-
-    def test_delete_asset_device_requires_login(self, client):
-        resp = client.post("/super_admin/devices/asset/1/delete", follow_redirects=False)
-        assert resp.status_code in (301, 302)
-        assert resp.headers["Location"] == "/super_admin/login"
+        assert b"No alerts were selected." in resp.data
 
 
 # ===========================================================================
@@ -945,3 +1086,68 @@ class TestChat:
         resp = client.post(f"/super_admin/chat/{tenant_row}/send", json={"message": "   "})
         assert resp.status_code == 400
         assert resp.get_json()["ok"] is False
+
+
+# ===========================================================================
+# Audit log (browsable view over security_events, scoped to
+# platform-admin-relevant event_type prefixes -- see
+# blueprints/platform_admin.py's _AUDIT_LOG_PREFIXES)
+# ===========================================================================
+
+class TestAuditLog:
+    @pytest.fixture
+    def audit_events(self, db_engine):
+        """Writes directly to security_events rather than going through
+        log_security_event()'s async background writer (see
+        tests/test_security_events_log.py's docstring) -- these tests only
+        care about the audit-log route's filtering/rendering, not the
+        writer itself, so a synchronous INSERT keeps them fast and
+        deterministic. INSERT isn't blocked by the append-only trigger
+        (only UPDATE/DELETE are), so no bypass is needed to create rows --
+        only to clean them up."""
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO security_events (event_type, level, message, identifier) VALUES "
+            "('platform_admin.rate_updated', 'WARNING', 'Per-employee rate changed from X to Y', 'AUDIT_TEST_ADMIN'),"
+            "('platform_admin.tenant_created', 'INFO', 'Platform admin created tenant Audit Test Co', 'AUDIT_TEST_ADMIN'),"
+            "('auth.admin_login_success', 'INFO', 'Should never appear -- not a platform-admin-scoped prefix', 'AUDIT_TEST_ADMIN')"
+        )
+        db_engine.commit()
+        yield
+        cur.execute("SET audit.bypass = 'on'")
+        cur.execute("DELETE FROM security_events WHERE identifier='AUDIT_TEST_ADMIN'")
+        cur.execute("SET audit.bypass = 'off'")
+        db_engine.commit()
+        cur.close()
+
+    def test_requires_login(self, client):
+        resp = client.get("/super_admin/audit-log", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert resp.headers["Location"] == "/super_admin/login"
+
+    def test_shows_platform_admin_scoped_events_only(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log")
+        assert resp.status_code == 200
+        assert b"Per-employee rate changed from X to Y" in resp.data
+        assert b"Platform admin created tenant Audit Test Co" in resp.data
+        assert b"Should never appear" not in resp.data
+
+    def test_search_filters_by_message(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log?q=Audit+Test+Co")
+        assert resp.status_code == 200
+        assert b"Platform admin created tenant Audit Test Co" in resp.data
+        assert b"Per-employee rate changed" not in resp.data
+
+    def test_level_filter(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log?level=WARNING")
+        assert resp.status_code == 200
+        assert b"Per-employee rate changed from X to Y" in resp.data
+        assert b"Platform admin created tenant Audit Test Co" not in resp.data
+
+    def test_out_of_range_page_clamps_instead_of_erroring(self, client, audit_events):
+        _login_platform_admin(client)
+        resp = client.get("/super_admin/audit-log?page=99999")
+        assert resp.status_code == 200

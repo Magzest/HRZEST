@@ -150,6 +150,8 @@ def admin_action():
 
     cursor.close()
     db.close()
+    if request.form.get("next") == "settings":
+        return redirect(tpath("/settings?tab=email"))
     return redirect(tpath("/admin"))
 
 
@@ -1091,7 +1093,7 @@ def update_photo(emp_id):
     file.save(save_path)
     db = get_db_connection()
     cursor = db.cursor()
-    cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (emp_id + ".jpg", emp_id))
+    cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (save_path, emp_id))
     db.commit()
     cursor.close()
     db.close()

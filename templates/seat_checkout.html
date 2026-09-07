@@ -113,6 +113,8 @@
           <span style="color:#15803d;"><i class="ti ti-circle-check"></i> Active</span>
         {% elif auto_debit_status and auto_debit_status.status == 'pending' %}
           <span style="color:#d97706;"><i class="ti ti-clock"></i> Pending authorization</span>
+        {% elif auto_debit_status and auto_debit_status.status == 'rate_changed' %}
+          <span style="color:#d97706;"><i class="ti ti-refresh-alert"></i> Rate changed — re-authorization needed</span>
         {% elif auto_debit_status and auto_debit_status.status == 'cancelled' %}
           <span style="color:#64748b;"><i class="ti ti-circle-x"></i> Cancelled</span>
         {% else %}
@@ -120,11 +122,16 @@
         {% endif %}
       </div>
       <div class="lbl">Estimated next charge: {{ monthly_bill_display }} for {{ employee_count }} employee{{ 's' if employee_count != 1 }}</div>
+      {% if auto_debit_status and auto_debit_status.status == 'rate_changed' %}
+      <div class="lbl" style="color:#d97706;margin-top:2px;">Your previous auto-debit ended after its last payment at the old rate — re-enable below to continue automatic billing at the new rate.</div>
+      {% endif %}
     </div>
     {% if auto_debit_status and auto_debit_status.status == 'active' %}
       <button type="button" class="qty-btn" id="disableAutoDebitBtn" style="width:auto; padding:0 16px; background:#fee2e2; border-color:#fca5a5; color:#dc2626;">Disable Auto-Debit</button>
+    {% elif auto_debit_status and auto_debit_status.status == 'rate_changed' %}
+      <button type="button" class="qty-btn" id="enableAutoDebitBtn" data-label="Re-Enable Auto-Debit" style="width:auto; padding:0 16px; background:#d97706; border-color:#d97706; color:#fff;">Re-Enable Auto-Debit</button>
     {% else %}
-      <button type="button" class="qty-btn" id="enableAutoDebitBtn" style="width:auto; padding:0 16px; background:#2563eb; border-color:#2563eb; color:#fff;">Enable Auto-Debit</button>
+      <button type="button" class="qty-btn" id="enableAutoDebitBtn" data-label="Enable Auto-Debit" style="width:auto; padding:0 16px; background:#2563eb; border-color:#2563eb; color:#fff;">Enable Auto-Debit</button>
     {% endif %}
   </div>
 
@@ -348,7 +355,7 @@ function resetEnrollButton() {
   const btn = document.getElementById('enableAutoDebitBtn');
   if (!btn) return;
   btn.disabled = false;
-  btn.textContent = 'Enable Auto-Debit';
+  btn.textContent = btn.dataset.label || 'Enable Auto-Debit';
 }
 
 const enableAutoDebitBtn = document.getElementById('enableAutoDebitBtn');
