@@ -13,7 +13,6 @@
     sb_active               for sb_mode='link': 'compoff' | 'performance' | 'onboarding'
     sb_name, sb_role, sb_id, sb_has_photo, sb_photo_url   profile block
     sb_show_brand           (optional bool) show the company logo header
-    sb_incoming_swap_count  (optional int) badge on Shift Swap, portal mode only
 #}
 <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
 <button type="button" class="sb-toggle" id="sbToggleBtn" onclick="toggleSidebar()" aria-label="Toggle menu"><i class="ti ti-menu-2"></i></button>
@@ -89,10 +88,6 @@
       <span class="sb-icon"><i class="ti ti-checklist"></i></span>My Onboarding
     </a>
     {% if sb_mode == 'portal' %}
-      <button type="button" class="sb-item" id="sbn-shift-swap" onclick="showView('shift-swap')">
-        <span class="sb-icon"><i class="ti ti-switch-horizontal"></i></span>Shift Swap
-        {% if sb_incoming_swap_count %}<span class="badge b-red u-fs-10 u-p-1-6 u-ml-4">{{ sb_incoming_swap_count }}</span>{% endif %}
-      </button>
       <button type="button" class="sb-item" id="sbn-tickets" onclick="showView('tickets')">
         <span class="sb-icon"><i class="ti ti-ticket"></i></span>Support Tickets
       </button>
@@ -100,9 +95,6 @@
         <span class="sb-icon"><i class="ti ti-user"></i></span>My Profile
       </button>
     {% else %}
-      <a href="{{ tpath('/employee_portal#shift-swap') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-switch-horizontal"></i></span>Shift Swap
-      </a>
       <a href="{{ tpath('/employee_portal#tickets') }}" class="sb-item u-tdec-none">
         <span class="sb-icon"><i class="ti ti-ticket"></i></span>Support Tickets
       </a>

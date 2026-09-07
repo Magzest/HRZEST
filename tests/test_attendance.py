@@ -455,32 +455,6 @@ class TestShiftsCRUD:
 
 
 # ===========================================================================
-# Shift swaps
-# ===========================================================================
-
-class TestShiftSwaps:
-    def test_admin_shift_swaps_page_for_admin(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        resp = client.get("/admin_shift_swaps")
-        assert resp.status_code == 200
-
-    def test_submit_shift_swap_requires_employee_session(self, client):
-        resp = client.post("/submit_shift_swap", data={}, follow_redirects=False)
-        assert resp.status_code in (302, 401, 403)
-
-    def test_respond_shift_swap_nonexistent(self, client, seed_employee):
-        with client.session_transaction() as sess:
-            sess["employee_id"] = seed_employee["employee_id"]
-        resp = client.post("/respond_shift_swap/999999", data={"response": "accept"}, follow_redirects=False)
-        assert resp.status_code in (200, 302, 404)
-
-    def test_admin_shift_swap_nonexistent(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        resp = client.post("/admin_shift_swap/999999", data={"action": "approve"}, follow_redirects=False)
-        assert resp.status_code in (200, 302, 404)
-
-
-# ===========================================================================
 # Breaks
 # ===========================================================================
 

@@ -46,7 +46,6 @@ _WIPE_TABLES = [
     "incentive_goals", "hike_config", "overtime_records",
     # Leave / resignation
     "leave_requests", "leave_balances", "leave_types", "resignation_requests",
-    "shift_swap_requests",
     # Tickets / notifications / announcements
     "tickets", "notifications", "announcements", "email_queue",
     # Documents / onboarding

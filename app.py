@@ -1705,24 +1705,6 @@ def _init_core_tables(cursor, db):
         )
     """)
     db.commit()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS shift_swap_requests (
-            id SERIAL PRIMARY KEY,
-            requester_id VARCHAR(50) NOT NULL,
-            target_id VARCHAR(50) NOT NULL,
-            requester_shift_id INT NOT NULL,
-            target_shift_id INT NOT NULL,
-            reason TEXT,
-            status VARCHAR(20) DEFAULT 'Pending_Target' CHECK (status IN ('Pending_Target','Pending_Admin','Approved','Rejected','Rejected_Admin')),
-            target_response TEXT,
-            admin_response TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    _attach_updated_at_trigger(cursor, "shift_swap_requests")
-    db.commit()
-    db.commit()
 
     # Create company_settings table (must precede the migration loop below,
     # which ALTERs this table -- on a fresh install with nothing to migrate
@@ -2083,7 +2065,6 @@ def _run_index_migrations_v3(cursor, db):
                 "CREATE INDEX IF NOT EXISTS idx_emp_docs_emp ON employee_documents(employee_id)",
                 "CREATE INDEX IF NOT EXISTS idx_incentives_emp ON employee_incentives(employee_id)",
                 "CREATE INDEX IF NOT EXISTS idx_overtime_emp ON overtime_records(employee_id)",
-                "CREATE INDEX IF NOT EXISTS idx_swap_requester_target ON shift_swap_requests(requester_id, target_id)",
             ]
             for stmt in _idx_stmts_v3:
                 try:
@@ -3068,7 +3049,6 @@ def unhandled_exception(e):
 
 
 # ---------------- LEAVE TYPES ADMIN ----------------
-# admin_leave_types migrated to blueprints/leave.py
 
 
 # change_admin_password migrated to blueprints/auth.py
@@ -3089,7 +3069,6 @@ def unhandled_exception(e):
 # employee_reset_password migrated to blueprints/auth.py
 
 
-# view_qrcodes migrated to blueprints/employees.py
 
 
 # serve_dataset migrated to blueprints/employees.py
@@ -3098,10 +3077,8 @@ def unhandled_exception(e):
 # my_photo migrated to blueprints/employees.py
 
 
-# view_photos migrated to blueprints/employees.py
 
 
-# update_photo migrated to blueprints/employees.py
 
 # ---------------- SHIFTS (redirect to settings) ----------------
 # shifts migrated to blueprints/attendance.py
@@ -3123,16 +3100,12 @@ def unhandled_exception(e):
 
 # ──────────────────────── SHIFT SWAP REQUESTS ────────────────────────
 
-# submit_shift_swap migrated to blueprints/attendance.py
 
 
-# respond_shift_swap migrated to blueprints/attendance.py
 
 
-# admin_shift_swap migrated to blueprints/attendance.py
 
 
-# admin_shift_swaps migrated to blueprints/attendance.py
 
 
 # import_indian_holidays migrated to blueprints/leave.py
@@ -3315,7 +3288,6 @@ def unhandled_exception(e):
 # request_resignation migrated to blueprints/leave.py
 
 
-# resignation_requests_view migrated to blueprints/leave.py
 
 
 # resignation_action migrated to blueprints/leave.py

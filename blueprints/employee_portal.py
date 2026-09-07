@@ -677,42 +677,6 @@ def employee_portal():
             'present': p_full + p_late + p_half, 'absent': p_absent,
         })
 
-    # Shift swap data
-    try:
-        cursor.execute("""
-            SELECT ssr.id, ssr.target_id, et.name, ts.name AS tgt_shift,
-                   ssr.reason, ssr.status, ssr.created_at
-            FROM shift_swap_requests ssr
-            JOIN employees et ON et.employee_id = ssr.target_id
-            JOIN shifts ts ON ts.id = ssr.target_shift_id
-            WHERE ssr.requester_id=%s ORDER BY ssr.created_at DESC LIMIT 20
-        """, (emp_id,))
-        my_swap_requests = cursor.fetchall()
-        cursor.execute("""
-            SELECT ssr.id, ssr.requester_id, er.name, rs.name AS req_shift,
-                   ssr.reason, ssr.status, ssr.created_at
-            FROM shift_swap_requests ssr
-            JOIN employees er ON er.employee_id = ssr.requester_id
-            JOIN shifts rs ON rs.id = ssr.requester_shift_id
-            WHERE ssr.target_id=%s AND ssr.status='Pending_Target' ORDER BY ssr.created_at DESC
-        """, (emp_id,))
-        incoming_swap_requests = cursor.fetchall()
-        cursor.execute("""
-            SELECT e.employee_id, e.name, COALESCE(s.name,''),
-                   COALESCE(TO_CHAR(s.start_time,'HH24:MI'),''),
-                   COALESCE(TO_CHAR(s.end_time,'HH24:MI'),''),
-                   COALESCE(e.department,''), COALESCE(e.designation,'')
-            FROM employees e
-            LEFT JOIN shifts s ON s.id = e.shift_id
-            WHERE e.employee_id != %s AND e.is_active=1
-            ORDER BY e.name
-        """, (emp_id,))
-        swap_eligible_employees = cursor.fetchall()
-    except Exception:
-        my_swap_requests = []
-        incoming_swap_requests = []
-        swap_eligible_employees = []
-
     cursor.close()
     db.close()
 
@@ -799,12 +763,6 @@ def employee_portal():
                            ot_pay_this_month=ot_pay_this_month,
                            net_this_month=net_this_month,
                            recent_payslips=recent_payslips,
-                           my_swap_requests=my_swap_requests,
-                           incoming_swap_requests=incoming_swap_requests,
-                           swap_eligible_employees=swap_eligible_employees,
-                           swap_sent=request.args.get("swap_sent") == "1",
-                           swap_responded=request.args.get("swap_responded") == "1",
-                           swap_error=request.args.get("swap_error", ""),
                            fp_enrolled=fp_enrolled,
                            fp_enabled=get_auth_config().get("fingerprint_enabled", False),
                            attendance_auth_cfg=get_auth_config(),

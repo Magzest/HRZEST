@@ -293,12 +293,6 @@ export const sendEmailBlast = (targetType, targetValue, subject, body) =>
   client.post('/api/admin/email-blast', { target_type: targetType, target_value: targetValue, subject, body });
 export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai/hr-helpdesk', { query });
 
-// ── AI Recruitment (blueprints/ai_hrms.py, previously session-only/web-only) ─
-export const parseResumeText = (resumeText) => client.post('/api/ai/parse-resume', { resume_text: resumeText });
-
-export const screenCandidate = (parsedProfile, jobDescription) =>
-  client.post('/api/ai/screen-candidate', { parsed_profile: parsedProfile, job_description: jobDescription });
-
 export const evaluateInterview = (candidateName, position, notes) =>
   client.post('/api/ai/evaluate-interview', { candidate_name: candidateName, position, notes });
 
