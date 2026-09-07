@@ -2348,7 +2348,7 @@ def analytics():
             'icon': 'ti-file-alert',
             'title': f'{expiring_docs} employee document{"s" if expiring_docs > 1 else ""} expiring within 30 days',
             'detail': 'Review and renew documents before they expire',
-            'link': '/documents'
+            'link': '/employees'
         })
 
     if not smart_alerts:
