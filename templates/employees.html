@@ -2286,7 +2286,12 @@
   function openAddShiftModal()  { document.getElementById('addShiftModal').style.display='flex'; }
   function openAddBreakModal()  { document.getElementById('addBreakModal').style.display='flex'; }
   function openEditShiftModal(id, name, start, half, end) {
-    document.getElementById('editShiftForm').action = '/edit_shift/' + id;
+    // Rewrite only the trailing id segment so the tenant-slug prefix that
+    // tpath() baked into the form's initial action (e.g. "/acme/edit_shift/0")
+    // survives -- a bare '/edit_shift/' + id here would silently drop it
+    // and submit outside the tenant's URL scope.
+    var shiftForm = document.getElementById('editShiftForm');
+    shiftForm.action = shiftForm.action.replace(/\/edit_shift\/[^/?]*$/, '/edit_shift/' + id);
     document.getElementById('editShiftName').value  = name;
     document.getElementById('editShiftStart').value = start;
     document.getElementById('editShiftHalf').value  = half;
@@ -2294,7 +2299,9 @@
     document.getElementById('editShiftModal').style.display = 'flex';
   }
   function openEditBreakModal(id, name, time, dur, active) {
-    document.getElementById('editBreakForm').action = '/update_break/' + id;
+    // Same tenant-prefix-preserving rewrite as openEditShiftModal() above.
+    var breakForm = document.getElementById('editBreakForm');
+    breakForm.action = breakForm.action.replace(/\/update_break\/[^/?]*$/, '/update_break/' + id);
     document.getElementById('editBreakName').value  = name;
     document.getElementById('editBreakTime').value  = time;
     document.getElementById('editBreakDur').value   = dur;

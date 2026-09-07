@@ -1,5 +1,8 @@
-// Toast Notification Engine
-function showToast(message, type = 'info') {
+// Toast Notification Engine -- single shared implementation for the whole
+// app (admin_base.html's live-dashboard alerts, employee_portal.html,
+// salary_report.html, and any window.alert() call on a page that loads
+// this script -- see the override at the bottom of this file).
+function showToast(message, type = 'info', icon = null) {
   let container = document.getElementById('toast-container');
   if (!container) {
     container = document.createElement('div');
@@ -9,10 +12,9 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  
-  let iconHtml = '<i class="ti ti-info-circle"></i>';
-  if (type === 'success') iconHtml = '<i class="ti ti-circle-check"></i>';
-  if (type === 'error') iconHtml = '<i class="ti ti-alert-triangle"></i>';
+
+  const defaultIcons = { success: 'circle-check', error: 'alert-triangle', alert: 'alert-triangle', info: 'info-circle' };
+  const iconHtml = `<i class="ti ti-${icon || defaultIcons[type] || 'info-circle'}"></i>`;
 
   toast.innerHTML = `
     <div class="toast-icon">${iconHtml}</div>

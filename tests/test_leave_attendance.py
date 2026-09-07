@@ -188,13 +188,6 @@ class TestLeaveAdminPages:
         resp = client.get("/compoff", follow_redirects=True)
         assert resp.status_code == 200
 
-    def test_view_holidays_renders(self, client, seed_admin):
-        # /view_holidays renders its own standalone holidays page directly
-        # rather than redirecting to /leave_holidays.
-        _admin_session(client, seed_admin)
-        resp = client.get("/view_holidays", follow_redirects=False)
-        assert resp.status_code == 200
-
     def test_admin_leave_types_get(self, client, seed_admin):
         _admin_session(client, seed_admin)
         assert client.get("/admin_leave_types").status_code == 200

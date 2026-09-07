@@ -1079,7 +1079,7 @@ def view_photos():
     employees = cursor.fetchall()
     cursor.close()
     db.close()
-    return render_template("employee_photos.html", employees=employees, active_nav="employees")
+    return render_template("employee_photos.html", employees=employees, active_nav="photos")
 
 
 @employees_bp.route("/update_photo/<emp_id>", methods=["POST"])

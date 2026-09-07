@@ -33,9 +33,9 @@ def check_password_hash(pw_hash: str, pw: str) -> bool:
 
 
 # Single source of truth for the "new password" minimum -- every set/change/
-# reset endpoint (admin, employee, SecOps force-reset, platform admin seed
-# script) must call this instead of its own inline `len(pw) < N` check, so
-# the floor can't silently drift to something weaker on one path.
+# reset endpoint (admin, employee, platform admin seed script) must call
+# this instead of its own inline `len(pw) < N` check, so the floor can't
+# silently drift to something weaker on one path.
 MIN_PASSWORD_LENGTH = 8
 
 

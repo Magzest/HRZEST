@@ -235,10 +235,7 @@ def admin_login():
 @limiter.limit("40 per 15 minutes")
 def mfa_verify():
     """Completion step for _start_login_mfa(): checks the emailed one-time
-    code, then builds the real admin/HR/employee session. Deliberately
-    separate from secops.py's own /mfa_login_verify -- SOC keeps its own
-    dedicated flow untouched, rather than risking that already-tested
-    portal by sharing this route with it."""
+    code, then builds the real admin/HR/employee session."""
     username = session.get("mfa_user")
     kind = session.get("mfa_kind")
     if not username or not session.get("mfa_pending") or kind not in ("admin_users", "employee"):

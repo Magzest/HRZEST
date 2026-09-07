@@ -36,53 +36,21 @@ not a guarantee every clone behaves identically.
 """
 import datetime
 import secrets
-from flask import Blueprint, request, jsonify, session, Response, g, render_template
+from flask import Blueprint, request, jsonify, session, Response, g
 from extensions import limiter, log_security_event, app_log
 from database import get_db_connection, get_master_db, get_tenant_db
 from utils.auth import admin_required, _hash_token
-from utils.helpers import tpath, _audit, get_company_settings, get_pending_action_counts
+from utils.helpers import _audit
 from blueprints.attendance import process_punch
 
 biometric_bp = Blueprint("biometric", __name__)
 
 
-# ── Admin page (session-based HTML) ──────────────────────────────────────────
-
-@biometric_bp.route("/biometric_devices")
-@admin_required
-def biometric_devices_page():
-    conn = get_master_db()
-    cur = conn.cursor(buffered=True)
-    cur.execute(
-        "SELECT device_serial, location_name, last_seen_at, created_at "
-        "FROM biometric_devices WHERE tenant_schema=%s ORDER BY created_at DESC",
-        (g.tenant_db,)
-    )
-    devices = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT employee_id, name FROM employees ORDER BY name")
-    employees = cursor.fetchall()
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
-    cursor.close()
-    db.close()
-
-    return render_template(
-        "biometric_devices.html",
-        co=get_company_settings(),
-        pending_leaves=pending_leaves,
-        pending_resignations=pending_resignations,
-        pending_tickets=pending_tickets,
-        devices=devices,
-        employees=employees,
-        active_nav="biometric_devices",
-    )
-
-
-# ── Admin API (session-based JSON, same page's own fetch() calls) ───────────
+# ── Admin API (session-based JSON) ───────────────────────────────────────────
+# No admin HTML page renders these anymore (templates/biometric_devices.html
+# was removed -- it had no nav link and was unreachable from the app UI).
+# Kept as a plain JSON API: still callable directly (e.g. by a setup script
+# or an external admin tool) for registering/managing devices without a UI.
 
 @biometric_bp.route("/api/biometric/devices", methods=["GET"])
 @admin_required
