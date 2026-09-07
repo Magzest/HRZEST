@@ -40,12 +40,11 @@ export default function PerformanceScreen({ navigation }) {
 
   // Review submission modal -- fields match what
   // blueprints/performance.py's api_submit_performance_review() actually
-  // stores (quarter/year upsert + reviewer feedback + potential rating),
-  // not a rating/comments/hike/bonus shape that never had a backend.
+  // stores (quarter/year upsert + reviewer feedback), not a
+  // rating/comments/hike/bonus shape that never had a backend.
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
   const [reviewTarget, setReviewTarget] = useState(null);
   const [reviewFeedback, setReviewFeedback] = useState("");
-  const [reviewPotential, setReviewPotential] = useState("3");
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const loadData = async () => {
@@ -76,7 +75,6 @@ export default function PerformanceScreen({ navigation }) {
   const openReviewModal = (item) => {
     setReviewTarget(item);
     setReviewFeedback("");
-    setReviewPotential("3");
     setReviewModalVisible(true);
   };
 
@@ -87,7 +85,7 @@ export default function PerformanceScreen({ navigation }) {
     try {
       res = await submitPerformanceReview(
         reviewTarget.employee_id, CURRENT_QUARTER, CURRENT_YEAR,
-        reviewFeedback.trim(), Number(reviewPotential) || 0, status
+        reviewFeedback.trim(), status
       );
     } catch (e) {
       res = e?.response;
@@ -300,22 +298,6 @@ export default function PerformanceScreen({ navigation }) {
                   onChangeText={setReviewFeedback}
                   multiline
                 />
-
-                <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 14 }}>POTENTIAL RATING (0-5, MANAGER JUDGMENT)</Text>
-                <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-                  {[0, 1, 2, 3, 4, 5].map((n) => (
-                    <TouchableOpacity
-                      key={n}
-                      onPress={() => setReviewPotential(String(n))}
-                      style={{
-                        width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center",
-                        backgroundColor: reviewPotential === String(n) ? "#173B8C" : "#F1F5F9",
-                      }}
-                    >
-                      <Text style={{ fontWeight: "800", color: reviewPotential === String(n) ? "#FFFFFF" : "#334155" }}>{n}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
 
                 <Text style={{ fontSize: 11, color: colors.textLight, marginTop: 10 }}>
                   Overall rating is computed automatically from this employee's rated KPIs, same as on web.

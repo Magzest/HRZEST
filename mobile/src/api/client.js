@@ -332,13 +332,13 @@ export const fetchSalaryReportExport = (year, month) =>
 
 // Field names match what blueprints/performance.py's api_submit_performance_review()
 // (and the web's performance_save_review()) actually store -- quarter/year
-// upsert with reviewer feedback + a manager-set potential rating, not the
-// rating/comments/hike/bonus shape this used to send (which had no
-// matching backend route or table columns at all).
-export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, potentialRating = 0, status = 'Draft') =>
+// upsert with reviewer feedback, not the rating/comments/hike/bonus shape
+// this used to send (which had no matching backend route or table columns
+// at all).
+export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, status = 'Draft') =>
   client.post('/api/performance/review', {
     employee_id: employeeId, quarter, year,
-    reviewer_feedback: reviewerFeedback, potential_rating: potentialRating, status,
+    reviewer_feedback: reviewerFeedback, status,
   });
 
 // createOnboardingTask (template creation) stays removed -- that's a
