@@ -6,106 +6,16 @@
   <title>Comp-off / OT</title>
   <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
   <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('employee_sidebar.css') }}" />
   <style>
 
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       html, body { height: 100%; }
       body { background: #f1f5f9; display: flex; flex-direction: row; min-height: 100dvh; }
 
-      .sidebar {
-        width: 240px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
-        background: linear-gradient(180deg, #0f2460 0%, #1a3a8f 100%);
-        padding: 20px 14px; color: white;
-        display: flex; flex-direction: column; flex-shrink: 0;
-        box-shadow: 4px 0 20px rgba(0,0,0,0.18); z-index: 300;
-        transition: transform 0.28s ease;
-      }
-      .sb-profile {
-        display: flex; align-items: center; gap: 12px;
-        padding-bottom: 18px; margin-bottom: 14px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-      }
-      .sb-avatar {
-        width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-        background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4);
-        overflow: hidden; display: flex; align-items: center; justify-content: center;
-        font-size: 18px; font-weight: 700; color: white;
-      }
-      .sb-avatar img { width: 100%; height: 100%; object-fit: cover; }
-      .sb-name { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.2; }
-      .sb-role { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 2px; }
-      .sb-id   { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
-      .sb-nav-label {
-        font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35);
-        text-transform: uppercase; letter-spacing: 1px;
-        padding: 0 10px; margin: 12px 0 4px;
-      }
-      .sb-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 9px 10px; margin: 1px 0;
-        color: rgba(255,255,255,0.75);
-        border-radius: 10px; font-size: 13px; font-weight: 500; transition: 0.18s;
-        position: relative; border: none; background: none; width: 100%;
-        text-align: left; cursor: pointer; font-family: inherit; text-decoration: none;
-        -webkit-tap-highlight-color: transparent;
-      }
-      .sb-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
-      .sb-item.active {
-        background: rgba(255,255,255,0.15); color: #fff; font-weight: 700;
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
-      }
-      .sb-item.active::before {
-        content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
-        width: 3px; border-radius: 2px; background: #60a5fa;
-      }
-      .sb-icon {
-        width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(255,255,255,0.08); font-size: 16px;
-      }
-      .sb-icon i { font-size: 16px; line-height: 1; }
-      .sb-item.active .sb-icon { background: rgba(96,165,250,0.2); }
-      .sb-item:hover .sb-icon  { background: rgba(255,255,255,0.12); }
-      .sb-item.danger { color: rgba(252,165,165,0.85); }
-      .sb-item.danger:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
-      .sb-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
-      .sb-scroll-nav { flex: 1; }
-      .sidebar::-webkit-scrollbar { width: 3px; }
-      .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
-      .sb-bottom { flex-shrink: 0; padding-top: 4px; }
-      .sb-footer {
-        padding-top: 10px;
-        border-top: 1px solid rgba(255,255,255,0.08);
-        font-size: 11px; color: rgba(255,255,255,0.4);
-        display: flex; align-items: center; gap: 6px;
-      }
       .main-area { flex: 1; min-width: 0; overflow-y: auto; }
       .app-content { padding: 24px 28px; }
 
-.sb-avatar img{width:100%;height:100%;object-fit:cover}
-    
-    
-    
-    
-    
-    
-    .sb-item.active{background:rgba(255,255,255,0.15);color:#fff;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12)}
-    .sb-item.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;border-radius:2px;background:#60a5fa}
-    
-    .sb-item.active 
-    
-    .sb-item.danger:hover{background:rgba(239,68,68,0.15);color:#fca5a5}
-    
-    
-    
-    
-    
-
-    
-    
-    
-    
-    
     .page-hdr{margin-bottom:20px}
     .page-hdr h1{font-size:22px;font-weight:800;color:#1e293b}
     .page-hdr p{font-size:13px;color:#64748b;margin-top:4px}
@@ -143,7 +53,6 @@
     body.dark-mode .app-content{background:#0d1117!important}
     body.dark-mode .page-hdr h1{color:#cdd9e5!important}
     body.dark-mode .page-hdr p{color:#768390!important}
-    body.dark-mode .stat-card{background:#161b22!important;border-color:#30363d!important}
     body.dark-mode .stat-card .lbl{color:#768390!important}
     body.dark-mode .card{background:#161b22!important;border-color:#30363d!important}
     body.dark-mode .sec-title{color:#93c5fd!important}
@@ -158,78 +67,15 @@
 </head>
 <body>
 
-    <nav class="sidebar">
-      <div class="sb-profile">
-        <div class="sb-avatar">
-          {% if emp_info[3] %}
-            <img src="/my_photo" alt="{{ emp_info[0] }}" onerror="this.parentNode.innerHTML='{{ emp_info[0][0] | upper }}'" />
-          {% else %}
-            {{ emp_info[0][0] | upper }}
-          {% endif %}
-        </div>
-        <div>
-          <div class="sb-name">{{ emp_info[0] }}</div>
-          <div class="sb-role">{{ emp_info[1] or 'Employee' }}</div>
-          <div class="sb-id">ID: {{ emp_id }}</div>
-        </div>
-      </div>
-      <div class="sb-scroll-nav">
+    {% set sb_mode = 'link' %}
+    {% set sb_active = 'compoff' %}
+    {% set sb_name = emp_info[0] %}
+    {% set sb_role = emp_info[1] %}
+    {% set sb_id = emp_id %}
+    {% set sb_has_photo = emp_info[3] %}
+    {% set sb_photo_url = '/my_photo' %}
+    {% include "_employee_sidebar.html" %}
 
-
-      <div class="sb-nav-label">Main</div>
-      <a href="{{ tpath('/employee_portal#dashboard') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-home"></i></span>Dashboard
-      </a>
-      <a href="{{ tpath('/employee_portal#attendance') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-calendar-check"></i></span>Attendance
-      </a>
-      <a href="{{ tpath('/employee_portal#apply-leave') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-file-plus"></i></span>Apply Leave
-      </a>
-      <a href="{{ tpath('/employee_portal#earnings') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-trophy"></i></span>Earnings
-      </a>
-      <a href="{{ tpath('/employee_portal#holidays') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-calendar-event"></i></span>Holidays
-      </a>
-
-      <div class="sb-nav-label">Account</div>
-      <a href="{{ tpath('/my_compoff') }}" class="sb-item active u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-replace"></i></span>Comp-off / OT
-      </a>
-      <a href="{{ tpath('/my_performance') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-chart-line"></i></span>My Performance
-      </a>
-      <a href="{{ tpath('/my_onboarding') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-checklist"></i></span>My Onboarding
-      </a>
-      <a href="{{ tpath('/employee_portal#shift-swap') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-switch-horizontal"></i></span>Shift Swap
-      </a>
-      <a href="{{ tpath('/employee_portal#tickets') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-ticket"></i></span>Support Tickets
-      </a>
-      <a href="{{ tpath('/employee_portal#my-profile') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-user"></i></span>My Profile
-      </a>
-
-      <div class="sb-nav-label">Policies</div>
-      <a href="{{ tpath('/employee_portal#policies') }}" class="sb-item u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-book"></i></span>Policies &amp; Guidelines
-      </a>
-      </div>
-
-      <div class="sb-bottom">
-        <a href="{{ tpath('/employee_portal#resign') }}" class="sb-item danger u-tdec-none">
-          <span class="sb-icon"><i class="ti ti-alert-triangle"></i></span>Resignation
-        </a>
-        <a href="{{ tpath('/employee_logout') }}" class="sb-item danger u-tdec-none">
-        <span class="sb-icon"><i class="ti ti-logout"></i></span>Logout
-      </a>
-  
-        <div class="sb-footer"><i class="ti ti-clock u-fs-13"></i> <span class="sb-live-clock"></span></div>
-      </div>
-    </nav>
   <div class="main-area">
     <div class="app-content">
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -359,7 +205,8 @@
       </table>
     </div>
   </div>
-</div>
+    </div><!-- /app-content -->
+  </div><!-- /main-area -->
 
 <!-- Apply Comp-off Modal -->
 {% if compoff_lt_id %}
@@ -414,13 +261,6 @@ var today = new Date().toISOString().split('T')[0];
 document.querySelectorAll('input[type=date]').forEach(function(el){ el.min = today; });
 </script>
 <script src="{{ static_url('darkmode.min.js') }}"></script>
-  </div>
-</div>
-<script src="{{ static_url('darkmode.min.js') }}"></script>
-    </div>
-  </div>
-<script src="{{ static_url('darkmode.min.js') }}"></script>
-
-
+<script src="{{ static_url('employee_sidebar.js') }}"></script>
 </body>
 </html>
