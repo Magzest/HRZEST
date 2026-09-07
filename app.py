@@ -559,13 +559,14 @@ _MANDATORY_MFA_EXEMPT_PATHS = {
     "/logout", "/admin_login", "/hr_login"
 }
 
-app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
+# All three MFA/2FA gates below default OFF at the user's request -- set any
+# of them to "true" in .env to turn that layer back on.
+app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
 app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
-# Platform admin's emailed-OTP step (blueprints/platform_admin.py) --
-# defaults on (secure by default) unlike the two flags above, since this is
-# the highest-privilege identity in the system; only skip it by explicitly
-# setting this in .env for local dev without SMTP configured.
-app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
+app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
+# Email Settings step-up gate (utils/auth.py's require_email_2fa) -- same
+# off-by-default posture as the three flags above.
+app.config["REQUIRE_EMAIL_2FA"] = os.environ.get("REQUIRE_EMAIL_2FA", "False").lower() in ("true", "1", "yes")
 
 
 @app.before_request
