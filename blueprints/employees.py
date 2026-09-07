@@ -491,7 +491,18 @@ def view_employees():
             emp_status = "On Leave"
         else:
             emp_status = "Active"
-        row = row[:14] + (decrypt_pii(row[14]),) + row[15:]  # [14]=gender
+        # Postgres returns date_of_joining (index 4) as a real date object;
+        # the SQLite dev fallback has no DATE type and hands back the raw
+        # "YYYY-MM-DD" string instead, which templates/employees.html's
+        # doj.strftime(...) can't call -- normalize here so both backends
+        # reach the template as the same type.
+        _doj = row[4]
+        if isinstance(_doj, str):
+            try:
+                _doj = datetime.datetime.strptime(_doj[:10], "%Y-%m-%d").date()
+            except ValueError:
+                _doj = None
+        row = row[:4] + (_doj,) + row[5:14] + (decrypt_pii(row[14]),) + row[15:]  # [14]=gender
         employees.append(row + (emp_status,))
 
     total = len(employees)

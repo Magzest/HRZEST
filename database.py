@@ -231,7 +231,11 @@ def _seed_sqlite_db(raw_conn):
             email TEXT,
             plan TEXT DEFAULT 'premium',
             totp_secret TEXT,
-            totp_enabled INTEGER DEFAULT 0
+            totp_enabled INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            reset_token TEXT,
+            reset_token_expiry TEXT
         );
         ''')
         cur.execute('''
@@ -270,8 +274,19 @@ def _seed_sqlite_db(raw_conn):
             uan_number TEXT,
             about_me TEXT,
             manager_name TEXT,
+            manager_id TEXT,
             shift_id INTEGER,
-            fingerprint_credential_id TEXT
+            fingerprint_credential_id TEXT,
+            fingerprint_public_key TEXT,
+            fingerprint_sign_count INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            work_lat TEXT,
+            work_lon TEXT,
+            designation TEXT,
+            email_alerts_enabled INTEGER DEFAULT 1,
+            joining_date TEXT,
+            reset_token TEXT,
+            reset_token_expiry TEXT
         );
         ''')
         cur.execute('''
@@ -345,6 +360,34 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT,
             name TEXT
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            priority TEXT DEFAULT 'Normal',
+            visibility TEXT DEFAULT 'public',
+            target_employee_id TEXT,
+            attachment_original_name TEXT,
+            attachment_stored_ref TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS email_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            to_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            html_body TEXT NOT NULL,
+            attachment_b64 TEXT,
+            attachment_filename TEXT,
+            status TEXT DEFAULT 'pending',
+            attempts INTEGER DEFAULT 0,
+            last_error TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            sent_at TEXT
         );
         ''')
         cur.execute('''

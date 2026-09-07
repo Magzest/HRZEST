@@ -18,7 +18,7 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info, coerce_datetime
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import get_indian_holidays
 import utils.config as cfg
@@ -450,12 +450,13 @@ def leave_holidays():
     # admin_views.py's announcements_admin() handles create/delete for both).
     cursor.execute("""
         SELECT a.id, a.title, a.content, a.priority, a.created_at,
-               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,'')
+               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,''),
+               a.attachment_original_name
         FROM announcements a
         LEFT JOIN employees e ON e.employee_id = a.target_employee_id
         ORDER BY a.created_at DESC
     """)
-    ann_list = cursor.fetchall()
+    ann_list = [r[:4] + (coerce_datetime(r[4]),) + r[5:] for r in cursor.fetchall()]
     pub_anns = [r for r in ann_list if r[5] == 'public']
     priv_anns = [r for r in ann_list if r[5] == 'private']
 

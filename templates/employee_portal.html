@@ -873,7 +873,7 @@
       {% if announcements %}
       <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-20 u-mb-20">
         <div class="u-fs-14 u-fw-700 u-c-1e293b u-mb-14 u-d-flex u-ai-center u-gap-8">📢 Announcements</div>
-        {% for ann_id, ann_title, ann_content, ann_pri, ann_date in announcements %}
+        {% for ann_id, ann_title, ann_content, ann_pri, ann_date, ann_att in announcements %}
         <div style="border-radius:10px;padding:14px 16px;margin-bottom:10px;border-left:4px solid
           {% if ann_pri=='Urgent' %}#ef4444{% elif ann_pri=='Important' %}#f59e0b{% else %}#3b82f6{% endif %};
           background:{% if ann_pri=='Urgent' %}#fff5f5{% elif ann_pri=='Important' %}#fffbeb{% else %}#f0f7ff{% endif %};">
@@ -884,6 +884,11 @@
               background:{% if ann_pri=='Urgent' %}#fee2e2;color:#dc2626{% elif ann_pri=='Important' %}#fef9c3;color:#92400e{% else %}#dbeafe;color:#1e40af{% endif %};">{{ ann_pri }}</span>
           </div>
           <div class="u-fs-12 u-c-475569 u-lh-1d6">{{ ann_content }}</div>
+          {% if ann_att %}
+          <a class="u-fs-12 u-c-2563eb u-d-inline-flex u-ai-center u-gap-4 u-mt-6" href="{{ tpath('/download_announcement/' ~ ann_id) }}">
+            <i class="ti ti-paperclip"></i> {{ ann_att }}
+          </a>
+          {% endif %}
           <div class="u-fs-11 u-c-94a3b8 u-mt-6">{{ ann_date.strftime('%d %b %Y') if ann_date else '' }}</div>
         </div>
         {% endfor %}

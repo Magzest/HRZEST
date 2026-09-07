@@ -12,7 +12,7 @@ from utils.auth import employee_required, employee_api_required, validate_new_pa
 from utils.helpers import (
     tpath,
     _audit, _db, encrypt_pii, decrypt_pii, decrypt_pii_date, _validate_image_file, get_auth_config,
-    company_today, company_now,
+    company_today, company_now, coerce_datetime,
 )
 from utils.ai_assistant import build_employee_context, ask_assistant
 from utils.session_risk import ensure_session_id, evaluate_session_risk
@@ -480,13 +480,13 @@ def employee_portal():
 
     # Announcements for dashboard (public + private addressed to this employee)
     cursor.execute("""
-        SELECT id, title, content, priority, created_at
+        SELECT id, title, content, priority, created_at, attachment_original_name
         FROM announcements
         WHERE COALESCE(visibility,'public') = 'public'
            OR (visibility = 'private' AND target_employee_id = %s)
         ORDER BY created_at DESC LIMIT 10
     """, (emp_id,))
-    announcements = cursor.fetchall()
+    announcements = [r[:4] + (coerce_datetime(r[4]),) + r[5:] for r in cursor.fetchall()]
 
     # Pending leave count for nav badge
     cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE employee_id=%s AND status='Pending'", (emp_id,))

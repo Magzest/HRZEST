@@ -15,13 +15,17 @@ All actual values are always passed as %s-bound params, never interpolated.
 """
 import os
 import re
+import uuid
 import json
 import secrets
 import datetime
 import calendar
+from io import BytesIO
 from flask import (
     Blueprint, request, session, redirect, jsonify, render_template, flash, abort, g,
+    send_file,
 )
+from werkzeug.utils import secure_filename
 
 from database import get_db_connection, transaction
 from extensions import app, app_log, log_security_event, limiter
@@ -39,9 +43,12 @@ from utils.helpers import (
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     encrypt_pii, decrypt_pii, invalidate_companies_cache,
     _validate_image_file, get_pending_action_counts, _audit, invalidate_settings_cache,
-    post_announcement,
+    post_announcement, _validate_upload,
 )
+from utils.storage import save_private, open_private, delete_private
 from utils.email_utils import get_email_config, send_email_smtp
+
+_ANN_ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
 from utils.totp import (
     get_or_create_admin_totp_secret, mark_totp_enabled, verify_totp_code, totp_qr_data_uri,
     reset_admin_totp_secret,
@@ -1853,22 +1860,72 @@ def announcements_admin():
         action = request.form.get("action")
         if action == "add":
             visibility = request.form.get("visibility", "public")
-            target_emp = request.form.get("target_employee_id", "").strip() or None
-            if visibility == "private" and not target_emp:
-                flash("Please select an employee for a private announcement.", "error")
+            target_emps = [e.strip() for e in request.form.getlist("target_employee_ids") if e.strip()]
+            if visibility == "private" and not target_emps:
+                flash("Please select at least one employee for a private announcement.", "error")
                 cursor.close()
                 db.close()
                 return redirect(tpath("/performance?tab=announcements"))
-            if visibility == "public":
-                target_emp = None
             title = request.form["title"]
             content = request.form.get("content", "")
-            post_announcement(cursor, db, title, content, request.form.get("priority", "Normal"),
-                               visibility, target_emp)
-            flash("Announcement posted.", "success")
+            priority = request.form.get("priority", "Normal")
+            attachment_name = None
+            f = request.files.get("attachment")
+            if f and f.filename:
+                ok, err = _validate_upload(f, _ANN_ALLOWED_EXT)
+                if not ok:
+                    flash(err, "error")
+                    cursor.close()
+                    db.close()
+                    return redirect(tpath("/performance?tab=announcements"))
+                attachment_name = f.filename
+
+            def _save_attachment_copy():
+                """Each announcement row owns an independent copy of the file
+                (re-saved from the still-open upload stream) so deleting one
+                row's attachment can never remove a file another row still
+                references -- cheaper than reference-counting a shared file
+                for the handful-of-employees case this targets."""
+                if not f or not f.filename:
+                    return None, None
+                f.stream.seek(0)
+                rel_path = f"announcements/{uuid.uuid4()}_{secure_filename(attachment_name)}"
+                ref, err = save_private(app.root_path, f, rel_path)
+                if err:
+                    app_log.warning("Announcement attachment save failed: %s", err)
+                return ref, err
+
+            if visibility == "public":
+                attachment_ref, err = _save_attachment_copy()
+                if attachment_name and err:
+                    flash(f"Attachment upload failed: {err}", "error")
+                    cursor.close()
+                    db.close()
+                    return redirect(tpath("/performance?tab=announcements"))
+                post_announcement(cursor, db, title, content, priority, "public", None,
+                                   attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
+                flash("Announcement posted.", "success")
+            else:
+                for target_emp in target_emps:
+                    attachment_ref, err = _save_attachment_copy()
+                    if attachment_name and err:
+                        flash(f"Attachment upload failed: {err}", "error")
+                        cursor.close()
+                        db.close()
+                        return redirect(tpath("/performance?tab=announcements"))
+                    post_announcement(cursor, db, title, content, priority, "private", target_emp,
+                                       attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
+                flash(f"Announcement posted to {len(target_emps)} employee(s).", "success")
         elif action == "delete":
+            cursor.execute("SELECT attachment_stored_ref FROM announcements WHERE id=%s", (request.form["ann_id"],))
+            row = cursor.fetchone()
             cursor.execute("DELETE FROM announcements WHERE id=%s", (request.form["ann_id"],))
             db.commit()
+            if row and row[0]:
+                try:
+                    delete_private(row[0])
+                except Exception as exc:
+                    app_log.warning("Could not remove announcement attachment %s: %s", row[0], exc)
             flash("Announcement deleted.", "success")
         cursor.close()
         db.close()
@@ -1876,6 +1933,40 @@ def announcements_admin():
     cursor.close()
     db.close()
     return redirect(tpath("/performance?tab=announcements"))
+
+
+@admin_views_bp.route("/download_announcement/<int:aid>")
+def download_announcement(aid):
+    is_admin = session.get("admin_logged_in")
+    emp_id = session.get("employee_id")
+    if not is_admin and not emp_id:
+        return redirect(tpath("/login"))
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT COALESCE(visibility,'public'), target_employee_id, attachment_original_name, attachment_stored_ref "
+        "FROM announcements WHERE id=%s", (aid,)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+    fallback = tpath("/employee_portal") if emp_id else tpath("/leave_holidays?tab=announcements")
+    if not row or not row[3]:
+        flash("Attachment not found.", "danger")
+        return redirect(fallback)
+    visibility, target_emp, orig_name, stored_ref = row
+    if not is_admin and visibility == "private" and target_emp != emp_id:
+        log_security_event(
+            "access.denied", "Attempt to download an announcement attachment not addressed to this employee",
+            level="WARNING", identifier=emp_id,
+        )
+        abort(403)
+    try:
+        data = open_private(stored_ref)
+    except Exception:
+        flash("Attachment file is missing or unreadable.", "danger")
+        return redirect(fallback)
+    return send_file(BytesIO(data), as_attachment=True, download_name=orig_name)
 
 
 @admin_views_bp.route("/test_email", methods=["POST"])
