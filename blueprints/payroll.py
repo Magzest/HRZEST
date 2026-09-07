@@ -24,7 +24,7 @@ from flask import (
 from database import get_db_connection
 from extensions import app_log, limiter, log_security_event
 from utils.auth import admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required
-from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today
+from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
@@ -149,7 +149,7 @@ def salary_report():
     )
     lock_row = cursor.fetchone()
     is_locked = lock_row is not None
-    lock_info = {"at": lock_row[0], "by": lock_row[1], "count": lock_row[2]} if lock_row else None
+    lock_info = {"at": coerce_datetime(lock_row[0]), "by": lock_row[1], "count": lock_row[2]} if lock_row else None
 
     cursor.close()
     db.close()
