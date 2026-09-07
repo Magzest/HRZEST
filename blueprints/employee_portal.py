@@ -520,28 +520,10 @@ def employee_portal():
     """, (today, today.year))
     leave_holidays = cursor.fetchall()
 
-    # Holiday calendar data for employee view
+    # Holiday list data for employee view
     hol_year = int(request.args.get("hol_year", today.year))
     cursor.execute("SELECT id, date, name FROM holidays WHERE EXTRACT(YEAR FROM date)=%s ORDER BY date", (hol_year,))
     hol_rows = cursor.fetchall()
-    hol_map = {}
-    for row in hol_rows:
-        date_val = row[1]
-        if isinstance(date_val, datetime.date):
-            hol_map[date_val] = (row[0], row[2])
-    sun_cal_obj = calendar.Calendar(firstweekday=6)
-    emp_hol_cal = []
-    for _m in range(1, 13):
-        m_hols = {}
-        for _d, (_hid, _hname) in hol_map.items():
-            if _d.month == _m:
-                m_hols[_d.day] = (_hid, _hname)
-        emp_hol_cal.append({
-            'month_num': _m,
-            'month_name': calendar.month_name[_m],
-            'weeks': sun_cal_obj.monthdayscalendar(hol_year, _m),
-            'holidays': m_hols,
-        })
 
     # Employee's own incentive history
     try:
@@ -801,7 +783,6 @@ def employee_portal():
                            upcoming_holidays=upcoming_holidays,
                            leave_holidays=leave_holidays,
                            hol_year=hol_year,
-                           emp_hol_cal=emp_hol_cal,
                            all_holidays_list=hol_rows,
                            my_incentives=my_incentives,
                            total_incentive_year=total_incentive_year,
