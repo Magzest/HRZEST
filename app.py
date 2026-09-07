@@ -639,8 +639,25 @@ def _enforce_csrf():
                  or request.headers.get("X-CSRF-Token")
                  or request.headers.get("X-CSRFToken"))
     if not token or not submitted or not secrets.compare_digest(str(token), str(submitted)):
-        # Browser form submissions: redirect to login so the user gets a fresh session+token
-        if request.accept_mimetypes.accept_html and not request.headers.get("X-Requested-With"):
+        # Browser form submissions: redirect to login so the user gets a fresh
+        # session+token. Gated on the request's actual Content-Type, not
+        # Accept/X-Requested-With -- those are unreliable signals for
+        # "this is a real full-page form submission, not a background
+        # fetch() call": a bare fetch() with no explicit headers sends
+        # Accept: */* (which accept_mimetypes.accept_html treats as
+        # accepting HTML too) and never sets X-Requested-With on its own,
+        # so a JSON-posting fetch() call whose CSRF token expired was
+        # taking this branch by mistake. Its JS never follows the redirect
+        # or renders the flash, but flash() still queued the message into
+        # the session -- silently, repeatedly, once per failed background
+        # call -- until the user's next *real* page load (one that calls
+        # get_flashed_messages()) dumped every accumulated copy at once.
+        # A genuine <form method="post"> is the only thing that can ever
+        # carry these two Content-Types; every legitimate fetch() POST in
+        # this app sends JSON instead (see the comment above on why JSON
+        # isn't exempted from the CSRF check itself).
+        if (request.mimetype in ("application/x-www-form-urlencoded", "multipart/form-data")
+                and request.accept_mimetypes.accept_html):
             flash("Your session expired. Please log in again.", "warning")
             # There is no standalone "employee_login" endpoint -- employee and
             # admin credentials are both checked by the one unified /login
