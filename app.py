@@ -1694,6 +1694,7 @@ def _run_schema_migrations(cursor, db):
     those columns exist (indexes, PII widening, FK backstops)."""
     _run_column_migrations(cursor, db)
     _run_password_migrations(cursor, db)
+    _run_qr_signing_migration(cursor, db)
     _run_index_migrations(cursor, db)
     _run_data_integrity_migrations(cursor, db)
 
@@ -1892,6 +1893,40 @@ def _run_password_migrations(cursor, db):
             db.commit()
     except Exception as exc:
         app_log.warning("Migration 'force_pin_change_flag' failed: %s", exc, exc_info=True)
+
+
+def _run_qr_signing_migration(cursor, db):
+    """One-time: regenerate every existing employee's QR code image so it
+    encodes an HMAC-signed value (qr_generator.py's generate_qr/
+    verify_qr_value) instead of the raw employee_id. Employee IDs are
+    often sequential/guessable (EMP001, EMP002, ...), so a QR that just
+    encoded the ID let anyone who knew or guessed a coworker's ID spoof
+    their attendance via the QR-only check-in path with no further
+    verification -- this closes that hole for every employee already in
+    the system, not just ones created after the fix. Existing physical
+    badges/printouts (which still show the old, now-invalid QR) will stop
+    working at check-in and need reprinting from the regenerated image.
+    Runs once per tenant schema (called from init_db(), which
+    init_tenant_db() also calls) via the _applied_migrations guard; a
+    SECRET_KEY rotation invalidates the signature again afterward, at
+    which point blueprints/employees.py's regenerate_qr() refreshes a
+    single employee's badge on demand."""
+    try:
+        cursor.execute("SELECT 1 FROM _applied_migrations WHERE name='qr_code_signing'")
+        if cursor.fetchone():
+            return
+        from qr_generator import generate_qr
+        cursor.execute("SELECT employee_id FROM employees WHERE qr_code IS NOT NULL")
+        for (eid,) in cursor.fetchall():
+            try:
+                new_path = generate_qr(eid)
+                cursor.execute("UPDATE employees SET qr_code=%s WHERE employee_id=%s", (new_path, eid))
+            except Exception as exc:
+                app_log.warning("QR regeneration failed for '%s' during 'qr_code_signing' migration: %s", eid, exc)
+        cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('qr_code_signing')")
+        db.commit()
+    except Exception as exc:
+        app_log.warning("Migration 'qr_code_signing' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations(cursor, db):

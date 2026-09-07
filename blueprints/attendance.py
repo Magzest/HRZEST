@@ -1225,6 +1225,23 @@ def attendance():
         err_msg = "Employee ID is required." if auth_combo == "fingerprint_only" else "No QR code data received."
         return jsonify({"ok": False, "msg": err_msg})
 
+    # For every combo that involves scanning a QR code, the posted
+    # "employee_id" is really whatever text the QR encodes -- which must be
+    # this employee's signed "<id>.<hmac>" value (see qr_generator.py), not
+    # a bare ID. Without this, qr_only in particular performed ZERO
+    # identity verification: the QR previously just encoded the raw,
+    # often-guessable employee_id, so anyone who knew or guessed a
+    # coworker's ID could mark them present/absent with no further check.
+    # fingerprint_only has no QR component (the ID is typed, then a real
+    # fingerprint match against THAT ID's stored credential gates it), so
+    # it's intentionally excluded here.
+    if auth_combo in ("qr_face", "qr_only", "qr_fingerprint"):
+        from qr_generator import verify_qr_value
+        _verified_emp_id, _qr_valid = verify_qr_value(emp_id)
+        if not _qr_valid:
+            return jsonify({"ok": False, "msg": "Invalid or unrecognized QR code. Please rescan."}), 400
+        emp_id = _verified_emp_id
+
     # Attendance auto-lockout -- 4 failed identity-mismatch attempts (face
     # mismatch / fingerprint verify failure) locks online check-in for this
     # employee/day; only an admin manually marking attendance

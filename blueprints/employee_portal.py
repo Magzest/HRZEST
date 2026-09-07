@@ -1228,7 +1228,6 @@ def api_employee_qr_face_checkin():
     kiosk device, which is never logged in), falls back to the posted
     employee_id exactly as before -- unauthenticated by design there, since
     the QR/face/fingerprint combo itself is the proof of identity."""
-    employee_id = (session.get("employee_id") or request.form.get("employee_id", "")).strip().upper()
     lat = request.form.get("lat")
     lon = request.form.get("lon")
     face_photo = request.files.get("face_photo")
@@ -1236,6 +1235,28 @@ def api_employee_qr_face_checkin():
 
     if auth_combo not in ("qr_face", "qr_fingerprint", "face_fingerprint"):
         return jsonify({"ok": False, "msg": "Invalid auth_combo"}), 400
+
+    _session_emp_id = session.get("employee_id")
+    if _session_emp_id:
+        employee_id = _session_emp_id.strip().upper()
+    elif auth_combo in ("qr_face", "qr_fingerprint"):
+        # Shared, unauthenticated kiosk device: the posted "employee_id" is
+        # really whatever text was scanned off the QR code, which must be
+        # this employee's signed "<id>.<hmac>" value (qr_generator.py), not
+        # a bare ID -- otherwise the QR/fingerprint combo below would be
+        # checking the RIGHT biometric against a WRONG (attacker-typed)
+        # employee_id if the two auth factors weren't cryptographically
+        # bound to the same source.
+        from qr_generator import verify_qr_value
+        _verified_id, _qr_valid = verify_qr_value(request.form.get("employee_id", "").strip())
+        if not _qr_valid:
+            return jsonify({"ok": False, "msg": "Invalid or unrecognized QR code. Please rescan."}), 400
+        employee_id = _verified_id.upper()
+    else:
+        # face_fingerprint has no QR component -- the ID is typed/pre-known
+        # at the kiosk, and a real face/fingerprint match against THAT ID's
+        # stored credential is what actually gates identity.
+        employee_id = request.form.get("employee_id", "").strip().upper()
 
     if not employee_id:
         return jsonify({"ok": False, "msg": "employee_id required"}), 400

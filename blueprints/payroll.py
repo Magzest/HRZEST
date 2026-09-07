@@ -1357,6 +1357,22 @@ def view_payslip(emp_id, year, month):
 
 @payroll_bp.route("/download_payslip/<emp_id>/<int:year>/<int:month>")
 def download_payslip(emp_id, year, month):
+    # Same IDOR/role guard as view_payslip() below -- this route is safe
+    # today only because it happens to call view_payslip() as a plain
+    # Python function (which runs its own inline ownership check first),
+    # not because it has a guard of its own. A future refactor that reuses
+    # the payslip-rendering logic through a different path (a shared
+    # helper, a bulk-export route) could silently lose that guard, so it's
+    # checked explicitly here too rather than relying on it being inherited.
+    if not enforce_ownership(emp_id, "payslip", f"{year}-{month:02d}"):
+        return redirect(tpath("/login"))
+    if session.get("admin_logged_in") and session.get("admin_role", "admin") != "admin":
+        log_security_event(
+            "access.denied", "Non-admin role attempted to download an employee payslip",
+            level="ERROR", identifier=session.get("admin_username"),
+            resource_type="payslip", resource_id=f"{emp_id}:{year}-{month:02d}",
+        )
+        return redirect(tpath("/login"))
     html = view_payslip(emp_id, year, month)
     if not isinstance(html, str):
         return html  # redirect or error response
