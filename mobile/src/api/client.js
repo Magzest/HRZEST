@@ -354,17 +354,6 @@ export const fetchOnboardingTasks = (obId) => client.get(`/api/onboarding/${obId
 export const updateOnboardingTaskStatus = (taskId, status, adminNotes = '') =>
   client.post(`/api/onboarding/task/${taskId}/update`, { status, admin_notes: adminNotes });
 
-// ── HR Accounts (admin-only) ──────────────────────────────────────────
-// blueprints/admin_views.py's Bearer twins of the session-only
-// /hr_accounts page and its /api/hr_accounts* actions.
-export const fetchHrAccounts = () => client.get('/api/hr/accounts');
-
-export const createHrAccount = (username, email, password) =>
-  client.post('/api/hr/accounts', { username, email, password });
-
-export const setHrAccountStatus = (username, active) =>
-  client.post(`/api/hr/accounts/${username}/status`, { active });
-
 // blueprints/documents.py's Bearer twins of the session-only document
 // routes -- both admin (manage any employee's documents) and the
 // employee's own upload/list/delete of their own documents.
