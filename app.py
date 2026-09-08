@@ -1400,6 +1400,24 @@ def _init_core_tables(cursor, db):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_actor ON audit_logs (actor)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_action ON audit_logs (action)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_created ON audit_logs (created_at)")
+    # blueprints/email_blast.py's INSERT INTO broadcast_emails had no
+    # matching CREATE TABLE anywhere in the schema -- every admin email-blast
+    # request (broadcast to all/department/individual employees) failed at
+    # the enqueue step with UndefinedTable, silently returning a 500 despite
+    # otherwise looking fully built. Audit record of one broadcast dispatch,
+    # separate from the per-recipient rows it fans out into email_queue.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS broadcast_emails (
+            id SERIAL PRIMARY KEY,
+            sender_username VARCHAR(150) NOT NULL,
+            target_type VARCHAR(20) NOT NULL,
+            target_value VARCHAR(150),
+            subject VARCHAR(500) NOT NULL,
+            body_snippet VARCHAR(200),
+            recipient_count INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS login_attempts (
             id SERIAL PRIMARY KEY,

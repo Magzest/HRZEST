@@ -356,11 +356,11 @@ class TestMobileBiometricRecentlyVerified:
     def test_expired_proof_returns_false(self, db_engine, seed_employee, client):
         emp_id = seed_employee["employee_id"]
         cur = db_engine.cursor()
-        old_ts = datetime.datetime.now() - datetime.timedelta(seconds=9999)
         cur.execute("DELETE FROM mobile_biometric_proofs WHERE employee_id=%s", (emp_id,))
         cur.execute(
-            "INSERT INTO mobile_biometric_proofs (employee_id, verified_at) VALUES (%s, %s)",
-            (emp_id, old_ts),
+            "INSERT INTO mobile_biometric_proofs (employee_id, verified_at) "
+            "VALUES (%s, NOW() - %s * INTERVAL '1 second')",
+            (emp_id, 9999),
         )
         from utils.webauthn_utils import _mobile_biometric_recently_verified
         with client.application.test_request_context("/"):
@@ -636,7 +636,7 @@ class TestBulkMarkAttendanceCoverage:
 
 class TestKioskLoginStatus:
 
-    def _login_fresh(self, client, seed_employee, db_engine, mocker, s_start, s_half, grace):
+    def _login_fresh(self, client, seed_employee, db_engine, mocker, s_start, s_half, grace, signed_qr):
         import blueprints.attendance as att
         today = datetime.date.today()
         cur = db_engine.cursor()
@@ -651,7 +651,7 @@ class TestKioskLoginStatus:
                      return_value=(s_start, s_half, datetime.time(18, 0), "Test Shift"))
         mocker.patch.object(att.cfg, "GRACE_MINUTES", grace)
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         cur = db_engine.cursor()
@@ -660,25 +660,27 @@ class TestKioskLoginStatus:
         cur.close()
         return rv
 
-    def test_late_login_status(self, client, seed_employee, db_engine, mocker):
+    def test_late_login_status(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Line 1120: current_time > grace_time but <= s_half → 'Late Login'."""
         rv = self._login_fresh(
             client, seed_employee, db_engine, mocker,
             s_start=datetime.time(0, 0),
             s_half=datetime.time(23, 59),
             grace=0,  # grace_time = 00:00 → any time > midnight = Late Login
+            signed_qr=signed_qr,
         )
         data = rv.get_json()
         assert data["ok"] is True, data
         assert data["status"] == "Late Login"
 
-    def test_half_day_login_status(self, client, seed_employee, db_engine, mocker):
+    def test_half_day_login_status(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Line 1122: current_time > s_half → 'Half Day Login'."""
         rv = self._login_fresh(
             client, seed_employee, db_engine, mocker,
             s_start=datetime.time(0, 0),
             s_half=datetime.time(0, 1),  # s_half=00:01 → any daytime is Half Day
             grace=0,
+            signed_qr=signed_qr,
         )
         data = rv.get_json()
         assert data["ok"] is True, data
@@ -691,7 +693,7 @@ class TestKioskLoginStatus:
 
 class TestKioskLogoutStatus:
 
-    def _logout(self, client, seed_employee, db_engine, mocker, s_half, s_end):
+    def _logout(self, client, seed_employee, db_engine, mocker, s_half, s_end, signed_qr):
         today = datetime.date.today()
         cur = db_engine.cursor()
         cur.execute("DELETE FROM attendance WHERE employee_id=%s AND date=%s",
@@ -709,7 +711,7 @@ class TestKioskLogoutStatus:
         mocker.patch("blueprints.attendance.get_employee_shift",
                      return_value=(datetime.time(9, 0), s_half, s_end, "Test Shift"))
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         cur = db_engine.cursor()
@@ -718,29 +720,31 @@ class TestKioskLogoutStatus:
         cur.close()
         return rv
 
-    def test_half_day_logout_status(self, client, seed_employee, db_engine, mocker):
+    def test_half_day_logout_status(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Line 1144: current_time < s_half → 'Half Day Logout'."""
         rv = self._logout(
             client, seed_employee, db_engine, mocker,
             s_half=datetime.time(23, 59),
             s_end=datetime.time(23, 59),
+            signed_qr=signed_qr,
         )
         data = rv.get_json()
         assert data["ok"] is True, data
         assert data["status"] == "Half Day Logout"
 
-    def test_early_logout_status(self, client, seed_employee, db_engine, mocker):
+    def test_early_logout_status(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Line 1146: s_half <= current_time < s_end → 'Early Logout'."""
         rv = self._logout(
             client, seed_employee, db_engine, mocker,
             s_half=datetime.time(0, 1),   # past midnight → no Half Day Logout
             s_end=datetime.time(23, 59),   # hasn't reached end yet → Early Logout
+            signed_qr=signed_qr,
         )
         data = rv.get_json()
         assert data["ok"] is True, data
         assert data["status"] == "Early Logout"
 
-    def test_second_logout_uses_last_relogin(self, client, seed_employee, att_post_relogin, db_engine, mocker):
+    def test_second_logout_uses_last_relogin(self, client, seed_employee, att_post_relogin, db_engine, mocker, signed_qr):
         """Line 1135: session_start = last_relogin_stored (not login_time) for second logout."""
         # att_post_relogin: login_time SET, logout_time NULL, last_relogin='12:30:00'
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
@@ -750,7 +754,7 @@ class TestKioskLogoutStatus:
         mocker.patch("blueprints.attendance.get_employee_shift",
                      return_value=(datetime.time(8, 0), datetime.time(0, 1), datetime.time(23, 59), "Test Shift"))
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -765,7 +769,7 @@ class TestKioskLogoutStatus:
 
 class TestKioskWfhGeoFence:
 
-    def test_wfh_employee_outside_home_rejected(self, client, seed_employee, db_engine, mocker):
+    def test_wfh_employee_outside_home_rejected(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Lines 1059-1062: work_mode='wfh' + work_lat/lon set + user outside → rejected."""
         cur = db_engine.cursor()
         cur.execute(
@@ -779,7 +783,7 @@ class TestKioskWfhGeoFence:
         })
         try:
             rv = client.post("/attendance", json={
-                "employee_id": seed_employee["employee_id"],
+                "employee_id": signed_qr(seed_employee["employee_id"]),
                 "auth_combo":  "qr_only",
                 "lat":         19.0760,   # Mumbai — far from Bangalore home
                 "lon":         72.8777,
@@ -1074,7 +1078,7 @@ class TestQrFaceCheckinCoverage:
         buf.seek(0)
         return buf
 
-    def test_wfh_outside_home_rejected(self, client, seed_employee, db_engine, mocker):
+    def test_wfh_outside_home_rejected(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Lines 1589-1600: WFH employee outside home → rejected."""
         cur = db_engine.cursor()
         cur.execute(
@@ -1088,7 +1092,7 @@ class TestQrFaceCheckinCoverage:
         })
         try:
             rv = client.post("/api/employee/qr-face-checkin", data={
-                "employee_id": seed_employee["employee_id"],
+                "employee_id": signed_qr(seed_employee["employee_id"]),
                 "auth_combo":  "qr_face",
                 "lat":         "19.0760",
                 "lon":         "72.8777",
@@ -1104,7 +1108,7 @@ class TestQrFaceCheckinCoverage:
             )
             cur.close()
 
-    def test_optional_face_photo_saved_when_not_needed(self, client, seed_employee, db_engine, mocker):
+    def test_optional_face_photo_saved_when_not_needed(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Lines 1636-1645: auth_combo=qr_fingerprint (no face needed) + face_photo uploaded → save attempt."""
         today = datetime.date.today()
         cur = db_engine.cursor()
@@ -1125,7 +1129,7 @@ class TestQrFaceCheckinCoverage:
         mocker.patch.object(att.cfg, "SHIFT_HALF", datetime.time(23, 59))
         mocker.patch.object(att.cfg, "SHIFT_END", datetime.time(23, 59))
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",  # needs fp not face
             "face_photo":  (self._make_jpeg(), "face.jpg"),
         }, content_type="multipart/form-data")
@@ -1137,7 +1141,7 @@ class TestQrFaceCheckinCoverage:
         cur.execute("DELETE FROM attendance WHERE employee_id='TST001' AND date=%s", (today,))
         cur.close()
 
-    def test_qr_face_known_enc_none_returns_400(self, client, seed_employee, db_engine, mocker):
+    def test_qr_face_known_enc_none_returns_400(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Lines 1622-1627: _get_known_face_encoding returns None → 400."""
         cur = db_engine.cursor()
         cur.execute("UPDATE employees SET face_image='/tmp/fake_face.jpg' WHERE employee_id='TST001'")
@@ -1151,7 +1155,7 @@ class TestQrFaceCheckinCoverage:
         mocker.patch("blueprints.employee_portal._get_known_face_encoding", return_value=None)
         # PIL.Image.open will be called; provide a valid JPEG
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_photo":  (self._make_jpeg(), "face.jpg"),
         }, content_type="multipart/form-data")
@@ -1168,7 +1172,7 @@ class TestQrFaceCheckinCoverage:
             sess["wa_fp_verified_emp_id"] = emp_id.upper()
             sess["wa_fp_verified_at"] = _time_stdlib.time()
 
-    def test_late_login_qrface(self, client, seed_employee, db_engine, mocker):
+    def test_late_login_qrface(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Line 1668: current_time > grace but <= s_half → Late Login."""
         today = datetime.date.today()
         cur = db_engine.cursor()
@@ -1185,7 +1189,7 @@ class TestQrFaceCheckinCoverage:
         mocker.patch.object(att.cfg, "SHIFT_HALF", datetime.time(23, 59))
         mocker.patch.object(att.cfg, "SHIFT_END", datetime.time(23, 59))
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         }, content_type="multipart/form-data")
         data = rv.get_json()
@@ -1195,7 +1199,7 @@ class TestQrFaceCheckinCoverage:
         cur.execute("DELETE FROM attendance WHERE employee_id='TST001' AND date=%s", (today,))
         cur.close()
 
-    def test_half_day_login_qrface(self, client, seed_employee, db_engine, mocker):
+    def test_half_day_login_qrface(self, client, seed_employee, db_engine, mocker, signed_qr):
         """Line 1670: current_time > s_half → Half Day Login."""
         today = datetime.date.today()
         cur = db_engine.cursor()
@@ -1212,7 +1216,7 @@ class TestQrFaceCheckinCoverage:
         mocker.patch.object(att.cfg, "SHIFT_HALF", datetime.time(0, 1))
         mocker.patch.object(att.cfg, "SHIFT_END", datetime.time(23, 59))
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         }, content_type="multipart/form-data")
         data = rv.get_json()
@@ -1222,7 +1226,7 @@ class TestQrFaceCheckinCoverage:
         cur.execute("DELETE FROM attendance WHERE employee_id='TST001' AND date=%s", (today,))
         cur.close()
 
-    def test_half_day_logout_qrface(self, client, seed_employee, att_login_only, db_engine, mocker):
+    def test_half_day_logout_qrface(self, client, seed_employee, att_login_only, db_engine, mocker, signed_qr):
         """Line 1687: current_time < s_half → Half Day Logout."""
         self._qr_fp_session(client, seed_employee["employee_id"])
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
@@ -1233,14 +1237,14 @@ class TestQrFaceCheckinCoverage:
         mocker.patch.object(att.cfg, "SHIFT_HALF", datetime.time(23, 59))
         mocker.patch.object(att.cfg, "SHIFT_END", datetime.time(23, 59))
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         }, content_type="multipart/form-data")
         data = rv.get_json()
         assert data["ok"] is True, data
         assert data["status"] == "Half Day Logout"
 
-    def test_early_logout_qrface(self, client, seed_employee, att_login_only, db_engine, mocker):
+    def test_early_logout_qrface(self, client, seed_employee, att_login_only, db_engine, mocker, signed_qr):
         """Line 1689: s_half < current_time < s_end → Early Logout."""
         self._qr_fp_session(client, seed_employee["employee_id"])
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
@@ -1251,14 +1255,14 @@ class TestQrFaceCheckinCoverage:
         mocker.patch.object(att.cfg, "SHIFT_HALF", datetime.time(0, 1))
         mocker.patch.object(att.cfg, "SHIFT_END", datetime.time(23, 59))
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         }, content_type="multipart/form-data")
         data = rv.get_json()
         assert data["ok"] is True, data
         assert data["status"] == "Early Logout"
 
-    def test_relogin_qrface(self, client, seed_employee, att_completed_basic, db_engine, mocker):
+    def test_relogin_qrface(self, client, seed_employee, att_completed_basic, db_engine, mocker, signed_qr):
         """Lines 1704-1711: relogin after a completed session."""
         self._qr_fp_session(client, seed_employee["employee_id"])
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
@@ -1266,7 +1270,7 @@ class TestQrFaceCheckinCoverage:
             "fingerprint_enabled": True, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         }, content_type="multipart/form-data")
         data = rv.get_json()

@@ -13,7 +13,6 @@ import json
 import re
 import secrets
 import time
-import datetime
 from urllib.parse import urlparse
 
 from flask import request, session, flash
@@ -152,16 +151,25 @@ def _mobile_biometric_issue_nonce(emp_id):
 
 def _mobile_biometric_attest(emp_id, nonce):
     """Consume a nonce after the mobile app confirms a local biometric/device
-    check for this exact authenticated employee. Returns (ok, err_msg)."""
+    check for this exact authenticated employee. Returns (ok, err_msg).
+
+    The expiry check is done in SQL (nonce_expires_at > NOW()) rather than
+    fetching nonce_expires_at and comparing it to Python's
+    datetime.datetime.now() -- that comparison used to compare a naive
+    UTC timestamp (nonce_expires_at is computed by Postgres's own NOW(),
+    stored in a "timestamp without time zone" column) against Python's
+    *local* system clock. On any server whose OS timezone isn't UTC (e.g.
+    IST, UTC+5:30), that made every nonce look already-expired immediately
+    after issuance, permanently breaking mobile biometric attestation."""
     if not nonce:
         return False, "Missing nonce"
     with _db() as (cursor, conn):
         cursor.execute(
-            "SELECT nonce, nonce_expires_at FROM mobile_biometric_proofs WHERE employee_id=%s",
-            (emp_id,)
+            "SELECT 1 FROM mobile_biometric_proofs "
+            "WHERE employee_id=%s AND nonce=%s AND nonce_expires_at > NOW()",
+            (emp_id, nonce)
         )
-        row = cursor.fetchone()
-        if not row or row[0] != nonce or not row[1] or row[1] < datetime.datetime.now():
+        if not cursor.fetchone():
             return False, "Invalid or expired nonce"
         cursor.execute(
             "UPDATE mobile_biometric_proofs SET nonce=NULL, nonce_expires_at=NULL, verified_at=NOW() "
@@ -175,25 +183,29 @@ def _mobile_biometric_attest(emp_id, nonce):
 def _mobile_biometric_recently_verified(emp_id):
     """One-time, employee-bound check mirroring _wa_fingerprint_recently_verified,
     but DB-backed (mobile has no Flask session) and gated by a real employee
-    Bearer token at both the nonce-issue and attest steps above."""
+    Bearer token at both the nonce-issue and attest steps above.
+
+    The window check is done in SQL (verified_at > NOW() - INTERVAL ...)
+    rather than fetching verified_at and diffing it against Python's
+    datetime.datetime.now() -- see _mobile_biometric_attest's docstring for
+    why that previously broke this check on any non-UTC server."""
     emp_id = (emp_id or "").strip().upper()
     if not emp_id:
         return False
     with _db() as (cursor, conn):
         cursor.execute(
-            "SELECT verified_at FROM mobile_biometric_proofs WHERE employee_id=%s",
-            (emp_id,)
+            "SELECT 1 FROM mobile_biometric_proofs "
+            "WHERE employee_id=%s AND verified_at IS NOT NULL "
+            "AND verified_at > NOW() - %s * INTERVAL '1 second'",
+            (emp_id, _MOBILE_BIO_VERIFY_WINDOW_SEC)
         )
-        row = cursor.fetchone()
-        if not row or not row[0]:
-            return False
-        verified_at = row[0]
+        found = cursor.fetchone() is not None
         cursor.execute(
             "UPDATE mobile_biometric_proofs SET verified_at=NULL WHERE employee_id=%s",
             (emp_id,)
         )
         conn.commit()
-    return (datetime.datetime.now() - verified_at).total_seconds() <= _MOBILE_BIO_VERIFY_WINDOW_SEC
+    return found
 
 
 def _wa_verify_and_store_registration(emp_id, credential, challenge_b64, cursor, db):

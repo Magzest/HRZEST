@@ -203,13 +203,18 @@ class TestMobileBiometricFlow:
     def test_recently_verified_expired_window_returns_false(self, seed_employee, db_engine):
         emp_id = seed_employee["employee_id"]
         cur = db_engine.cursor()
-        stale = datetime.datetime.now() - datetime.timedelta(
-            seconds=wa._MOBILE_BIO_VERIFY_WINDOW_SEC + 30
-        )
+        # Computed via Postgres's own NOW() (matching how the production code
+        # now compares, and how nonce_expires_at/verified_at are populated),
+        # not Python's datetime.datetime.now() -- that's the local system
+        # clock, which on a non-UTC server (e.g. IST) doesn't line up with
+        # the naive-but-UTC timestamps Postgres stores in this "timestamp
+        # without time zone" column, and would make this "stale" value look
+        # recent instead.
         cur.execute(
-            "INSERT INTO mobile_biometric_proofs (employee_id, verified_at) VALUES (%s, %s) "
+            "INSERT INTO mobile_biometric_proofs (employee_id, verified_at) "
+            "VALUES (%s, NOW() - %s * INTERVAL '1 second') "
             "ON CONFLICT (employee_id) DO UPDATE SET verified_at=EXCLUDED.verified_at",
-            (emp_id, stale),
+            (emp_id, wa._MOBILE_BIO_VERIFY_WINDOW_SEC + 30),
         )
         db_engine.commit()
         cur.close()

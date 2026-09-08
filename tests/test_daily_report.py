@@ -147,6 +147,13 @@ class TestGenerateAndSendDailyReport:
                 "INSERT INTO leave_requests (employee_id, leave_date, reason, status) "
                 "VALUES (%s,%s,%s,'Pending')", (emp_absent, today, "still deciding"),
             )
+            # get_pending_counts() (which stats["pending_leaves"] comes from,
+            # via blueprints/daily_report.py) is cached for 30s -- without
+            # invalidating it here, a call from an earlier test elsewhere in
+            # the suite can leave a stale count in place and this assertion
+            # sees that stale value instead of the row just inserted above.
+            from utils.helpers import invalidate_pending_counts_cache
+            invalidate_pending_counts_cache()
 
             # Capture the stats dict passed to _build_email_html instead of
             # asserting on hardcoded totals -- att_test is a persistent,

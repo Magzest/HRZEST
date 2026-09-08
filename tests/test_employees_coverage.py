@@ -60,6 +60,32 @@ class TestViewEmployees:
         assert rv.status_code == 200
         assert seed_employee["employee_id"].encode() in rv.data
 
+    def test_schedule_modal_js_preserves_tenant_prefix(self, client, seed_admin):
+        """Regression guard for a real tenant-isolation bug: the edit-shift/
+        edit-break modals' JS used to overwrite the form's action with a bare
+        '/edit_shift/' + id / '/update_break/' + id, discarding whatever
+        tenant-slug prefix tpath() had baked into the form's initial,
+        server-rendered action -- silently submitting outside the tenant's
+        URL scope on a tenant-prefixed deployment. The fix rewrites only the
+        trailing id segment via .replace(...) so the prefix survives.
+
+        No JS engine runs in this suite (no Selenium/Playwright), so this
+        can't execute the browser code -- it guards the source text itself:
+        fails if the vulnerable bare-assignment pattern is ever reintroduced,
+        or if the prefix-preserving .replace(...) fix is removed."""
+        _admin_session(client, seed_admin)
+        rv = client.get("/employees?tab=schedule")
+        assert rv.status_code == 200
+        body = rv.get_data(as_text=True)
+
+        assert "shiftForm.action.replace(/\\/edit_shift\\/[^/?]*$/, '/edit_shift/' + id)" in body
+        assert "breakForm.action.replace(/\\/update_break\\/[^/?]*$/, '/update_break/' + id)" in body
+
+        # The vulnerable pattern this test guards against: a bare assignment
+        # that drops any tenant prefix tpath() added to the form's action.
+        assert "document.getElementById('editShiftForm').action = '/edit_shift/' + id" not in body
+        assert "document.getElementById('editBreakForm').action = '/update_break/' + id" not in body
+
 
 # ── api_employee_info ─────────────────────────────────────────────────────────
 

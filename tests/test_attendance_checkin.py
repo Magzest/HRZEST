@@ -269,15 +269,15 @@ class TestKioskAttendance:
         assert data["ok"] is False
         assert "Employee ID is required" in data["msg"]
 
-    def test_unknown_employee(self, client):
+    def test_unknown_employee(self, client, signed_qr):
         rv = client.post("/attendance", json={
-            "employee_id": "GHOST99", "auth_combo": "qr_only",
+            "employee_id": signed_qr("GHOST99"), "auth_combo": "qr_only",
         })
         data = rv.get_json()
         assert data["ok"] is False
         assert "not found" in data["msg"].lower()
 
-    def test_qr_only_login_creates_attendance_record(self, client, seed_employee, db_engine, mocker):
+    def test_qr_only_login_creates_attendance_record(self, client, seed_employee, db_engine, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "qr_enabled": True,
             "face_enabled": True, "location_enabled": False,
@@ -289,7 +289,7 @@ class TestKioskAttendance:
         cur.close()
 
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -309,13 +309,13 @@ class TestKioskAttendance:
         assert row[0] is not None   # login_time set
         assert row[1] is None       # logout_time still NULL
 
-    def test_qr_only_logout_sets_logout_time(self, client, seed_employee, attendance_today, db_engine, mocker):
+    def test_qr_only_logout_sets_logout_time(self, client, seed_employee, attendance_today, db_engine, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "qr_enabled": True,
             "face_enabled": True, "location_enabled": False,
         })
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -329,13 +329,13 @@ class TestKioskAttendance:
         assert cur.fetchone()[0] is not None
         cur.close()
 
-    def test_qr_only_relogin_clears_logout_time(self, client, seed_employee, attendance_completed, db_engine, mocker):
+    def test_qr_only_relogin_clears_logout_time(self, client, seed_employee, attendance_completed, db_engine, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "qr_enabled": True,
             "face_enabled": True, "location_enabled": False,
         })
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -348,9 +348,9 @@ class TestKioskAttendance:
         assert cur.fetchone()[0] is None
         cur.close()
 
-    def test_qr_face_empty_face_image(self, client, seed_employee):
+    def test_qr_face_empty_face_image(self, client, seed_employee, signed_qr):
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_image":  "",
         })
@@ -358,9 +358,9 @@ class TestKioskAttendance:
         assert data["ok"] is False
         assert "Face photo not captured" in data["msg"]
 
-    def test_qr_face_invalid_base64(self, client, seed_employee):
+    def test_qr_face_invalid_base64(self, client, seed_employee, signed_qr):
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_image":  "!!!not_valid_base64!!!",
         })
@@ -368,7 +368,7 @@ class TestKioskAttendance:
         assert data["ok"] is False
         assert "Invalid face image data" in data["msg"]
 
-    def test_qr_face_recognition_unavailable(self, client, seed_employee, mocker):
+    def test_qr_face_recognition_unavailable(self, client, seed_employee, mocker, signed_qr):
         from PIL import Image as _PIL
         buf = io.BytesIO()
         _PIL.new("RGB", (100, 100)).save(buf, format="JPEG")
@@ -380,7 +380,7 @@ class TestKioskAttendance:
         })
         mocker.patch("blueprints.attendance._face_recognition_available", False)
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_image":  face_b64,
         })
@@ -413,27 +413,27 @@ class TestKioskAttendance:
         assert rv.status_code == 401
         assert rv.get_json()["ok"] is False
 
-    def test_location_required_but_missing(self, client, seed_employee, mocker):
+    def test_location_required_but_missing(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "location_enabled": True,
             "face_enabled": False, "qr_enabled": True,
         })
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
         assert data["ok"] is False
         assert "Location not captured" in data["msg"]
 
-    def test_location_outside_office_rejected(self, client, seed_employee, mocker):
+    def test_location_outside_office_rejected(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "location_enabled": True,
             "face_enabled": False, "qr_enabled": True,
         })
         mocker.patch("blueprints.attendance.is_within_office_range", return_value=False)
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
             "lat": 19.0760, "lon": 72.8777,
         })
@@ -662,40 +662,40 @@ class TestApiQrFaceCheckin:
         })
         assert rv.status_code == 400
 
-    def test_qr_disabled_returns_403(self, client, seed_employee, mocker):
+    def test_qr_disabled_returns_403(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": False, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 403
 
-    def test_face_disabled_returns_403(self, client, seed_employee, mocker):
+    def test_face_disabled_returns_403(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": False,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 403
 
-    def test_fingerprint_disabled_returns_403(self, client, seed_employee, mocker):
+    def test_fingerprint_disabled_returns_403(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         assert rv.status_code == 403
 
-    def test_fingerprint_not_verified_returns_401(self, client, seed_employee, mocker):
+    def test_fingerprint_not_verified_returns_401(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": True, "location_enabled": False,
@@ -703,24 +703,24 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._wa_fingerprint_recently_verified", return_value=False)
         mocker.patch("blueprints.employee_portal._mobile_biometric_recently_verified", return_value=False)
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         assert rv.status_code == 401
 
-    def test_unknown_employee_returns_404(self, client, mocker):
+    def test_unknown_employee_returns_404(self, client, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": "GHOST99",
+            "employee_id": signed_qr("GHOST99"),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 404
 
     def test_qr_fingerprint_login_with_verified_fingerprint(
-            self, client, seed_employee, db_engine, mocker):
+            self, client, seed_employee, db_engine, mocker, signed_qr):
         """qr_fingerprint with a verified fingerprint should create a login record."""
         today = datetime.date.today()
         cur = db_engine.cursor()
@@ -735,7 +735,7 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._wa_fingerprint_recently_verified", return_value=True)
 
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         data = rv.get_json()
@@ -747,19 +747,19 @@ class TestApiQrFaceCheckin:
                     (seed_employee["employee_id"], today))
         cur.close()
 
-    def test_qr_face_without_photo_returns_400(self, client, seed_employee, mocker):
+    def test_qr_face_without_photo_returns_400(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 400
         assert "face photo required" in rv.get_json()["msg"].lower()
 
-    def test_qr_face_with_face_recognition_unavailable(self, client, seed_employee, mocker):
+    def test_qr_face_with_face_recognition_unavailable(self, client, seed_employee, mocker, signed_qr):
         from PIL import Image as _PIL
         buf = io.BytesIO()
         _PIL.new("RGB", (100, 100)).save(buf, format="JPEG")
@@ -772,7 +772,7 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._face_recognition_available", False)
 
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_photo":  (buf, "face.jpg", "image/jpeg"),
         }, content_type="multipart/form-data")
@@ -780,7 +780,7 @@ class TestApiQrFaceCheckin:
         assert "unavailable" in rv.get_json()["msg"].lower()
 
     def test_qr_fingerprint_relogin_after_completed(
-            self, client, seed_employee, attendance_completed, mocker):
+            self, client, seed_employee, attendance_completed, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": True, "location_enabled": False,
@@ -788,7 +788,7 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._wa_fingerprint_recently_verified", return_value=True)
 
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         data = rv.get_json()

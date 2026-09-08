@@ -211,7 +211,12 @@ class TestNineBoxTalentMatrix:
             # CSS), so scope the search to the 9-box panel specifically --
             # otherwise the employee's row in the (hidden) main table would
             # produce a false positive.
-            grid_html = body[body.index('id="tab-9box"'):body.index('id="tab-announcements"')]
+            # tab-9box is the last tab-content section in performance.html
+            # (Announcements moved to leave_holidays.html a while back, so
+            # "tab-announcements" no longer exists here to slice up to) --
+            # slicing to the end of the body still isolates the 9-box grid
+            # markup from the other, earlier tab-content sections.
+            grid_html = body[body.index('id="tab-9box"'):]
             assert seed_employee["name"] in grid_html
             # The employee's card must land inside the "Star" cell (high
             # performance, high potential) specifically -- "Star" is that
@@ -244,7 +249,12 @@ class TestNineBoxTalentMatrix:
             resp = client.get(f"/performance?tab=9box&quarter={q}&year={today.year}")
             assert resp.status_code == 200
             body = resp.data.decode()
-            grid_html = body[body.index('id="tab-9box"'):body.index('id="tab-announcements"')]
+            # tab-9box is the last tab-content section in performance.html
+            # (Announcements moved to leave_holidays.html a while back, so
+            # "tab-announcements" no longer exists here to slice up to) --
+            # slicing to the end of the body still isolates the 9-box grid
+            # markup from the other, earlier tab-content sections.
+            grid_html = body[body.index('id="tab-9box"'):]
             assert seed_employee["name"] not in grid_html
         finally:
             _cleanup_reviews(db_engine, seed_employee["employee_id"])

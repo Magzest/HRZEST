@@ -224,6 +224,26 @@ def client():
 
 
 @pytest.fixture
+def signed_qr():
+    """Returns a signed_qr(emp_id) callable that signs an employee_id the
+    same way qr_generator.generate_qr() does, for tests that POST a QR
+    check-in payload (auth_combo in qr_only/qr_face/qr_fingerprint) --
+    blueprints/attendance.py now runs every such employee_id through
+    qr_generator.verify_qr_value(), which requires the "{emp_id}.{signature}"
+    format, not a bare employee_id. Reuses the real signing function (not a
+    reimplementation) so this can never drift from production behavior.
+    Works even for an employee_id that doesn't exist in the DB -- signing is
+    a pure HMAC over the string, independent of whether the employee is
+    real, which is exactly what a negative-case test (e.g. an unknown
+    employee ID) needs to reach the app's own "employee not found" check
+    instead of failing at signature verification."""
+    from qr_generator import _qr_signature
+    def _sign(emp_id):
+        return f"{emp_id}.{_qr_signature(emp_id)}"
+    return _sign
+
+
+@pytest.fixture
 def seed_admin(db_engine):
     """Insert a test admin user; clean up after the test.
 
