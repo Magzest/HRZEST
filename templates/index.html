@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Redirect raw-IP loopback → localhost so WebAuthn rpId matches origin -->
-    <script>if(location.hostname==="127.0.0.1"||location.hostname==="::1"){location.replace(location.href.replace(location.hostname,"localhost"));}</script>
+    <!-- Raw-IP loopback → localhost normalization now happens server-side
+         (app.py's _normalize_loopback_host), before login sets any cookie. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Attendance Scanner</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />

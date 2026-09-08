@@ -10,7 +10,8 @@
         document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('dark-mode'); });
       }
     })();
-    if(location.hostname==="127.0.0.1"||location.hostname==="::1"){location.replace(location.href.replace(location.hostname,"localhost"));}
+    // Raw-IP loopback → localhost normalization now happens server-side
+    // (app.py's _normalize_loopback_host), before login sets any cookie.
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Admin{% endblock %} — {{ co.company_name }}</title>
