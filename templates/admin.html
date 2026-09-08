@@ -4,16 +4,6 @@
 
 {% block page_css %}
 <style>
-  /* Neutralizes shared.min.css's legacy indigo/blue-600 utility-class
-     layer for this page only -- overrides the specific class instances
-     used here rather than editing the shared generated stylesheet. */
-  .u-c-1e3a8a, .u-c-1e40af, .u-c-2563eb, .u-c-1d4ed8, .u-c-3b82f6,
-  .u-c-6366f1, .u-c-7c3aed, .u-c-6d28d9, .u-c-8b5cf6 { color: #1E3A5F !important; }
-  .u-bg-1e3a8a, .u-bg-3b82f6, .u-bg-6366f1, .u-bg-7c3aed { background: #1E3A5F !important; }
-  .u-bg-eff6ff, .u-bg-dbeafe, .u-bg-ede9fe { background: #E7ECF1 !important; }
-  .u-c-bfdbfe { color: #A9BCCB !important; }
-  .u-accent-1e3a8a, .u-accent-7c3aed { accent-color: #1E3A5F !important; }
-
   /* ── PAGE HEADER ── */
   .page-header {
     display: flex; align-items: center; justify-content: space-between;
@@ -30,7 +20,7 @@
   }
   .hbtn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
   .hbtn-green  { background: #16a34a; color: white; }
-  .hbtn-blue   { background: #1E3A5F; color: white; }
+  .hbtn-blue   { background: #2563eb; color: white; }
 
   /* ── ADMIN SEARCH ── */
   .admin-search-wrap { position: relative; flex: 1; min-width: 220px; max-width: 420px; }
@@ -42,7 +32,7 @@
     width: 100%; padding: 10px 14px 10px 38px; border: 1px solid #e2e8f0; border-radius: 10px;
     font-size: 13px; font-family: inherit; background: #fff; color: #0f172a; outline: none; transition: 0.15s;
   }
-  .admin-search-input:focus { border-color: #1E3A5F; box-shadow: 0 0 0 3px rgba(30, 58, 95,0.12); }
+  .admin-search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
   .admin-search-results {
     position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 500;
     background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 16px 40px rgba(15,23,42,0.18);
@@ -57,9 +47,9 @@
     display: flex; align-items: center; gap: 10px; padding: 9px 14px;
     text-decoration: none; color: inherit; cursor: pointer;
   }
-  .asr-item:hover, .asr-item.active { background: #FAFAFA; }
+  .asr-item:hover, .asr-item.active { background: #eff6ff; }
   .asr-icon {
-    width: 30px; height: 30px; border-radius: 8px; background: #eef2f7; color: #1E3A5F;
+    width: 30px; height: 30px; border-radius: 8px; background: #eef2f7; color: #2563eb;
     display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px;
   }
   .asr-label { font-size: 13px; font-weight: 600; color: #1e293b; }
@@ -76,23 +66,23 @@
   /* ── STAT CARDS ── */
   .stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 16px; margin-bottom: 24px; }
   .stat-card {
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-    padding: 16px 18px; display: flex; align-items: center; gap: 16px;
-    text-decoration: none; color: #0f172a; transition: 0.15s;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 18px 20px; display: flex; align-items: center; gap: 16px;
+    text-decoration: none; color: #0f172a; transition: 0.2s;
   }
-  .stat-card:hover { border-color: #B7C7D6; box-shadow: 0 2px 8px rgba(30, 58, 95, 0.08); }
+  .stat-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(30,58,138,0.1); transform: translateY(-2px); }
   .stat-icon {
-    width: 44px; height: 44px; border-radius: 8px;
+    width: 52px; height: 52px; border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; flex-shrink: 0;
+    font-size: 24px; flex-shrink: 0;
   }
-  .si-blue   { background: #E7ECF1; }
+  .si-blue   { background: #dbeafe; }
   .si-green  { background: #dcfce7; }
   .si-red    { background: #fee2e2; }
   .si-yellow { background: #fef9c3; }
   .stat-num  { font-size: 32px; font-weight: 800; line-height: 1; }
   .stat-lbl  { font-size: 12px; color: #64748b; margin-top: 3px; font-weight: 500; }
-  .sn-blue   { color: #1E3A5F; }
+  .sn-blue   { color: #2563eb; }
   .sn-green  { color: #16a34a; }
   .sn-red    { color: #dc2626; }
   .sn-yellow { color: #d97706; }
@@ -100,7 +90,7 @@
   /* ── SECTION ── */
   .section {
     background: #fff; border: 1px solid #e2e8f0;
-    border-radius: 8px; padding: 18px 20px; margin-bottom: 16px;
+    border-radius: 16px; padding: 22px 24px; margin-bottom: 20px;
     color: #0f172a;
   }
   .section-title {
@@ -122,11 +112,11 @@
   .empty-row td { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
 
   /* ── BADGES ── */
-  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius:6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
   .badge-green  { background: #dcfce7; color: #15803d; }
   .badge-yellow { background: #fef9c3; color: #854d0e; }
   .badge-red    { background: #fee2e2; color: #dc2626; }
-  .badge-blue   { background: #E7ECF1; color: #16293F; }
+  .badge-blue   { background: #dbeafe; color: #1d4ed8; }
   .badge-gray   { background: #f1f5f9; color: #64748b; }
 
   /* ── ACTION BUTTONS in table ── */
@@ -134,7 +124,7 @@
     padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
     font-weight: 600; transition: 0.15s; border: 1px solid;
   }
-  .tbl-btn-edit   { border-color: #DCE4EB; background: #FAFAFA; color: #16293F; }
+  .tbl-btn-edit   { border-color: #bfdbfe; background: #eff6ff; color: #1e40af; }
   .tbl-btn-delete { border-color: #fca5a5; background: #fee2e2; color: #dc2626; }
   .tbl-btn:hover  { transform: translateY(-1px); }
 
@@ -145,7 +135,7 @@
     border-radius: 12px; padding: 18px; display: flex; flex-direction: column;
     transition: 0.2s;
   }
-  .action-card:hover { border-color: #DCE4EB; box-shadow: 0 2px 10px rgba(30, 58, 95,0.07); }
+  .action-card:hover { border-color: #bfdbfe; box-shadow: 0 2px 10px rgba(30,58,138,0.07); }
   .ac-icon {
     width: 40px; height: 40px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
@@ -156,12 +146,12 @@
   .action-card form { flex: 1; display: flex; flex-direction: column; }
   .action-card input {
     width: 100%; padding: 8px 11px;
-    border: 1px solid #E7ECF1; border-radius: 8px;
+    border: 1px solid #dbeafe; border-radius: 8px;
     background: #fff; color: #0f172a; font-size: 13px;
     margin-bottom: 7px; outline: none; transition: 0.2s;
   }
   .action-card input::placeholder { color: #94a3b8; }
-  .action-card input:focus { border-color: #B7C7D6; }
+  .action-card input:focus { border-color: #93c5fd; }
   .action-card .btn { margin-top: auto; }
 
   /* ── EDIT EMPLOYEE FORM ── */
@@ -178,15 +168,15 @@
     outline: none; transition: 0.2s; font-family: inherit;
   }
   .field input::placeholder, .field textarea::placeholder { color: #94a3b8; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color: #B7C7D6; background: #fff; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: #93c5fd; background: #fff; }
   .field textarea { resize: vertical; min-height: 70px; }
 
   /* ── BUTTONS ── */
   .btn { width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 14px; transition: 0.2s; }
   .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
   .btn-green  { background: #16a34a; color: white; }
-  .btn-indigo { background: #1E3A5F; color: white; }
-  .btn-blue   { background: #1E3A5F; color: white; }
+  .btn-indigo { background: #6366f1; color: white; }
+  .btn-blue   { background: #2563eb; color: white; }
 
   /* ── ANIMATIONS ── */
   @keyframes pulse {
@@ -214,23 +204,23 @@
   body.dark-mode .stat-card { background: #161b22 !important; border-color: #30363d !important; color: #cdd9e5 !important; }
   body.dark-mode .stat-num { color: #cdd9e5 !important; }
   body.dark-mode .stat-lbl { color: #768390 !important; }
-  body.dark-mode .si-blue   { background: #1E3A5F !important; }
+  body.dark-mode .si-blue   { background: #1e3a8a !important; }
   body.dark-mode .si-green  { background: #14532d !important; }
   body.dark-mode .si-red    { background: #7f1d1d !important; }
   body.dark-mode .si-yellow { background: #713f12 !important; }
-  body.dark-mode .sn-blue   { color: #6B93BB !important; }
+  body.dark-mode .sn-blue   { color: #60a5fa !important; }
   body.dark-mode .sn-green  { color: #4ade80 !important; }
   body.dark-mode .sn-red    { color: #f87171 !important; }
   body.dark-mode .sn-yellow { color: #fbbf24 !important; }
   body.dark-mode .section { background: #161b22 !important; border-color: #30363d !important; color: #cdd9e5 !important; }
   body.dark-mode .section-title { color: #cdd9e5 !important; }
   body.dark-mode .table-wrap { border-color: #30363d !important; }
-  body.dark-mode .tbl-btn-edit   { background: #1E3A5F !important; border-color: #16293F !important; color: #B7C7D6 !important; }
+  body.dark-mode .tbl-btn-edit   { background: #1e3a8a !important; border-color: #1d4ed8 !important; color: #93c5fd !important; }
   body.dark-mode .tbl-btn-delete { background: #7f1d1d !important; border-color: #991b1b !important; color: #fca5a5 !important; }
   body.dark-mode .badge-green  { background: #14532d !important; color: #86efac !important; }
   body.dark-mode .badge-yellow { background: #713f12 !important; color: #fde047 !important; }
   body.dark-mode .badge-red    { background: #7f1d1d !important; color: #fca5a5 !important; }
-  body.dark-mode .badge-blue   { background: #1E3A5F !important; color: #B7C7D6 !important; }
+  body.dark-mode .badge-blue   { background: #1e3a8a !important; color: #93c5fd !important; }
   body.dark-mode .badge-gray   { background: #1c2128 !important; color: #768390 !important; }
   body.dark-mode .action-card { background: #161b22 !important; border-color: #30363d !important; }
   body.dark-mode .action-card h4 { color: #cdd9e5 !important; }
@@ -267,7 +257,7 @@
   <!-- STAT CARDS -->
   <div class="stats">
     <a class="stat-card" href="{{ tpath('/employees') }}">
-      <div class="stat-icon si-blue"><i class="ti ti-users" style="color:#1E3A5F"></i></div>
+      <div class="stat-icon si-blue"><i class="ti ti-users" style="color:#2563eb"></i></div>
       <div>
         <div class="stat-num sn-blue" id="statTotal">{{ total }}</div>
         <div class="stat-lbl">Total Employees</div>
@@ -348,8 +338,8 @@
     <div class="u-d-grid u-gtc-repeat3_1fr u-gap-14">
 
       <a class="u-tdec-none" href="{{ tpath('/employees') }}">
-        <div class="u-bg-eff6ff u-bd-1d5-solid-bfdbfe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(30, 58, 95,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-dbeafe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-users" style="color:#16293F"></i></div>
+        <div class="u-bg-eff6ff u-bd-1d5-solid-bfdbfe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(30,58,138,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div class="u-w-46 u-h-46 u-bg-dbeafe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-users" style="color:#1e40af"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-1e40af">Employee Management</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Add · Edit · Delete · Photos · QR</div>
@@ -368,8 +358,8 @@
       </a>
 
       <a class="u-tdec-none" href="{{ tpath('/employees?tab=schedule') }}">
-        <div class="u-bg-faf5ff u-bd-1d5-solid-d8b4fe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(30, 58, 95,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-ede9fe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-clock-hour-4" style="color:#1E3A5F"></i></div>
+        <div class="u-bg-faf5ff u-bd-1d5-solid-d8b4fe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(124,58,237,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+          <div class="u-w-46 u-h-46 u-bg-ede9fe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-clock-hour-4" style="color:#7c3aed"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-7c3aed">Shifts &amp; Breaks</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Create Shifts · Assign · Break Config</div>
@@ -432,7 +422,7 @@
       </div>
 
       <div class="action-card">
-        <div class="ac-icon u-bg-ede9fe" style="color:#1E3A5F"><i class="ti ti-coin"></i></div>
+        <div class="ac-icon u-bg-ede9fe" style="color:#7c3aed"><i class="ti ti-coin"></i></div>
         <h4>Set Daily Salary</h4>
         <div class="sub">Update an employee's daily pay</div>
         <form action="{{ tpath('/admin_action') }}" method="POST">
@@ -444,7 +434,7 @@
       </div>
 
       <div class="action-card">
-        <div class="ac-icon u-bg-dbeafe" style="color:#1E3A5F"><i class="ti ti-user-plus"></i></div>
+        <div class="ac-icon u-bg-dbeafe" style="color:#2563eb"><i class="ti ti-user-plus"></i></div>
         <h4>Register Employee</h4>
         <div class="sub">Add a new employee to the system</div>
         <a href="{{ tpath('/employees?open=add') }}" class="btn btn-blue u-d-flex u-ai-center u-jc-center" style="text-decoration:none;">Register Employee</a>
