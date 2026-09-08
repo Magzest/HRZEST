@@ -1,0 +1,157 @@
+/* ==========================================================================
+   HRzest - Shared enterprise UI components (badges, dense tables, toolbars,
+   empty states, loading skeletons, inline banners).
+
+   Deliberately additive: these classes are new (or unify parallel systems
+   like .status-*/.sbadge/.ls-*/.b-* that all render the same pastel-pill
+   badge but share no code) rather than replacing shared.min.css. Pages not
+   yet migrated to these classes keep working exactly as before.
+   ========================================================================== */
+
+/* ── Badges ────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.badge--pending          { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }
+.badge--action-required  { background: #FEF2F2; color: #991B1B; border-color: #FECACA; }
+.badge--approved,
+.badge--settled          { background: #F0FDF4; color: #166534; border-color: #BBF7D0; }
+.badge--rejected         { background: #FEF2F2; color: #991B1B; border-color: #FECACA; }
+.badge--neutral          { background: #F4F4F5; color: #52525B; border-color: #E4E4E7; }
+.badge--info             { background: #EEF2F6; color: var(--accent, #1E3A5F); border-color: #D6E0E8; }
+
+/* ── Dense enterprise table ───────────────────────────────────────────── */
+.table-enterprise-wrap {
+  overflow: auto;
+  border: 1px solid #E4E4E7;
+  border-radius: 6px;
+  max-height: var(--table-max-height, none);
+}
+.table-enterprise {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.table-enterprise thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #FAFAFA;
+  color: #52525B;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 12px;
+  border-bottom: 1px solid #D4D4D8;
+  white-space: nowrap;
+}
+.table-enterprise tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #F4F4F5;
+  color: #18181B;
+  vertical-align: middle;
+}
+.table-enterprise tbody tr:last-child td { border-bottom: none; }
+.table-enterprise tbody tr:hover td { background: #FAFAFA; }
+.table-enterprise .num,
+.table-enterprise td[data-num] {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────── */
+.empty-state-ez {
+  text-align: center;
+  padding: 48px 24px;
+  color: #71717A;
+}
+.empty-state-ez .es-icon {
+  font-size: 28px;
+  color: #A1A1AA;
+  margin-bottom: 10px;
+  display: block;
+}
+.empty-state-ez .es-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #3F3F46;
+  margin-bottom: 4px;
+}
+.empty-state-ez .es-sub {
+  font-size: 12.5px;
+  color: #A1A1AA;
+  margin-bottom: 16px;
+}
+.empty-state-ez .es-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--accent, #1E3A5F);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+}
+.empty-state-ez .es-action:hover { background: var(--accent-hover, #16293F); }
+
+/* ── Loading skeleton ─────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg, #F4F4F5 25%, #E4E4E7 37%, #F4F4F5 63%);
+  background-size: 400% 100%;
+  animation: ez-shimmer 1.4s ease infinite;
+  border-radius: 4px;
+}
+.skeleton-text  { height: 12px; margin: 4px 0; }
+.skeleton-row td { padding: 8px 12px; }
+.skeleton-row .skeleton { height: 12px; width: 100%; }
+@keyframes ez-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* ── Inline banner (persistent, not auto-dismissing -- distinct from the
+     floating toast in toast.js) ───────────────────────────────────────── */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.banner i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.banner .banner-title { font-weight: 700; margin-bottom: 2px; }
+.banner .banner-actions { margin-top: 8px; display: flex; gap: 8px; }
+.banner .banner-retry {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.banner--error   { background: #FEF2F2; border-color: #FECACA; color: #991B1B; }
+.banner--warning { background: #FFFBEB; border-color: #FDE68A; color: #92400E; }
+.banner--info    { background: #EEF2F6; border-color: #D6E0E8; color: #1E3A5F; }

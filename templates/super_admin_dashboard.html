@@ -11,8 +11,8 @@
       :root {
         --bg-main: #f3f4f8; --bg-card: #ffffff; --surface-2: #f8f9fc;
         --border-color: #e3e5ec; --border-strong: #d3d6e3;
-        --primary: #3538cd; --primary-dark: #23268f; --primary-light: #6366f1;
-        --primary-soft: #eef0fd; --primary-soft-border: #c7ccf5;
+        --primary: #1E3A5F; --primary-dark: #16293F; --primary-light: #1E3A5F;
+        --primary-soft: #EEF2F6; --primary-soft-border: #C7D4DF;
         --danger: #dc2626; --warning: #b45309; --success: #15803d;
         --text-bright: #0b1220; --text-muted: #4b5568; --text-dim: #8991a6;
         --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
@@ -63,7 +63,7 @@
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
       thead th:first-child { border-top-left-radius: 8px; }
       thead th:last-child { border-top-right-radius: 8px; }
-      th {
+      th{position:sticky;top:0;z-index:1;
         text-align: left; padding: 11px 12px; color: var(--text-dim); font-size: 10.5px;
         text-transform: uppercase; letter-spacing: .6px; font-weight: 800;
         background: var(--surface-2); border-bottom: 1px solid var(--border-color);
@@ -885,7 +885,7 @@
     <!-- ═══ PER-TENANT CHAT ═══ -->
     <div id="tcOverlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);z-index:99998;align-items:center;justify-content:center;padding:20px;">
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;width:100%;max-width:420px;height:520px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Segoe UI',sans-serif;box-shadow:0 24px 60px rgba(15,23,42,0.18);">
-        <div style="background:linear-gradient(135deg,#23268f,#3538cd);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
+        <div style="background:linear-gradient(135deg,#16293F,#1E3A5F);color:#fff;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
           <div style="font-size:13px;font-weight:800;" id="tcCompanyName">Chat</div>
           <button onclick="tenantChatClose()" style="border:none;background:rgba(255,255,255,0.18);color:#fff;width:24px;height:24px;border-radius:7px;cursor:pointer;">&#10005;</button>
         </div>
@@ -893,7 +893,7 @@
         <form id="tcSendForm" style="display:flex;gap:8px;padding:10px;border-top:1px solid #e2e8f0;background:#fff;" onsubmit="return tenantChatSend(event)">
           <input id="tcInput" placeholder="Message this company's admin/HR&hellip;" autocomplete="off"
                  style="flex:1;padding:9px 12px;border:1px solid #e2e8f0;border-radius:20px;font-size:13px;outline:none;background:#fff;color:#0f172a;">
-          <button type="submit" style="border:none;background:#3538cd;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;">&#10148;</button>
+          <button type="submit" style="border:none;background:#1E3A5F;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;">&#10148;</button>
         </form>
       </div>
     </div>
@@ -911,7 +911,7 @@
         var mine = m.sender_kind === 'platform_admin';
         return (
           '<div style="max-width:82%;align-self:' + (mine ? 'flex-end' : 'flex-start') + ';">' +
-            '<div style="background:' + (mine ? '#3538cd' : '#fff') + ';color:' + (mine ? '#fff' : '#0f172a') + ';border:' + (mine ? 'none' : '1px solid #e2e8f0') + ';border-radius:14px;' +
+            '<div style="background:' + (mine ? '#1E3A5F' : '#fff') + ';color:' + (mine ? '#fff' : '#0f172a') + ';border:' + (mine ? 'none' : '1px solid #e2e8f0') + ';border-radius:14px;' +
               (mine ? 'border-bottom-right-radius:4px;' : 'border-bottom-left-radius:4px;') +
               'padding:8px 12px;font-size:13px;word-break:break-word;">' + tcEscape(m.message) + '</div>' +
             '<div style="font-size:10px;color:#64748b;margin-top:2px;' + (mine ? 'text-align:right;' : '') + '">' + tcEscape(m.sender_name) + '</div>' +

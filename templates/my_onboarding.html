@@ -20,14 +20,14 @@
 
     .ob-selector{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
     .ob-chip{padding:8px 18px;border-radius:99px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;border:2px solid #e2e8f0;background:#fff;color:#475569;transition:0.2s}
-    .ob-chip.active{border-color:#1e3a8a;background:#1e3a8a;color:#fff}
-    .ob-chip:hover:not(.active){border-color:#93c5fd;color:#1e3a8a}
+    .ob-chip.active{border-color:#1E3A5F;background:#1E3A5F;color:#fff}
+    .ob-chip:hover:not(.active){border-color:#B7C7D6;color:#1E3A5F}
     .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:22px 24px;margin-bottom:20px}
     .card-title{font-size:15px;font-weight:700;color:#0f172a;display:flex;align-items:center;gap:8px;margin-bottom:4px}
     .progress-wrap{margin:16px 0}
     .progress-label{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px}
     .progress-bar{background:#e2e8f0;border-radius:99px;height:12px;overflow:hidden}
-    .progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#3b82f6,#6366f1);transition:width 0.4s}
+    .progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#1E3A5F,#1E3A5F);transition:width 0.4s}
     .progress-fill.done{background:linear-gradient(90deg,#16a34a,#22c55e)}
     .task-list{list-style:none}
     .task-item{display:flex;gap:14px;padding:16px 0;border-bottom:1px solid #f1f5f9;align-items:flex-start}
@@ -41,9 +41,9 @@
     .tag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
     .tag-done{background:#dcfce7;color:#15803d}
     .tag-pending{background:#fef9c3;color:#854d0e}
-    .tag-doc{background:#dbeafe;color:#1d4ed8}
-    .btn-done{padding:7px 16px;border:none;border-radius:8px;background:#1e3a8a;color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;flex-shrink:0}
-    .btn-done:hover{background:#1d4ed8;transform:translateY(-1px)}
+    .tag-doc{background:#E7ECF1;color:#16293F}
+    .btn-done{padding:7px 16px;border:none;border-radius:8px;background:#1E3A5F;color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:0.2s;flex-shrink:0}
+    .btn-done:hover{background:#16293F;transform:translateY(-1px)}
     .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center}
     .modal.open{display:flex}
     .modal-box{background:#fff;border-radius:18px;padding:28px;width:100%;max-width:440px;box-shadow:0 24px 60px rgba(0,0,0,0.2)}
@@ -60,24 +60,24 @@
     .flash-success{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
     .flash-error{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5}
     .empty-state{text-align:center;padding:64px 32px}
-    .empty-state-icon{width:64px;height:64px;margin:0 auto 20px;border-radius:16px;background:#dbeafe;display:flex;align-items:center;justify-content:center}
-    .empty-state-icon i{font-size:28px;color:#1d4ed8}
+    .empty-state-icon{width:64px;height:64px;margin:0 auto 20px;border-radius:16px;background:#E7ECF1;display:flex;align-items:center;justify-content:center}
+    .empty-state-icon i{font-size:28px;color:#16293F}
     .empty-state h3{font-size:16px;font-weight:800;color:#0f172a;margin-bottom:8px}
     .empty-state p{font-size:13.5px;color:#64748b;max-width:340px;margin:0 auto;line-height:1.6}
     .badge-status{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
     .badge-green{background:#dcfce7;color:#15803d}
-    .badge-blue{background:#dbeafe;color:#1d4ed8}
+    .badge-blue{background:#E7ECF1;color:#16293F}
 
     /* ── Dark mode ── */
     body.dark-mode{background:#0d1117!important}
     body.dark-mode .main-area{background:#0d1117!important}
     body.dark-mode .app-content{background:#0d1117!important}
     body.dark-mode .ob-chip{background:#161b22!important;border-color:#30363d!important;color:#94a3b8!important}
-    body.dark-mode .ob-chip.active{background:#1e3a8a!important;border-color:#3b82f6!important;color:#fff!important}
+    body.dark-mode .ob-chip.active{background:#1E3A5F!important;border-color:#1E3A5F!important;color:#fff!important}
     body.dark-mode .card{background:#161b22!important;border-color:#30363d!important}
     body.dark-mode .card-title{color:#cdd9e5!important}
-    body.dark-mode .empty-state-icon{background:#1e3a8a!important}
-    body.dark-mode .empty-state-icon i{color:#60a5fa!important}
+    body.dark-mode .empty-state-icon{background:#1E3A5F!important}
+    body.dark-mode .empty-state-icon i{color:#6B93BB!important}
     body.dark-mode .empty-state h3{color:#cdd9e5!important}
     body.dark-mode .empty-state p{color:#768390!important}
     body.dark-mode .progress-label{color:#768390!important}
@@ -87,7 +87,7 @@
     body.dark-mode .task-desc{color:#768390!important}
     body.dark-mode .icon-pending{background:#1c2128!important;color:#768390!important}
     body.dark-mode .tag-pending{background:#713f12!important;color:#fbbf24!important}
-    body.dark-mode .tag-doc{background:#1e3a8a!important;color:#60a5fa!important}
+    body.dark-mode .tag-doc{background:#1E3A5F!important;color:#6B93BB!important}
     body.dark-mode .modal-box{background:#161b22!important}
     body.dark-mode .modal-header h3{color:#cdd9e5!important}
     body.dark-mode .modal-close{background:#1c2128!important;color:#cdd9e5!important}
@@ -96,7 +96,7 @@
     body.dark-mode .btn-cancel{background:#1c2128!important;border-color:#30363d!important;color:#94a3b8!important}
     body.dark-mode .flash-success{background:#14532d!important;border-color:#166534!important;color:#4ade80!important}
     body.dark-mode .flash-error{background:#7f1d1d!important;border-color:#991b1b!important;color:#f87171!important}
-    body.dark-mode .badge-blue{background:#1e3a8a!important;color:#60a5fa!important}
+    body.dark-mode .badge-blue{background:#1E3A5F!important;color:#6B93BB!important}
   </style>
 </head>
 <body>
@@ -159,7 +159,7 @@
     <div class="progress-wrap">
       <div class="progress-label">
         <span>{{ done_count }} of {{ total }} tasks completed</span>
-        <span style="color:{% if pct==100 %}#16a34a{% else %}#1e3a8a{% endif %};">{{ pct }}%</span>
+        <span style="color:{% if pct==100 %}#16a34a{% else %}#1E3A5F{% endif %};">{{ pct }}%</span>
       </div>
       <div class="progress-bar">
         <div class="progress-fill {% if pct==100 %}done{% endif %}" style="width:{{ pct }}%;"></div>

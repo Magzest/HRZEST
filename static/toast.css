@@ -12,7 +12,7 @@
 .toast {
   background: #fff;
   color: #0f172a;
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid #1E3A5F;
   border-radius: 8px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   padding: 16px 20px;
@@ -44,7 +44,7 @@
   border-left-color: #ef4444;
 }
 .toast.info {
-  border-left-color: #3b82f6;
+  border-left-color: #1E3A5F;
 }
 .toast.alert {
   background: #7f1d1d;
@@ -57,7 +57,7 @@
 }
 .toast.success .toast-icon { color: #10b981; }
 .toast.error .toast-icon { color: #ef4444; }
-.toast.info .toast-icon { color: #3b82f6; }
+.toast.info .toast-icon { color: #1E3A5F; }
 .toast.alert .toast-icon { color: #fca5a5; }
 .toast-content {
   flex: 1;
