@@ -145,12 +145,17 @@ def admin_login():
                 (identifier,)
             )
             admin_row = cursor.fetchone()
-        if admin_row and admin_row[1] == "admin":
+        if admin_row and admin_row[1] == "admin" and app.config.get("MANDATORY_LOGIN_MFA", True):
             # Top-level admin accounts (not HR/SOC-analyst admin_users rows,
             # which keep password login below) no longer authenticate with a
             # password at all -- the emailed one-time code is the sole
             # credential from here on, same mechanism _start_login_mfa
-            # already uses as a second factor for everyone else.
+            # already uses as a second factor for everyone else. Gated on
+            # MANDATORY_LOGIN_MFA (like the two branches below) so the test
+            # suite's `flask_app.config["MANDATORY_LOGIN_MFA"] = False`
+            # override still gets a plain password-verified login for these
+            # accounts instead of falling through to the failed-credentials
+            # branch below.
             if not admin_row[3]:
                 # Terminated account -- same generic error as a wrong
                 # password, so a probe can't distinguish "deactivated" from

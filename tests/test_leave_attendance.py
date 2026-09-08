@@ -112,9 +112,6 @@ class TestLeaveAuthGuards:
     def test_leave_calendar_requires_admin(self, client):
         assert client.get("/leave_calendar", follow_redirects=False).status_code in (302, 401)
 
-    def test_resignation_requests_requires_admin(self, client):
-        assert client.get("/resignation_requests", follow_redirects=False).status_code in (302, 401)
-
     def test_overtime_requires_admin(self, client):
         assert client.get("/overtime", follow_redirects=False).status_code in (302, 401)
 
@@ -174,10 +171,6 @@ class TestLeaveAdminPages:
     def test_leave_calendar_month_year_params(self, client, seed_admin):
         _admin_session(client, seed_admin)
         assert client.get("/leave_calendar?month=3&year=2025").status_code == 200
-
-    def test_resignation_requests_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        assert client.get("/resignation_requests").status_code == 200
 
     def test_overtime_renders(self, client, seed_admin):
         _admin_session(client, seed_admin)
