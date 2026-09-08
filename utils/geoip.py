@@ -1,19 +1,10 @@
 # -*- coding: utf-8 -*-
 """GeoIP Anomaly & Impossible Travel Threat Detection Engine."""
 
-import math
 import time
 from database import get_db_connection
 from extensions import app_log, log_security_event
-
-def _haversine_km(lat1, lon1, lat2, lon2):
-    """Calculate the great-circle distance between two points on Earth in km."""
-    R = 6371.0  # Earth radius in km
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
+from utils.geo import haversine_km as _haversine_km
 
 def detect_impossible_travel(identifier: str, current_ip: str, current_lat: float = 0.0, current_lon: float = 0.0) -> bool:
     """

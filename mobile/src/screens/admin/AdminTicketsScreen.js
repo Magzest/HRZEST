@@ -18,6 +18,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import { fetchAllTickets, ticketAction } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 const STATUSES = ["Open", "In Progress", "Resolved", "Closed"];
 
@@ -48,6 +49,8 @@ const getPriorityBadge = (priority) => {
 };
 
 function TicketCard({ ticket, onUpdate }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [expanded, setExpanded] = useState(false);
   const [status, setStatus] = useState(ticket.status || "Open");
   const [response, setResponse] = useState(ticket.admin_response || "");
@@ -181,7 +184,7 @@ function TicketCard({ ticket, onUpdate }) {
             value={response}
             onChangeText={setResponse}
             placeholder="Write a clear resolution or update for the employee..."
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={colors.textLight}
             multiline
             numberOfLines={3}
           />
@@ -209,6 +212,8 @@ function TicketCard({ ticket, onUpdate }) {
 }
 
 export default function AdminTicketsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [tickets, setTickets] = useState([]);
@@ -255,7 +260,7 @@ export default function AdminTicketsScreen() {
   const resolvedCount = tickets.filter((t) => t.status === "Resolved" || t.status === "Closed").length;
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader title="Support Tickets" subtitle="HELP DESK" />
 
@@ -329,7 +334,7 @@ export default function AdminTicketsScreen() {
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="ticket-outline" size={48} color="#94A3B8" />
+              <Ionicons name="ticket-outline" size={48} color={colors.textLight} />
               <Text style={styles.emptyTitle}>No Support Tickets</Text>
               <Text style={styles.emptySubtitle}>
                 {search ? "No tickets match your search parameters." : "There are currently no tickets in this view."}
@@ -346,7 +351,7 @@ export default function AdminTicketsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -361,7 +366,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 12,
     borderLeftWidth: 4,
@@ -374,7 +379,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   statLabel: {
     fontSize: 11,
@@ -391,7 +396,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#E2E8F0",
+    backgroundColor: colors.border,
   },
   filterChipActive: {
     backgroundColor: "#173B8C",
@@ -399,7 +404,7 @@ const styles = StyleSheet.create({
   filterChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: colors.textSecondary,
   },
   filterChipTextActive: {
     color: "#FFFFFF",
@@ -415,18 +420,18 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   emptyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 36,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     marginTop: 10,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
     marginTop: 12,
   },
   emptySubtitle: {
@@ -436,12 +441,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -466,7 +471,7 @@ const styles = StyleSheet.create({
   ticketIdText: {
     fontSize: 11,
     fontWeight: "800",
-    color: "#475569",
+    color: colors.textSecondary,
   },
   priorityBadge: {
     paddingHorizontal: 6,
@@ -492,7 +497,7 @@ const styles = StyleSheet.create({
   subjectText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
     lineHeight: 22,
     marginBottom: 6,
   },
@@ -503,13 +508,13 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 12,
-    color: "#475569",
+    color: colors.textSecondary,
     fontWeight: "500",
     marginLeft: 4,
   },
   dot: {
     marginHorizontal: 6,
-    color: "#94A3B8",
+    color: colors.textLight,
   },
   categoryText: {
     fontSize: 12,
@@ -549,7 +554,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   descBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 10,
     padding: 12,
     marginBottom: 14,
@@ -562,7 +567,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   existingResponseBox: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     borderRadius: 10,
     padding: 12,
     marginBottom: 14,
@@ -592,10 +597,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#F1F5F9",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   chipActive: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     borderColor: "#2563EB",
   },
   chipText: {
@@ -608,13 +613,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   responseInput: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     padding: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: colors.text,
     minHeight: 80,
     textAlignVertical: "top",
     marginBottom: 14,

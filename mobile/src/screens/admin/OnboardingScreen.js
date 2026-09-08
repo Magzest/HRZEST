@@ -14,13 +14,15 @@ import {
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 
 import { fetchOnboarding, fetchOnboardingTasks, updateOnboardingTaskStatus } from "../../api/client";
 
 export default function OnboardingScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -109,7 +111,7 @@ export default function OnboardingScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]}
+      colors={colors.screenGradient}
       style={styles.container}
     >
       <SafeAreaView style={{ flex: 1 }}>
@@ -125,13 +127,13 @@ export default function OnboardingScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[THEME.colors.primary]}
+              colors={[colors.primary]}
             />
           }
         >
           {/* Summary Hero Card */}
           <LinearGradient
-            colors={["#0B2253", "#173B8C"]}
+            colors={[colors.primary, "#173B8C"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.heroCard}
@@ -167,8 +169,8 @@ export default function OnboardingScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 24 }} />
           ) : filteredOnboardings.length === 0 ? (
-            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 16, padding: 32, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0", marginTop: 10 }}>
-              <Ionicons name="person-add-outline" size={48} color="#94A3B8" />
+            <View style={{ backgroundColor: colors.card, borderRadius: 16, padding: 32, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, marginTop: 10 }}>
+              <Ionicons name="person-add-outline" size={48} color={colors.textLight} />
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 12 }}>
                 No Active Onboardings
               </Text>
@@ -249,9 +251,9 @@ export default function OnboardingScreen({ navigation }) {
         {/* Task Checklist Modal */}
         <Modal visible={taskModalVisible} transparent animationType="slide" onRequestClose={() => setTaskModalVisible(false)}>
           <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" }}>
+            <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "85%" }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-                <Text style={{ fontSize: 17, fontWeight: "800", color: "#0F172A" }}>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: colors.text }}>
                   {taskModalOnboarding?.employeeName}'s Tasks
                 </Text>
                 <TouchableOpacity onPress={() => setTaskModalVisible(false)}>
@@ -284,7 +286,7 @@ export default function OnboardingScreen({ navigation }) {
                         ) : null}
                       </TouchableOpacity>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: "#0F172A", textDecorationLine: task.status === "Done" ? "line-through" : "none" }}>
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: colors.text, textDecorationLine: task.status === "Done" ? "line-through" : "none" }}>
                           {task.title}
                         </Text>
                         {!!task.description && (
@@ -306,7 +308,7 @@ export default function OnboardingScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   heroCard: {
@@ -316,7 +318,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     elevation: 4,
   },
-  heroSub: { color: "#94A3B8", fontSize: 12, fontWeight: "600" },
+  heroSub: { color: colors.textLight, fontSize: 12, fontWeight: "600" },
   heroTitle: { color: "#FFFFFF", fontSize: 18, fontWeight: "800", marginTop: 4 },
   heroStatsRow: {
     flexDirection: "row",
@@ -328,7 +330,7 @@ const styles = StyleSheet.create({
   },
   heroStatItem: { alignItems: "center" },
   heroStatValue: { color: "#60A5FA", fontSize: 16, fontWeight: "800" },
-  heroStatLabel: { color: "#94A3B8", fontSize: 11, marginTop: 2 },
+  heroStatLabel: { color: colors.textLight, fontSize: 11, marginTop: 2 },
   heroStatDivider: { width: 1, height: 28, backgroundColor: "rgba(255,255,255,0.1)" },
   sectionHeader: {
     flexDirection: "row",
@@ -337,27 +339,27 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 12,
   },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   sectionBadge: { fontSize: 12, fontWeight: "700", color: "#173B8C" },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
   iconCircle: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     justifyContent: "center",
     alignItems: "center",
   },
-  name: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  name: { fontSize: 13, fontWeight: "700", color: colors.text },
   role: { fontSize: 13, color: "#64748B", marginTop: 2 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   pillCompleted: { backgroundColor: "#DCFCE7" },
@@ -370,9 +372,9 @@ const styles = StyleSheet.create({
   progressContainer: { marginTop: 14 },
   progressLabelRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
   progressLabel: { fontSize: 12, color: "#64748B", fontWeight: "600" },
-  progressValue: { fontSize: 12, color: "#0F172A", fontWeight: "700" },
+  progressValue: { fontSize: 12, color: colors.text, fontWeight: "700" },
   progressBarTrack: { height: 8, backgroundColor: "#F1F5F9", borderRadius: 4, overflow: "hidden" },
-  progressBarFill: { height: "100%", backgroundColor: "#3B82F6", borderRadius: 4 },
-  cardFooter: { flexDirection: "row", alignItems: "center", marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#F8FAFC" },
+  progressBarFill: { height: "100%", backgroundColor: colors.employee, borderRadius: 4 },
+  cardFooter: { flexDirection: "row", alignItems: "center", marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.background },
   footerText: { marginLeft: 6, fontSize: 12, color: "#64748B" },
 });

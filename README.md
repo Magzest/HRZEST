@@ -94,7 +94,16 @@ python -m pytest tests/ -v --tb=short --cov=. --cov-report=term-missing
 python -m pytest tests/test_comprehensive.py -v
 ```
 
-Tests require a running PostgreSQL instance. Set the connection variables in your shell or `.env`:
+Tests require a running PostgreSQL instance — there is no SQLite/mock fallback for the suite (the SQLite path in `database.py` is a low-fidelity manual-dev convenience only; it has no schema-per-tenant isolation and can't validate tenant boundaries). If you don't already have a local Postgres, spin up a disposable one that matches CI exactly:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+# wait for it to report healthy, then:
+DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres DB_PASS=ci_testpass DB_NAME=att_test \
+  SECRET_KEY=ci-test-secret-key FLASK_ENV=testing python -m pytest tests/ -v
+```
+
+Or, against your own Postgres instance, set the connection variables in your shell or `.env`:
 
 ```bash
 DB_HOST=127.0.0.1 DB_USER=postgres DB_PASS=yourpass DB_NAME=att_test python -m pytest tests/
@@ -154,7 +163,7 @@ All variables are documented with examples in [.env.example](.env.example).
 | `OFFICE_LAT` / `OFFICE_LON` | No | — | GPS geo-fence centre |
 | `APP_URL` | No | *(request host)* | Trusted base URL for email links |
 | `ALLOWED_ORIGINS` | No | `*` | CORS whitelist — set your domain in production |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | No | — | Brevo (or any) SMTP for email delivery |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | No | — | SMTP for email delivery (any provider) |
 | `ANTHROPIC_API_KEY` | No | *(disabled)* | Enables the employee portal's AI chat widget |
 | `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | No | *(disabled)* | CAPTCHA challenge on `/admin_login` after 2 failed attempts |
 

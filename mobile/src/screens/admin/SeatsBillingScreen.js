@@ -15,10 +15,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { WebView } from "react-native-webview";
 
 import AdminHeader from "../../components/admin/AdminHeader";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchBillingStatus, getWebSessionLink } from "../../api/client";
-
-const { colors } = THEME;
 
 // Same data/limits the web app shows on templates/employees.html (the
 // seat-usage banner) and templates/seat_checkout.html (Seats & Billing
@@ -30,6 +28,8 @@ const { colors } = THEME;
 // bridged in via a one-time login link (getWebSessionLink()) so the user
 // never has to log in twice.
 export default function SeatsBillingScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -83,6 +83,15 @@ export default function SeatsBillingScreen() {
     load();
   };
 
+  // Memoized so an unrelated re-render (e.g. `refreshing` toggling from a
+  // background pull-to-refresh) doesn't hand the WebView a new `source`
+  // object reference and risk it reloading /settings/seats mid-checkout.
+  // Called unconditionally, before the `loading` early return below --
+  // every hook in this component must run on every render regardless of
+  // `loading`, or React throws "Rendered more hooks than during the
+  // previous render" the moment `loading` flips from true to false.
+  const webviewSource = useMemo(() => (webviewUrl ? { uri: webviewUrl } : null), [webviewUrl]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -101,10 +110,6 @@ export default function SeatsBillingScreen() {
   const pct = isUnlimited ? 0 : cap > 0 ? Math.min(100, (employeeCount / cap) * 100) : 100;
   const autoDebit = status?.auto_debit;
   const autoDebitActive = autoDebit?.status === "active";
-  // Memoized so an unrelated re-render (e.g. `refreshing` toggling from a
-  // background pull-to-refresh) doesn't hand the WebView a new `source`
-  // object reference and risk it reloading /settings/seats mid-checkout.
-  const webviewSource = useMemo(() => (webviewUrl ? { uri: webviewUrl } : null), [webviewUrl]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -251,7 +256,7 @@ export default function SeatsBillingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centerFill: { flex: 1, alignItems: "center", justifyContent: "center" },
   scrollContent: { padding: 16, paddingBottom: 32 },

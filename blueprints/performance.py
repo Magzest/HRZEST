@@ -10,37 +10,13 @@ import datetime
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, employee_api_required
-from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings
+from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings, get_employee_sidebar_info
 from extensions import limiter
 
 performance_bp = Blueprint("performance", __name__)
 
 RATING_LABELS = {0: "Not Rated", 1: "Unsatisfactory", 2: "Needs Improvement",
                  3: "Meets Expectations", 4: "Exceeds Expectations", 5: "Outstanding"}
-
-# 9-Box Talent Matrix: performance (x-axis, KPI-derived overall_rating) vs.
-# potential (y-axis, manager-set potential_rating), each bucketed low/mid/high
-# on the existing 1-5 rating scale (low=1-2, mid=3, high=4-5). Indexed
-# [potential_tier][performance_tier], both 0=low, 1=mid, 2=high.
-NINE_BOX_LABELS = [
-    ["Risk", "Inconsistent", "Enigma"],
-    ["Underperformer", "Core Player", "Emerging Talent"],
-    ["Trusted Professional", "High Performer", "Star"],
-]
-NINE_BOX_COLORS = [
-    ["#ef4444", "#f59e0b", "#3b82f6"],
-    ["#f59e0b", "#3b82f6", "#22c55e"],
-    ["#3b82f6", "#22c55e", "#15803d"],
-]
-
-
-def _rating_tier(rating):
-    if rating >= 4:
-        return 2
-    if rating >= 3:
-        return 1
-    return 0
-
 
 @performance_bp.route("/api/performance", methods=["GET"])
 def api_performance():
@@ -125,10 +101,6 @@ def api_submit_performance_review():
         return jsonify({"ok": False, "msg": "employee_id and a valid quarter (1-4) are required."}), 400
     feedback = (data.get("reviewer_feedback") or "").strip()
     status = (data.get("status") or "Draft").strip()
-    try:
-        potential = max(0, min(5, float(data.get("potential_rating") or 0)))
-    except (TypeError, ValueError):
-        potential = 0
 
     with _db() as (cursor, conn):
         cursor.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
@@ -136,10 +108,10 @@ def api_submit_performance_review():
             return jsonify({"ok": False, "msg": f"Unknown employee_id '{emp_id}'."}), 400
 
         cursor.execute("""
-            INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status, potential_rating)
-            VALUES (%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, potential_rating=%s, updated_at=NOW()
-        """, (emp_id, q, yr, feedback, status, potential, feedback, status, potential))
+            INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status)
+            VALUES (%s,%s,%s,%s,%s)
+            ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, updated_at=NOW()
+        """, (emp_id, q, yr, feedback, status, feedback, status))
         conn.commit()
 
         cursor.execute("SELECT id FROM performance_reviews WHERE employee_id=%s AND quarter=%s AND year=%s", (emp_id, q, yr))
@@ -193,21 +165,6 @@ def performance():
             "SELECT department FROM employees WHERE is_active=1 AND department IS NOT NULL AND department!='' GROUP BY department ORDER BY MIN(id) ASC")
     departments = [r[0] for r in cursor.fetchall()]
 
-    # Announcements (admin sees all)
-    cursor.execute("""
-        SELECT a.id, a.title, a.content, a.priority, a.created_at,
-               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,'')
-        FROM announcements a
-        LEFT JOIN employees e ON e.employee_id = a.target_employee_id
-        ORDER BY a.created_at DESC
-    """)
-    ann_list = cursor.fetchall()
-    pub_anns = [r for r in ann_list if r[5] == 'public']
-    priv_anns = [r for r in ann_list if r[5] == 'private']
-
-    cursor.execute("SELECT employee_id, name FROM employees WHERE is_active=1 ORDER BY name")
-    ann_emp_list = cursor.fetchall()
-
     pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     co = get_company_settings()
 
@@ -249,26 +206,6 @@ def performance():
             hike_employees.append((h_eid, h_name, h_role, h_dept, h_rating, h_status,
                                    h_ctc, band_label, band_color, hike_pct, new_ctc, inc_pct, bonus))
 
-    nine_box_grid = [[[] for _ in range(3)] for _ in range(3)]
-    nine_box_rated_count = 0
-    if active_tab == '9box':
-        _nb_co, _nb_co_args = co_scope_column(active_cid, alias="e")
-        _nb_params = (yr, q) + _nb_co_args
-        cursor.execute(f"""
-            SELECT e.employee_id, e.name, COALESCE(e.department,''),
-                   pr.overall_rating, pr.potential_rating
-            FROM employees e
-            JOIN performance_reviews pr ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
-            WHERE e.is_active=1 AND pr.overall_rating > 0 AND COALESCE(pr.potential_rating,0) > 0 {_nb_co}
-            ORDER BY e.name
-        """, _nb_params)  # nosec B608
-        for nb_eid, nb_name, nb_dept, nb_perf, nb_pot in cursor.fetchall():
-            nb_perf, nb_pot = float(nb_perf), float(nb_pot)
-            nine_box_grid[_rating_tier(nb_pot)][_rating_tier(nb_perf)].append(
-                (nb_eid, nb_name, nb_dept, nb_perf, nb_pot)
-            )
-            nine_box_rated_count += 1
-
     cursor.close()
     db.close()
 
@@ -280,20 +217,12 @@ def performance():
                            pending_resignations=pending_resignations,
                            pending_tickets=pending_tickets, co=co,
                            today=today,
-                           ann_list=ann_list,
-                           pub_anns=pub_anns,
-                           priv_anns=priv_anns,
-                           ann_emp_list=ann_emp_list,
                            active_tab=active_tab,
                            hike_bands=hike_bands,
                            hike_employees=hike_employees,
                            total_hike_cost=total_hike_cost,
                            total_bonus_pool=total_bonus_pool,
                            hike_eligible_count=hike_eligible_count,
-                           nine_box_grid=nine_box_grid,
-                           nine_box_labels=NINE_BOX_LABELS,
-                           nine_box_colors=NINE_BOX_COLORS,
-                           nine_box_rated_count=nine_box_rated_count,
                            active_nav="performance",
                            )
 
@@ -322,7 +251,7 @@ def performance_review(emp_id):
 
     # Get or create review
     cursor.execute("""
-        SELECT id, overall_rating, reviewer_feedback, employee_comment, status, COALESCE(potential_rating,0)
+        SELECT id, overall_rating, reviewer_feedback, employee_comment, status
         FROM performance_reviews WHERE employee_id=%s AND quarter=%s AND year=%s
     """, (emp_id, q, yr))
     review = cursor.fetchone()
@@ -366,21 +295,13 @@ def performance_save_review():
     feedback = request.form.get("reviewer_feedback", "").strip()
     status = request.form.get("status", "Draft")
 
-    # Potential (9-box matrix's other axis) is a manager judgment call, not
-    # KPI-derived like overall_rating below -- set directly here, same 0-5
-    # scale, defaults to 0 (not rated) rather than guessing.
-    try:
-        potential = max(0, min(5, float(request.form.get("potential_rating", "0") or 0)))
-    except ValueError:
-        potential = 0
-
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
-        INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status, potential_rating)
-        VALUES (%s,%s,%s,%s,%s,%s)
-        ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, potential_rating=%s, updated_at=NOW()
-    """, (emp_id, q, yr, feedback, status, potential, feedback, status, potential))
+        INSERT INTO performance_reviews (employee_id, quarter, year, reviewer_feedback, status)
+        VALUES (%s,%s,%s,%s,%s)
+        ON CONFLICT (employee_id, quarter, year) DO UPDATE SET reviewer_feedback=%s, status=%s, updated_at=NOW()
+    """, (emp_id, q, yr, feedback, status, feedback, status))
     db.commit()
 
     # Recalculate overall rating from KPIs
@@ -523,9 +444,7 @@ def my_performance():
 
     reviews_data = [{"review": rev, "kpis": kpis_by_review[rev[0]]} for rev in reviews]
 
-    cursor.execute(
-        "SELECT name, COALESCE(role,''), COALESCE(department,''), face_image FROM employees WHERE employee_id=%s", (emp_id,))
-    emp_info = cursor.fetchone()
+    emp_info = get_employee_sidebar_info(cursor, emp_id)
     cursor.close()
     db.close()
 

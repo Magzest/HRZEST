@@ -25,6 +25,7 @@ import SALARY_THEME from "../../constants/salaryTheme";
 import { fetchSalaryReport, fetchEmployees, sendPayslipEmail, fetchPayrollStatus, lockPayroll, unlockPayroll, fetchSalaryReportExport } from "../../api/client";
 import { shareBase64File } from "../../utils/fileShare";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
+import { useTheme } from "../../store/ThemeContext";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -35,6 +36,8 @@ const now = new Date();
 const YEARS = ["2024", "2025", "2026", "2027"];
 
 export default function SalaryPayslipsScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(MONTHS[now.getMonth()]);
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
@@ -340,7 +343,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Month</Text>
               <TouchableOpacity onPress={() => setMonthModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#0F172A" />
+                <Ionicons name="close" size={22} color={colors.text} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -366,7 +369,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
                     {item}
                   </Text>
                   {selectedMonth === item && (
-                    <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
                   )}
                 </TouchableOpacity>
               )}
@@ -387,7 +390,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Year</Text>
               <TouchableOpacity onPress={() => setYearModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#0F172A" />
+                <Ionicons name="close" size={22} color={colors.text} />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -413,7 +416,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
                     {item}
                   </Text>
                   {selectedYear === item && (
-                    <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                    <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
                   )}
                 </TouchableOpacity>
               )}
@@ -443,7 +446,7 @@ export default function SalaryPayslipsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: SALARY_THEME.colors.background,
@@ -466,7 +469,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxHeight: 380,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 20,
     elevation: 10,
@@ -481,12 +484,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   pickerOption: {
     flexDirection: "row",
@@ -498,7 +501,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pickerOptionActive: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
   },
   pickerOptionText: {
     fontSize: 13,
@@ -507,6 +510,6 @@ const styles = StyleSheet.create({
   },
   pickerOptionTextActive: {
     fontWeight: "800",
-    color: "#0B2253",
+    color: colors.primary,
   },
 });

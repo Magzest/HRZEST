@@ -19,13 +19,12 @@ from utils.auth import (
     _check_login_lockout, _record_login_failure, _clear_login_failures,
     admin_required, role_required, employee_required, employee_api_required,
     _get_failed_count, verify_turnstile, turnstile_enabled,
-    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, SOC_ANALYST_ROLE, HR_ROLE,
-    api_required,
+    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, HR_ROLE,
+    api_required, validate_new_password, verify_and_update_password,
 )
 from utils.helpers import tpath, get_company_settings, _audit, _db, _safe_app_url
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async, notify_if_new_login_ip
 from utils.session_risk import ensure_session_id
-from utils.device_utils import get_or_create_device_token, set_device_cookie, record_login_device
 from utils.totp import verify_totp_code, send_mfa_login_email, mark_totp_enabled
 from utils.face_utils import verify_uploaded_face
 from utils.webauthn_utils import (
@@ -87,21 +86,6 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     return redirect(tpath("/mfa_verify"))
 
 
-def _capture_and_cookie_device(resp, owner_kind, owner_id, sid):
-    """Best-effort: record this login's device (utils/device_utils.py) on
-    whichever schema get_db_connection() currently resolves to, and stamp
-    the browser's device-token cookie on the response we're about to
-    return. Never fails or blocks the login itself -- a device-tracking
-    hiccup must not be able to lock someone out of signing in."""
-    try:
-        token, is_new = get_or_create_device_token(request)
-        record_login_device(get_db_connection, owner_kind, owner_id, token, sid, request)
-        if is_new:
-            set_device_cookie(resp, token)
-    except Exception as exc:
-        app_log.warning("device capture failed for %s '%s': %s", owner_kind, owner_id, exc)
-    return resp
-
 
 @auth_bp.route("/login", methods=["GET", "POST"])
 @auth_bp.route("/admin_login", methods=["GET", "POST"])
@@ -161,24 +145,34 @@ def admin_login():
                 (identifier,)
             )
             admin_row = cursor.fetchone()
-        if admin_row and admin_row[1] == SOC_ANALYST_ROLE and check_password_hash(admin_row[0], password):
-            # SOC analyst accounts are deliberately a separate credential
-            # (blueprints/secops.py's /sp_admin/login) -- letting it also
-            # complete the regular admin login here would grant it a full
-            # admin_required session (payroll, tenant settings, company
-            # management, everything), which that dedicated, narrowly-scoped
-            # login exists specifically to avoid. Same generic error either
-            # way, no distinction leaked between "wrong role" and "wrong
-            # password". HR accounts use this same general login instead
-            # (see the is_active check and role='hr' redirect below) --
-            # role_required("admin") already scopes them away from
-            # admin-only pages, so a second gate here was redundant.
-            _record_login_failure(identifier)
-            return render_template(
-                "admin_login.html", co=co,
-                error="Invalid credentials. Check your ID and password.",
-                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
-            )
+        if admin_row and admin_row[1] == "admin" and app.config.get("MANDATORY_LOGIN_MFA", True):
+            # Top-level admin accounts (not HR/SOC-analyst admin_users rows,
+            # which keep password login below) no longer authenticate with a
+            # password at all -- the emailed one-time code is the sole
+            # credential from here on, same mechanism _start_login_mfa
+            # already uses as a second factor for everyone else. Gated on
+            # MANDATORY_LOGIN_MFA (like the two branches below) so the test
+            # suite's `flask_app.config["MANDATORY_LOGIN_MFA"] = False`
+            # override still gets a plain password-verified login for these
+            # accounts instead of falling through to the failed-credentials
+            # branch below.
+            if not admin_row[3]:
+                # Terminated account -- same generic error as a wrong
+                # password, so a probe can't distinguish "deactivated" from
+                # "doesn't exist"/"wrong password".
+                _record_login_failure(identifier)
+                log_security_event(
+                    "access.denied", "Login attempt against a terminated admin account",
+                    level="WARNING", identifier=identifier,
+                )
+                return render_template(
+                    "admin_login.html", co=co,
+                    error="Invalid credentials. Check your ID and password.",
+                    show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
+                )
+            _clear_login_failures(identifier)
+            return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
+                                     "Executive Administrator")
         if admin_row and check_password_hash(admin_row[0], password):
             if not admin_row[3]:
                 # Terminated account -- same generic error as a wrong
@@ -209,7 +203,6 @@ def admin_login():
             session["admin_username"] = identifier
             session["admin_role"] = admin_row[1]
             session["_session_created"] = time.time()
-            session["soc_step_up_until"] = time.time() + 600
             session.permanent = True
             sid = ensure_session_id(session)
             log_security_event(
@@ -222,7 +215,7 @@ def admin_login():
                 dest = redirect(tpath("/employees"))
             else:
                 dest = redirect(tpath("/admin"))
-            return _capture_and_cookie_device(dest, HR_ROLE if admin_row[1] == HR_ROLE else "admin", identifier, sid)
+            return dest
         # Try employee credentials
         with _db() as (cursor, db):
             cursor.execute(
@@ -256,7 +249,7 @@ def admin_login():
             if emp_row[5]:
                 notify_if_new_login_ip(emp_row[0], "employee", request.remote_addr, emp_row[1], emp_row[5])
             dest = redirect(tpath("/force_change_pin")) if emp_row[4] else redirect(tpath("/employee_portal"))
-            return _capture_and_cookie_device(dest, "employee", emp_row[0], sid)
+            return dest
         _record_login_failure(identifier)
         return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
                                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
@@ -270,10 +263,7 @@ def admin_login():
 @limiter.limit("40 per 15 minutes")
 def mfa_verify():
     """Completion step for _start_login_mfa(): checks the emailed one-time
-    code, then builds the real admin/HR/employee session. Deliberately
-    separate from secops.py's own /mfa_login_verify -- SOC keeps its own
-    dedicated flow untouched, rather than risking that already-tested
-    portal by sharing this route with it."""
+    code, then builds the real admin/HR/employee session."""
     username = session.get("mfa_user")
     kind = session.get("mfa_kind")
     if not username or not session.get("mfa_pending") or kind not in ("admin_users", "employee"):
@@ -309,7 +299,7 @@ def mfa_verify():
                 if row[4]:
                     notify_if_new_login_ip(row[0], "employee", request.remote_addr, row[1], row[4])
                 dest = redirect(tpath("/force_change_pin")) if row[3] else redirect(tpath("/employee_portal"))
-                return _capture_and_cookie_device(dest, "employee", row[0], sid)
+                return dest
             else:
                 with _db() as (cursor, db):
                     cursor.execute("SELECT role, email FROM admin_users WHERE username=%s", (username,))
@@ -333,7 +323,7 @@ def mfa_verify():
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
                 dest = redirect(tpath("/employees" if role == HR_ROLE else "/admin"))
-                return _capture_and_cookie_device(dest, HR_ROLE if role == HR_ROLE else "admin", username, sid)
+                return dest
 
         log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
         return render_template("mfa_verify.html", username=username, error="Invalid code. Please try again.")
@@ -362,23 +352,13 @@ def change_admin_password():
     # if they know its current value -- a cross-account privilege escalation.
     logged_in_as = session.get("admin_username", "admin")
     if not new_pw or new_pw != confirm_pw:
-        return redirect(tpath("/admin?pwd_error=mismatch"))
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT password FROM admin_users WHERE username=%s", (logged_in_as,))
-    row = cursor.fetchone()
-    if not row or not check_password_hash(row[0], current_pw):
-        cursor.close()
-        db.close()
-        return redirect(tpath("/admin?pwd_error=wrong"))
-    cursor.execute(
-        "UPDATE admin_users SET password=%s WHERE username=%s",
-        (generate_password_hash(new_pw), logged_in_as)
-    )
-    db.commit()
-    cursor.close()
-    db.close()
-    return redirect(tpath("/admin?pwd_ok=1"))
+        return redirect(tpath("/settings?tab=email&pwd_error=mismatch"))
+    _pw_ok, _pw_err = validate_new_password(new_pw)
+    if not _pw_ok:
+        return redirect(tpath("/settings?tab=email&pwd_error=weak"))
+    if not verify_and_update_password("admin_users", "username", logged_in_as, current_pw, new_pw):
+        return redirect(tpath("/settings?tab=email&pwd_error=wrong"))
+    return redirect(tpath("/settings?tab=email&pwd_ok=1"))
 
 
 @auth_bp.route("/api/admin/password", methods=["POST"])
@@ -399,24 +379,12 @@ def api_change_admin_password():
 
     if not new_pw or new_pw != confirm_pw:
         return jsonify({"ok": False, "msg": "New password and confirmation must match."}), 400
-    if len(new_pw) < 8:
-        return jsonify({"ok": False, "msg": "New password must be at least 8 characters."}), 400
+    _pw_ok, _pw_err = validate_new_password(new_pw)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT password FROM admin_users WHERE username=%s", (username,))
-    row = cursor.fetchone()
-    if not row or not check_password_hash(row[0], current_pw):
-        cursor.close()
-        db.close()
+    if not verify_and_update_password("admin_users", "username", username, current_pw, new_pw):
         return jsonify({"ok": False, "msg": "Current password is incorrect."}), 400
-    cursor.execute(
-        "UPDATE admin_users SET password=%s WHERE username=%s",
-        (generate_password_hash(new_pw), username)
-    )
-    db.commit()
-    cursor.close()
-    db.close()
     log_security_event("auth.password_changed", f"Password changed for '{username}' via mobile app",
                         level="INFO", identifier=username)
     return jsonify({"ok": True, "msg": "Password updated."})
@@ -434,7 +402,30 @@ def admin_set_recovery_email():
         db.commit()
         cursor.close()
         db.close()
-    return redirect(tpath("/admin?email_ok=1#password-management"))
+    return redirect(tpath("/settings?tab=email&email_ok=1#password-management"))
+
+
+def _new_reset_token():
+    """(token, token_hash, expiry) for a password-reset link -- shared by
+    admin_forgot_password and employee_forgot_password, which previously
+    each generated this identically."""
+    token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    return token, token_hash, expiry
+
+
+def _find_by_reset_token(cursor, table, id_column, token):
+    """Look up a still-valid (unexpired) reset token. Shared by
+    admin_reset_password and employee_reset_password. table/id_column are
+    always call-site literals ("admin_users"/"id" or "employees"/
+    "employee_id"), never request-controlled."""
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    cursor.execute(
+        f"SELECT {id_column} FROM {table} WHERE reset_token=%s AND reset_token_expiry > %s",
+        (token_hash, datetime.datetime.utcnow())
+    )
+    return cursor.fetchone()
 
 
 @auth_bp.route("/admin_forgot_password", methods=["GET", "POST"])
@@ -453,9 +444,7 @@ def admin_forgot_password():
         db.close()
         # Return the same message whether the email exists or not (no account enumeration)
         return render_template("admin_forgot_password.html", sent=True, error=None)
-    token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    token, token_hash, expiry = _new_reset_token()
     admin_id = row[0]
     cursor.execute(
         "UPDATE admin_users SET reset_token=%s, reset_token_expiry=%s WHERE id=%s",
@@ -498,12 +487,7 @@ def admin_forgot_password():
 def admin_reset_password(token):
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    cursor.execute(
-        "SELECT id FROM admin_users WHERE reset_token=%s AND reset_token_expiry > %s",
-        (token_hash, datetime.datetime.utcnow())
-    )
-    row = cursor.fetchone()
+    row = _find_by_reset_token(cursor, "admin_users", "id", token)
     if not row:
         cursor.close()
         db.close()
@@ -514,11 +498,12 @@ def admin_reset_password(token):
         return render_template("admin_reset_password.html", valid=True, done=False, token=token, error=None)
     new_pw = request.form.get("new_password", "").strip()
     confirm_pw = request.form.get("confirm_password", "").strip()
-    if len(new_pw) < 8:
+    _pw_ok, _pw_err = validate_new_password(new_pw)
+    if not _pw_ok:
         cursor.close()
         db.close()
         return render_template("admin_reset_password.html", valid=True, done=False,
-                               token=token, error="Password must be at least 8 characters.")
+                               token=token, error=_pw_err)
     if new_pw != confirm_pw:
         cursor.close()
         db.close()
@@ -554,9 +539,7 @@ def employee_forgot_password():
         return render_template("employee_forgot_password.html", sent=True, error=None)
     db_email = row[1]
     emp_name = _html.escape(row[2] or emp_id)
-    token = secrets.token_hex(32)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    token, token_hash, expiry = _new_reset_token()
     cursor.execute("UPDATE employees SET reset_token=%s, reset_token_expiry=%s WHERE employee_id=%s",
                    (token_hash, expiry, emp_id))
     db.commit()
@@ -591,10 +574,7 @@ def employee_forgot_password():
 def employee_reset_password(token):
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    token_hash = hashlib.sha256(token.encode()).hexdigest()
-    cursor.execute("SELECT employee_id FROM employees WHERE reset_token=%s AND reset_token_expiry > %s",
-                   (token_hash, datetime.datetime.utcnow()))
-    row = cursor.fetchone()
+    row = _find_by_reset_token(cursor, "employees", "employee_id", token)
     if not row:
         cursor.close()
         db.close()
@@ -605,11 +585,12 @@ def employee_reset_password(token):
         return render_template("employee_reset_password.html", valid=True, done=False, token=token, error=None)
     new_pw = request.form.get("new_password", "").strip()
     confirm_pw = request.form.get("confirm_password", "").strip()
-    if len(new_pw) < 8:
+    _pw_ok, _pw_err = validate_new_password(new_pw)
+    if not _pw_ok:
         cursor.close()
         db.close()
         return render_template("employee_reset_password.html", valid=True, done=False,
-                               token=token, error="Password must be at least 8 characters.")
+                               token=token, error=_pw_err)
     if new_pw != confirm_pw:
         cursor.close()
         db.close()
@@ -638,29 +619,13 @@ def change_password():
     current = request.form.get("current_password", "").strip()
     new_pwd = request.form.get("new_password", "").strip()
     confirm = request.form.get("confirm_password", "").strip()
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT password FROM employees WHERE employee_id=%s", (emp_id,))
-    row = cursor.fetchone()
-    if not row or not check_password_hash(row[0], current):
-        cursor.close()
-        db.close()
-        return redirect(tpath("/employee_portal?pwd_error=wrong#my-profile"))
-    if len(new_pwd) < 8:
-        cursor.close()
-        db.close()
+    _pw_ok, _pw_err = validate_new_password(new_pwd)
+    if not _pw_ok:
         return redirect(tpath("/employee_portal?pwd_error=short#my-profile"))
     if new_pwd != confirm:
-        cursor.close()
-        db.close()
         return redirect(tpath("/employee_portal?pwd_error=mismatch#my-profile"))
-    cursor.execute(
-        "UPDATE employees SET password=%s WHERE employee_id=%s",
-        (generate_password_hash(new_pwd), emp_id)
-    )
-    db.commit()
-    cursor.close()
-    db.close()
+    if not verify_and_update_password("employees", "employee_id", emp_id, current, new_pwd):
+        return redirect(tpath("/employee_portal?pwd_error=wrong#my-profile"))
     return redirect(tpath("/employee_portal?pwd_ok=1#my-profile"))
 
 
@@ -672,8 +637,9 @@ def force_change_pin():
     if request.method == "POST":
         new_pwd = request.form.get("new_password", "").strip()
         confirm = request.form.get("confirm_password", "").strip()
-        if len(new_pwd) < 8:
-            error = "Password must be at least 8 characters."
+        _pw_ok, _pw_err = validate_new_password(new_pwd)
+        if not _pw_ok:
+            error = _pw_err
         elif new_pwd != confirm:
             error = "Passwords do not match."
         elif new_pwd in ("1234", "12345678", "password", "admin123"):
@@ -920,8 +886,8 @@ def webauthn_verify_challenge():
         try:
             cur.close()
             db.close()
-        except Exception:
-            pass
+        except Exception as _close_exc:
+            app_log.debug("WebAuthn auth failure cleanup (cursor/db close) also failed: %s", _close_exc)
         app_log.warning("WebAuthn authentication verification failed for emp_id=%s: %s",
                         emp_id or "(passkey mode)", e, exc_info=True)
         return jsonify({"ok": False, "msg": f"Verification failed: {e}"}), 401
@@ -940,8 +906,9 @@ def webauthn_verify_challenge():
             (verified.new_sign_count, emp_id)
         )
         db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Persisting WebAuthn sign_count failed for %s (anti-clone bookkeeping degraded): %s",
+                        emp_id, exc, exc_info=True)
     finally:
         cur.close()
         db.close()

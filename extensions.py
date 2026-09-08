@@ -172,8 +172,13 @@ else:
             _f.write(app.secret_key)
         try:
             os.chmod(_key_file, 0o600)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Leaves the freshly-written secret-key file at whatever the
+            # default umask permissions are (potentially group/world
+            # readable) -- security-relevant enough to always report, not
+            # just a cosmetic failure (Windows filesystems commonly hit
+            # this since chmod's bit semantics don't map cleanly there).
+            app_log.warning("Could not chmod %s to 0600: %s", _key_file, exc, exc_info=True)
 
 app.config["SESSION_COOKIE_HTTPONLY"] = True   # blocks document.cookie read via injected/XSS'd JS
 # Secure flag is always True — browsers exempt 127.0.0.1/localhost from the

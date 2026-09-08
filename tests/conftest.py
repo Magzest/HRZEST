@@ -54,8 +54,9 @@ from blueprints.billing import billing_bp
 from blueprints.webhooks import webhooks_bp
 from blueprints.seats import seats_bp
 from blueprints.auto_debit import auto_debit_bp
+from blueprints.billing_dunning import billing_dunning_bp
 from blueprints.platform_admin import platform_admin_bp
-from blueprints.secops import secops_bp
+from blueprints.honeypot_routes import honeypot_bp
 from blueprints.biometric import biometric_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
@@ -79,8 +80,9 @@ flask_app.register_blueprint(billing_bp)
 flask_app.register_blueprint(webhooks_bp)
 flask_app.register_blueprint(seats_bp)
 flask_app.register_blueprint(auto_debit_bp)
+flask_app.register_blueprint(billing_dunning_bp)
 flask_app.register_blueprint(platform_admin_bp)
-flask_app.register_blueprint(secops_bp)
+flask_app.register_blueprint(honeypot_bp)
 flask_app.register_blueprint(biometric_bp)
 
 # Mirror wsgi.py's WSGI-level tenant-prefix stripping so tests exercise the
@@ -220,6 +222,26 @@ def client():
     flask_app.config["RATELIMIT_ENABLED"] = False  # Flask-Limiter 3.x flag
     with flask_app.test_client() as c:
         yield c
+
+
+@pytest.fixture
+def signed_qr():
+    """Returns a signed_qr(emp_id) callable that signs an employee_id the
+    same way qr_generator.generate_qr() does, for tests that POST a QR
+    check-in payload (auth_combo in qr_only/qr_face/qr_fingerprint) --
+    blueprints/attendance.py now runs every such employee_id through
+    qr_generator.verify_qr_value(), which requires the "{emp_id}.{signature}"
+    format, not a bare employee_id. Reuses the real signing function (not a
+    reimplementation) so this can never drift from production behavior.
+    Works even for an employee_id that doesn't exist in the DB -- signing is
+    a pure HMAC over the string, independent of whether the employee is
+    real, which is exactly what a negative-case test (e.g. an unknown
+    employee ID) needs to reach the app's own "employee not found" check
+    instead of failing at signature verification."""
+    from qr_generator import _qr_signature
+    def _sign(emp_id):
+        return f"{emp_id}.{_qr_signature(emp_id)}"
+    return _sign
 
 
 @pytest.fixture

@@ -112,9 +112,6 @@ class TestLeaveAuthGuards:
     def test_leave_calendar_requires_admin(self, client):
         assert client.get("/leave_calendar", follow_redirects=False).status_code in (302, 401)
 
-    def test_resignation_requests_requires_admin(self, client):
-        assert client.get("/resignation_requests", follow_redirects=False).status_code in (302, 401)
-
     def test_overtime_requires_admin(self, client):
         assert client.get("/overtime", follow_redirects=False).status_code in (302, 401)
 
@@ -175,10 +172,6 @@ class TestLeaveAdminPages:
         _admin_session(client, seed_admin)
         assert client.get("/leave_calendar?month=3&year=2025").status_code == 200
 
-    def test_resignation_requests_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        assert client.get("/resignation_requests").status_code == 200
-
     def test_overtime_renders(self, client, seed_admin):
         _admin_session(client, seed_admin)
         assert client.get("/overtime").status_code == 200
@@ -187,17 +180,6 @@ class TestLeaveAdminPages:
         _admin_session(client, seed_admin)
         resp = client.get("/compoff", follow_redirects=True)
         assert resp.status_code == 200
-
-    def test_view_holidays_renders(self, client, seed_admin):
-        # /view_holidays renders its own standalone holidays page directly
-        # rather than redirecting to /leave_holidays.
-        _admin_session(client, seed_admin)
-        resp = client.get("/view_holidays", follow_redirects=False)
-        assert resp.status_code == 200
-
-    def test_admin_leave_types_get(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        assert client.get("/admin_leave_types").status_code == 200
 
 
 # ---------------------------------------------------------------------------
@@ -391,44 +373,6 @@ class TestBulkLeaveAction:
 
 
 # ---------------------------------------------------------------------------
-# 7. Leave type management
-# ---------------------------------------------------------------------------
-
-class TestLeaveTypeManagement:
-    def test_add_leave_type(self, client, seed_admin, db_engine):
-        _admin_session(client, seed_admin)
-        resp = client.post("/admin_leave_types", data={
-            "action":       "add",
-            "name":         "Test Casual Leave",
-            "annual_quota": "12",
-            "is_paid":      "1",
-        }, follow_redirects=True)
-        assert resp.status_code == 200
-        cur = db_engine.cursor()
-        cur.execute("SELECT id FROM leave_types WHERE name='Test Casual Leave'")
-        row = cur.fetchone()
-        if row:
-            cur.execute("DELETE FROM leave_types WHERE id=%s", (row[0],))
-        cur.close()
-
-    def test_toggle_leave_type(self, client, seed_admin, db_engine):
-        cur = db_engine.cursor()
-        cur.execute("""
-            INSERT INTO leave_types (name, annual_quota, is_paid, is_active)
-            VALUES ('Toggle Test Leave', 10, 1, 1) RETURNING id
-        """)
-        lt_id = cur.fetchone()[0]
-        _admin_session(client, seed_admin)
-        resp = client.post("/admin_leave_types", data={
-            "action": "toggle",
-            "lt_id":  str(lt_id),
-        }, follow_redirects=True)
-        assert resp.status_code == 200
-        cur.execute("DELETE FROM leave_types WHERE id=%s", (lt_id,))
-        cur.close()
-
-
-# ---------------------------------------------------------------------------
 # 8. API: /api/holidays
 # ---------------------------------------------------------------------------
 
@@ -592,9 +536,6 @@ class TestAttendanceAuthGuards:
     def test_monthly_report_requires_admin(self, client):
         assert client.get("/monthly_report", follow_redirects=False).status_code in (302, 401)
 
-    def test_admin_shift_swaps_requires_admin(self, client):
-        assert client.get("/admin_shift_swaps", follow_redirects=False).status_code in (302, 401)
-
     def test_add_shift_requires_admin(self, client):
         assert client.post("/add_shift", data={}).status_code in (302, 401)
 
@@ -625,10 +566,6 @@ class TestAttendanceAdminPages:
         _admin_session(client, seed_admin)
         for m in range(1, 13):
             assert client.get(f"/monthly_report?year=2025&month={m}").status_code == 200
-
-    def test_admin_shift_swaps_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        assert client.get("/admin_shift_swaps").status_code == 200
 
     def test_employee_attendance_detail_renders(self, client, seed_admin, seed_employee):
         _admin_session(client, seed_admin)

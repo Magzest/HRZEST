@@ -110,9 +110,6 @@ def employee_document(db_engine, seed_employee):
 # ---------------------------------------------------------------------------
 
 class TestDocumentsAuthGuards:
-    def test_documents_page_requires_admin(self, client):
-        assert client.get("/documents", follow_redirects=False).status_code in (302, 401)
-
     def test_upload_document_requires_admin(self, client):
         assert client.post("/upload_document", data={}).status_code in (302, 401)
 
@@ -134,30 +131,6 @@ class TestDocumentsAuthGuards:
     def test_api_expiring_documents_requires_admin(self, client):
         assert client.get("/api/admin/expiring_documents",
                           follow_redirects=False).status_code in (302, 401)
-
-
-# ---------------------------------------------------------------------------
-# 2. /documents page
-# ---------------------------------------------------------------------------
-
-class TestDocumentsPage:
-    def test_renders_200(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        assert client.get("/documents").status_code == 200
-
-    def test_renders_with_emp_filter(self, client, seed_admin, seed_employee):
-        _admin_session(client, seed_admin)
-        resp = client.get(f"/documents?emp_id={seed_employee['employee_id']}")
-        assert resp.status_code == 200
-
-    def test_renders_with_document_data(self, client, seed_admin, employee_document, seed_employee):
-        _admin_session(client, seed_admin)
-        resp = client.get(f"/documents?emp_id={seed_employee['employee_id']}")
-        assert resp.status_code == 200
-
-    def test_renders_without_emp_filter_shows_all(self, client, seed_admin, employee_document):
-        _admin_session(client, seed_admin)
-        assert client.get("/documents").status_code == 200
 
 
 # ---------------------------------------------------------------------------

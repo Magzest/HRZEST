@@ -2,9 +2,13 @@
 """Shared utility helpers used across multiple blueprints."""
 import os
 import re
+import base64
 import datetime
+import hashlib
 import threading
 from contextlib import contextmanager
+
+import pytz
 
 _SAFE_IDENT_RE = re.compile(r'^[a-z][a-z0-9_]*$')
 
@@ -75,6 +79,66 @@ def tpath(path: str) -> str:
     if not prefix or path == prefix or path.startswith(prefix + "/"):
         return path
     return prefix + path
+
+
+# ── Static asset cache-busting ────────────────────────────────────────────────
+# filename -> (mtime, hash) -- lets static_url() below skip re-hashing a file
+# on every request and only pay that cost the first time a filename is seen
+# or after the file has actually changed on disk.
+_STATIC_ASSET_CACHE = {}
+_STATIC_ASSET_CACHE_LOCK = threading.Lock()
+
+
+def static_url(filename: str) -> str:
+    """Return "/static/<filename>?v=<hash>" for a CSS/JS (or any other)
+    file under static/, so a deploy that changes a file's bytes is visible
+    to browsers/CDNs immediately instead of being served stale for up to
+    SEND_FILE_MAX_AGE_DEFAULT (extensions.py, currently 1 hour) -- or
+    indefinitely by any intermediary that ignores that header.
+
+    Templates call this in place of a bare "/static/x.js" href/src (this
+    codebase writes static links as literal strings, same as tpath() above
+    -- see its docstring) or `{{ url_for('static', filename='x.js') }}`.
+
+    The hash is an md5 of the file's actual bytes, memoized in
+    _STATIC_ASSET_CACHE keyed by filename and invalidated with a cheap
+    os.path.getmtime() check -- so a request only re-reads+re-hashes the
+    file when it's new to the cache or has actually changed, not on every
+    page render of a busy HR app.
+
+    This mtime-keyed, in-process cache is correct today because there is
+    exactly one app instance reading static/ off its own local disk, so
+    "the file changed" and "mtime changed" are the same fact, and every
+    request sees the same cache. It would need to change (e.g. to a
+    build-time manifest file checked into the deploy, or a shared
+    Redis-backed cache) if this ever runs as multiple instances behind a
+    load balancer -- each process's mtime cache would only reflect files
+    it happens to have re-read locally, so a client could get inconsistent
+    hashes for the same file across requests -- or if static/ moves to
+    S3/a CDN origin instead of local disk, where there is no local mtime
+    to check at all.
+    """
+    from extensions import app as _app
+    static_root = _app.static_folder or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+    path = os.path.join(static_root, filename)
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return f"/static/{filename}"  # missing file -- let the resulting 404 happen with no query string
+
+    cached = _STATIC_ASSET_CACHE.get(filename)
+    if cached is None or cached[0] != mtime:
+        with _STATIC_ASSET_CACHE_LOCK:
+            cached = _STATIC_ASSET_CACHE.get(filename)
+            if cached is None or cached[0] != mtime:
+                try:
+                    with open(path, "rb") as f:
+                        digest = hashlib.md5(f.read()).hexdigest()[:10]
+                except OSError:
+                    return f"/static/{filename}"
+                cached = (mtime, digest)
+                _STATIC_ASSET_CACHE[filename] = cached
+    return f"/static/{filename}?v={cached[1]}"
 
 
 def employee_login_url() -> str:
@@ -188,13 +252,45 @@ def encrypt_pii(value: str) -> str:
     return _fernet.encrypt(value.encode()).decode()
 
 
+def _looks_like_fernet_token(value: str) -> bool:
+    """True if `value` is at least shaped like a real Fernet token (right
+    base64 alphabet, right minimum length, right version byte) -- as
+    opposed to legacy plaintext written before PII encryption existed
+    (e.g. a bare "Female" or "1988-03-10" seeded by an old migration or a
+    test fixture), which decrypt_pii() must keep passing through
+    unchanged rather than flagging as a decryption failure."""
+    try:
+        raw = base64.urlsafe_b64decode(value.encode())
+    except Exception:
+        return False
+    # Fernet token = 1 version byte + 8 timestamp + 16 IV + >=16 ciphertext
+    # (AES-CBC pads to a full block even for empty input) + 32 HMAC = 73
+    # bytes minimum; version byte is always 0x80.
+    return len(raw) >= 73 and raw[0:1] == b"\x80"
+
+
 def decrypt_pii(value: str) -> str:
     if not value:
         return value
     try:
         return _fernet.decrypt(value.encode()).decode()
     except (_FernetInvalid, Exception):
-        return value
+        if not _looks_like_fernet_token(value):
+            # Legacy plaintext that was never encrypted in the first
+            # place -- not a failure, just pass it through as-is (existing
+            # behavior, relied on by pre-encryption data / test fixtures).
+            return value
+        # This IS shaped like real ciphertext but failed to decrypt --
+        # almost always ENCRYPTION_KEY having been rotated after this row
+        # was written, or corrupted data. Previously this fell through to
+        # returning the raw gAAAAAB... blob, rendered directly in the UI
+        # and indistinguishable from a template bug to whoever's looking
+        # at it. Log it (so a real key-rotation incident is actually
+        # visible) and return an unambiguous placeholder instead; the
+        # underlying ciphertext is unrecoverable without the original key
+        # either way, so there's nothing useful to show the caller.
+        app_log.warning("decrypt_pii: failed to decrypt a PII value (wrong/rotated ENCRYPTION_KEY or corrupted data) -- returning placeholder")
+        return "[unable to decrypt]"
 
 
 def decrypt_pii_date(value):
@@ -254,8 +350,11 @@ def _audit(action, table=None, record_id=None, detail=None):
         finally:
             cursor.close()
             db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        # A silently-lost audit_logs row undermines the whole point of an
+        # audit trail -- worth a trace even though _audit() itself must
+        # never raise and block the action it's recording.
+        app_log.warning("_audit failed (action=%s, table=%s, record_id=%s): %s", action, table, record_id, exc, exc_info=True)
 
 
 # ── Notification helper ───────────────────────────────────────────────────────
@@ -272,8 +371,8 @@ def _create_notification(recipient_type, title, message, employee_id=None):
         finally:
             cursor.close()
             db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("_create_notification failed (recipient_type=%s, employee_id=%s): %s", recipient_type, employee_id, exc, exc_info=True)
 
 
 # ── Malware scanning (ClamAV) ─────────────────────────────────────────────────
@@ -424,29 +523,73 @@ _LOGO_NAME_RE = re.compile(r'[^a-z0-9\-]')
 
 def save_uploaded_logo(file_storage, name_hint):
     """Validate and save an uploaded company-logo image under
-    static/company_logos/, named after name_hint (the tenant's subdomain
-    slug, already restricted to [a-z0-9-] by org.py's _SUBDOMAIN_RE --
-    scrubbed again here defensively since other callers may not enforce
-    that). Returns (relative_path, None) on success -- relative_path is
-    under static/ and is what company_settings.logo_url is built from --
-    or (None, error_message) if the file is present but invalid. Callers
-    should treat "no file provided" as optional and skip calling this
-    entirely rather than treating it as an error.
+    static/company_logos/ (or the equivalent S3 key -- see utils/storage.py,
+    a no-op switch controlled entirely by whether S3_BUCKET is set), named
+    after name_hint (the tenant's subdomain slug, already restricted to
+    [a-z0-9-] by org.py's _SUBDOMAIN_RE -- scrubbed again here defensively
+    since other callers may not enforce that). Returns (stored_ref, None)
+    on success -- stored_ref is either the "company_logos/x.png"-style
+    relative path (local disk, what company_settings.logo_url is built
+    from as before) or a full https:// S3 object URL, or (None,
+    error_message) if the file is present but invalid. Callers should
+    treat "no file provided" as optional and skip calling this entirely
+    rather than treating it as an error.
 
     Deterministic filename (no re-upload dedup needed): a second signup
     attempt for the same subdomain just overwrites the previous file,
     which is fine since a subdomain can only ever back one live tenant."""
     from flask import current_app
+    from utils.storage import save_public
     ok, err = _validate_image_file(file_storage)
     if not ok:
         return None, err
     ext = os.path.splitext(file_storage.filename)[1].lower()
     safe_name = _LOGO_NAME_RE.sub("", name_hint.lower()) or "logo"
-    folder = os.path.join(current_app.root_path, "static", "company_logos")
-    os.makedirs(folder, exist_ok=True)
-    filename = f"{safe_name}{ext}"
-    file_storage.save(os.path.join(folder, filename))
-    return f"company_logos/{filename}", None
+    return save_public(current_app.root_path, file_storage, f"company_logos/{safe_name}{ext}",
+                        content_type=file_storage.content_type)
+
+
+_APPLICATION_DOC_KINDS = {
+    "registration_cert": ("upload", {"pdf", "jpg", "jpeg", "png"}),
+    "address_proof": ("upload", {"pdf", "jpg", "jpeg", "png"}),
+    "visiting_card": ("image", None),
+    "name_board_photo": ("image", None),
+}
+
+
+def save_application_document(file_storage, application_id, doc_kind):
+    """Validate and save one KYC document for a pending company-signup
+    application (blueprints/org.py's gated /create_org flow). Unlike
+    save_uploaded_logo() above, this deliberately does NOT save under
+    static/ -- these are business-verification documents (registration
+    certificate, address proof, visiting card, name-board photo), not an
+    asset meant to be publicly rendered on every dashboard. They're only
+    ever read back server-side, by the platform-admin-only document-view
+    route (blueprints/platform_admin.py), which reads via
+    utils/storage.py's open_private() after checking
+    @_platform_admin_required -- that route plus never constructing a
+    client-facing URL to this path is the entire access control.
+
+    Returns (stored_ref, None) on success -- stored_ref is either an
+    absolute local filesystem path or an "s3://bucket/key" reference (see
+    utils/storage.py; a no-op switch controlled by S3_BUCKET), pass it
+    straight into open_private()/delete_private() -- or (None, error_message).
+    """
+    from flask import current_app
+    from utils.storage import save_private
+    kind_info = _APPLICATION_DOC_KINDS.get(doc_kind)
+    if not kind_info:
+        return None, "Unknown document type."
+    validator_kind, allowed_exts = kind_info
+    if validator_kind == "image":
+        ok, err = _validate_image_file(file_storage)
+    else:
+        ok, err = _validate_upload(file_storage, allowed_exts=allowed_exts)
+    if not ok:
+        return None, err
+    ext = os.path.splitext(file_storage.filename)[1].lower()
+    return save_private(current_app.root_path, file_storage,
+                         f"tenant_applications/{int(application_id)}/{doc_kind}{ext}")
 
 
 # ── Company settings cache (60-second TTL) ────────────────────────────────────
@@ -464,6 +607,107 @@ def invalidate_settings_cache():
     with _settings_lock:
         _co_cache["data"] = None
         _auth_cache["data"] = None
+
+
+def post_announcement(cursor, db, title, content, priority, visibility, target_emp=None,
+                       attachment_original_name=None, attachment_stored_ref=None):
+    """Insert an `announcements` row and fan out the matching `notifications`
+    row(s) -- shared by the web admin form (blueprints/admin_views.py's
+    announcements_admin) and the Bearer-token API twin (blueprints/
+    notifications.py's api_broadcast_notification), which previously each
+    hand-rolled this identical insert-then-fan-out sequence. Uses the
+    caller's own open cursor/connection so the public-audience fan-out stays
+    one batched executemany() round-trip rather than _create_notification's
+    one-connection-per-call pattern (deliberate -- see the perf note this
+    replaced in announcements_admin).
+
+    attachment_original_name/attachment_stored_ref (set by the caller after
+    saving the upload via utils.storage.save_private) also drive an email
+    to every recipient -- the in-app notification alone doesn't reach an
+    employee who isn't currently logged in to check it."""
+    cursor.execute(
+        "INSERT INTO announcements (title, content, priority, visibility, target_employee_id, "
+        "attachment_original_name, attachment_stored_ref) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        (title, content, priority, visibility, target_emp, attachment_original_name, attachment_stored_ref)
+    )
+    db.commit()
+    snippet = (content[:117] + "...") if len(content) > 120 else content
+    if visibility == "private":
+        _create_notification('employee', f"📢 {title}", snippet, target_emp)
+        cursor.execute("SELECT email FROM employees WHERE employee_id=%s AND email IS NOT NULL AND email != ''",
+                       (target_emp,))
+        recipient_emails = [row[0] for row in cursor.fetchall()]
+    else:
+        cursor.execute("SELECT employee_id FROM employees WHERE is_active=1")
+        emp_ids = [eid for (eid,) in cursor.fetchall()]
+        if emp_ids:
+            cursor.executemany(
+                "INSERT INTO notifications (recipient_type, employee_id, title, message) "
+                "VALUES ('employee', %s, %s, %s)",
+                [(eid, f"📢 {title}", snippet) for eid in emp_ids]
+            )
+            db.commit()
+        cursor.execute("SELECT email FROM employees WHERE is_active=1 AND email IS NOT NULL AND email != ''")
+        recipient_emails = [row[0] for row in cursor.fetchall()]
+    _email_announcement(title, content, priority, recipient_emails,
+                        attachment_original_name, attachment_stored_ref)
+
+
+def _email_announcement(title, content, priority, recipient_emails, attachment_name, attachment_ref):
+    """Best-effort email fan-out for a newly posted announcement, queued
+    through the same DB-backed email worker every other transactional email
+    in this app uses (see utils/email_utils.py). Local imports avoid a
+    circular import -- email_utils imports from this module already."""
+    if not recipient_emails:
+        return
+    from utils.email_utils import get_email_config, send_email_async
+    cfg = get_email_config()
+    if not cfg:
+        app_log.info("Announcement '%s' posted but SMTP isn't configured -- skipping email fan-out.", title)
+        return
+    attachment_bytes = None
+    if attachment_ref:
+        from utils.storage import open_private
+        try:
+            attachment_bytes = open_private(attachment_ref)
+        except Exception as exc:
+            app_log.warning("Could not read announcement attachment %s for email: %s", attachment_ref, exc)
+    import html as _html_mod
+    safe_title = _html_mod.escape(title)
+    safe_content = _html_mod.escape(content).replace("\n", "<br>")
+    attachment_note = (
+        f'<div style="padding:0 20px 16px;color:#64748b;font-size:12px;">'
+        f'📎 Attached: {_html_mod.escape(attachment_name)}</div>'
+        if attachment_name else ""
+    )
+    html_body = f"""
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
+      <div style="background:#1e3a8a;padding:16px 20px;border-radius:8px 8px 0 0;color:#ffffff;">
+        <h2 style="margin:0;font-size:18px;">📢 {safe_title}</h2>
+      </div>
+      <div style="padding:20px;color:#334155;font-size:14px;line-height:1.6;">
+        {safe_content}
+      </div>
+      {attachment_note}
+      <div style="border-top:1px solid #e2e8f0;padding:12px 20px;font-size:11px;color:#94a3b8;">
+        Priority: {priority}. Sent via HRzest.com. Please do not reply directly to this automated email.
+      </div>
+    </div>
+    """
+    for email in recipient_emails:
+        send_email_async(email, f"📢 {title}", html_body, cfg,
+                         attachment_bytes=attachment_bytes, attachment_filename=attachment_name)
+
+
+def get_employee_sidebar_info(cursor, emp_id):
+    """(name, role, department, face_image) for the employee-portal sidebar
+    -- byte-identical query previously duplicated in blueprints/performance.py
+    (my_performance) and blueprints/leave.py (my_compoff)."""
+    cursor.execute(
+        "SELECT name, COALESCE(role,''), COALESCE(department,''), face_image FROM employees WHERE employee_id=%s",
+        (emp_id,)
+    )
+    return cursor.fetchone()
 
 
 _pending_counts_cache = {"data": None, "expires": None}
@@ -553,12 +797,45 @@ def get_company_settings():
                 _co_cache["data"] = result
                 _co_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL)
             return dict(result)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Falls through to generic hardcoded defaults below -- every page
+        # in the app would silently render wrong branding/settings, worth
+        # a trace.
+        app_log.warning("get_company_settings failed, using generic defaults: %s", exc, exc_info=True)
     return {"company_name": "My Company", "company_tagline": "HRzest.com",
             "company_logo": None, "currency_symbol": "₹", "timezone": "Asia/Kolkata",
             "setup_done": False, "company_code": "", "session_timeout": 30, "logo_url": "", "plan": "basic",
             "email_domain": "", "paid_employee_slots": None}
+
+
+def _company_tzinfo():
+    """Resolve the current tenant's configured timezone (company_settings.timezone,
+    via get_company_settings() -- already tenant-scoped through get_db_connection()'s
+    flask.g.tenant_db resolution) to a pytz tzinfo, falling back to Asia/Kolkata for an
+    unset/unrecognized value -- same fallback get_company_settings() itself uses."""
+    tz_name = (get_company_settings().get("timezone") or "Asia/Kolkata").strip()
+    try:
+        return pytz.timezone(tz_name)
+    except Exception:
+        return pytz.timezone("Asia/Kolkata")
+
+
+def company_now():
+    """Current wall-clock datetime in the current tenant's configured timezone
+    (company_settings.timezone), timezone-aware. Anchored to a real UTC instant
+    first (datetime.datetime.now(pytz.utc)) rather than the naive local
+    datetime.datetime.now(), since the server host's own system clock is not
+    guaranteed to be UTC either. Use this (or company_today()) instead of
+    datetime.datetime.now()/datetime.date.today() anywhere "today"/"now" is used
+    to decide which calendar day a check-in, leave date, or payroll period
+    belongs to."""
+    return datetime.datetime.now(pytz.utc).astimezone(_company_tzinfo())
+
+
+def company_today():
+    """Current calendar date in the current tenant's configured timezone. See
+    company_now() -- this is just company_now().date()."""
+    return company_now().date()
 
 
 # ── Company email domain (employee-registration gate) ────────────────────────
@@ -739,8 +1016,8 @@ def get_auth_config():
                 _auth_cache["data"] = result
                 _auth_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL)
             return dict(result)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("get_auth_config failed, using defaults: %s", exc, exc_info=True)
     return dict(_AUTH_CONFIG_DEFAULTS)
 
 
@@ -776,8 +1053,8 @@ def _read_global_features():
                 "holiday_pay": r[15], "leave_pay": r[16],
                 "shift_start": r[17], "shift_half": r[18], "shift_end": r[19],
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("_read_global_features failed, using defaults: %s", exc, exc_info=True)
     return {
         "face_auth_enabled": True, "geo_enabled": False, "geo_radius": 300,
         "qr_enabled": True, "pin_enabled": True, "fingerprint_enabled": False,
@@ -818,8 +1095,8 @@ def get_co_features(company_id=None):
                 "holiday_pay": r[15], "leave_pay": r[16],
                 "shift_start": r[17], "shift_half": r[18], "shift_end": r[19],
             }
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Per-company feature settings lookup failed, falling back to global: %s", exc, exc_info=True)
     return _read_global_features()
 
 
@@ -856,8 +1133,10 @@ def _upsert_co_feature(company_id, field, value):
         db.commit()
         cur.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        # The caller (a settings-save route) has no idea this silently
+        # failed -- it flashes "saved" while nothing actually persisted.
+        app_log.warning("_upsert_co_feature failed (company_id=%s, field=%s): %s", company_id, field, exc, exc_info=True)
 
 
 def _upsert_co_features(company_id, fields_dict):
@@ -884,8 +1163,8 @@ def _upsert_co_features(company_id, fields_dict):
         db.commit()
         cur.close()
         db.close()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("_upsert_co_features failed (company_id=%s, fields=%s): %s", company_id, list(fields_dict.keys()), exc, exc_info=True)
 
 
 # ── Company-scoping WHERE fragments ─────────────────────────────────────────
@@ -953,30 +1232,64 @@ def _error_page(code, icon, title, subtitle, hint):
     back_emp = session.get("employee_id")
     back_link = "/admin" if back_admin else ("/employee_portal" if back_emp else "/")
     back_label = "Go to Admin Dashboard" if back_admin else ("Go to My Portal" if back_emp else "Go to Home")
+    # Same landing_v2.css design system as admin_login.html/create_org.html
+    # (see admin_login.html's header comment) -- this page used to be the
+    # last one still on the old plain blue-and-white style.
     return f"""<!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en" data-theme="light"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{code} – {title}</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+<link rel="stylesheet" href="{static_url('shared.min.css')}" />
+<link rel="stylesheet" href="{static_url('landing_v2.css')}" />
 <style>
-  *{{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}}
-  body{{min-height:100vh;background:#f1f5f9;display:flex;align-items:center;justify-content:center;}}
-  .box{{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:52px 44px;text-align:center;max-width:480px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.08);}}
-  .icon{{font-size:72px;margin-bottom:18px;}}
-  .code{{font-size:80px;font-weight:900;line-height:1;color:#1e3a8a;margin-bottom:6px;}}
-  .title{{font-size:22px;font-weight:700;color:#1e293b;margin-bottom:8px;}}
-  .sub{{font-size:14px;color:#64748b;margin-bottom:6px;line-height:1.6;}}
-  .hint{{font-size:12px;color:#94a3b8;margin-bottom:28px;}}
-  a.btn{{display:inline-block;padding:12px 28px;background:#1e3a8a;color:#fff;border-radius:10px;font-size:14px;font-weight:700;text-decoration:none;transition:0.2s;margin:4px;}}
-  a.btn:hover{{background:#1d4ed8;}}
-  a.sec{{display:inline-block;padding:12px 20px;background:#f1f5f9;color:#374151;border-radius:10px;font-size:14px;font-weight:600;text-decoration:none;transition:0.2s;margin:4px;border:1px solid #e2e8f0;}}
-  a.sec:hover{{background:#e2e8f0;}}
+  * {{ margin: 0; padding: 0; box-sizing: border-box; font-family: var(--font-body); }}
+  html, body {{ min-height: 100vh; color: var(--text-main); }}
+  body {{
+    background: linear-gradient(160deg, #FDF3E3 0%, #F7ECF7 28%, #EAF0FC 56%, var(--bg-secondary) 100%);
+    background-attachment: fixed;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }}
+  .box {{
+    width: 100%; max-width: 460px; text-align: center;
+    background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+    padding: 48px 40px 40px; box-shadow: var(--shadow-lg); position: relative; overflow: hidden;
+  }}
+  .box::before {{ content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--gradient-brand); }}
+  .icon {{
+    width: 68px; height: 68px; margin: 0 auto 18px; border-radius: var(--radius-md);
+    background: var(--gradient-brand); display: flex; align-items: center; justify-content: center;
+    font-size: 32px; box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+  }}
+  .code {{ font-family: var(--font-heading); font-size: 15px; font-weight: 800; letter-spacing: 2px; color: var(--accent-cyan); margin-bottom: 8px; text-transform: uppercase; }}
+  .title {{ font-family: var(--font-heading); font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 10px; }}
+  .sub {{ font-size: 14px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.6; }}
+  .hint {{ font-size: 12.5px; color: var(--text-subtle); margin-bottom: 28px; }}
+  .actions {{ display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }}
+  a.btn {{
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 26px; border-radius: var(--radius-sm); background: var(--gradient-brand);
+    color: #fff; font-size: 14px; font-weight: 700; text-decoration: none;
+    transition: var(--transition-fast); box-shadow: var(--shadow-md);
+  }}
+  a.btn:hover {{ box-shadow: var(--shadow-lg); transform: translateY(-1px); }}
+  a.sec {{
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 22px; border-radius: var(--radius-sm); background: var(--bg-secondary);
+    color: var(--text-main); font-size: 14px; font-weight: 600; text-decoration: none;
+    transition: var(--transition-fast); border: 1px solid var(--border-color);
+  }}
+  a.sec:hover {{ background: var(--bg-tertiary); }}
+  @media (max-width: 480px) {{ .box {{ padding: 36px 26px 30px; }} }}
 </style></head><body>
 <div class="box">
   <div class="icon">{icon}</div>
-  <div class="code">{code}</div>
+  <div class="code">Error {code}</div>
   <div class="title">{title}</div>
   <div class="sub">{subtitle}</div>
   <div class="hint">{hint}</div>
-  <a href="{back_link}" class="btn">{back_label}</a>
-  <a href="javascript:history.back()" class="sec">← Go Back</a>
+  <div class="actions">
+    <a href="{back_link}" class="btn">{back_label}</a>
+    <a href="javascript:history.back()" class="sec">← Go Back</a>
+  </div>
 </div>
 </body></html>""", code

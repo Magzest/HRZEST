@@ -9,12 +9,19 @@ bootstrap) out of order. Neither function here touches the DB directly
 extraction is safe.
 """
 import datetime
+from extensions import app_log
+from utils.helpers import company_today
 
 
 def assign_leave_balances_for_employee(cursor, employee_id, year=None):
     """Auto-assign leave balances for all active leave types for a new/existing employee."""
     if year is None:
-        year = datetime.date.today().year
+        # company_today() rather than the server's own local date -- this
+        # runs unconditionally on every new-employee registration
+        # (blueprints/employees.py), so a server clock in a different
+        # timezone than the tenant's configured one must not put a hire
+        # made right around New Year's into the wrong year's leave balances.
+        year = company_today().year
     cursor.execute("SELECT id, annual_quota FROM leave_types WHERE is_active=1")
     for lt_id, quota in cursor.fetchall():
         cursor.execute("""
@@ -82,11 +89,14 @@ def get_indian_holidays(year):
     for m, d, name in fixed:
         try:
             result.append((datetime.date(year, m, d), name))
-        except ValueError:
-            pass
+        except ValueError as exc:
+            # These are hand-typed literal (month, day) tuples above --
+            # a ValueError here means a typo (e.g. day=31 in February),
+            # not a runtime data problem, but still worth surfacing.
+            app_log.debug("get_indian_holidays: invalid fixed-date entry %r for year %s: %s", (m, d, name), year, exc)
     for m, d, name in variable_by_year.get(year, []):
         try:
             result.append((datetime.date(year, m, d), name))
-        except ValueError:
-            pass
+        except ValueError as exc:
+            app_log.debug("get_indian_holidays: invalid variable-date entry %r for year %s: %s", (m, d, name), year, exc)
     return sorted(result, key=lambda x: x[0])

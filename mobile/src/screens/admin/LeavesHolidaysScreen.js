@@ -25,9 +25,11 @@ import {
   addHoliday,
   deleteHoliday,
 } from "../../api/client";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function LeavesHolidaysScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [activeTab, setActiveTab] = useState("leaves"); // 'leaves' | 'compoff' | 'holidays'
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -143,7 +145,7 @@ export default function LeavesHolidaysScreen({ navigation }) {
   };
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
           title="Leaves & Holidays"
@@ -180,7 +182,7 @@ export default function LeavesHolidaysScreen({ navigation }) {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[THEME.colors.primary]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
         >
           {loading ? (
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 40 }} />
@@ -264,7 +266,7 @@ export default function LeavesHolidaysScreen({ navigation }) {
 
               {holidays.length === 0 ? (
                 <View style={styles.emptyCard}>
-                  <Ionicons name="calendar-outline" size={44} color="#3B82F6" />
+                  <Ionicons name="calendar-outline" size={44} color={colors.employee} />
                   <Text style={styles.emptyTitle}>No Holidays Added</Text>
                   <Text style={styles.emptySub}>Add public holidays to the company calendar.</Text>
                 </View>
@@ -283,7 +285,7 @@ export default function LeavesHolidaysScreen({ navigation }) {
                       </View>
 
                       <TouchableOpacity onPress={() => handleDeleteHoliday(h)}>
-                        <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                        <Ionicons name="trash-outline" size={20} color={colors.danger} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -336,11 +338,11 @@ export default function LeavesHolidaysScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   tabsContainer: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     marginHorizontal: 16,
     marginTop: 12,
     borderRadius: 14,
@@ -359,16 +361,16 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 12, fontWeight: "600", color: "#64748B", marginLeft: 6 },
   activeTabText: { color: "#FFFFFF" },
   content: { padding: 16 },
-  sectionHeader: { fontSize: 14, fontWeight: "700", color: "#0F172A", marginBottom: 12 },
+  sectionHeader: { fontSize: 14, fontWeight: "700", color: colors.text, marginBottom: 12 },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     elevation: 2,
   },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  empName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  empName: { fontSize: 13, fontWeight: "700", color: colors.text },
   leaveType: { fontSize: 12, color: "#64748B", marginTop: 2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   statusText: { fontSize: 11, fontWeight: "700" },
@@ -379,18 +381,18 @@ const styles = StyleSheet.create({
   btnApprove: { backgroundColor: "#10B981" },
   rejectText: { color: "#DC2626", fontWeight: "700", fontSize: 12 },
   approveText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
-  emptyCard: { backgroundColor: "#FFFFFF", padding: 32, borderRadius: 20, alignItems: "center", marginTop: 20 },
-  emptyTitle: { fontSize: 14, fontWeight: "700", color: "#0F172A", marginTop: 12 },
+  emptyCard: { backgroundColor: colors.card, padding: 32, borderRadius: 20, alignItems: "center", marginTop: 20 },
+  emptyTitle: { fontSize: 14, fontWeight: "700", color: colors.text, marginTop: 12 },
   emptySub: { fontSize: 12, color: "#64748B", textAlign: "center", marginTop: 4 },
   holidayHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   addBtn: { backgroundColor: "#173B8C", flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
   addBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700", marginLeft: 4 },
-  dateCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#EFF6FF", justifyContent: "center", alignItems: "center" },
+  dateCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.blueBg, justifyContent: "center", alignItems: "center" },
   modalBg: { flex: 1, backgroundColor: "rgba(15,23,42,0.75)", justifyContent: "center", padding: 20 },
-  modalCard: { backgroundColor: "#FFFFFF", borderRadius: 20, padding: 20 },
-  modalTitle: { fontSize: 15, fontWeight: "700", color: "#0F172A", marginBottom: 16 },
+  modalCard: { backgroundColor: colors.card, borderRadius: 20, padding: 20 },
+  modalTitle: { fontSize: 15, fontWeight: "700", color: colors.text, marginBottom: 16 },
   inputLabel: { fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10, marginBottom: 4 },
-  textInput: { backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 12, fontSize: 13 },
+  textInput: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 12, fontSize: 13 },
   modalBtnRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 20, gap: 10 },
   modalCancelBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: "#F1F5F9" },
   modalCancelText: { color: "#64748B", fontWeight: "600" },

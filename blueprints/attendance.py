@@ -18,14 +18,14 @@ from flask import (
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required
-from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii, get_pending_action_counts
+from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii, get_pending_action_counts, company_today, company_now
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
     fetch_holidays_set, get_employee_shift, _td_to_time, infer_type_legacy,
     is_within_range, is_within_office_range,
     check_attendance_lockout, record_attendance_failure, clear_attendance_lockout,
-    geofence_check_error, compute_session_worked_minutes,
+    geofence_check_error, compute_session_worked_minutes, fetch_employee_work_location,
 )
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified
@@ -44,7 +44,7 @@ def _today_pending_counts(cursor):
 def today_present():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
     _args = (today,) + _co_args
@@ -71,7 +71,7 @@ def today_present():
 def today_absent():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
     _args = (today,) + _co_args
@@ -97,7 +97,7 @@ def today_absent():
 def today_late():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
     _args = (today,) + _co_args
@@ -151,8 +151,11 @@ def add_shift():
                 (name, start, half, end)
             )
         db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Previously silent -- the admin got redirected back with no
+        # indication the shift was never actually created.
+        app_log.warning("create_shift failed for '%s': %s", name, exc, exc_info=True)
+        flash("Could not create shift. Please try again.", "error")
     cursor.close()
     db.close()
     return redirect(dest)
@@ -261,140 +264,6 @@ def assign_shift():
     cursor.close()
     db.close()
     return jsonify({"ok": True})
-
-
-@attendance_bp.route("/submit_shift_swap", methods=["POST"])
-@employee_required
-def submit_shift_swap():
-    requester_id = session["employee_id"]
-    target_id = request.form.get("target_id", "").strip()
-    reason = request.form.get("reason", "").strip()
-    if not target_id or target_id == requester_id:
-        return redirect(tpath("/employee_portal?swap_error=invalid_target#shift-swap"))
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    # Fetch both employees' current shift_id (must both have shifts assigned)
-    cursor.execute("SELECT shift_id FROM employees WHERE employee_id=%s", (requester_id,))
-    row_r = cursor.fetchone()
-    cursor.execute("SELECT shift_id FROM employees WHERE employee_id=%s", (target_id,))
-    row_t = cursor.fetchone()
-    if not row_r or not row_t or row_r[0] is None or row_t[0] is None:
-        cursor.close()
-        db.close()
-        return redirect(tpath("/employee_portal?swap_error=no_shift#shift-swap"))
-    if row_r[0] == row_t[0]:
-        cursor.close()
-        db.close()
-        return redirect(tpath("/employee_portal?swap_error=same_shift#shift-swap"))
-    # Check no open request already exists between them
-    cursor.execute("""
-        SELECT id FROM shift_swap_requests
-        WHERE requester_id=%s AND target_id=%s
-          AND status IN ('Pending_Target','Pending_Admin')
-    """, (requester_id, target_id))
-    if cursor.fetchone():
-        cursor.close()
-        db.close()
-        return redirect(tpath("/employee_portal?swap_error=duplicate#shift-swap"))
-    cursor.execute("""
-        INSERT INTO shift_swap_requests
-            (requester_id, target_id, requester_shift_id, target_shift_id, reason)
-        VALUES (%s, %s, %s, %s, %s)
-    """, (requester_id, target_id, row_r[0], row_t[0], reason))
-    db.commit()
-    cursor.close()
-    db.close()
-    return redirect(tpath("/employee_portal?swap_sent=1#shift-swap"))
-
-
-@attendance_bp.route("/respond_shift_swap/<int:req_id>", methods=["POST"])
-@employee_required
-def respond_shift_swap(req_id):
-    emp_id = session["employee_id"]
-    action = request.form.get("action", "")
-    response = request.form.get("response", "").strip()
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT id, requester_id, target_id, status
-        FROM shift_swap_requests WHERE id=%s AND target_id=%s AND status='Pending_Target'
-    """, (req_id, emp_id))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close()
-        db.close()
-        return redirect(tpath("/employee_portal?swap_error=not_found#shift-swap"))
-    if action == "accept":
-        cursor.execute("""
-            UPDATE shift_swap_requests SET status='Pending_Admin', target_response=%s WHERE id=%s
-        """, (response or "Accepted", req_id))
-    else:
-        cursor.execute("""
-            UPDATE shift_swap_requests SET status='Rejected', target_response=%s WHERE id=%s
-        """, (response or "Rejected by employee", req_id))
-    db.commit()
-    cursor.close()
-    db.close()
-    return redirect(tpath("/employee_portal?swap_responded=1#shift-swap"))
-
-
-@attendance_bp.route("/admin_shift_swap/<int:req_id>", methods=["POST"])
-@admin_required
-def admin_shift_swap(req_id):
-    action = request.form.get("action", "")
-    response = request.form.get("admin_response", "").strip()
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT requester_id, target_id, requester_shift_id, target_shift_id
-        FROM shift_swap_requests WHERE id=%s AND status='Pending_Admin'
-    """, (req_id,))
-    row = cursor.fetchone()
-    if not row:
-        cursor.close()
-        db.close()
-        return redirect(tpath("/admin_shift_swaps?error=not_found"))
-    requester_id, target_id, req_shift, tgt_shift = row
-    if action == "approve":
-        # Swap actual shift assignments
-        cursor.execute("UPDATE employees SET shift_id=%s WHERE employee_id=%s", (tgt_shift, requester_id))
-        cursor.execute("UPDATE employees SET shift_id=%s WHERE employee_id=%s", (req_shift, target_id))
-        cursor.execute("""
-            UPDATE shift_swap_requests SET status='Approved', admin_response=%s WHERE id=%s
-        """, (response or "Approved by admin", req_id))
-    else:
-        cursor.execute("""
-            UPDATE shift_swap_requests SET status='Rejected_Admin', admin_response=%s WHERE id=%s
-        """, (response or "Rejected by admin", req_id))
-    db.commit()
-    cursor.close()
-    db.close()
-    return redirect(tpath("/admin_shift_swaps?ok=1"))
-
-
-@attendance_bp.route("/admin_shift_swaps")
-@admin_required
-def admin_shift_swaps():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT ssr.id, ssr.requester_id, er.name, ssr.target_id, et.name,
-               sr.name AS req_shift, st.name AS tgt_shift,
-               ssr.reason, ssr.status, ssr.target_response, ssr.admin_response, ssr.created_at
-        FROM shift_swap_requests ssr
-        JOIN employees er ON er.employee_id = ssr.requester_id
-        JOIN employees et ON et.employee_id = ssr.target_id
-        JOIN shifts sr ON sr.id = ssr.requester_shift_id
-        JOIN shifts st ON st.id = ssr.target_shift_id
-        ORDER BY ssr.created_at DESC LIMIT 100
-    """)
-    swap_rows = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("admin_shift_swaps.html", swap_rows=swap_rows,
-                           ok=request.args.get("ok"),
-                           active_nav="employees",
-                           error=request.args.get("error"))
 
 
 @attendance_bp.route("/api/breaks")
@@ -539,7 +408,7 @@ def monthly_report():
 
     holidays = fetch_holidays_set(year, month)
     working_days = get_working_days(year, month)
-    today = datetime.date.today()
+    today = company_today()
 
     report = []
     for emp_id, name, role, phone, email in employees:
@@ -625,7 +494,7 @@ def employee_attendance_detail(emp_id, year, month):
     att_map = {row[0]: row for row in cursor.fetchall()}
 
     holidays_set = fetch_holidays_set(year, month)
-    today = datetime.date.today()
+    today = company_today()
 
     # Informational only -- which dates this employee is currently locked
     # out of online check-in for (utils/attendance_utils.py). Table may not
@@ -638,8 +507,10 @@ def employee_attendance_detail(emp_id, year, month):
             (emp_id, datetime.date(year, month, 1), datetime.date(year, month, last_day))
         )
         locked_dates = {r[0] for r in cursor.fetchall()}
-    except Exception:
-        pass
+    except Exception as exc:
+        # debug, not warning: expected and harmless on an older tenant
+        # schema that predates the attendance_lockouts table.
+        app_log.debug("attendance_lockouts lookup failed for %s (%s/%s): %s", emp_id, year, month, exc)
 
     days = []
     full_days = half_days = late_days = absent = 0
@@ -857,8 +728,8 @@ def bulk_mark_attendance():
             "SELECT employee_id FROM attendance_lockouts WHERE date=%s AND locked=1", (date_obj,)
         )
         locked_employee_ids = {r[0] for r in cursor.fetchall()}
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("attendance_lockouts lookup failed for date=%s: %s", date_obj, exc)
 
     # Monthly summary for the selected date's month
     cursor.execute(
@@ -881,8 +752,10 @@ def bulk_mark_attendance():
     pending_tickets = 0
     try:
         pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor, tickets_open_only=True)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Counts stay at 0 -- misleadingly implies nothing pending, worth
+        # knowing since it directly affects what admins see on this page.
+        app_log.warning("get_pending_action_counts failed: %s", exc, exc_info=True)
     cursor.close()
     db.close()
 
@@ -1011,7 +884,7 @@ def monthly_report_export():
 
     holidays = fetch_holidays_set(year, month)
     working_days = get_working_days(year, month)
-    today = datetime.date.today()
+    today = company_today()
     cursor.close()
     db.close()
 
@@ -1121,7 +994,7 @@ def send_absentee_report():
     if not cfg:
         return jsonify({"ok": False, "msg": "Email not configured. Go to Email Settings first."})
 
-    today = datetime.date.today()
+    today = company_today()
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
@@ -1218,13 +1091,30 @@ def attendance():
         err_msg = "Employee ID is required." if auth_combo == "fingerprint_only" else "No QR code data received."
         return jsonify({"ok": False, "msg": err_msg})
 
+    # For every combo that involves scanning a QR code, the posted
+    # "employee_id" is really whatever text the QR encodes -- which must be
+    # this employee's signed "<id>.<hmac>" value (see qr_generator.py), not
+    # a bare ID. Without this, qr_only in particular performed ZERO
+    # identity verification: the QR previously just encoded the raw,
+    # often-guessable employee_id, so anyone who knew or guessed a
+    # coworker's ID could mark them present/absent with no further check.
+    # fingerprint_only has no QR component (the ID is typed, then a real
+    # fingerprint match against THAT ID's stored credential gates it), so
+    # it's intentionally excluded here.
+    if auth_combo in ("qr_face", "qr_only", "qr_fingerprint"):
+        from qr_generator import verify_qr_value
+        _verified_emp_id, _qr_valid = verify_qr_value(emp_id)
+        if not _qr_valid:
+            return jsonify({"ok": False, "msg": "Invalid or unrecognized QR code. Please rescan."}), 400
+        emp_id = _verified_emp_id
+
     # Attendance auto-lockout -- 4 failed identity-mismatch attempts (face
     # mismatch / fingerprint verify failure) locks online check-in for this
     # employee/day; only an admin manually marking attendance
     # (correct_attendance/bulk_mark_attendance) clears it. Checked before any
     # biometric work so a locked-out employee doesn't burn a face-recognition
     # pass for nothing. Available to every tenant.
-    _today = datetime.date.today()
+    _today = company_today()
     _locked, _lock_msg = check_attendance_lockout(emp_id, _today)
     if _locked:
         return jsonify({"ok": False, "msg": _lock_msg}), 403
@@ -1327,7 +1217,7 @@ def attendance():
             record_attendance_failure(emp_id, _today, "Face does not match")
             return jsonify({"ok": False, "msg": "Face does not match. Please try again."})
 
-    now = datetime.datetime.now()
+    now = company_now()
     today = now.date()
     current_time = now.time()
 
@@ -1431,10 +1321,10 @@ def process_punch(cursor, db, emp_id, employee_name, punch_dt=None):
     device push). Returns a plain dict rather than a Response so callers
     can add their own fields (e.g. a device's raw PIN) before jsonifying.
 
-    punch_dt defaults to now() for a live human tap; a device push passes
-    the device's own punch timestamp instead, since it may be delivered
-    slightly after the fact."""
-    now = punch_dt or datetime.datetime.now()
+    punch_dt defaults to the tenant's current company-local time for a live
+    human tap; a device push passes the device's own punch timestamp
+    instead, since it may be delivered slightly after the fact."""
+    now = punch_dt or company_now()
     today = now.date()
     current_time = now.time()
     cursor.execute(
@@ -1503,14 +1393,12 @@ def api_checkin():
     lon = data.get("lon")
     if not emp_id:
         return jsonify({"ok": False, "msg": "employee_id required"}), 400
-    _locked, _lock_msg = check_attendance_lockout(emp_id, datetime.date.today())
+    _locked, _lock_msg = check_attendance_lockout(emp_id, company_today())
     if _locked:
         return jsonify({"ok": False, "msg": _lock_msg}), 403
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT name, work_mode, work_lat, work_lon FROM employees WHERE employee_id=%s", (emp_id,))
-    result = cursor.fetchone()
+    result = fetch_employee_work_location(cursor, emp_id)
     if not result:
         cursor.close()
         db.close()

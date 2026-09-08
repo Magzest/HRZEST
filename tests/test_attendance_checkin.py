@@ -82,24 +82,6 @@ def shift_b(db_engine):
 
 
 @pytest.fixture
-def seed_employee2(db_engine):
-    """Second test employee for shift-swap tests."""
-    from utils.auth import generate_password_hash
-    cur = db_engine.cursor()
-    cur.execute(
-        "INSERT INTO employees (employee_id, name, email, password, force_pin_change) "
-        "VALUES (%s,%s,%s,%s,0) ON CONFLICT (employee_id) DO NOTHING",
-        ("TST002", "Test Employee 2", "emp2@test.local", generate_password_hash("EmpPass@2")),
-    )
-    yield {"employee_id": "TST002", "password": "EmpPass@2", "name": "Test Employee 2"}
-    cur.execute("DELETE FROM shift_swap_requests WHERE requester_id='TST002' OR target_id='TST002'")
-    cur.execute("DELETE FROM attendance WHERE employee_id='TST002'")
-    cur.execute("DELETE FROM api_tokens WHERE identity='TST002'")
-    cur.execute("DELETE FROM employees WHERE employee_id='TST002'")
-    cur.close()
-
-
-@pytest.fixture
 def attendance_today(db_engine, seed_employee):
     """Seed a login-only record for today — next checkin becomes a logout."""
     cur = db_engine.cursor()
@@ -136,55 +118,6 @@ def attendance_completed(db_engine, seed_employee):
                 (seed_employee["employee_id"], today))
     cur.close()
 
-
-@pytest.fixture
-def swap_pending(db_engine, seed_employee, seed_employee2, shift_a, shift_b):
-    """Seed a Pending_Target swap request from TST001 → TST002."""
-    cur = db_engine.cursor()
-    cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id='TST001'", (shift_a["id"],))
-    cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id='TST002'", (shift_b["id"],))
-    cur.execute(
-        "INSERT INTO shift_swap_requests "
-        "(requester_id, target_id, requester_shift_id, target_shift_id, reason, status) "
-        "VALUES ('TST001','TST002',%s,%s,'CI swap reason','Pending_Target') RETURNING id",
-        (shift_a["id"], shift_b["id"]),
-    )
-    req_id = cur.fetchone()[0]
-    yield {
-        "id": req_id,
-        "requester_id": "TST001",
-        "target_id":    "TST002",
-        "req_shift_id": shift_a["id"],
-        "tgt_shift_id": shift_b["id"],
-    }
-    cur.execute("DELETE FROM shift_swap_requests WHERE id=%s", (req_id,))
-    cur.execute("UPDATE employees SET shift_id=NULL WHERE employee_id IN ('TST001','TST002')")
-    cur.close()
-
-
-@pytest.fixture
-def swap_pending_admin(db_engine, seed_employee, seed_employee2, shift_a, shift_b):
-    """Seed a Pending_Admin swap request (target already accepted)."""
-    cur = db_engine.cursor()
-    cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id='TST001'", (shift_a["id"],))
-    cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id='TST002'", (shift_b["id"],))
-    cur.execute(
-        "INSERT INTO shift_swap_requests "
-        "(requester_id, target_id, requester_shift_id, target_shift_id, reason, status, target_response) "
-        "VALUES ('TST001','TST002',%s,%s,'CI swap reason','Pending_Admin','Accepted') RETURNING id",
-        (shift_a["id"], shift_b["id"]),
-    )
-    req_id = cur.fetchone()[0]
-    yield {
-        "id": req_id,
-        "requester_id": "TST001",
-        "target_id":    "TST002",
-        "req_shift_id": shift_a["id"],
-        "tgt_shift_id": shift_b["id"],
-    }
-    cur.execute("DELETE FROM shift_swap_requests WHERE id=%s", (req_id,))
-    cur.execute("UPDATE employees SET shift_id=NULL WHERE employee_id IN ('TST001','TST002')")
-    cur.close()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -269,15 +202,15 @@ class TestKioskAttendance:
         assert data["ok"] is False
         assert "Employee ID is required" in data["msg"]
 
-    def test_unknown_employee(self, client):
+    def test_unknown_employee(self, client, signed_qr):
         rv = client.post("/attendance", json={
-            "employee_id": "GHOST99", "auth_combo": "qr_only",
+            "employee_id": signed_qr("GHOST99"), "auth_combo": "qr_only",
         })
         data = rv.get_json()
         assert data["ok"] is False
         assert "not found" in data["msg"].lower()
 
-    def test_qr_only_login_creates_attendance_record(self, client, seed_employee, db_engine, mocker):
+    def test_qr_only_login_creates_attendance_record(self, client, seed_employee, db_engine, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "qr_enabled": True,
             "face_enabled": True, "location_enabled": False,
@@ -289,7 +222,7 @@ class TestKioskAttendance:
         cur.close()
 
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -309,13 +242,13 @@ class TestKioskAttendance:
         assert row[0] is not None   # login_time set
         assert row[1] is None       # logout_time still NULL
 
-    def test_qr_only_logout_sets_logout_time(self, client, seed_employee, attendance_today, db_engine, mocker):
+    def test_qr_only_logout_sets_logout_time(self, client, seed_employee, attendance_today, db_engine, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "qr_enabled": True,
             "face_enabled": True, "location_enabled": False,
         })
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -329,13 +262,13 @@ class TestKioskAttendance:
         assert cur.fetchone()[0] is not None
         cur.close()
 
-    def test_qr_only_relogin_clears_logout_time(self, client, seed_employee, attendance_completed, db_engine, mocker):
+    def test_qr_only_relogin_clears_logout_time(self, client, seed_employee, attendance_completed, db_engine, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "qr_enabled": True,
             "face_enabled": True, "location_enabled": False,
         })
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
@@ -348,9 +281,9 @@ class TestKioskAttendance:
         assert cur.fetchone()[0] is None
         cur.close()
 
-    def test_qr_face_empty_face_image(self, client, seed_employee):
+    def test_qr_face_empty_face_image(self, client, seed_employee, signed_qr):
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_image":  "",
         })
@@ -358,9 +291,9 @@ class TestKioskAttendance:
         assert data["ok"] is False
         assert "Face photo not captured" in data["msg"]
 
-    def test_qr_face_invalid_base64(self, client, seed_employee):
+    def test_qr_face_invalid_base64(self, client, seed_employee, signed_qr):
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_image":  "!!!not_valid_base64!!!",
         })
@@ -368,7 +301,7 @@ class TestKioskAttendance:
         assert data["ok"] is False
         assert "Invalid face image data" in data["msg"]
 
-    def test_qr_face_recognition_unavailable(self, client, seed_employee, mocker):
+    def test_qr_face_recognition_unavailable(self, client, seed_employee, mocker, signed_qr):
         from PIL import Image as _PIL
         buf = io.BytesIO()
         _PIL.new("RGB", (100, 100)).save(buf, format="JPEG")
@@ -380,7 +313,7 @@ class TestKioskAttendance:
         })
         mocker.patch("blueprints.attendance._face_recognition_available", False)
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_image":  face_b64,
         })
@@ -413,27 +346,27 @@ class TestKioskAttendance:
         assert rv.status_code == 401
         assert rv.get_json()["ok"] is False
 
-    def test_location_required_but_missing(self, client, seed_employee, mocker):
+    def test_location_required_but_missing(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "location_enabled": True,
             "face_enabled": False, "qr_enabled": True,
         })
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
         })
         data = rv.get_json()
         assert data["ok"] is False
         assert "Location not captured" in data["msg"]
 
-    def test_location_outside_office_rejected(self, client, seed_employee, mocker):
+    def test_location_outside_office_rejected(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.attendance.get_auth_config", return_value={
             "fingerprint_enabled": False, "location_enabled": True,
             "face_enabled": False, "qr_enabled": True,
         })
         mocker.patch("blueprints.attendance.is_within_office_range", return_value=False)
         rv = client.post("/attendance", json={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_only",
             "lat": 19.0760, "lon": 72.8777,
         })
@@ -662,40 +595,40 @@ class TestApiQrFaceCheckin:
         })
         assert rv.status_code == 400
 
-    def test_qr_disabled_returns_403(self, client, seed_employee, mocker):
+    def test_qr_disabled_returns_403(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": False, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 403
 
-    def test_face_disabled_returns_403(self, client, seed_employee, mocker):
+    def test_face_disabled_returns_403(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": False,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 403
 
-    def test_fingerprint_disabled_returns_403(self, client, seed_employee, mocker):
+    def test_fingerprint_disabled_returns_403(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         assert rv.status_code == 403
 
-    def test_fingerprint_not_verified_returns_401(self, client, seed_employee, mocker):
+    def test_fingerprint_not_verified_returns_401(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": True, "location_enabled": False,
@@ -703,24 +636,24 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._wa_fingerprint_recently_verified", return_value=False)
         mocker.patch("blueprints.employee_portal._mobile_biometric_recently_verified", return_value=False)
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         assert rv.status_code == 401
 
-    def test_unknown_employee_returns_404(self, client, mocker):
+    def test_unknown_employee_returns_404(self, client, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": "GHOST99",
+            "employee_id": signed_qr("GHOST99"),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 404
 
     def test_qr_fingerprint_login_with_verified_fingerprint(
-            self, client, seed_employee, db_engine, mocker):
+            self, client, seed_employee, db_engine, mocker, signed_qr):
         """qr_fingerprint with a verified fingerprint should create a login record."""
         today = datetime.date.today()
         cur = db_engine.cursor()
@@ -735,7 +668,7 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._wa_fingerprint_recently_verified", return_value=True)
 
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         data = rv.get_json()
@@ -747,19 +680,19 @@ class TestApiQrFaceCheckin:
                     (seed_employee["employee_id"], today))
         cur.close()
 
-    def test_qr_face_without_photo_returns_400(self, client, seed_employee, mocker):
+    def test_qr_face_without_photo_returns_400(self, client, seed_employee, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": False, "location_enabled": False,
         })
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
         })
         assert rv.status_code == 400
         assert "face photo required" in rv.get_json()["msg"].lower()
 
-    def test_qr_face_with_face_recognition_unavailable(self, client, seed_employee, mocker):
+    def test_qr_face_with_face_recognition_unavailable(self, client, seed_employee, mocker, signed_qr):
         from PIL import Image as _PIL
         buf = io.BytesIO()
         _PIL.new("RGB", (100, 100)).save(buf, format="JPEG")
@@ -772,7 +705,7 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._face_recognition_available", False)
 
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_face",
             "face_photo":  (buf, "face.jpg", "image/jpeg"),
         }, content_type="multipart/form-data")
@@ -780,7 +713,7 @@ class TestApiQrFaceCheckin:
         assert "unavailable" in rv.get_json()["msg"].lower()
 
     def test_qr_fingerprint_relogin_after_completed(
-            self, client, seed_employee, attendance_completed, mocker):
+            self, client, seed_employee, attendance_completed, mocker, signed_qr):
         mocker.patch("blueprints.employee_portal.get_auth_config", return_value={
             "qr_enabled": True, "face_enabled": True,
             "fingerprint_enabled": True, "location_enabled": False,
@@ -788,7 +721,7 @@ class TestApiQrFaceCheckin:
         mocker.patch("blueprints.employee_portal._wa_fingerprint_recently_verified", return_value=True)
 
         rv = client.post("/api/employee/qr-face-checkin", data={
-            "employee_id": seed_employee["employee_id"],
+            "employee_id": signed_qr(seed_employee["employee_id"]),
             "auth_combo":  "qr_fingerprint",
         })
         data = rv.get_json()
@@ -887,181 +820,6 @@ class TestApiEmployeeAttendanceGet:
         cur.execute("DELETE FROM attendance WHERE employee_id=%s AND date=%s",
                     (seed_employee["employee_id"], today))
         cur.close()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Shift swap lifecycle
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TestShiftSwapLifecycle:
-
-    # ── submit_shift_swap ────────────────────────────────────────────────────
-
-    def test_submit_requires_employee_session(self, client):
-        rv = client.post("/submit_shift_swap", data={"target_id": "TST002"})
-        assert rv.status_code in (302, 401)
-
-    def test_submit_missing_target_id(self, client, seed_employee):
-        _emp_session(client, seed_employee)
-        rv = client.post("/submit_shift_swap", data={"target_id": ""})
-        assert rv.status_code == 302
-        assert "invalid_target" in rv.headers["Location"]
-
-    def test_submit_self_as_target(self, client, seed_employee):
-        _emp_session(client, seed_employee)
-        rv = client.post("/submit_shift_swap",
-                         data={"target_id": seed_employee["employee_id"]})
-        assert rv.status_code == 302
-        assert "invalid_target" in rv.headers["Location"]
-
-    def test_submit_no_shift_assigned(self, client, seed_employee, seed_employee2, db_engine):
-        """When employees have no shift assigned, swap is rejected."""
-        cur = db_engine.cursor()
-        cur.execute("UPDATE employees SET shift_id=NULL WHERE employee_id IN ('TST001','TST002')")
-        cur.close()
-
-        _emp_session(client, seed_employee)
-        rv = client.post("/submit_shift_swap",
-                         data={"target_id": seed_employee2["employee_id"], "reason": "test"})
-        assert rv.status_code == 302
-        assert "no_shift" in rv.headers["Location"]
-
-    def test_submit_same_shift_rejected(self, client, seed_employee, seed_employee2, shift_a, db_engine):
-        """Both employees on same shift → same_shift error."""
-        cur = db_engine.cursor()
-        cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id IN ('TST001','TST002')",
-                    (shift_a["id"],))
-        cur.close()
-
-        _emp_session(client, seed_employee)
-        rv = client.post("/submit_shift_swap",
-                         data={"target_id": seed_employee2["employee_id"], "reason": "test"})
-        assert rv.status_code == 302
-        assert "same_shift" in rv.headers["Location"]
-
-        cur = db_engine.cursor()
-        cur.execute("UPDATE employees SET shift_id=NULL WHERE employee_id IN ('TST001','TST002')")
-        cur.close()
-
-    def test_submit_happy_path_creates_pending_target(
-            self, client, seed_employee, seed_employee2, shift_a, shift_b, db_engine):
-        cur = db_engine.cursor()
-        cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id='TST001'", (shift_a["id"],))
-        cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id='TST002'", (shift_b["id"],))
-        cur.execute("DELETE FROM shift_swap_requests WHERE requester_id='TST001' AND target_id='TST002'")
-        cur.close()
-
-        _emp_session(client, seed_employee)
-        rv = client.post("/submit_shift_swap",
-                         data={"target_id": seed_employee2["employee_id"], "reason": "CI reason"})
-        assert rv.status_code == 302
-        assert "swap_sent=1" in rv.headers["Location"]
-
-        cur = db_engine.cursor()
-        cur.execute(
-            "SELECT status FROM shift_swap_requests "
-            "WHERE requester_id='TST001' AND target_id='TST002'"
-        )
-        row = cur.fetchone()
-        assert row is not None
-        assert row[0] == "Pending_Target"
-        cur.execute("DELETE FROM shift_swap_requests WHERE requester_id='TST001' AND target_id='TST002'")
-        cur.execute("UPDATE employees SET shift_id=NULL WHERE employee_id IN ('TST001','TST002')")
-        cur.close()
-
-    def test_submit_duplicate_request_rejected(self, client, seed_employee, swap_pending):
-        _emp_session(client, seed_employee)
-        rv = client.post("/submit_shift_swap",
-                         data={"target_id": swap_pending["target_id"], "reason": "again"})
-        assert rv.status_code == 302
-        assert "duplicate" in rv.headers["Location"]
-
-    # ── respond_shift_swap ───────────────────────────────────────────────────
-
-    def test_respond_accept_moves_to_pending_admin(
-            self, client, seed_employee2, swap_pending, db_engine):
-        with client.session_transaction() as sess:
-            sess["employee_id"]   = seed_employee2["employee_id"]
-            sess["employee_name"] = seed_employee2["name"]
-
-        rv = client.post(f"/respond_shift_swap/{swap_pending['id']}",
-                         data={"action": "accept", "response": "Happy to swap"})
-        assert rv.status_code == 302
-        assert "swap_responded=1" in rv.headers["Location"]
-
-        cur = db_engine.cursor()
-        cur.execute("SELECT status FROM shift_swap_requests WHERE id=%s", (swap_pending["id"],))
-        assert cur.fetchone()[0] == "Pending_Admin"
-        cur.close()
-
-    def test_respond_reject_sets_rejected(self, client, seed_employee2, swap_pending, db_engine):
-        with client.session_transaction() as sess:
-            sess["employee_id"]   = seed_employee2["employee_id"]
-            sess["employee_name"] = seed_employee2["name"]
-
-        rv = client.post(f"/respond_shift_swap/{swap_pending['id']}",
-                         data={"action": "reject", "response": "Cannot swap"})
-        assert rv.status_code == 302
-
-        cur = db_engine.cursor()
-        cur.execute("SELECT status FROM shift_swap_requests WHERE id=%s", (swap_pending["id"],))
-        assert cur.fetchone()[0] == "Rejected"
-        cur.close()
-
-    def test_respond_nonexistent_request(self, client, seed_employee2):
-        with client.session_transaction() as sess:
-            sess["employee_id"]   = seed_employee2["employee_id"]
-            sess["employee_name"] = seed_employee2["name"]
-
-        rv = client.post("/respond_shift_swap/99999", data={"action": "accept"})
-        assert rv.status_code == 302
-        assert "not_found" in rv.headers["Location"]
-
-    def test_respond_wrong_employee_is_rejected(self, client, seed_employee, swap_pending):
-        """Requester cannot respond to their own swap request."""
-        _emp_session(client, seed_employee)
-        rv = client.post(f"/respond_shift_swap/{swap_pending['id']}",
-                         data={"action": "accept"})
-        assert rv.status_code == 302
-        assert "not_found" in rv.headers["Location"]
-
-    # ── admin_shift_swap ─────────────────────────────────────────────────────
-
-    def test_admin_approve_swaps_shift_assignments(
-            self, client, seed_admin, swap_pending_admin, db_engine):
-        _admin_session(client, seed_admin)
-        rv = client.post(f"/admin_shift_swap/{swap_pending_admin['id']}",
-                         data={"action": "approve", "admin_response": "Approved by CI"})
-        assert rv.status_code == 302
-
-        cur = db_engine.cursor()
-        cur.execute("SELECT shift_id FROM employees WHERE employee_id='TST001'")
-        tst001_shift = cur.fetchone()[0]
-        cur.execute("SELECT shift_id FROM employees WHERE employee_id='TST002'")
-        tst002_shift = cur.fetchone()[0]
-        cur.close()
-
-        assert tst001_shift == swap_pending_admin["tgt_shift_id"]
-        assert tst002_shift == swap_pending_admin["req_shift_id"]
-
-    def test_admin_reject_sets_rejected_admin(
-            self, client, seed_admin, swap_pending_admin, db_engine):
-        _admin_session(client, seed_admin)
-        rv = client.post(f"/admin_shift_swap/{swap_pending_admin['id']}",
-                         data={"action": "reject", "admin_response": "Rejected by CI"})
-        assert rv.status_code == 302
-
-        cur = db_engine.cursor()
-        cur.execute("SELECT status FROM shift_swap_requests WHERE id=%s",
-                    (swap_pending_admin["id"],))
-        assert cur.fetchone()[0] == "Rejected_Admin"
-        cur.close()
-
-    def test_admin_approve_nonexistent_redirects(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        rv = client.post("/admin_shift_swap/99999", data={"action": "approve"})
-        assert rv.status_code == 302
-        assert "not_found" in rv.headers["Location"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

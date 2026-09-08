@@ -77,6 +77,15 @@ export default function AttendanceScannerModal({ visible, onClose, onSuccess }) 
   const parseEmployeeIdFromQR = (data) => {
     if (!data) return user?.employeeId || user?.employee_id || user?.emp_id || "EMP-1001";
     let raw = String(data).trim();
+    // Signed QR payload from the backend ("<employee_id>.<16-hex-char-hmac>",
+    // see qr_generator.py's generate_qr/verify_qr_value) -- forward it
+    // verbatim so the server can verify the signature. The EMP-\d+
+    // extraction below would otherwise strip the ".<hmac>" suffix off
+    // every real scan, silently discarding the proof of authenticity and
+    // getting every check-in rejected as "Invalid or unrecognized QR code."
+    if (/^[^.]+\.[0-9a-f]{16}$/i.test(raw)) {
+      return raw;
+    }
     const empMatch = raw.match(/EMP-?\d+/i);
     if (empMatch) {
       let matched = empMatch[0].toUpperCase();

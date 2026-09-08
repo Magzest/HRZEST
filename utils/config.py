@@ -9,6 +9,7 @@ they see the updated values after startup loading.
 import datetime
 import os
 from database import get_db_connection
+from extensions import app_log
 
 # Office geo-fence (overridable via .env)
 OFFICE_LAT = float(os.environ.get("OFFICE_LAT", "17.494664737165042"))
@@ -48,8 +49,11 @@ def load_default_shift():
             SHIFT_START = _to_time(row[0])
             SHIFT_HALF = _to_time(row[1])
             SHIFT_END = _to_time(row[2])
-    except Exception:
-        pass
+    except Exception as exc:
+        # Module-level defaults (9:00/13:00/18:00) stay in effect for the
+        # whole app runtime until this is next called -- worth knowing
+        # about rather than silently running on stale/wrong shift times.
+        app_log.warning("load_default_shift failed, using existing defaults: %s", exc, exc_info=True)
 
 
 def load_salary_rules():
@@ -71,5 +75,5 @@ def load_salary_rules():
             GRACE_MINUTES = int(row[2])
             HOLIDAY_PAY = str(row[3])
             LEAVE_PAY = str(row[4])
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("load_salary_rules failed, using existing defaults: %s", exc, exc_info=True)

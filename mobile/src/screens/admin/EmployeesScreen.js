@@ -28,14 +28,16 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import {
   fetchEmployees, addEmployee, uploadEmployeePhoto, getPhotoUrl, fetchBillingStatus,
-  editEmployee, deleteEmployee,
+  editEmployee, deleteEmployee, sendEmailBlast,
 } from "../../api/client";
 import { saveLocalEmployee, mergeEmployeesWithLocal, deleteLocalEmployee } from "../../utils/employeeStore";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 
 export default function EmployeesScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [selectedDept, setSelectedDept] = useState("All");
   const [selectedStatus, setSelectedStatus] = useState("All");
@@ -73,6 +75,43 @@ export default function EmployeesScreen({ navigation }) {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Email Blast Form State
+  const [blastModalVisible, setBlastModalVisible] = useState(false);
+  const [blastTargetType, setBlastTargetType] = useState("all");
+  const [blastTargetValue, setBlastTargetValue] = useState("");
+  const [blastSubject, setBlastSubject] = useState("");
+  const [blastBody, setBlastBody] = useState("");
+  const [sendingBlast, setSendingBlast] = useState(false);
+
+  const handleSendBlast = async () => {
+    if (!blastSubject.trim() || !blastBody.trim()) {
+      Alert.alert("Validation Error", "Subject and message body are required.");
+      return;
+    }
+    if (blastTargetType !== "all" && !blastTargetValue.trim()) {
+      Alert.alert("Validation Error", blastTargetType === "department" ? "Select a department." : "Enter an employee ID.");
+      return;
+    }
+    setSendingBlast(true);
+    let res;
+    try {
+      res = await sendEmailBlast(blastTargetType, blastTargetValue.trim(), blastSubject.trim(), blastBody.trim());
+    } catch (e) {
+      res = e?.response;
+    }
+    setSendingBlast(false);
+    if (!res?.data?.ok) {
+      Alert.alert("Send Failed", res?.data?.msg || "Could not send the broadcast email.");
+      return;
+    }
+    setBlastModalVisible(false);
+    setBlastSubject("");
+    setBlastBody("");
+    setBlastTargetValue("");
+    setBlastTargetType("all");
+    Alert.alert("Queued", res.data.msg);
+  };
 
   const handleAutoGenerateId = () => {
     const nextSeq = 1001 + (employees ? employees.length : 0);
@@ -403,7 +442,7 @@ export default function EmployeesScreen({ navigation }) {
     });
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
           title="Staff Directory"
@@ -417,7 +456,7 @@ export default function EmployeesScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[THEME.colors.primary]}
+              colors={[colors.primary]}
             />
           }
         >
@@ -462,7 +501,7 @@ export default function EmployeesScreen({ navigation }) {
                 Seats: {billingStatus.employee_count} / {billingStatus.paid_employee_slots} used
                 {billingStatus.employee_count >= billingStatus.paid_employee_slots ? " — tap to buy more" : ""}
               </Text>
-              <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
+              <Ionicons name="chevron-forward" size={16} color={colors.textLight} />
             </TouchableOpacity>
           )}
 
@@ -507,8 +546,8 @@ export default function EmployeesScreen({ navigation }) {
           {loading ? (
             <ActivityIndicator size="large" color="#173B8C" style={{ marginTop: 30 }} />
           ) : filteredEmployees.length === 0 ? (
-            <View style={{ padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
-              <Ionicons name="people-outline" size={48} color="#94A3B8" />
+            <View style={{ padding: 32, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 16, marginTop: 12, borderWidth: 1, borderColor: colors.border }}>
+              <Ionicons name="people-outline" size={48} color={colors.textLight} />
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#334155", marginTop: 12 }}>
                 No Staff Members Found
               </Text>
@@ -575,7 +614,7 @@ export default function EmployeesScreen({ navigation }) {
                       {emp.status}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" style={{ marginTop: 8 }} />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textLight} style={{ marginTop: 8 }} />
                 </View>
               </TouchableOpacity>
             ))
@@ -609,7 +648,7 @@ export default function EmployeesScreen({ navigation }) {
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="mail-outline" size={16} color="#173B8C" />
                       <Text style={{ fontSize: 13, color: "#64748B", marginLeft: 8, fontWeight: "600" }}>Email:</Text>
-                      <Text style={{ fontSize: 13, color: "#0F172A", marginLeft: 6, fontWeight: "700" }}>
+                      <Text style={{ fontSize: 13, color: colors.text, marginLeft: 6, fontWeight: "700" }}>
                         {selectedEmp.email || `${selectedEmp.employee_id}@company.com`}
                       </Text>
                     </View>
@@ -617,7 +656,7 @@ export default function EmployeesScreen({ navigation }) {
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
                       <Ionicons name="calendar-outline" size={16} color="#173B8C" />
                       <Text style={{ fontSize: 13, color: "#64748B", marginLeft: 8, fontWeight: "600" }}>Joined:</Text>
-                      <Text style={{ fontSize: 13, color: "#0F172A", marginLeft: 6, fontWeight: "700" }}>
+                      <Text style={{ fontSize: 13, color: colors.text, marginLeft: 6, fontWeight: "700" }}>
                         {selectedEmp.joining_date || selectedEmp.date_of_joining || "Recently"}
                       </Text>
                     </View>
@@ -635,14 +674,14 @@ export default function EmployeesScreen({ navigation }) {
 
                   <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
                     <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      style={{ flex: 1, backgroundColor: colors.blueBg, borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
                       onPress={() => openEditModal(selectedEmp)}
                     >
                       <Text style={{ color: "#1D4ED8", fontWeight: "700", fontSize: 13 }}>Edit</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={{ flex: 1, backgroundColor: "#EF4444", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      style={{ flex: 1, backgroundColor: colors.danger, borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
                       onPress={() => handleDeleteEmployee(selectedEmp)}
                       disabled={deleting}
                     >
@@ -672,11 +711,11 @@ export default function EmployeesScreen({ navigation }) {
             since the backend column set for PUT differs from POST). */}
         <Modal visible={editModalVisible} transparent animationType="slide" onRequestClose={() => setEditModalVisible(false)}>
           <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "90%" }}>
+            <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "90%" }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Ionicons name="create-outline" size={20} color="#173B8C" style={{ marginRight: 8 }} />
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Edit {editEmpId}</Text>
+                  <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>Edit {editEmpId}</Text>
                 </View>
                 <TouchableOpacity onPress={() => setEditModalVisible(false)}>
                   <Ionicons name="close-circle" size={26} color="#64748B" />
@@ -686,14 +725,14 @@ export default function EmployeesScreen({ navigation }) {
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 30 }}>
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>FULL NAME *</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   value={editEmpName}
                   onChangeText={setEditEmpName}
                 />
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMAIL ADDRESS</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   value={editEmpEmail}
                   onChangeText={setEditEmpEmail}
                   keyboardType="email-address"
@@ -702,14 +741,14 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>JOB ROLE / DESIGNATION</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   value={editEmpRole}
                   onChangeText={setEditEmpRole}
                 />
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DATE OF JOINING</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="YYYY-MM-DD"
                   value={editEmpDoj}
                   onChangeText={setEditEmpDoj}
@@ -755,14 +794,38 @@ export default function EmployeesScreen({ navigation }) {
           <Ionicons name="person-add" size={24} color="#FFFFFF" />
         </TouchableOpacity>
 
+        {/* Floating Email Blast Button */}
+        <TouchableOpacity
+          activeOpacity={0.88}
+          style={{
+            position: "absolute",
+            right: 20,
+            bottom: 141,
+            backgroundColor: "#0EA5E9",
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            justifyContent: "center",
+            alignItems: "center",
+            elevation: 8,
+            shadowColor: "#0EA5E9",
+            shadowOpacity: 0.4,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+          }}
+          onPress={() => setBlastModalVisible(true)}
+        >
+          <Ionicons name="mail" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+
         {/* Add Employee Modal */}
         <Modal visible={addModalVisible} transparent animationType="slide" onRequestClose={() => setAddModalVisible(false)}>
           <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.8)", justifyContent: "flex-end" }}>
-            <View style={{ backgroundColor: "#FFFFFF", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "90%" }}>
+            <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "90%" }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <Ionicons name="person-add" size={20} color="#173B8C" style={{ marginRight: 8 }} />
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: "#0F172A" }}>Add New Staff Member</Text>
+                  <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>Add New Staff Member</Text>
                 </View>
                 <TouchableOpacity onPress={() => setAddModalVisible(false)}>
                   <Ionicons name="close-circle" size={26} color="#64748B" />
@@ -782,20 +845,20 @@ export default function EmployeesScreen({ navigation }) {
                 )}
 
                 {/* Face Photo Registration Box */}
-                <View style={{ alignItems: "center", marginBottom: 16, backgroundColor: "#F8FAFC", padding: 16, borderRadius: 18, borderWidth: 2, borderColor: "#BFDBFE", borderStyle: "dashed" }}>
+                <View style={{ alignItems: "center", marginBottom: 16, backgroundColor: colors.background, padding: 16, borderRadius: 18, borderWidth: 2, borderColor: "#BFDBFE", borderStyle: "dashed" }}>
                   <Text style={{ fontSize: 11, fontWeight: "800", color: "#1E3A8A", letterSpacing: 0.8, marginBottom: 10, alignSelf: "flex-start" }}>
                     FACE PHOTO REGISTRATION *
                   </Text>
                   
                   {newEmpPhoto ? (
                     <View style={{ position: "relative" }}>
-                      <Image source={{ uri: newEmpPhoto }} style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: "#22C55E" }} />
-                      <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: "#22C55E", width: 22, height: 22, borderRadius: 11, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" }}>
+                      <Image source={{ uri: newEmpPhoto }} style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: colors.success }} />
+                      <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: colors.success, width: 22, height: 22, borderRadius: 11, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" }}>
                         <Ionicons name="checkmark" size={14} color="#FFFFFF" />
                       </View>
                     </View>
                   ) : (
-                    <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: "#EFF6FF", borderWidth: 2, borderColor: "#DBEAFE", justifyContent: "center", alignItems: "center" }}>
+                    <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: colors.blueBg, borderWidth: 2, borderColor: "#DBEAFE", justifyContent: "center", alignItems: "center" }}>
                       <Ionicons name="camera" size={32} color="#1D4ED8" />
                     </View>
                   )}
@@ -813,7 +876,7 @@ export default function EmployeesScreen({ navigation }) {
                       <Text style={{ fontSize: 12, fontWeight: "800", color: "#FFFFFF" }}>📷 Camera</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#EFF6FF", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: "#BFDBFE" }}
+                      style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.blueBg, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: "#BFDBFE" }}
                       onPress={handlePickPhoto}
                     >
                       <Ionicons name="image-outline" size={16} color="#1D4ED8" style={{ marginRight: 6 }} />
@@ -824,7 +887,7 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 4 }}>FULL NAME *</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="Ravi Kumar"
                   value={newEmpName}
                   onChangeText={setNewEmpName}
@@ -833,14 +896,14 @@ export default function EmployeesScreen({ navigation }) {
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMPLOYEE ID *</Text>
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center", marginTop: 4 }}>
                   <TextInput
-                    style={{ flex: 1, backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, fontWeight: "800", letterSpacing: 0.5 }}
+                    style={{ flex: 1, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, fontWeight: "800", letterSpacing: 0.5 }}
                     placeholder="EMP-1006"
                     value={newEmpId}
                     onChangeText={setNewEmpId}
                     autoCapitalize="characters"
                   />
                   <TouchableOpacity
-                    style={{ backgroundColor: "#EFF6FF", borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10 }}
+                    style={{ backgroundColor: colors.blueBg, borderWidth: 1, borderColor: "#DBEAFE", paddingHorizontal: 12, paddingVertical: 11, borderRadius: 10 }}
                     onPress={handleAutoGenerateId}
                   >
                     <Text style={{ fontSize: 12, fontWeight: "700", color: "#1D4ED8" }}>🔄 Generate</Text>
@@ -849,9 +912,9 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>EMAIL ADDRESS *</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="employee@company.com"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textLight}
                   value={newEmpEmail}
                   onChangeText={setNewEmpEmail}
                   keyboardType="email-address"
@@ -860,9 +923,9 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>PHONE NUMBER</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="9876543210"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textLight}
                   value={newEmpPhone}
                   onChangeText={setNewEmpPhone}
                   keyboardType="phone-pad"
@@ -870,7 +933,7 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DATE OF JOINING</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="YYYY-MM-DD"
                   value={newEmpDoj}
                   onChangeText={setNewEmpDoj}
@@ -878,7 +941,7 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>DEPARTMENT</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="Engineering"
                   value={newEmpDept}
                   onChangeText={setNewEmpDept}
@@ -886,7 +949,7 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>JOB ROLE / DESIGNATION</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="Software Engineer"
                   value={newEmpRole}
                   onChangeText={setNewEmpRole}
@@ -894,9 +957,9 @@ export default function EmployeesScreen({ navigation }) {
 
                 <Text style={{ fontSize: 11, fontWeight: "700", color: "#64748B", marginTop: 10 }}>INITIAL PASSWORD</Text>
                 <TextInput
-                  style={{ backgroundColor: "#F8FAFC", borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, padding: 10, marginTop: 4 }}
+                  style={{ backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 10, marginTop: 4 }}
                   placeholder="welcome123"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={colors.textLight}
                   value={newEmpPassword}
                   onChangeText={setNewEmpPassword}
                   secureTextEntry
@@ -911,6 +974,114 @@ export default function EmployeesScreen({ navigation }) {
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
                     <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 15 }}>Create Staff Profile</Text>
+                  )}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Email Blast Compose Modal -- Bearer twin of blueprints/email_blast.py's
+            api_email_blast, previously session-only and unreachable from mobile. */}
+        <Modal visible={blastModalVisible} transparent animationType="slide" onRequestClose={() => setBlastModalVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: "rgba(15, 23, 42, 0.5)", justifyContent: "flex-end" }}>
+            <View style={{ backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: "85%" }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: colors.text }}>Broadcast Email</Text>
+                <TouchableOpacity onPress={() => setBlastModalVisible(false)}>
+                  <Ionicons name="close" size={22} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", letterSpacing: 0.6, marginBottom: 8 }}>SEND TO</Text>
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>
+                  {[
+                    { key: "all", label: "All Staff" },
+                    { key: "department", label: "Department" },
+                    { key: "individual", label: "One Employee" },
+                  ].map((opt) => (
+                    <TouchableOpacity
+                      key={opt.key}
+                      style={{
+                        flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center",
+                        backgroundColor: blastTargetType === opt.key ? colors.primary : "#F1F5F9",
+                        borderWidth: 1, borderColor: blastTargetType === opt.key ? colors.primary : colors.border,
+                      }}
+                      onPress={() => { setBlastTargetType(opt.key); setBlastTargetValue(""); }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: blastTargetType === opt.key ? "#FFFFFF" : colors.textSecondary }}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {blastTargetType === "department" && (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", letterSpacing: 0.6, marginBottom: 8 }}>DEPARTMENT</Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                      {[...new Set(employees.map((e) => e.department).filter(Boolean))].map((dept) => (
+                        <TouchableOpacity
+                          key={dept}
+                          style={{
+                            paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
+                            backgroundColor: blastTargetValue === dept ? colors.primary : "#F1F5F9",
+                            borderWidth: 1, borderColor: blastTargetValue === dept ? colors.primary : colors.border,
+                          }}
+                          onPress={() => setBlastTargetValue(dept)}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: blastTargetValue === dept ? "#FFFFFF" : colors.textSecondary }}>
+                            {dept}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {blastTargetType === "individual" && (
+                  <View style={{ marginBottom: 14 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", letterSpacing: 0.6, marginBottom: 8 }}>EMPLOYEE ID</Text>
+                    <TextInput
+                      style={{ backgroundColor: colors.background, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, fontWeight: "600", color: colors.text }}
+                      placeholder="e.g. GZT001"
+                      value={blastTargetValue}
+                      onChangeText={setBlastTargetValue}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                )}
+
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", letterSpacing: 0.6, marginBottom: 8 }}>SUBJECT</Text>
+                <TextInput
+                  style={{ backgroundColor: colors.background, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, fontWeight: "600", color: colors.text, marginBottom: 14 }}
+                  placeholder="Announcement subject"
+                  value={blastSubject}
+                  onChangeText={setBlastSubject}
+                />
+
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#64748B", letterSpacing: 0.6, marginBottom: 8 }}>MESSAGE</Text>
+                <TextInput
+                  style={{ backgroundColor: colors.background, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 13, fontWeight: "600", color: colors.text, minHeight: 100, textAlignVertical: "top", marginBottom: 18 }}
+                  placeholder="Write your message..."
+                  value={blastBody}
+                  onChangeText={setBlastBody}
+                  multiline
+                />
+
+                <TouchableOpacity
+                  style={{ backgroundColor: colors.primary, flexDirection: "row", justifyContent: "center", alignItems: "center", paddingVertical: 14, borderRadius: 14 }}
+                  onPress={handleSendBlast}
+                  disabled={sendingBlast}
+                >
+                  {sendingBlast ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={16} color="#FFF" />
+                      <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "800", marginLeft: 8 }}>Send Broadcast</Text>
+                    </>
                   )}
                 </TouchableOpacity>
               </ScrollView>
@@ -944,7 +1115,7 @@ export default function EmployeesScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   heroCard: {
@@ -962,7 +1133,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     borderWidth: 1,
     borderColor: "#BFDBFE",
     borderRadius: 12,
@@ -985,40 +1156,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   chipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
   chipText: { fontSize: 12, fontWeight: "600", color: "#64748B" },
   chipTextActive: { color: "#FFFFFF", fontWeight: "700" },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginVertical: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: colors.text },
   sectionBadge: { fontSize: 12, fontWeight: "700", color: "#173B8C" },
   employeeCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 10,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
   employeeInfo: { flex: 1, marginLeft: 14 },
-  employeeName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
-  employeeId: { fontSize: 11, color: "#94A3B8", marginTop: 2 },
+  employeeName: { fontSize: 13, fontWeight: "700", color: colors.text },
+  employeeId: { fontSize: 11, color: colors.textLight, marginTop: 2 },
   employeeRole: { fontSize: 12, color: "#64748B", marginTop: 2 },
   rightSection: { alignItems: "flex-end" },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
@@ -1030,17 +1201,17 @@ const styles = StyleSheet.create({
   statusTextInactive: { color: "#991B1B" },
   statusTextLeave: { color: "#B45309" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.5)", justifyContent: "center", alignItems: "center", padding: 20 },
-  modalCard: { width: "100%", backgroundColor: "#FFFFFF", borderRadius: 24, padding: 24, alignItems: "center", elevation: 10 },
+  modalCard: { width: "100%", backgroundColor: colors.card, borderRadius: 24, padding: 24, alignItems: "center", elevation: 10 },
   modalHeader: { alignItems: "center" },
-  modalAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#EEF4FF", justifyContent: "center", alignItems: "center", marginBottom: 12 },
+  modalAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primaryLight, justifyContent: "center", alignItems: "center", marginBottom: 12 },
   modalAvatarText: { fontSize: 24, fontWeight: "800", color: "#173B8C" },
-  modalName: { fontSize: 20, fontWeight: "800", color: "#0F172A" },
+  modalName: { fontSize: 20, fontWeight: "800", color: colors.text },
   modalRole: { fontSize: 14, color: "#64748B", marginTop: 4 },
-  modalEmpId: { fontSize: 12, color: "#94A3B8", marginTop: 2 },
+  modalEmpId: { fontSize: 12, color: colors.textLight, marginTop: 2 },
   modalDivider: { width: "100%", height: 1, backgroundColor: "#F1F5F9", marginVertical: 16 },
   modalRow: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   modalLabel: { fontSize: 14, fontWeight: "600", color: "#64748B", marginLeft: 8 },
-  modalValue: { fontSize: 14, fontWeight: "700", color: "#0F172A", marginLeft: 6 },
+  modalValue: { fontSize: 14, fontWeight: "700", color: colors.text, marginLeft: 6 },
   closeBtn: { width: "100%", backgroundColor: "#173B8C", paddingVertical: 14, borderRadius: 16, alignItems: "center", marginTop: 10 },
   closeBtnText: { color: "#FFFFFF", fontSize: 15, fontWeight: "700" },
 });

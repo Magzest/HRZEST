@@ -920,10 +920,6 @@ class TestAdminPageSmoke:
     def test_leave_requests_page(self, client):
         assert client.get("/leave_requests").status_code in (200, 302)
 
-    def test_view_holidays_page(self, client):
-        # /view_holidays redirects to /leave_holidays?tab=holidays
-        assert client.get("/view_holidays").status_code in (200, 302)
-
     def test_admin_payslips_page(self, client):
         assert client.get("/admin_payslips").status_code == 200
 
@@ -935,9 +931,6 @@ class TestAdminPageSmoke:
 
     def test_overtime_page(self, client):
         assert client.get("/overtime").status_code == 200
-
-    def test_documents_page(self, client):
-        assert client.get("/documents").status_code == 200
 
     def test_onboarding_page(self, client):
         assert client.get("/onboarding").status_code == 200

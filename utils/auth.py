@@ -8,7 +8,7 @@ import hashlib
 import urllib.request  # noqa: F401 -- module-level so tests can monkeypatch auth_module.urllib.request.urlopen
 import bcrypt as _bcrypt
 from functools import wraps
-from flask import session, request, jsonify, redirect, url_for, g as _flask_g
+from flask import session, request, jsonify, redirect, url_for, g as _flask_g, current_app
 from werkzeug.security import check_password_hash as _wz_check_pw
 from extensions import app_log, log_security_event
 from utils.session_risk import is_session_compromised, evaluate_session_risk
@@ -30,6 +30,49 @@ def check_password_hash(pw_hash: str, pw: str) -> bool:
         except Exception:
             return False
     return _wz_check_pw(pw_hash, pw)
+
+
+# Single source of truth for the "new password" minimum -- every set/change/
+# reset endpoint (admin, employee, platform admin seed script) must call
+# this instead of its own inline `len(pw) < N` check, so the floor can't
+# silently drift to something weaker on one path.
+MIN_PASSWORD_LENGTH = 8
+
+
+def validate_new_password(pw: str):
+    """Return (True, None) if pw meets the minimum bar, else (False, error_message)."""
+    if not pw or len(pw) < MIN_PASSWORD_LENGTH:
+        return False, f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+    return True, None
+
+
+def verify_and_update_password(table, id_column, id_value, current_pw, new_pw):
+    """Verify current_pw against `table`.password for the row matching
+    id_column=id_value, then overwrite it with new_pw. Returns True on
+    success, False if current_pw was wrong or the row doesn't exist (no
+    row is touched in that case). table/id_column are always call-site
+    literals ("admin_users"/"username" or "employees"/"employee_id"),
+    never request-controlled, so the f-string below carries no injection
+    risk. Shared by the web-session and Bearer-API "change own password"
+    routes for both admin_users and employees, which previously
+    reimplemented this identical verify-then-update per channel."""
+    from database import get_db_connection
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(f"SELECT password FROM {table} WHERE {id_column}=%s", (id_value,))
+    row = cursor.fetchone()
+    if not row or not check_password_hash(row[0], current_pw):
+        cursor.close()
+        db.close()
+        return False
+    cursor.execute(
+        f"UPDATE {table} SET password=%s WHERE {id_column}=%s",
+        (generate_password_hash(new_pw), id_value)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+    return True
 
 
 # ── Token hashing ─────────────────────────────────────────────────────────────
@@ -135,8 +178,10 @@ def _check_login_lockout(identifier: str, attempt_type: str = "admin"):
             row = cur.fetchone()
         if row and row[0] and row[0] > datetime.datetime.now():
             return True, row[0].strftime("%H:%M")
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fails open (treated as not-locked) -- a lockout check that can't
+        # run is exactly the kind of failure that should never be silent.
+        app_log.warning("_check_login_lockout failed for %s (%s): %s", _mask_identifier(identifier), attempt_type, exc, exc_info=True)
     return False, None
 
 
@@ -194,8 +239,11 @@ def _record_login_failure_db(identifier: str, attempt_type: str = "admin"):
                     identifier=_mask_identifier(identifier), attempt_type=attempt_type,
                     failed_count=row[0], locked_until=lockout_until.isoformat(),
                 )
-    except Exception:
-        pass
+    except Exception as exc:
+        # This DB write is what actually enforces lockout -- a silent
+        # failure here means brute-force protection isn't tracking
+        # attempts at all for this identifier.
+        app_log.warning("_record_login_failure_db failed for %s (%s): %s", _mask_identifier(identifier), attempt_type, exc, exc_info=True)
 
 
 def _clear_login_failures(identifier: str, attempt_type: str = "admin"):
@@ -221,8 +269,10 @@ def _clear_login_failures_db(identifier: str, attempt_type: str = "admin"):
                 (identifier, attempt_type)
             )
             conn.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Fails safe (stale failure count just stays, doesn't unlock
+        # anything it shouldn't) but still worth knowing about.
+        app_log.warning("_clear_login_failures_db failed for %s (%s): %s", _mask_identifier(identifier), attempt_type, exc, exc_info=True)
 
 
 # ── Session kill-switch enforcement ───────────────────────────────────────────
@@ -445,6 +495,45 @@ def employee_api_required(f):
     return wrapper
 
 
+def resolve_admin_identity():
+    """Session (web) or Bearer admin token (mobile) -- for routes usable
+    from both without a route-level decorator, since admin_required
+    redirects to a login page rather than returning JSON, which breaks a
+    Bearer-token mobile client. Returns the admin username, or None if
+    neither proves a logged-in, active admin. Used by blueprints/ai_hrms.py
+    and blueprints/email_blast.py.
+
+    Mirrors admin_required's compromised-session check (a session flagged
+    mid-lifetime by utils/session_risk.py must not keep working just
+    because this helper skips the decorator) -- but only checks, doesn't
+    clear()/redirect like the decorator does, since callers here are JSON
+    sub-actions, not full page loads.
+    """
+    if session.get("admin_logged_in"):
+        sid = session.get("_sid")
+        if sid and is_session_compromised(sid):
+            return None
+        return session.get("admin_username", "admin")
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token_hash = _hash_token(auth[7:])
+    with _db() as (cursor, _conn):
+        cursor.execute(
+            """
+            SELECT t.identity, COALESCE(u.is_active, 1)
+            FROM api_tokens t
+            LEFT JOIN admin_users u ON u.username = t.identity
+            WHERE t.token=%s AND t.token_type='admin' AND t.expires_at > NOW()
+            """,
+            (token_hash,)
+        )
+        row = cursor.fetchone()
+    if not row or not row[1]:
+        return None
+    return row[0]
+
+
 # ── Email Settings 2FA step-up gate ───────────────────────────────────────────
 # Same time.time()-in-session idiom as the WebAuthn fingerprint window
 # (utils/webauthn_utils.py:_WA_FP_VERIFY_WINDOW_SEC), but NOT single-use/popped
@@ -468,41 +557,20 @@ def email_settings_step_up_clear():
     session.pop("email_2fa_verified_at", None)
 
 
-# ── SOC Analyst security dashboard step-up gate ───────────────────────────────
-# Deliberately a SEPARATE step-up flag from the Email Settings one above, even
-# though both ultimately check the same enrolled TOTP secret (utils/totp.py --
-# one MFA seed per admin account, reused across every step-up gate, matching
-# how a real authenticator app works: one enrollment, many uses). Passing the
-# Email Settings gate must not silently also unlock the SOC dashboard, and
-# vice versa -- each sensitive area gets its own proof-of-recent-verification,
-# not one that leaks scope to the others.
-#
-# Shorter window than Email Settings (10 min vs 15) because this gate sits in
-# front of security telemetry (who's compromised, who's locked out) rather
-# than a config form -- a smaller blast radius if a SOC analyst's unlocked tab
-# is left unattended, but still short enough not to force re-entering a code
-# on every click while actively triaging.
-SOC_ANALYST_ROLE = "soc_analyst"
-SOC_2FA_WINDOW_SEC = 10 * 60
-
 # HR accounts (created/managed via blueprints/admin_views.py's /hr_accounts
-# page) log in through the same general /login as admin, unlike
-# SOC_ANALYST_ROLE -- but role_required("admin") elsewhere still scopes
-# them to employees/attendance/leave/onboarding/performance/tickets/
-# documents, away from tenant/system settings, company management, and
-# analytics that a full admin session carries.
+# page) log in through the same general /login as admin -- but
+# role_required("admin") elsewhere still scopes them to employees/
+# attendance/leave/onboarding/performance/tickets/documents, away from
+# tenant/system settings, company management, and analytics that a full
+# admin session carries.
 HR_ROLE = "hr"
-
-
-def soc_step_up_refresh():
-    session["soc_2fa_verified_at"] = time.time()
 
 
 # ── Security Settings hub step-up gate ────────────────────────────────────────
 # Same time.time()-in-session step-up pattern as Email Settings, guarding the
 # consolidated "Security" tab in Settings (session timeout, audit log, MFA
-# status, SOC entry point, security posture -- all in one place, per the
-# row-wise hub requirement).
+# status, security posture -- all in one place, per the row-wise hub
+# requirement).
 #
 # This one has NO role restriction -- every admin can open this hub with just
 # their own TOTP code.
@@ -515,9 +583,14 @@ def security_settings_step_up_clear():
 def require_email_2fa(f):
     """Gate for Email Settings routes (SMTP config, including a
     reveal-plaintext-password action) behind a recent TOTP step-up --
-    see email_settings_step_up_valid() above."""
+    see email_settings_step_up_valid() above. Off by default (same as the
+    three MANDATORY_*_MFA flags in app.py) -- set REQUIRE_EMAIL_2FA=true in
+    .env, or app.config["REQUIRE_EMAIL_2FA"]=True in tests, to turn this
+    step-up back on."""
     @wraps(f)
     def wrapper(*args, **kwargs):
+        if not current_app.config.get("REQUIRE_EMAIL_2FA", False):
+            return f(*args, **kwargs)
         if not email_settings_step_up_valid():
             log_security_event(
                 "access.denied", "Email Settings accessed without a valid 2FA step-up",

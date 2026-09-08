@@ -13,20 +13,18 @@ import html
 from flask import Blueprint, request, jsonify, session
 from database import get_db_connection, transaction
 from utils.email_utils import get_email_config
+from utils.auth import resolve_admin_identity
 from extensions import app_log, log_security_event, limiter
 
 email_blast_bp = Blueprint("email_blast", __name__)
-
-
-def _is_admin():
-    return bool(session.get("admin_logged_in"))
 
 
 @email_blast_bp.route("/api/admin/email-blast", methods=["POST"])
 @limiter.limit("10 per hour")
 def api_email_blast():
     """Broadcast target-selected emails out-of-band and return immediate 202."""
-    if not _is_admin():
+    admin_username = resolve_admin_identity()
+    if not admin_username:
         return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
 
     data = request.get_json(silent=True) or request.form
@@ -100,7 +98,7 @@ def api_email_blast():
             cur.execute(
                 "INSERT INTO broadcast_emails (sender_username, target_type, target_value, subject, body_snippet, recipient_count) "
                 "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                (session.get("admin_username", "admin"), target_type, target_value, clean_subject, clean_body[:200], len(recipients))
+                (admin_username, target_type, target_value, clean_subject, clean_body[:200], len(recipients))
             )
             cur.fetchone()
 
@@ -119,7 +117,7 @@ def api_email_blast():
         "admin.email_blast",
         f"Broadcast email dispatch initiated to {queued_count} recipient(s)",
         level="INFO",
-        identifier=session.get("admin_username"),
+        identifier=admin_username,
         target_type=target_type,
         count=queued_count
     )

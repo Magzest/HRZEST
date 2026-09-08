@@ -1,69 +1,18 @@
 # -*- coding: utf-8 -*-
 """Documents blueprint -- admin and employee document management."""
-import os
 import uuid
-import datetime
-from flask import Blueprint, request, session, redirect, render_template, flash, send_from_directory, jsonify, g as _g
-from extensions import app
+from io import BytesIO
+from flask import Blueprint, request, session, redirect, flash, send_file, jsonify, g as _g
+from extensions import app, app_log
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, enforce_ownership, api_required, api_role_required, employee_api_required
-from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect, get_company_settings, get_pending_action_counts
+from utils.helpers import tpath, _audit, _validate_upload, _safe_referrer_redirect
+from utils.storage import save_private, open_private, delete_private
 
 documents_bp = Blueprint("documents", __name__)
 
 _DOC_ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
-
-
-def _doc_admin_ctx(cursor):
-    co = get_company_settings()
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
-    return co, pending_leaves, pending_resignations, pending_tickets
-
-
-@documents_bp.route("/documents")
-@admin_required
-def documents():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    co, pending_leaves, pending_resignations, pending_tickets = _doc_admin_ctx(cursor)
-
-    cursor.execute("SELECT employee_id, name FROM employees ORDER BY name")
-    employees = cursor.fetchall()
-
-    sel_emp = request.args.get('emp_id', '')
-    sel_emp_name = ''
-
-    if sel_emp:
-        cursor.execute("SELECT name FROM employees WHERE employee_id=%s", (sel_emp,))
-        r = cursor.fetchone()
-        sel_emp_name = r[0] if r else sel_emp
-        cursor.execute("""
-            SELECT d.id, d.employee_id, e.name, d.doc_type, d.original_name, d.stored_name,
-                   d.uploaded_by, d.uploaded_at, d.expiry_date
-            FROM employee_documents d JOIN employees e ON e.employee_id=d.employee_id
-            WHERE d.employee_id=%s ORDER BY d.uploaded_at DESC
-        """, (sel_emp,))
-    else:
-        cursor.execute("""
-            SELECT d.id, d.employee_id, e.name, d.doc_type, d.original_name, d.stored_name,
-                   d.uploaded_by, d.uploaded_at, d.expiry_date
-            FROM employee_documents d JOIN employees e ON e.employee_id=d.employee_id
-            ORDER BY d.uploaded_at DESC
-        """)
-    docs = cursor.fetchall()
-    cursor.close()
-    db.close()
-
-    return render_template("documents.html",
-                           co=co,
-                           pending_leaves=pending_leaves,
-                           pending_resignations=pending_resignations,
-                           pending_tickets=pending_tickets,
-                           employees=employees, docs=docs,
-                           sel_emp=sel_emp, sel_emp_name=sel_emp_name,
-                           today=datetime.date.today(),
-                           )
 
 
 @documents_bp.route("/upload_document", methods=["POST"])
@@ -74,16 +23,17 @@ def upload_document():
     f = request.files.get('document')
     if not emp_id or not doc_type or not f or not f.filename:
         flash("All fields required.", "danger")
-        return redirect(tpath("/documents"))
+        return redirect(tpath(f"/employee_detail/{emp_id}" if emp_id else "/employees"))
     ok, err = _validate_upload(f, _DOC_ALLOWED_EXT)
     if not ok:
         flash(err, "danger")
-        return redirect(tpath(f"/documents?emp_id={emp_id}"))
-    folder = os.path.join(app.root_path, 'static', 'employee_docs', emp_id)
-    os.makedirs(folder, exist_ok=True)
+        return redirect(tpath(f"/employee_detail/{emp_id}"))
     orig_name = f.filename
-    stored_name = str(uuid.uuid4()) + '_' + secure_filename(orig_name)
-    f.save(os.path.join(folder, stored_name))
+    rel_path = f"employee_documents/{emp_id}/{uuid.uuid4()}_{secure_filename(orig_name)}"
+    stored_ref, err = save_private(app.root_path, f, rel_path)
+    if err:
+        flash(f"Upload failed: {err}", "danger")
+        return redirect(tpath(f"/employee_detail/{emp_id}"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     expiry_raw = request.form.get("expiry_date", "").strip()
@@ -91,7 +41,7 @@ def upload_document():
     cursor.execute(
         "INSERT INTO employee_documents (employee_id, doc_type, original_name, stored_name, uploaded_by, expiry_date) "
         "VALUES (%s,%s,%s,%s,'admin',%s)",
-        (emp_id, doc_type, orig_name, stored_name, expiry_date)
+        (emp_id, doc_type, orig_name, stored_ref, expiry_date)
     )
     db.commit()
     cursor.close()
@@ -99,12 +49,12 @@ def upload_document():
     _audit("upload_document", "employee_documents", emp_id,
            f"doc_type={doc_type} file={orig_name} expiry={expiry_date or 'none'}")
     flash("Document uploaded successfully.", "success")
-    raw_redirect = request.form.get('redirect_to') or f'/documents?emp_id={emp_id}'
+    raw_redirect = request.form.get('redirect_to') or f'/employee_detail/{emp_id}'
     # Reject any redirect that leaves this origin (open-redirect prevention).
     # Only allow relative URLs (no scheme, no netloc).
     from urllib.parse import urlparse as _urlparse
     _p = _urlparse(raw_redirect)
-    safe_redirect = raw_redirect if (not _p.scheme and not _p.netloc) else f'/documents?emp_id={emp_id}'
+    safe_redirect = raw_redirect if (not _p.scheme and not _p.netloc) else f'/employee_detail/{emp_id}'
     return redirect(tpath(safe_redirect))
 
 
@@ -115,19 +65,23 @@ def delete_document(did):
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT employee_id, stored_name FROM employee_documents WHERE id=%s", (did,))
     row = cursor.fetchone()
+    fallback = "/employees"
     if row:
-        emp_id, stored_name = row
-        fpath = os.path.join(app.root_path, 'static', 'employee_docs', emp_id, stored_name)
+        _emp_id, stored_ref = row
+        fallback = f"/employee_detail/{_emp_id}"
         try:
-            os.remove(fpath)
-        except Exception:
-            pass
+            delete_private(stored_ref)
+        except Exception as exc:
+            # DB row still gets deleted below -- an orphaned file left on
+            # disk is a minor leak, not worth blocking the delete over, but
+            # worth knowing about since these silently accumulate.
+            app_log.warning("Could not remove document file %s: %s", stored_ref, exc)
         cursor.execute("DELETE FROM employee_documents WHERE id=%s", (did,))
         db.commit()
     cursor.close()
     db.close()
     flash("Document deleted.", "success")
-    return redirect(_safe_referrer_redirect(request.referrer or "", "/documents"))
+    return redirect(_safe_referrer_redirect(request.referrer or "", fallback))
 
 
 @documents_bp.route("/download_document/<int:did>")
@@ -144,8 +98,8 @@ def download_document(did):
     db.close()
     if not row:
         flash("Document not found.", "danger")
-        return redirect(tpath("/documents"))
-    doc_emp_id, original_name, stored_name = row
+        return redirect(tpath("/employees"))
+    doc_emp_id, original_name, stored_ref = row
     # This check existed before but never logged a denial -- a real IDOR
     # probe against someone else's payslip/ID-document upload would have
     # been invisible. enforce_ownership() logs it at ERROR, which feeds the
@@ -153,8 +107,12 @@ def download_document(did):
     if not enforce_ownership(doc_emp_id, "document", did):
         flash("Access denied.", "danger")
         return redirect(tpath("/employee_portal"))
-    folder = os.path.join(app.root_path, 'static', 'employee_docs', doc_emp_id)
-    return send_from_directory(folder, stored_name, as_attachment=True, download_name=original_name)
+    try:
+        data = open_private(stored_ref)
+    except Exception:
+        flash("Document file is missing or unreadable.", "danger")
+        return redirect(tpath(f"/employee_detail/{doc_emp_id}") if is_admin else tpath("/employee_portal"))
+    return send_file(BytesIO(data), as_attachment=True, download_name=original_name)
 
 
 @documents_bp.route("/upload_my_document", methods=["POST"])
@@ -171,16 +129,17 @@ def upload_my_document():
     if not ok:
         flash(err, "danger")
         return redirect(tpath("/employee_portal"))
-    folder = os.path.join(app.root_path, 'static', 'employee_docs', emp_id)
-    os.makedirs(folder, exist_ok=True)
     orig_name = f.filename
-    stored_name = str(uuid.uuid4()) + '_' + secure_filename(orig_name)
-    f.save(os.path.join(folder, stored_name))
+    rel_path = f"employee_documents/{emp_id}/{uuid.uuid4()}_{secure_filename(orig_name)}"
+    stored_ref, err = save_private(app.root_path, f, rel_path)
+    if err:
+        flash(f"Upload failed: {err}", "danger")
+        return redirect(tpath("/employee_portal"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
         "INSERT INTO employee_documents (employee_id, doc_type, original_name, stored_name, uploaded_by) VALUES (%s,%s,%s,%s,'employee')",
-        (emp_id, doc_type, orig_name, stored_name)
+        (emp_id, doc_type, orig_name, stored_ref)
     )
     db.commit()
     cursor.close()
@@ -199,11 +158,11 @@ def delete_my_document(did):
     cursor.execute("SELECT employee_id, stored_name FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
     row = cursor.fetchone()
     if row:
-        fpath = os.path.join(app.root_path, 'static', 'employee_docs', emp_id, row[1])
+        stored_ref = row[1]
         try:
-            os.remove(fpath)
-        except Exception:
-            pass
+            delete_private(stored_ref)
+        except Exception as exc:
+            app_log.warning("Could not remove document file %s: %s", stored_ref, exc)
         cursor.execute("DELETE FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
         db.commit()
     cursor.close()
@@ -276,16 +235,18 @@ def api_documents_upload():
         db.close()
         return jsonify({"ok": False, "msg": f"Unknown employee_id '{emp_id}'."}), 400
 
-    folder = os.path.join(app.root_path, "static", "employee_docs", emp_id)
-    os.makedirs(folder, exist_ok=True)
     orig_name = f.filename
-    stored_name = str(uuid.uuid4()) + "_" + secure_filename(orig_name)
-    f.save(os.path.join(folder, stored_name))
+    rel_path = f"employee_documents/{emp_id}/{uuid.uuid4()}_{secure_filename(orig_name)}"
+    stored_ref, err = save_private(app.root_path, f, rel_path)
+    if err:
+        cursor.close()
+        db.close()
+        return jsonify({"ok": False, "msg": f"Upload failed: {err}"}), 500
     expiry_raw = (request.form.get("expiry_date") or "").strip()
     cursor.execute(
         "INSERT INTO employee_documents (employee_id, doc_type, original_name, stored_name, uploaded_by, expiry_date) "
         "VALUES (%s,%s,%s,%s,'admin',%s)",
-        (emp_id, doc_type, orig_name, stored_name, expiry_raw or None)
+        (emp_id, doc_type, orig_name, stored_ref, expiry_raw or None)
     )
     db.commit()
     cursor.close()
@@ -307,12 +268,11 @@ def api_documents_delete(did):
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": "Document not found."}), 404
-    emp_id, stored_name = row
-    fpath = os.path.join(app.root_path, "static", "employee_docs", emp_id, stored_name)
+    _emp_id, stored_ref = row
     try:
-        os.remove(fpath)
-    except Exception:
-        pass
+        delete_private(stored_ref)
+    except Exception as exc:
+        app_log.warning("Could not remove document file %s: %s", stored_ref, exc)
     cursor.execute("DELETE FROM employee_documents WHERE id=%s", (did,))
     db.commit()
     cursor.close()
@@ -350,17 +310,17 @@ def api_my_documents_upload():
     if not ok:
         return jsonify({"ok": False, "msg": err}), 400
 
-    folder = os.path.join(app.root_path, "static", "employee_docs", emp_id)
-    os.makedirs(folder, exist_ok=True)
     orig_name = f.filename
-    stored_name = str(uuid.uuid4()) + "_" + secure_filename(orig_name)
-    f.save(os.path.join(folder, stored_name))
+    rel_path = f"employee_documents/{emp_id}/{uuid.uuid4()}_{secure_filename(orig_name)}"
+    stored_ref, err = save_private(app.root_path, f, rel_path)
+    if err:
+        return jsonify({"ok": False, "msg": f"Upload failed: {err}"}), 500
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
         "INSERT INTO employee_documents (employee_id, doc_type, original_name, stored_name, uploaded_by) "
         "VALUES (%s,%s,%s,%s,'employee')",
-        (emp_id, doc_type, orig_name, stored_name)
+        (emp_id, doc_type, orig_name, stored_ref)
     )
     db.commit()
     cursor.close()
@@ -380,11 +340,11 @@ def api_my_documents_delete(did):
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": "Document not found."}), 404
-    fpath = os.path.join(app.root_path, "static", "employee_docs", emp_id, row[0])
+    stored_ref = row[0]
     try:
-        os.remove(fpath)
-    except Exception:
-        pass
+        delete_private(stored_ref)
+    except Exception as exc:
+        app_log.warning("Could not remove document file %s: %s", stored_ref, exc)
     cursor.execute("DELETE FROM employee_documents WHERE id=%s AND employee_id=%s", (did, emp_id))
     db.commit()
     cursor.close()

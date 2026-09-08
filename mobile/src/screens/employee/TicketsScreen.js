@@ -20,8 +20,11 @@ import TicketStatsCard from "../../components/tickets/TicketStatsCard";
 import TicketCard from "../../components/tickets/TicketCard";
 import EmptyTickets from "../../components/tickets/EmptyTickets";
 import { fetchEmployeeTickets, raiseTicket } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function TicketsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [category, setCategory] = useState("hr");
   const [priority, setPriority] = useState("Medium");
   const [subject, setSubject] = useState("");
@@ -100,7 +103,7 @@ export default function TicketsScreen() {
               setRefreshing(true);
               loadTickets();
             }}
-            colors={["#173B8C"]}
+            colors={[colors.primary]}
           />
         }
       >
@@ -170,10 +173,10 @@ export default function TicketsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
   content: {
     padding: 16,

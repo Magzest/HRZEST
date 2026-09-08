@@ -15,23 +15,22 @@ admin_users row in any schema for them to look up. Using a separate
 session key means those hooks simply no-op here, and this blueprint
 enforces its own (lighter) idle timeout below.
 """
+import io
+import re
+import csv
 import time
 import datetime
 import secrets
 import functools
-from flask import Blueprint, request, session, redirect, render_template, flash, jsonify, current_app
+from flask import Blueprint, request, session, redirect, render_template, flash, jsonify, current_app, Response
 
-from database import get_master_db, get_db_connection
+from database import get_master_db, get_db_connection, get_tenant_db
 from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
-from utils.plan_limits import PER_EMPLOYEE_PAISE, calculate_price, format_price_inr, get_tenant_employee_count
-from utils.helpers import coerce_datetime
+from utils.plan_limits import get_per_employee_paise, invalidate_rate_paise_cache, calculate_price, format_price_inr, get_tenant_employee_count
+from utils.helpers import coerce_datetime, _safe_app_url
 from utils.analytics import get_traffic_stats
-from utils.device_utils import (
-    get_or_create_device_token, set_device_cookie, record_login_device,
-    list_devices, rename_device, add_asset_device, delete_asset_device, revoke_device,
-)
 from utils import chat_utils
 
 platform_admin_bp = Blueprint("platform_admin", __name__)
@@ -44,6 +43,28 @@ _IDLE_TIMEOUT_SEC = 30 * 60  # 30 minutes of inactivity
 # every time. Same 60s-cache idea as utils/helpers.py's _co_expired pattern.
 _COUNT_CACHE_TTL_SEC = 60
 _employee_count_cache = {}
+_TENANTS_PER_PAGE = 20
+_AUDIT_LOG_PER_PAGE = 50
+# Same prefixes _recent_platform_activity() scopes its dashboard preview
+# to -- every event_type a platform admin action or org-signup security
+# check can emit. security_events is one global table (see that
+# function's docstring), so this filter is what keeps the audit log
+# platform-admin-relevant instead of showing every tenant's routine
+# admin/employee logins too.
+_AUDIT_LOG_PREFIXES = ("platform_admin.", "auth.platform_admin_", "billing.", "org.")
+
+
+def _paginate(items, page, per_page):
+    """Slices an already-fetched list for display -- used where the
+    filtering happens in Python (see platform_admin_dashboard()) rather
+    than in SQL. Returns (page_items, total_pages), clamping page into
+    range so an out-of-bounds ?page= value degrades to the nearest valid
+    page instead of a blank result."""
+    total = len(items)
+    total_pages = max(1, -(-total // per_page))  # ceil
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    return items[start:start + per_page], page, total_pages
 
 
 def _complete_platform_admin_login(username):
@@ -65,19 +86,7 @@ def _complete_platform_admin_login(username):
         f"Platform admin session established for '{username}'",
         level="INFO", identifier=username,
     )
-    dest = redirect("/super_admin")
-    try:
-        token, is_new = get_or_create_device_token(request)
-        # No session_risk participation here (see this module's docstring
-        # on why platform admin keeps its own lighter session model), so
-        # last_sid stays unset -- revoke on this owner_kind is row-only,
-        # not a live session kill.
-        record_login_device(get_master_db, "platform_admin", username, token, None, request)
-        if is_new:
-            set_device_cookie(dest, token)
-    except Exception as exc:
-        app_log.warning("device capture failed for platform_admin '%s': %s", username, exc)
-    return dest
+    return redirect("/super_admin")
 
 
 def _platform_admin_required(view):
@@ -98,8 +107,41 @@ def _platform_admin_required(view):
 @platform_admin_bp.route("/super_admin/login", methods=["GET", "POST"])
 @limiter.limit("10 per 15 minutes")
 def platform_admin_login():
+    """Single-page credentials + emailed-OTP MFA login -- one URL, one
+    template. Which of the two steps renders is driven entirely by session
+    state (platform_mfa_pending), not by a second page: submitting
+    username/password here starts the OTP step in place (re-renders this
+    same route); submitting otp_code here while that session state is set
+    completes it via _complete_platform_admin_login."""
     if session.get("platform_admin_logged_in"):
         return redirect("/super_admin")
+
+    if request.args.get("restart"):
+        session.pop("platform_mfa_pending", None)
+        session.pop("platform_mfa_user", None)
+        session.pop("platform_mfa_otp_code", None)
+        session.pop("platform_mfa_issued_at", None)
+        return redirect("/super_admin/login")
+
+    mfa_pending = bool(session.get("platform_mfa_pending"))
+    if mfa_pending:
+        issued_at = session.get("platform_mfa_issued_at") or 0
+        if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
+            session.clear()
+            return render_template("super_admin_login.html", error="Your code expired. Please log in again.")
+
+    if request.method == "POST" and mfa_pending and "otp_code" in request.form:
+        username = session.get("platform_mfa_user")
+        submitted = (request.form.get("otp_code") or "").strip()
+        expected = session.get("platform_mfa_otp_code") or ""
+        if username and submitted and expected and secrets.compare_digest(submitted, expected):
+            return _complete_platform_admin_login(username)
+
+        log_security_event(
+            "auth.platform_admin_mfa_failure", "Invalid platform admin login MFA code",
+            level="WARNING", identifier=username,
+        )
+        return render_template("super_admin_login.html", mfa_step=True, error="Invalid verification code.")
 
     if request.method == "POST":
         username = request.form.get("username", "").strip()
@@ -134,7 +176,7 @@ def platform_admin_login():
             session["platform_mfa_user"] = username
             session["platform_mfa_otp_code"] = otp_code
             session["platform_mfa_issued_at"] = time.time()
-            return redirect("/super_admin/mfa_verify")
+            return render_template("super_admin_login.html", mfa_step=True)
 
         log_security_event(
             "auth.platform_admin_login_failed",
@@ -143,34 +185,7 @@ def platform_admin_login():
         )
         return render_template("super_admin_login.html", error="Invalid credentials.")
 
-    return render_template("super_admin_login.html")
-
-
-@platform_admin_bp.route("/super_admin/mfa_verify", methods=["GET", "POST"])
-@limiter.limit("8 per 15 minutes")
-def platform_admin_mfa_verify():
-    username = session.get("platform_mfa_user")
-    if not username or not session.get("platform_mfa_pending"):
-        return redirect("/super_admin/login")
-
-    issued_at = session.get("platform_mfa_issued_at") or 0
-    if (time.time() - issued_at) > _MFA_OTP_TTL_SEC:
-        session.clear()
-        return render_template("super_admin_login.html", error="Your code expired. Please log in again.")
-
-    if request.method == "POST":
-        submitted = (request.form.get("otp_code") or "").strip()
-        expected = session.get("platform_mfa_otp_code") or ""
-        if submitted and expected and secrets.compare_digest(submitted, expected):
-            return _complete_platform_admin_login(username)
-
-        log_security_event(
-            "auth.platform_admin_mfa_failure", "Invalid platform admin login MFA code",
-            level="WARNING", identifier=username,
-        )
-        return render_template("super_admin_mfa_verify.html", error="Invalid verification code.")
-
-    return render_template("super_admin_mfa_verify.html")
+    return render_template("super_admin_login.html", mfa_step=mfa_pending)
 
 
 @platform_admin_bp.route("/super_admin/logout", methods=["POST"])
@@ -221,17 +236,22 @@ def _recent_platform_activity(limit=20):
 
 
 def _self_signup_tenant_ids():
-    """Tenant IDs that came through the public self-service flow
-    (blueprints/billing.py's verify_payment -- real Razorpay or the demo
-    checkout, doesn't matter which) rather than being created directly by
-    a platform admin. A payment_orders row with tenant_id set is only ever
-    written by that path, so its presence is the signal -- no separate
-    'source' column needed on tenants itself."""
+    """Tenant IDs that came through the public self-service flow -- either
+    the paid path (blueprints/billing.py's verify_payment, real Razorpay or
+    the demo checkout) or the gated free/manual path (a tenant_applications
+    row approved directly by platform_admin_approve_application()) -- rather
+    than being created directly by a platform admin via
+    platform_admin_create_tenant(), which never touches either table. A
+    payment_orders or tenant_applications row with tenant_id set is only
+    ever written by one of those two self-service paths, so its presence
+    is the signal -- no separate 'source' column needed on tenants itself."""
     try:
         conn = get_master_db()
         cur = conn.cursor(buffered=True)
         cur.execute("SELECT DISTINCT tenant_id FROM payment_orders WHERE tenant_id IS NOT NULL")
         ids = {r[0] for r in cur.fetchall()}
+        cur.execute("SELECT DISTINCT tenant_id FROM tenant_applications WHERE tenant_id IS NOT NULL")
+        ids |= {r[0] for r in cur.fetchall()}
         cur.close()
         conn.close()
         return ids
@@ -240,26 +260,40 @@ def _self_signup_tenant_ids():
         return set()
 
 
-def _recent_payments(limit=20):
-    """Payment history across every tenant -- real and demo-mode orders
-    alike (payment_orders.razorpay_order_id starts with "demo_order_" for
-    the latter, same table either way per blueprints/billing.py). Also
-    merges in seat_topup_orders (blueprints/seats.py) -- an existing
-    tenant paying to raise its paid_employee_slots cap -- and
-    monthly_invoices (blueprints/auto_debit.py) -- a tenant's recurring
-    per-employee auto-debit charge, collected automatically each cycle --
-    so the Platform Admin sees every payment reaching them through any of
-    the three flows in one feed."""
+def _recent_payments(limit=20, tenant_id=None, tenant_schema=None):
+    """Payment history -- real and demo-mode orders alike
+    (payment_orders.razorpay_order_id starts with "demo_order_" for the
+    latter, same table either way per blueprints/billing.py). Also merges
+    in seat_topup_orders (blueprints/seats.py) -- an existing tenant paying
+    to raise its paid_employee_slots cap -- and monthly_invoices
+    (blueprints/auto_debit.py) -- a tenant's recurring per-employee
+    auto-debit charge, collected automatically each cycle -- so the
+    Platform Admin sees every payment reaching them through any of the
+    three flows in one feed.
+
+    Across every tenant by default; pass tenant_id + tenant_schema (both --
+    payment_orders keys off the former, seat_topup_orders/monthly_invoices
+    off the latter) to scope this to one company's financial history
+    instead, for the company profile page."""
     try:
         conn = get_master_db()
         cur = conn.cursor(buffered=True)
-        cur.execute(
-            "SELECT company_name, subdomain, employee_count, amount_paise, status, "
-            "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
-            "admin_username, admin_email "
-            "FROM payment_orders ORDER BY created_at DESC LIMIT %s",
-            (limit,)
-        )
+        if tenant_id is not None:
+            cur.execute(
+                "SELECT company_name, subdomain, employee_count, amount_paise, status, "
+                "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
+                "admin_username, admin_email "
+                "FROM payment_orders WHERE tenant_id=%s ORDER BY created_at DESC LIMIT %s",
+                (tenant_id, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT company_name, subdomain, employee_count, amount_paise, status, "
+                "razorpay_order_id, razorpay_payment_id, created_at, paid_at, "
+                "admin_username, admin_email "
+                "FROM payment_orders ORDER BY created_at DESC LIMIT %s",
+                (limit,)
+            )
         signup_payments = [
             {
                 "company_name": r[0], "subdomain": r[1], "employee_count": r[2],
@@ -271,14 +305,24 @@ def _recent_payments(limit=20):
             for r in cur.fetchall()
         ]
 
-        cur.execute(
-            "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
-            "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
-            "s.company_name AS fallback_company_name "
-            "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
-            "ORDER BY s.created_at DESC LIMIT %s",
-            (limit,)
-        )
+        if tenant_schema is not None:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
+                "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
+                "s.company_name AS fallback_company_name "
+                "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
+                "WHERE s.tenant_schema=%s ORDER BY s.created_at DESC LIMIT %s",
+                (tenant_schema, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, s.seats_purchased, s.amount_paise, s.status, "
+                "s.razorpay_order_id, s.razorpay_payment_id, s.created_at, s.paid_at, s.requested_by, "
+                "s.company_name AS fallback_company_name "
+                "FROM seat_topup_orders s LEFT JOIN tenants t ON t.db_name = s.tenant_schema "
+                "ORDER BY s.created_at DESC LIMIT %s",
+                (limit,)
+            )
         seat_payments = [
             {
                 "company_name": r[0] or r[10], "subdomain": r[1] or "—", "employee_count": r[2],
@@ -289,13 +333,22 @@ def _recent_payments(limit=20):
             }
             for r in cur.fetchall()
         ]
-        cur.execute(
-            "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
-            "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
-            "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
-            "ORDER BY m.created_at DESC LIMIT %s",
-            (limit,)
-        )
+        if tenant_schema is not None:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
+                "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
+                "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
+                "WHERE m.tenant_schema=%s ORDER BY m.created_at DESC LIMIT %s",
+                (tenant_schema, limit)
+            )
+        else:
+            cur.execute(
+                "SELECT t.company_name, t.subdomain, m.employee_count, m.amount_paise, m.status, "
+                "m.razorpay_subscription_id, m.razorpay_payment_id, m.created_at, m.company_name AS fallback_company_name "
+                "FROM monthly_invoices m LEFT JOIN tenants t ON t.db_name = m.tenant_schema "
+                "ORDER BY m.created_at DESC LIMIT %s",
+                (limit,)
+            )
         auto_debit_payments = [
             {
                 "company_name": r[0] or r[8], "subdomain": r[1] or "—", "employee_count": r[2],
@@ -423,13 +476,18 @@ def _compute_pnl(mrr_paise, active_employee_count, costs):
     }
 
 
-@platform_admin_bp.route("/super_admin")
-@_platform_admin_required
-def platform_admin_dashboard():
+def _load_all_tenants():
+    """Fetches every tenant plus its live employee count/monthly bill --
+    the full, unfiltered set the dashboard's revenue/headcount KPIs are
+    computed over. Search/status filtering and pagination for the on-page
+    table happen in Python on top of this (see platform_admin_dashboard()
+    and the CSV export below), so those KPIs stay accurate regardless of
+    which page or search the admin currently has open."""
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "SELECT id, company_name, subdomain, db_name, payment_option, status, created_at "
+        "SELECT id, company_name, subdomain, db_name, payment_option, status, created_at, "
+        "billing_state, grace_period_ends_at "
         "FROM tenants ORDER BY created_at DESC"
     )
     rows = cur.fetchall()
@@ -438,40 +496,150 @@ def platform_admin_dashboard():
 
     self_signup_ids = _self_signup_tenant_ids()
     tenants = []
-    mrr_paise = 0
-    active_employee_count = 0
     for r in rows:
-        tid, company_name, subdomain, db_name, payment_option, status, created_at = r
+        (tid, company_name, subdomain, db_name, payment_option, status, created_at,
+         billing_state, grace_period_ends_at) = r
         employee_count = _tenant_employee_count(db_name)
         monthly_bill_paise = calculate_price(employee_count)
-        if status == "active":
-            mrr_paise += monthly_bill_paise
-            active_employee_count += employee_count
         tenants.append({
             "id": tid, "company_name": company_name, "subdomain": subdomain,
             "db_name": db_name, "payment_option": payment_option or "online",
             "status": status, "created_at": created_at,
             "employee_count": employee_count,
+            "monthly_bill_paise": monthly_bill_paise,
             "monthly_bill_display": format_price_inr(monthly_bill_paise),
             "self_signup": tid in self_signup_ids,
+            "billing_state": billing_state or "current",
+            "grace_period_ends_at": coerce_datetime(grace_period_ends_at),
         })
+    return tenants
+
+
+def _filter_tenants(tenants, q, status_filter):
+    """Company-name/subdomain substring search plus an exact status match,
+    applied in Python over the already-fetched full tenant list -- the
+    same pattern _load_all_tenants()'s docstring describes."""
+    q = (q or "").strip().lower()
+    status_filter = (status_filter or "all").strip().lower()
+    out = tenants
+    if q:
+        out = [t for t in out if q in t["company_name"].lower() or q in t["subdomain"].lower()]
+    if status_filter in ("active", "suspended"):
+        out = [t for t in out if t["status"] == status_filter]
+    return out
+
+
+@platform_admin_bp.route("/super_admin")
+@_platform_admin_required
+def platform_admin_dashboard():
+    all_tenants = _load_all_tenants()
+
+    mrr_paise = sum(t["monthly_bill_paise"] for t in all_tenants if t["status"] == "active")
+    active_employee_count = sum(t["employee_count"] for t in all_tenants if t["status"] == "active")
+
+    q = request.args.get("q", "")
+    status_filter = request.args.get("status", "all")
+    try:
+        page = int(request.args.get("page", 1))
+    except ValueError:
+        page = 1
+    filtered_tenants = _filter_tenants(all_tenants, q, status_filter)
+    tenants, page, total_pages = _paginate(filtered_tenants, page, _TENANTS_PER_PAGE)
 
     costs = _get_platform_costs()
     pnl = _compute_pnl(mrr_paise, active_employee_count, costs)
 
+    conn2 = get_master_db()
+    cur2 = conn2.cursor(buffered=True)
+    cur2.execute("SELECT COUNT(*) FROM tenant_applications WHERE status='pending_review'")
+    pending_applications_count = cur2.fetchone()[0]
+    cur2.execute("SELECT COUNT(*) FROM tenant_duplicate_alerts WHERE acknowledged=0")
+    unacknowledged_alerts_count = cur2.fetchone()[0]
+    cur2.execute("SELECT COUNT(*) FROM tenant_support_tickets WHERE status IN ('open','in_progress')")
+    open_tickets_count = cur2.fetchone()[0]
+    cur2.close()
+    conn2.close()
+
     return render_template(
         "super_admin_dashboard.html", tenants=tenants,
-        per_employee_paise=PER_EMPLOYEE_PAISE,
+        portal_base_url=_safe_app_url(),
+        per_employee_paise=get_per_employee_paise(),
         mrr_display=format_price_inr(mrr_paise),
-        active_tenant_count=sum(1 for t in tenants if t["status"] == "active"),
-        total_employee_count=sum(t["employee_count"] for t in tenants),
-        self_signup_count=sum(1 for t in tenants if t["self_signup"]),
+        active_tenant_count=sum(1 for t in all_tenants if t["status"] == "active"),
+        total_tenant_count=len(all_tenants),
+        filtered_tenant_count=len(filtered_tenants),
+        total_employee_count=sum(t["employee_count"] for t in all_tenants),
+        self_signup_count=sum(1 for t in all_tenants if t["self_signup"]),
+        q=q, status_filter=status_filter, page=page, total_pages=total_pages,
         recent_activity=_recent_platform_activity(),
         recent_payments=_recent_payments(),
         leads=_recent_leads(),
         traffic=get_traffic_stats(),
         pnl=pnl,
         costs=costs,
+        pending_applications_count=pending_applications_count,
+        unacknowledged_alerts_count=unacknowledged_alerts_count,
+        open_tickets_count=open_tickets_count,
+    )
+
+
+def _csv_response(filename, header, rows):
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+    writer.writerows(rows)
+    return Response(
+        buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@platform_admin_bp.route("/super_admin/export/tenants.csv", methods=["GET"])
+@_platform_admin_required
+def platform_admin_export_tenants_csv():
+    """Same q/status filters as the dashboard table, but unpaginated --
+    exports every matching row, not just the current page."""
+    all_tenants = _load_all_tenants()
+    tenants = _filter_tenants(all_tenants, request.args.get("q", ""), request.args.get("status", "all"))
+    rows = [
+        [t["company_name"], t["subdomain"], t["status"], t["billing_state"], t["payment_option"],
+         t["employee_count"], t["monthly_bill_display"], "Self-Signup" if t["self_signup"] else "Platform Admin",
+         t["created_at"].strftime("%Y-%m-%d %H:%M") if t["created_at"] else ""]
+        for t in tenants
+    ]
+    log_security_event(
+        "platform_admin.tenants_exported", f"Tenant list exported to CSV ({len(rows)} rows)",
+        level="INFO", identifier=session.get("platform_admin_username"),
+    )
+    return _csv_response(
+        "tenants.csv",
+        ["Company", "Subdomain", "Status", "Billing State", "Payment Option", "Employees",
+         "Monthly Bill", "Source", "Created At"],
+        rows,
+    )
+
+
+@platform_admin_bp.route("/super_admin/export/payments.csv", methods=["GET"])
+@_platform_admin_required
+def platform_admin_export_payments_csv():
+    payments = _recent_payments(limit=100000)
+    rows = [
+        [p["kind"], p["company_name"], p["subdomain"], p["employee_count"], p["amount_display"],
+         p["status"], "Demo" if p["is_demo"] else "Razorpay", p["order_id"] or "", p["payment_id"] or "",
+         p["admin_username"] or "", p["admin_email"] or "",
+         p["created_at"].strftime("%Y-%m-%d %H:%M") if p["created_at"] else "",
+         p["paid_at"].strftime("%Y-%m-%d %H:%M") if p["paid_at"] else ""]
+        for p in payments
+    ]
+    log_security_event(
+        "platform_admin.payments_exported", f"Payment history exported to CSV ({len(rows)} rows)",
+        level="INFO", identifier=session.get("platform_admin_username"),
+    )
+    return _csv_response(
+        "payments.csv",
+        ["Kind", "Company", "Subdomain", "Employees", "Amount", "Status", "Payment Type",
+         "Order ID", "Payment ID", "Admin Username", "Admin Email", "Created At", "Paid At"],
+        rows,
     )
 
 
@@ -517,6 +685,74 @@ def platform_admin_set_costs():
     return redirect("/super_admin")
 
 
+@platform_admin_bp.route("/super_admin/rate", methods=["POST"])
+@_platform_admin_required
+def platform_admin_set_rate():
+    """Updates the flat per-employee monthly rate every price calculation
+    in the app reads (utils/plan_limits.py's get_per_employee_paise()) --
+    takes effect for new signups, seat top-ups, and manual/dunning bills on
+    the very next calculation (invalidate_rate_paise_cache() below), no
+    redeploy needed.
+
+    Existing recurring auto-debit subscribers are migrated at their own
+    next renewal, not immediately: a fresh Razorpay Plan is created here at
+    the new rate (Plans are immutable, so the old one keeps its old price
+    forever) and every currently-active mandate is flagged
+    needs_rate_migration -- blueprints/auto_debit.py's
+    _handle_subscription_charged() checks that flag after each successful
+    charge, cancels that subscription once its current (old-rate) cycle is
+    paid, and emails the tenant to re-authorize a new one. Nobody is
+    charged mid-cycle or has a payment silently change amount."""
+    from utils.razorpay_utils import create_plan, razorpay_configured
+    from blueprints.auto_debit import _PLAN_ITEM_NAME
+
+    raw = request.form.get("per_employee_rupees", "").strip()
+    try:
+        rupees = float(raw)
+    except ValueError:
+        flash("Enter a valid rate in rupees.", "error")
+        return redirect("/super_admin")
+    if rupees <= 0:
+        flash("The rate must be greater than zero.", "error")
+        return redirect("/super_admin")
+
+    new_paise = round(rupees * 100)
+    old_paise = get_per_employee_paise()
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE platform_costs SET per_employee_paise=%s, updated_at=CURRENT_TIMESTAMP WHERE id=1",
+        (new_paise,)
+    )
+
+    migration_note = ""
+    if razorpay_configured():
+        new_plan_id, plan_error = create_plan(new_paise, _PLAN_ITEM_NAME)
+        if plan_error:
+            app_log.error("platform_admin.set_rate: failed to create new Razorpay plan: %s", plan_error)
+            migration_note = " Warning: creating the new Razorpay plan failed, so auto-debit migration could not be armed -- existing subscribers will keep their old rate until this is retried."
+        else:
+            cur.execute("UPDATE billing_config SET razorpay_plan_id=%s WHERE id=1", (new_plan_id,))
+            cur.execute("UPDATE auto_debit_mandates SET needs_rate_migration=TRUE WHERE status='active'")
+            migrated_count = cur.rowcount
+            if migrated_count:
+                migration_note = f" {migrated_count} active auto-debit subscriber(s) will be migrated to the new rate at their next renewal."
+
+    conn.commit()
+    cur.close()
+    conn.close()
+    invalidate_rate_paise_cache()
+
+    log_security_event(
+        "platform_admin.rate_updated",
+        f"Per-employee rate changed from {format_price_inr(old_paise)} to {format_price_inr(new_paise)}",
+        level="WARNING", identifier=session.get("platform_admin_username"),
+    )
+    flash(f"Rate updated to {format_price_inr(new_paise)}/employee/month.{migration_note}", "success")
+    return redirect("/super_admin")
+
+
 @platform_admin_bp.route("/super_admin/leads/<int:lead_id>/status", methods=["POST"])
 @_platform_admin_required
 def platform_admin_set_lead_status(lead_id):
@@ -542,6 +778,7 @@ def platform_admin_create_tenant():
     onboarded company gets an identical, fully-isolated schema rather than
     a second, softer path into tenant creation."""
     from blueprints.org import _validate_new_tenant_fields, provision_tenant, send_portal_ready_email
+    from utils.auth import generate_password_hash
     from utils.helpers import clean_email_domain
 
     company_name = request.form.get("company_name", "").strip()
@@ -567,7 +804,8 @@ def platform_admin_create_tenant():
             flash(f"Company logo: {logo_err}", "error")
             return redirect("/super_admin")
 
-    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username, admin_password,
+    ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username,
+                                                            generate_password_hash(admin_password),
                                                             admin_email, payment_option, email_domain=email_domain,
                                                             logo_path=logo_path)
     if not ok:
@@ -609,56 +847,765 @@ def platform_admin_set_status(tenant_id):
     return redirect("/super_admin")
 
 
-# ── Self-service device management (utils/device_utils.py) ─────────────────
-# Platform admin's own rows live in att_master's user_devices, not any
-# tenant schema -- get_master_db throughout, never get_db_connection.
-
-@platform_admin_bp.route("/super_admin/devices", methods=["GET"])
+@platform_admin_bp.route("/super_admin/tenants/bulk-status", methods=["POST"])
 @_platform_admin_required
-def platform_admin_devices():
-    username = session["platform_admin_username"]
-    token, _ = get_or_create_device_token(request)
-    return jsonify({"ok": True, "devices": list_devices(get_master_db, "platform_admin", username, token)})
+def platform_admin_bulk_set_status():
+    """Same activate/deactivate action as platform_admin_set_status(), applied
+    to every selected tenant in one request -- for clearing out a batch of
+    stale trial accounts, etc., without one click per row."""
+    status = request.form.get("status", "").strip()
+    tenant_ids = [int(v) for v in request.form.getlist("tenant_ids") if v.isdigit()]
+    if status not in ("active", "suspended"):
+        flash("Invalid status.", "error")
+        return redirect("/super_admin")
+    if not tenant_ids:
+        flash("No companies were selected.", "error")
+        return redirect("/super_admin")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    placeholders = ",".join(["%s"] * len(tenant_ids))
+    cur.execute(
+        f"UPDATE tenants SET status=%s WHERE id IN ({placeholders})",  # nosec B608 -- placeholders is a fixed-width %s list sized to tenant_ids, all values still bound as params
+        [status] + tenant_ids,
+    )
+    updated = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    log_security_event(
+        "platform_admin.bulk_status_changed",
+        f"{updated} tenant(s) bulk-changed to status '{status}': {tenant_ids}",
+        level="WARNING" if status == "suspended" else "INFO",
+        identifier=session.get("platform_admin_username"), status=status, tenant_ids=tenant_ids,
+    )
+    flash(f"{updated} compan{'y' if updated == 1 else 'ies'} updated.", "success")
+    return redirect("/super_admin")
 
 
-@platform_admin_bp.route("/super_admin/devices/<int:device_id>/rename", methods=["POST"])
+# schema names are always "att_" + a subdomain slug limited to [a-z0-9-]
+# (blueprints/org.py's _clean_subdomain_slug + provision_tenant's
+# db_name = "att_" + subdomain.replace("-", "_")) -- this is a hard gate on
+# top of that existing guarantee, checked immediately before the one place
+# in this codebase that runs DROP SCHEMA, so a latent bug anywhere upstream
+# in slug generation can never turn into arbitrary DDL here.
+_SAFE_SCHEMA_NAME_RE = re.compile(r"^att_[a-z0-9_]+$")
+
+
+@platform_admin_bp.route("/super_admin/tenants/<int:tenant_id>/delete", methods=["POST"])
 @_platform_admin_required
-def platform_admin_device_rename(device_id):
-    username = session["platform_admin_username"]
-    data = request.get_json(silent=True) or {}
-    ok = rename_device(get_master_db, "platform_admin", username, device_id, data.get("name"))
-    return jsonify({"ok": ok})
+def platform_admin_delete_tenant(tenant_id):
+    """Permanently deletes a tenant: DROP SCHEMA on its entire Postgres
+    schema (every employee, attendance/payroll/leave record, uploaded
+    document -- everything company-specific), then removes its att_master
+    row. Irreversible, so the UI only ever reaches this route after the
+    admin has typed the company's exact subdomain into a confirmation
+    field -- re-checked here server-side too, never trusted from a hidden
+    field alone.
+
+    Billing/payment history (payment_orders, seat_topup_orders,
+    monthly_invoices, auto_debit_mandates) is untouched: those tables
+    already carry their own denormalized company_name/subdomain columns
+    rather than a live foreign key to tenants (see _recent_payments()'s
+    docstring), specifically so the Payments feed keeps showing a
+    deleted company's transaction history correctly after this runs."""
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT company_name, subdomain, db_name FROM tenants WHERE id=%s", (tenant_id,))
+    row = cur.fetchone()
+    if not row:
+        cur.close()
+        conn.close()
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+    company_name, subdomain, db_name = row
+
+    confirm = (request.form.get("confirm_subdomain") or "").strip().lower()
+    if confirm != subdomain.lower():
+        cur.close()
+        conn.close()
+        flash(f"Deletion cancelled: you must type '{subdomain}' exactly to confirm.", "error")
+        return redirect("/super_admin")
+
+    if not _SAFE_SCHEMA_NAME_RE.match(db_name):
+        cur.close()
+        conn.close()
+        app_log.error("platform_admin.delete_tenant: refusing to drop schema with unexpected name %r", db_name)
+        flash("Could not delete this company: its schema name failed a safety check. Contact engineering.", "error")
+        return redirect("/super_admin")
+
+    try:
+        cur.execute(f'DROP SCHEMA IF EXISTS "{db_name}" CASCADE')  # nosec B608 -- db_name is read back from the tenants row (never from this request) and re-validated against _SAFE_SCHEMA_NAME_RE immediately above
+    except Exception as exc:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        app_log.error("platform_admin.delete_tenant: schema drop failed for %s: %s", db_name, exc, exc_info=True)
+        flash(f"Could not delete company data: {exc}", "error")
+        return redirect("/super_admin")
+
+    cur.execute("DELETE FROM tenants WHERE id=%s", (tenant_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    _employee_count_cache.pop(db_name, None)
+
+    log_security_event(
+        "platform_admin.tenant_deleted",
+        f"Tenant '{company_name}' (subdomain={subdomain}, schema={db_name}) permanently deleted -- "
+        f"all company data removed; payment/billing history retained",
+        level="WARNING", identifier=session.get("platform_admin_username"),
+        tenant_id=tenant_id, subdomain=subdomain,
+    )
+    flash(f"'{company_name}' and all its company data have been permanently deleted. Its payment history is still visible below.", "success")
+    return redirect("/super_admin")
 
 
-@platform_admin_bp.route("/super_admin/devices/<int:device_id>/revoke", methods=["POST"])
+# ── Gated company-signup review queue (blueprints/org.py's tenant_applications) ──
+# Every applicant now goes through email OTP + KYC document upload before
+# reaching this queue; provision_tenant() is only ever called from the
+# approve action below (or, for paid plans, from billing.py's
+# verify_payment() after the post-approval payment step completes).
+
+_APPLICATION_DOC_KINDS = ("registration_cert", "address_proof", "visiting_card", "name_board_photo")
+_APPLICATION_STATUS_COLS = (
+    "id, company_name, subdomain, admin_username, admin_email, email_domain, employee_count, "
+    "payment_option, logo_path, email_verified_at, doc_registration_cert, doc_address_proof, "
+    "doc_visiting_card, doc_name_board_photo, documents_submitted_at, status, reviewed_by, "
+    "reviewed_at, rejection_reason, tenant_id, created_at"
+)
+_APPLICATION_COLS = [c.strip() for c in _APPLICATION_STATUS_COLS.split(",")]
+
+
+def _fetch_application(application_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- _APPLICATION_STATUS_COLS is a fixed module-level constant, never built from request input
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    return dict(zip(_APPLICATION_COLS, row))
+
+
+@platform_admin_bp.route("/super_admin/applications", methods=["GET"])
 @_platform_admin_required
-def platform_admin_device_revoke(device_id):
-    username = session["platform_admin_username"]
-    ok = revoke_device(get_master_db, "platform_admin", username, device_id, username)
-    if ok:
-        log_security_event(
-            "platform_admin.device_revoked", f"Device {device_id} revoked by '{username}'",
-            level="INFO", identifier=username,
+def platform_admin_applications_queue():
+    status_filter = request.args.get("status", "pending_review")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    if status_filter == "all":
+        cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications ORDER BY created_at DESC")  # nosec B608 -- fixed constant, see _fetch_application
+    else:
+        cur.execute(
+            f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE status=%s ORDER BY created_at ASC",  # nosec B608
+            (status_filter,)
         )
-    return jsonify({"ok": ok})
+    rows = cur.fetchall()
+    cur.execute("SELECT COUNT(*) FROM tenant_applications WHERE status='pending_review'")
+    pending_count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    applications = [dict(zip(_APPLICATION_COLS, r)) for r in rows]
+    return render_template(
+        "super_admin_applications.html", applications=applications,
+        status_filter=status_filter, pending_count=pending_count,
+    )
 
 
-@platform_admin_bp.route("/super_admin/devices/asset", methods=["POST"])
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>", methods=["GET"])
 @_platform_admin_required
-def platform_admin_device_add_asset():
-    username = session["platform_admin_username"]
-    data = request.get_json(silent=True) or {}
-    new_id = add_asset_device(get_master_db, "platform_admin", username,
-                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
-    return jsonify({"ok": new_id is not None, "id": new_id})
+def platform_admin_application_detail(application_id):
+    application = _fetch_application(application_id)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/super_admin/applications")
+    return render_template("super_admin_application_detail.html", application=application,
+                            doc_kinds=_APPLICATION_DOC_KINDS)
 
 
-@platform_admin_bp.route("/super_admin/devices/asset/<int:device_id>/delete", methods=["POST"])
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>/documents/<doc_kind>", methods=["GET"])
 @_platform_admin_required
-def platform_admin_device_delete_asset(device_id):
-    username = session["platform_admin_username"]
-    ok = delete_asset_device(get_master_db, "platform_admin", username, device_id)
-    return jsonify({"ok": ok})
+def platform_admin_view_document(application_id, doc_kind):
+    """Streams one uploaded KYC document. This route + the
+    @_platform_admin_required guard above is the ENTIRE access control for
+    these files -- they're saved outside static/ (see utils/helpers.py's
+    save_application_document()) specifically so there is no other way to
+    reach them. doc_kind is checked against a fixed whitelist and the
+    actual filesystem path/S3 ref always comes from the DB row, never from
+    anything client-supplied, so this can't be tricked into serving an
+    arbitrary path.
+
+    Reads via utils/storage.py's open_private() rather than send_file(path)
+    directly, since the stored ref may be a local path OR an "s3://..."
+    reference (whichever save_application_document() actually used) --
+    open_private() handles both transparently, this route doesn't need to
+    know or care which mode is active."""
+    if doc_kind not in _APPLICATION_DOC_KINDS:
+        flash("Invalid document type.", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(f"SELECT doc_{doc_kind} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- doc_kind is allowlist-checked against _APPLICATION_DOC_KINDS above, never interpolated from an unchecked value
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row or not row[0]:
+        flash("Document not found.", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+    import io
+    import mimetypes
+    from flask import send_file
+    from utils.storage import open_private
+    try:
+        data = open_private(row[0])
+    except Exception as exc:
+        app_log.warning("Could not read application document %s (application_id=%s): %s", row[0], application_id, exc, exc_info=True)
+        flash("Could not read this document.", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+    mimetype = mimetypes.guess_type(row[0])[0] or "application/octet-stream"
+    return send_file(io.BytesIO(data), mimetype=mimetype, as_attachment=False)
+
+
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>/approve", methods=["POST"])
+@_platform_admin_required
+def platform_admin_approve_application(application_id):
+    from blueprints.org import provision_tenant, check_duplicate_name, _record_duplicate_alert, \
+        send_portal_ready_email, _GENERIC_DUPLICATE_MSG
+
+    application = _fetch_application(application_id)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/super_admin/applications")
+    if application["status"] != "pending_review":
+        flash("This application isn't awaiting review.", "error")
+        return redirect("/super_admin/applications")
+
+    # Re-check for a name collision -- state may have shifted since this
+    # application was submitted (e.g. a different applicant with the same
+    # name was approved first).
+    conflicting = check_duplicate_name(application["company_name"])
+    if conflicting:
+        _record_duplicate_alert(application_id, application["company_name"], application["admin_email"], conflicting)
+        flash(_GENERIC_DUPLICATE_MSG + " (duplicate detected at approval time)", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    reviewer = session.get("platform_admin_username")
+
+    if application["payment_option"] == "online":
+        # Payment happens AFTER approval for paid plans -- provisioning is
+        # deferred until blueprints/billing.py's verify_payment() confirms
+        # the charge (see create_order()'s new application_id requirement).
+        cur.execute(
+            "UPDATE tenant_applications SET status='approved_pending_payment', reviewed_by=%s, reviewed_at=NOW(), "
+            "updated_at=NOW() WHERE id=%s",
+            (reviewer, application_id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        from utils.email_utils import get_email_config, send_email_async
+        pay_url = f"{request.url_root.rstrip('/')}/create_org/pay/{application_id}"
+        email_cfg = get_email_config()
+        if email_cfg:
+            send_email_async(
+                application["admin_email"], f"Your application was approved -- complete payment for {application['company_name']}",
+                f"<p>Your company registration for <strong>{application['company_name']}</strong> has been approved.</p>"
+                f"<p><a href=\"{pay_url}\">Complete payment to activate your portal</a></p>",
+                email_cfg,
+            )
+        log_security_event("platform_admin.application_approved", f"Application {application_id} approved (awaiting payment)",
+                            level="INFO", identifier=reviewer, application_id=application_id)
+        flash(f"Application approved. Applicant has been emailed a payment link: {pay_url}", "success")
+        return redirect("/super_admin/applications")
+
+    cur.execute("SELECT admin_password_hash FROM tenant_applications WHERE id=%s", (application_id,))
+    admin_password_hash = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+
+    ok, error, portal_url, checkin_url = provision_tenant(
+        application["company_name"], application["subdomain"], application["admin_username"], admin_password_hash,
+        application["admin_email"], payment_option=application["payment_option"],
+        email_domain=application["email_domain"], employee_count=application["employee_count"],
+        logo_path=application["logo_path"],
+    )
+    if not ok:
+        flash(f"Approval failed: {error}", "error")
+        return redirect(f"/super_admin/applications/{application_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT id FROM tenants WHERE subdomain=%s", (application["subdomain"],))
+    tenant_id = cur.fetchone()[0]
+    cur.execute(
+        "UPDATE tenant_applications SET status='provisioned', reviewed_by=%s, reviewed_at=NOW(), tenant_id=%s, "
+        "updated_at=NOW() WHERE id=%s",
+        (reviewer, tenant_id, application_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    send_portal_ready_email(application["admin_email"], application["company_name"], application["admin_username"],
+                             portal_url, checkin_url=checkin_url)
+    log_security_event("platform_admin.application_approved", f"Application {application_id} approved and provisioned",
+                        level="INFO", identifier=reviewer, application_id=application_id, tenant_id=tenant_id)
+    flash(f"Company '{application['company_name']}' approved and provisioned. Portal: {portal_url}", "success")
+    return redirect("/super_admin/applications")
+
+
+@platform_admin_bp.route("/super_admin/applications/<int:application_id>/reject", methods=["POST"])
+@_platform_admin_required
+def platform_admin_reject_application(application_id):
+    from blueprints.org import send_application_rejected_email
+    reason = request.form.get("reason", "").strip()[:1000]
+    application = _fetch_application(application_id)
+    if not application:
+        flash("Application not found.", "error")
+        return redirect("/super_admin/applications")
+
+    reviewer = session.get("platform_admin_username")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE tenant_applications SET status='rejected', reviewed_by=%s, reviewed_at=NOW(), rejection_reason=%s, "
+        "updated_at=NOW() WHERE id=%s",
+        (reviewer, reason, application_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    send_application_rejected_email(application["admin_email"], application["company_name"], reason)
+    log_security_event("platform_admin.application_rejected", f"Application {application_id} rejected",
+                        level="INFO", identifier=reviewer, application_id=application_id, reason=reason)
+    flash("Application rejected.", "success")
+    return redirect("/super_admin/applications")
+
+
+@platform_admin_bp.route("/super_admin/duplicate-alerts", methods=["GET"])
+@_platform_admin_required
+def platform_admin_duplicate_alerts():
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, application_id, attempted_company_name, attempted_admin_email, conflicting_tenant_id, "
+        "conflicting_company_name, conflicting_admin_email, match_type, acknowledged, acknowledged_by, "
+        "acknowledged_at, source_ip, created_at "
+        "FROM tenant_duplicate_alerts ORDER BY acknowledged ASC, created_at DESC"
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    cols = ["id", "application_id", "attempted_company_name", "attempted_admin_email", "conflicting_tenant_id",
+            "conflicting_company_name", "conflicting_admin_email", "match_type", "acknowledged", "acknowledged_by",
+            "acknowledged_at", "source_ip", "created_at"]
+    alerts = [dict(zip(cols, r)) for r in rows]
+    return render_template("super_admin_duplicate_alerts.html", alerts=alerts)
+
+
+@platform_admin_bp.route("/super_admin/duplicate-alerts/<int:alert_id>/acknowledge", methods=["POST"])
+@_platform_admin_required
+def platform_admin_acknowledge_duplicate_alert(alert_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "UPDATE tenant_duplicate_alerts SET acknowledged=1, acknowledged_by=%s, acknowledged_at=NOW() WHERE id=%s",
+        (session.get("platform_admin_username"), alert_id)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash("Alert acknowledged.", "success")
+    return redirect("/super_admin/duplicate-alerts")
+
+
+@platform_admin_bp.route("/super_admin/duplicate-alerts/bulk-acknowledge", methods=["POST"])
+@_platform_admin_required
+def platform_admin_bulk_acknowledge_duplicate_alerts():
+    alert_ids = [int(v) for v in request.form.getlist("alert_ids") if v.isdigit()]
+    if not alert_ids:
+        flash("No alerts were selected.", "error")
+        return redirect("/super_admin/duplicate-alerts")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    placeholders = ",".join(["%s"] * len(alert_ids))
+    cur.execute(
+        f"UPDATE tenant_duplicate_alerts SET acknowledged=1, acknowledged_by=%s, acknowledged_at=NOW() "  # nosec B608 -- placeholders is a fixed-width %s list sized to alert_ids, all values still bound as params
+        f"WHERE id IN ({placeholders})",
+        [session.get("platform_admin_username")] + alert_ids,
+    )
+    updated = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash(f"{updated} alert(s) acknowledged.", "success")
+    return redirect("/super_admin/duplicate-alerts")
+
+
+# ── Audit log: browsable view over security_events ──────────────────────
+# security_events already exists (extensions.py's log_security_event) and
+# every platform-admin action in this blueprint already writes to it --
+# this just gives the admin a page to search/filter/page through that
+# history instead of only ever seeing the dashboard's 20-row preview.
+
+@platform_admin_bp.route("/super_admin/audit-log", methods=["GET"])
+@_platform_admin_required
+def platform_admin_audit_log():
+    q = request.args.get("q", "").strip()
+    level_filter = request.args.get("level", "").strip().upper()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    prefix_clause = " OR ".join(["event_type LIKE %s"] * len(_AUDIT_LOG_PREFIXES))
+    conditions = [f"({prefix_clause})"]
+    params = [f"{p}%" for p in _AUDIT_LOG_PREFIXES]
+    if level_filter in ("INFO", "WARNING", "ERROR"):
+        conditions.append("level=%s")
+        params.append(level_filter)
+    if q:
+        conditions.append("(message ILIKE %s OR identifier ILIKE %s OR event_type ILIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like])
+    where_sql = " AND ".join(conditions)  # nosec B608 -- conditions are fixed literals built above, never from unescaped request input; all variable values are bound params
+
+    conn = get_db_connection()
+    cur = conn.cursor(buffered=True)
+    cur.execute(f"SELECT COUNT(*) FROM security_events WHERE {where_sql}", params)  # nosec B608 -- see where_sql note above
+    total = cur.fetchone()[0]
+    total_pages = max(1, -(-total // _AUDIT_LOG_PER_PAGE))
+    page = min(page, total_pages)
+    offset = (page - 1) * _AUDIT_LOG_PER_PAGE
+    cur.execute(
+        f"SELECT event_type, level, message, identifier, ip, created_at FROM security_events "  # nosec B608 -- see where_sql note above
+        f"WHERE {where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        params + [_AUDIT_LOG_PER_PAGE, offset],
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    events = [
+        {"event_type": r[0], "level": r[1], "message": r[2], "identifier": r[3], "ip": r[4], "created_at": r[5]}
+        for r in rows
+    ]
+    return render_template(
+        "super_admin_audit_log.html", events=events, q=q, level_filter=level_filter,
+        page=page, total_pages=total_pages, total=total,
+    )
+
+
+# ── Mini-CRM: company profile (financials + notes + tickets) ───────────────
+# One page per company pulling together everything the Platform Admin
+# already tracks about them (payment history, live billing state) plus two
+# new things: free-text internal notes, and a trackable support-ticket
+# queue -- distinct from the real-time chat below, which has no status or
+# history a report could be built on.
+
+_TICKET_STATUSES = ("open", "in_progress", "resolved", "closed")
+_TICKET_PRIORITIES = ("low", "normal", "high", "urgent")
+
+
+def _fetch_tenant(tenant_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, company_name, subdomain, db_name, payment_option, status, created_at, "
+        "billing_state, grace_period_ends_at, admin_email FROM tenants WHERE id=%s",
+        (tenant_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    (tid, company_name, subdomain, db_name, payment_option, status, created_at,
+     billing_state, grace_period_ends_at, admin_email) = row
+    employee_count = _tenant_employee_count(db_name)
+    return {
+        "id": tid, "company_name": company_name, "subdomain": subdomain, "db_name": db_name,
+        "payment_option": payment_option or "online", "status": status, "created_at": created_at,
+        "billing_state": billing_state or "current", "grace_period_ends_at": coerce_datetime(grace_period_ends_at),
+        "admin_email": admin_email, "employee_count": employee_count,
+        "monthly_bill_display": format_price_inr(calculate_price(employee_count)),
+    }
+
+
+def _load_tenant_admins(schema):
+    """Best-effort list of this company's own portal admin accounts, for
+    the profile page's Contacts card. Never raises -- a schema that's
+    since been deleted (platform_admin_delete_tenant()), or a transient DB
+    hiccup, just shows an empty contacts list instead of breaking the
+    page the platform admin is trying to view."""
+    try:
+        conn = get_tenant_db(schema)
+        cur = conn.cursor(buffered=True)
+        cur.execute("SELECT username, email FROM admin_users ORDER BY id ASC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [{"username": r[0], "email": r[1]} for r in rows]
+    except Exception as exc:
+        app_log.warning("platform_admin: tenant admin lookup failed for schema %s: %s", schema, exc)
+        return []
+
+
+def _load_tenant_notes(tenant_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, author, note, created_at FROM tenant_notes WHERE tenant_id=%s ORDER BY created_at DESC",
+        (tenant_id,)
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [{"id": r[0], "author": r[1], "note": r[2], "created_at": r[3]} for r in rows]
+
+
+@platform_admin_bp.route("/super_admin/companies/<int:tenant_id>", methods=["GET"])
+@_platform_admin_required
+def platform_admin_company_profile(tenant_id):
+    tenant = _fetch_tenant(tenant_id)
+    if not tenant:
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT id, subject, status, priority, created_at, updated_at FROM tenant_support_tickets "
+        "WHERE tenant_id=%s ORDER BY created_at DESC LIMIT 50",
+        (tenant_id,)
+    )
+    tickets = [
+        {"id": r[0], "subject": r[1], "status": r[2], "priority": r[3], "created_at": r[4], "updated_at": r[5]}
+        for r in cur.fetchall()
+    ]
+    cur.close()
+    conn.close()
+
+    return render_template(
+        "super_admin_company_profile.html",
+        tenant=tenant,
+        portal_base_url=_safe_app_url(),
+        contacts=_load_tenant_admins(tenant["db_name"]),
+        notes=_load_tenant_notes(tenant_id),
+        payments=_recent_payments(limit=200, tenant_id=tenant_id, tenant_schema=tenant["db_name"]),
+        tickets=tickets,
+        ticket_priorities=_TICKET_PRIORITIES,
+    )
+
+
+@platform_admin_bp.route("/super_admin/companies/<int:tenant_id>/notes", methods=["POST"])
+@_platform_admin_required
+def platform_admin_add_tenant_note(tenant_id):
+    note = (request.form.get("note") or "").strip()[:4000]
+    if not note:
+        flash("Note cannot be empty.", "error")
+        return redirect(f"/super_admin/companies/{tenant_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT 1 FROM tenants WHERE id=%s", (tenant_id,))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+    cur.execute(
+        "INSERT INTO tenant_notes (tenant_id, author, note) VALUES (%s,%s,%s)",
+        (tenant_id, session.get("platform_admin_username"), note),
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash("Note added.", "success")
+    return redirect(f"/super_admin/companies/{tenant_id}")
+
+
+@platform_admin_bp.route("/super_admin/companies/<int:tenant_id>/tickets", methods=["POST"])
+@_platform_admin_required
+def platform_admin_create_ticket(tenant_id):
+    tenant = _fetch_tenant(tenant_id)
+    if not tenant:
+        flash("Company not found.", "error")
+        return redirect("/super_admin")
+
+    subject = (request.form.get("subject") or "").strip()[:200]
+    description = (request.form.get("description") or "").strip()[:4000]
+    priority = request.form.get("priority", "normal").strip()
+    if priority not in _TICKET_PRIORITIES:
+        priority = "normal"
+    if not subject or not description:
+        flash("Subject and description are required.", "error")
+        return redirect(f"/super_admin/companies/{tenant_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "INSERT INTO tenant_support_tickets (tenant_id, subject, description, priority, created_by) "
+        "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+        (tenant_id, subject, description, priority, session.get("platform_admin_username")),
+    )
+    ticket_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    log_security_event(
+        "platform_admin.ticket_created", f"Support ticket #{ticket_id} opened for '{tenant['company_name']}': {subject}",
+        level="INFO", identifier=session.get("platform_admin_username"), tenant_id=tenant_id,
+    )
+    flash("Ticket created.", "success")
+    return redirect(f"/super_admin/tickets/{ticket_id}")
+
+
+def _fetch_ticket(ticket_id):
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT tk.id, tk.tenant_id, t.company_name, t.subdomain, tk.subject, tk.description, tk.status, "
+        "tk.priority, tk.created_by, tk.resolved_at, tk.created_at, tk.updated_at "
+        "FROM tenant_support_tickets tk LEFT JOIN tenants t ON t.id = tk.tenant_id WHERE tk.id=%s",
+        (ticket_id,)
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "id": row[0], "tenant_id": row[1], "company_name": row[2] or "(deleted company)", "subdomain": row[3] or "—",
+        "subject": row[4], "description": row[5], "status": row[6], "priority": row[7], "created_by": row[8],
+        "resolved_at": row[9], "created_at": row[10], "updated_at": row[11],
+    }
+
+
+@platform_admin_bp.route("/super_admin/tickets", methods=["GET"])
+@_platform_admin_required
+def platform_admin_tickets_queue():
+    status_filter = request.args.get("status", "open")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    if status_filter == "all":
+        cur.execute(
+            "SELECT tk.id, tk.tenant_id, t.company_name, t.subdomain, tk.subject, tk.status, tk.priority, "
+            "tk.created_at, tk.updated_at FROM tenant_support_tickets tk "
+            "LEFT JOIN tenants t ON t.id = tk.tenant_id ORDER BY tk.created_at DESC"
+        )
+    else:
+        cur.execute(
+            "SELECT tk.id, tk.tenant_id, t.company_name, t.subdomain, tk.subject, tk.status, tk.priority, "
+            "tk.created_at, tk.updated_at FROM tenant_support_tickets tk "
+            "LEFT JOIN tenants t ON t.id = tk.tenant_id WHERE tk.status=%s ORDER BY tk.created_at DESC",
+            (status_filter,)
+        )
+    rows = cur.fetchall()
+    cur.execute("SELECT COUNT(*) FROM tenant_support_tickets WHERE status IN ('open','in_progress')")
+    open_count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    tickets = [
+        {"id": r[0], "tenant_id": r[1], "company_name": r[2] or "(deleted company)", "subdomain": r[3] or "—",
+         "subject": r[4], "status": r[5], "priority": r[6], "created_at": r[7], "updated_at": r[8]}
+        for r in rows
+    ]
+    return render_template(
+        "super_admin_tickets.html", tickets=tickets, status_filter=status_filter, open_count=open_count,
+    )
+
+
+@platform_admin_bp.route("/super_admin/tickets/<int:ticket_id>", methods=["GET"])
+@_platform_admin_required
+def platform_admin_ticket_detail(ticket_id):
+    ticket = _fetch_ticket(ticket_id)
+    if not ticket:
+        flash("Ticket not found.", "error")
+        return redirect("/super_admin/tickets")
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT author, comment, created_at FROM tenant_ticket_comments WHERE ticket_id=%s ORDER BY created_at ASC",
+        (ticket_id,)
+    )
+    comments = [{"author": r[0], "comment": r[1], "created_at": r[2]} for r in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return render_template(
+        "super_admin_ticket_detail.html", ticket=ticket, comments=comments,
+        statuses=_TICKET_STATUSES, priorities=_TICKET_PRIORITIES,
+    )
+
+
+@platform_admin_bp.route("/super_admin/tickets/<int:ticket_id>/update", methods=["POST"])
+@_platform_admin_required
+def platform_admin_update_ticket(ticket_id):
+    status = request.form.get("status", "").strip()
+    priority = request.form.get("priority", "").strip()
+    if status not in _TICKET_STATUSES or priority not in _TICKET_PRIORITIES:
+        flash("Invalid status or priority.", "error")
+        return redirect(f"/super_admin/tickets/{ticket_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    if status in ("resolved", "closed"):
+        cur.execute(
+            "UPDATE tenant_support_tickets SET status=%s, priority=%s, resolved_at=NOW() WHERE id=%s",
+            (status, priority, ticket_id)
+        )
+    else:
+        cur.execute(
+            "UPDATE tenant_support_tickets SET status=%s, priority=%s, resolved_at=NULL WHERE id=%s",
+            (status, priority, ticket_id)
+        )
+    updated = cur.rowcount
+    conn.commit()
+    cur.close()
+    conn.close()
+    if not updated:
+        flash("Ticket not found.", "error")
+        return redirect("/super_admin/tickets")
+    log_security_event(
+        "platform_admin.ticket_updated", f"Ticket #{ticket_id} set to status={status}, priority={priority}",
+        level="INFO", identifier=session.get("platform_admin_username"),
+    )
+    flash("Ticket updated.", "success")
+    return redirect(f"/super_admin/tickets/{ticket_id}")
+
+
+@platform_admin_bp.route("/super_admin/tickets/<int:ticket_id>/comment", methods=["POST"])
+@_platform_admin_required
+def platform_admin_add_ticket_comment(ticket_id):
+    comment = (request.form.get("comment") or "").strip()[:2000]
+    if not comment:
+        flash("Comment cannot be empty.", "error")
+        return redirect(f"/super_admin/tickets/{ticket_id}")
+
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute("SELECT 1 FROM tenant_support_tickets WHERE id=%s", (ticket_id,))
+    if not cur.fetchone():
+        cur.close()
+        conn.close()
+        flash("Ticket not found.", "error")
+        return redirect("/super_admin/tickets")
+    cur.execute(
+        "INSERT INTO tenant_ticket_comments (ticket_id, author, comment) VALUES (%s,%s,%s)",
+        (ticket_id, session.get("platform_admin_username"), comment),
+    )
+    cur.execute("UPDATE tenant_support_tickets SET updated_at=NOW() WHERE id=%s", (ticket_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    flash("Comment added.", "success")
+    return redirect(f"/super_admin/tickets/{ticket_id}")
 
 
 # ── Internal chat with a company's admin/HR (utils/chat_utils.py) ──────────

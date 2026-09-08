@@ -18,8 +18,11 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 import { fetchResignations, resignationAction } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function ResignationsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("Pending");
   const [selectedSort, setSelectedSort] = useState("Newest First");
@@ -137,7 +140,7 @@ export default function ResignationsScreen() {
   };
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader title="Resignations" subtitle="OFFBOARDING" />
 
@@ -157,7 +160,7 @@ export default function ResignationsScreen() {
         >
           {/* Stats Metrics Cards Row */}
           <View style={styles.statsRow}>
-            <View style={[styles.statCard, { borderLeftColor: "#F59E0B" }]}>
+            <View style={[styles.statCard, { borderLeftColor: colors.warning }]}>
               <Text style={styles.statNumber}>{pendingCount}</Text>
               <Text style={styles.statLabel}>Pending</Text>
             </View>
@@ -167,7 +170,7 @@ export default function ResignationsScreen() {
               <Text style={styles.statLabel}>Accepted</Text>
             </View>
 
-            <View style={[styles.statCard, { borderLeftColor: "#EF4444" }]}>
+            <View style={[styles.statCard, { borderLeftColor: colors.danger }]}>
               <Text style={styles.statNumber}>{declinedCount}</Text>
               <Text style={styles.statLabel}>Declined</Text>
             </View>
@@ -210,7 +213,7 @@ export default function ResignationsScreen() {
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="document-text-outline" size={48} color="#94A3B8" />
+              <Ionicons name="document-text-outline" size={48} color={colors.textLight} />
               <Text style={styles.emptyTitle}>No Resignations Found</Text>
               <Text style={styles.emptySubtitle}>
                 {search ? "No requests match your search criteria." : "There are currently no resignation requests."}
@@ -327,7 +330,7 @@ export default function ResignationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -342,7 +345,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 12,
     borderLeftWidth: 4,
@@ -355,7 +358,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   statLabel: {
     fontSize: 11,
@@ -365,7 +368,7 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#E2E8F0",
+    backgroundColor: colors.border,
     borderRadius: 12,
     padding: 3,
     marginBottom: 16,
@@ -377,7 +380,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   tabButtonActive: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     shadowColor: "#000",
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -389,7 +392,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   tabTextActive: {
-    color: "#0F172A",
+    color: colors.text,
     fontWeight: "700",
   },
   loadingBox: {
@@ -402,18 +405,18 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   emptyCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 36,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     marginTop: 10,
   },
   emptyTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
     marginTop: 12,
   },
   emptySubtitle: {
@@ -423,12 +426,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -450,7 +453,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
@@ -458,7 +461,7 @@ const styles = StyleSheet.create({
   empName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   empIdBadge: {
     fontSize: 11,
@@ -508,7 +511,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   reasonBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
@@ -518,7 +521,7 @@ const styles = StyleSheet.create({
   reasonLabel: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#94A3B8",
+    color: colors.textLight,
     letterSpacing: 0.6,
     marginBottom: 2,
   },

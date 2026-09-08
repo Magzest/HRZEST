@@ -35,9 +35,9 @@
   </script>
 
   <!-- Icons: local Tabler set (no external CDN -- the app's CSP is style-src-elem 'self', which blocks cross-origin stylesheets) -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='tabler-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}">
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='landing_v2.css') }}">
+  <link rel="stylesheet" href="{{ static_url('landing_v2.css') }}">
 </head>
 <body>
 
@@ -857,6 +857,6 @@
   </div>
 
   <!-- App JavaScript Logic -->
-  <script src="{{ url_for('static', filename='landing_v2.js') }}"></script>
+  <script src="{{ static_url('landing_v2.js') }}"></script>
 </body>
 </html>

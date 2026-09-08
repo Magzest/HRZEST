@@ -123,6 +123,22 @@ export const employeeSignup = (employee_id, name, password, email = '', role = '
 export const changePassword = (current_password, new_password) =>
   client.post('/api/employee/change-password', { current_password, new_password });
 
+// ── Company Signup (gated: OTP verification + KYC document upload + ─
+// platform-admin review, before a tenant is ever provisioned) ────────
+export const startCompanySignup = (payload) => client.post('/api/create_org', payload);
+
+export const verifyCompanySignupOtp = (application_id, access_token, otp_code) =>
+  client.post('/api/create_org/verify_otp', { application_id, access_token, otp_code });
+
+export const resendCompanySignupOtp = (application_id, access_token) =>
+  client.post('/api/create_org/resend_otp', { application_id, access_token });
+
+export const uploadCompanyDocuments = (formData) =>
+  client.post('/api/create_org/upload_documents', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
+
+export const getCompanySignupStatus = (application_id, access_token) =>
+  client.get(`/api/create_org/status/${application_id}`, { params: { access_token } });
+
 export const uploadEmployeePhoto = (formData) =>
   client.post('/api/employee/photo', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 30000 });
 
@@ -193,6 +209,9 @@ export const fetchEmployeeProfile = () => client.get('/api/employee/profile');
 export const updateMyProfile = (fields) => client.post('/api/employee/profile', fields);
 
 export const updateMyBankDetails = (fields) => client.post('/api/employee/bank_details', fields);
+
+export const updateNotificationPreferences = (emailAlertsEnabled) =>
+  client.post('/api/employee/notification_preferences', { email_alerts_enabled: emailAlertsEnabled });
 
 export const fetchMyExperience = () => client.get('/api/employee/experience');
 
@@ -266,7 +285,18 @@ export const deleteEmployee = (empId) => client.delete(`/api/employees/${empId}`
 // Real manager_id-based reporting hierarchy -- Bearer twin of
 // blueprints/admin_views.py's session-only /api/org_chart_data.
 export const fetchOrgChart = () => client.get('/api/org_chart');
+
+// Bearer twin of blueprints/email_blast.py's api_email_blast -- targetType
+// is 'all' | 'department' | 'individual', targetValue is the department
+// name or employee_id (ignored for 'all').
+export const sendEmailBlast = (targetType, targetValue, subject, body) =>
+  client.post('/api/admin/email-blast', { target_type: targetType, target_value: targetValue, subject, body });
 export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai/hr-helpdesk', { query });
+
+export const evaluateInterview = (candidateName, position, notes) =>
+  client.post('/api/ai/evaluate-interview', { candidate_name: candidateName, position, notes });
+
+export const fetchAttritionAnalytics = () => client.get('/api/ai/attrition-analytics');
 // compoffAction/api_compoff_action removed together -- the backend route
 // referenced a compoff_balances (plural) table that is never created
 // anywhere in this codebase's schema, so it silently 500'd/no-op'd on
@@ -296,13 +326,13 @@ export const fetchSalaryReportExport = (year, month) =>
 
 // Field names match what blueprints/performance.py's api_submit_performance_review()
 // (and the web's performance_save_review()) actually store -- quarter/year
-// upsert with reviewer feedback + a manager-set potential rating, not the
-// rating/comments/hike/bonus shape this used to send (which had no
-// matching backend route or table columns at all).
-export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, potentialRating = 0, status = 'Draft') =>
+// upsert with reviewer feedback, not the rating/comments/hike/bonus shape
+// this used to send (which had no matching backend route or table columns
+// at all).
+export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, status = 'Draft') =>
   client.post('/api/performance/review', {
     employee_id: employeeId, quarter, year,
-    reviewer_feedback: reviewerFeedback, potential_rating: potentialRating, status,
+    reviewer_feedback: reviewerFeedback, status,
   });
 
 // createOnboardingTask (template creation) stays removed -- that's a
@@ -317,17 +347,6 @@ export const fetchOnboardingTasks = (obId) => client.get(`/api/onboarding/${obId
 
 export const updateOnboardingTaskStatus = (taskId, status, adminNotes = '') =>
   client.post(`/api/onboarding/task/${taskId}/update`, { status, admin_notes: adminNotes });
-
-// ── HR Accounts (admin-only) ──────────────────────────────────────────
-// blueprints/admin_views.py's Bearer twins of the session-only
-// /hr_accounts page and its /api/hr_accounts* actions.
-export const fetchHrAccounts = () => client.get('/api/hr/accounts');
-
-export const createHrAccount = (username, email, password) =>
-  client.post('/api/hr/accounts', { username, email, password });
-
-export const setHrAccountStatus = (username, active) =>
-  client.post(`/api/hr/accounts/${username}/status`, { active });
 
 // blueprints/documents.py's Bearer twins of the session-only document
 // routes -- both admin (manage any employee's documents) and the

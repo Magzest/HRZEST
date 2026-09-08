@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Redirect raw-IP loopback → localhost so WebAuthn rpId matches origin -->
+    <!-- Raw-IP loopback → localhost normalization now happens server-side
+         (app.py's _normalize_loopback_host), before login sets any cookie. -->
     <script>
       (function(){
         var s = localStorage.getItem('dm');
@@ -11,7 +12,6 @@
           document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('dark-mode'); });
         }
       })();
-      if(location.hostname==="127.0.0.1"||location.hostname==="::1"){location.replace(location.href.replace(location.hostname,"localhost"));}
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Portal — {{ emp[1] }}</title>
@@ -20,285 +20,58 @@
          well after user interaction starts a scan -- nothing needs this
          130KB library synchronously during initial parse, so deferring it
          lets the rest of the page render without waiting on it. -->
-    <script src="/static/jsQR.min.js" defer></script>
-    <script src="/static/toast.js"></script>
-    <link rel="stylesheet" href="/static/toast.css" />
+    <script src="{{ static_url('jsQR.min.js') }}" defer></script>
+    <script src="{{ static_url('toast.js') }}"></script>
+    <link rel="stylesheet" href="{{ static_url('toast.css') }}" />
+    <link rel="stylesheet" href="{{ static_url('enterprise-ui.css') }}" />
     <style>
+      /* Neutralizes shared.min.css's legacy indigo/blue-600 utility-class
+         layer for this page only -- overrides the specific class instances
+         used here rather than editing the shared generated stylesheet. */
+      .u-c-1e3a8a, .u-c-1e40af, .u-c-2563eb, .u-c-1d4ed8, .u-c-3b82f6,
+      .u-c-6366f1, .u-c-7c3aed, .u-c-6d28d9, .u-c-8b5cf6 { color: #1E3A5F !important; }
+      .u-bg-1e3a8a, .u-bg-3b82f6, .u-bg-6366f1, .u-bg-7c3aed { background: #1E3A5F !important; }
+      .u-bg-eff6ff, .u-bg-dbeafe, .u-bg-ede9fe { background: #E7ECF1 !important; }
+      .u-c-bfdbfe { color: #A9BCCB !important; }
+      .u-accent-1e3a8a, .u-accent-7c3aed { accent-color: #1E3A5F !important; }
+
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", sans-serif; }
       html, body { height: 100%; }
       body { background: #f1f5f9; display: flex; flex-direction: row; min-height: 100dvh; }
 
-      /* ── SIDEBAR ──
-         Fixed dark blue, matching admin_base.html/admin.html's shared
-         sidebar instead of the old time-of-day gradient that made this
-         page's nav look different from every other page depending on
-         when it was loaded (see ff434e9, which fixed the same drift on
-         admin.html). */
-      :root {
-        --brand-accent: #fbbf24;
-      }
-
-      /* ── SIDEBAR ── */
-      .sidebar {
-        width: 240px; height: 100vh; position: sticky; top: 0; overflow: hidden;
-        background: linear-gradient(180deg, #0f2460 0%, #1a3a8f 100%);
-        padding: 20px 14px; color: white;
-        display: flex; flex-direction: column; flex-shrink: 0;
-        box-shadow: 4px 0 20px rgba(0,0,0,0.18); z-index: 300;
-        transition: transform 0.28s ease;
-      }
-      .sb-profile {
-        display: flex; align-items: center; gap: 12px;
-        padding-bottom: 18px; margin-bottom: 14px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-      }
-      .sb-brand {
-        display: flex; align-items: center; gap: 10px;
-        padding-bottom: 14px; margin-bottom: 14px;
-        border-bottom: 1px solid rgba(255,255,255,0.1);
-      }
-      .sb-brand-logo {
-        width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
-        background: #fff; overflow: hidden;
-        display: flex; align-items: center; justify-content: center;
-      }
-      .sb-brand-logo img { width: 100%; height: 100%; object-fit: contain; }
-      .sb-brand-name { font-size: 13px; font-weight: 700; color: #fff; line-height: 1.2; }
-      .sb-avatar {
-        width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
-        background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4);
-        overflow: hidden; display: flex; align-items: center; justify-content: center;
-        font-size: 18px; font-weight: 700; color: white;
-      }
-      .sb-avatar img { width: 100%; height: 100%; object-fit: cover; }
-      .sb-name { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.2; }
-      .sb-role { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 2px; }
-      .sb-id   { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
-      .sb-nav-label {
-        font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35);
-        text-transform: uppercase; letter-spacing: 1px;
-        padding: 0 10px; margin: 12px 0 4px;
-      }
-      .sb-item {
-        display: flex; align-items: center; gap: 10px;
-        padding: 9px 10px; margin: 1px 0;
-        color: rgba(255,255,255,0.75);
-        border-radius: 10px; font-size: 13px; font-weight: 500; transition: 0.18s;
-        position: relative; border: none; background: none; width: 100%;
-        text-align: left; cursor: pointer; font-family: inherit; text-decoration: none;
-        -webkit-tap-highlight-color: transparent;
-      }
-      .sb-item:hover { background: rgba(255,255,255,0.1); color: #fff; transform: scale(1.03) translateX(2px); }
-      .sb-item.active {
-        background: rgba(255,255,255,0.15); color: #fff; font-weight: 700;
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
-      }
-      .sb-item.active::before {
-        content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
-        width: 3px; border-radius: 2px; background: var(--brand-accent);
-      }
-      .sb-icon {
-        width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(255,255,255,0.08); font-size: 16px;
-      }
-      .sb-icon i { font-size: 16px; line-height: 1; }
-      .sb-item.active .sb-icon { background: rgba(96,165,250,0.2); }
-      .sb-item:hover .sb-icon  { background: rgba(255,255,255,0.12); }
-      .sb-item.danger { color: rgba(252,165,165,0.85); }
-      .sb-item.danger:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
-      .sb-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
-      .sb-scroll-nav {
-        flex: 1; overflow-y: auto; min-height: 0;
-      }
-      .sb-scroll-nav::-webkit-scrollbar { width: 3px; }
-      .sb-scroll-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
-      .sb-bottom {
-        flex-shrink: 0; padding-top: 4px;
-      }
-      .sb-footer {
-        padding-top: 10px;
-        border-top: 1px solid rgba(255,255,255,0.08);
-        font-size: 11px; color: rgba(255,255,255,0.4);
-        display: flex; align-items: center; gap: 6px;
-      }
-
       /* ── MAIN AREA ── */
       .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-
-      /* ── APP HEADER ── */
-      .app-header {
-        height: 56px; background: #1e3a8a; flex-shrink: 0;
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 0 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.18);
-      }
-      .app-header-left { display: flex; align-items: center; gap: 10px; }
-      .sb-toggle {
-        display: none; background: none; border: none; color: white;
-        font-size: 22px; cursor: pointer; padding: 4px; line-height: 1;
-      }
-      .app-title { font-size: 15px; font-weight: 700; color: white; }
-      .app-clock { font-size: 12px; color: rgba(255,255,255,0.65); }
 
       /* ── APP CONTENT ── */
       .app-content { flex: 1; overflow-y: auto; padding: 24px; }
 
-      /* ── SIDEBAR OVERLAY (mobile) ── */
-      .sb-overlay {
-        display: none; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.45); z-index: 250;
-      }
-      .sb-overlay.open { display: block; }
-
-      /* ── SHIFT SWAP REDESIGN ── */
-      .swap-my-shift {
-        display: flex; align-items: center; justify-content: space-between;
-        background: linear-gradient(135deg,#1e40af 0%,#2563eb 100%);
-        border-radius: 14px; padding: 18px 22px; color: #fff; margin-bottom: 20px;
-      }
-      .swap-my-shift .sms-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; opacity: 0.65; margin-bottom: 4px; }
-      .swap-my-shift .sms-name  { font-size: 20px; font-weight: 800; }
-      .swap-my-shift .sms-time  { font-size: 13px; opacity: 0.75; margin-top: 3px; }
-      .swap-no-shift {
-        display: flex; align-items: center; gap: 14px;
-        background: #fff7ed; border: 1.5px solid #fed7aa; border-radius: 14px;
-        padding: 18px 20px; color: #92400e; margin-bottom: 20px;
-      }
-      .swap-no-shift .sns-icon  { font-size: 30px; flex-shrink: 0; }
-      .swap-no-shift .sns-title { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
-      .swap-no-shift .sns-sub   { font-size: 13px; opacity: 0.8; }
-      .swap-section-heading {
-        font-size: 13px; font-weight: 700; color: #1e293b; margin: 18px 0 12px;
-        display: flex; align-items: center; gap: 8px;
-        border-left: 3px solid #2563eb; padding-left: 10px;
-      }
-      .swap-section-heading.inc { border-left-color: #f59e0b; }
-      .swap-incoming {
-        border: 1px solid #fcd34d; border-radius: 12px; background: #fffbeb;
-        padding: 16px; margin-bottom: 12px;
-      }
-      .swap-incoming .si-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; flex-wrap: wrap; gap: 6px; }
-      .swap-incoming .si-name   { font-weight: 700; color: #1e293b; font-size: 14px; }
-      .swap-incoming .si-id     { font-size: 12px; color: #94a3b8; }
-      .swap-incoming .si-pill   { display: inline-block; background: #dbeafe; color: #1e40af; border-radius: 20px; font-size: 11px; font-weight: 700; padding: 2px 10px; margin-left: 6px; }
-      .swap-incoming .si-date   { font-size: 11px; color: #94a3b8; }
-      .swap-incoming .si-reason { font-size: 13px; color: #64748b; margin: 8px 0 12px; font-style: italic; }
-      .swap-inc-actions  { display: flex; gap: 8px; flex-wrap: wrap; }
-      .swap-inc-note { flex: 1; min-width: 160px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: #fff; font-family: inherit; }
-      .swap-btn-ok  { padding: 8px 18px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition:.15s; }
-      .swap-btn-ok:hover  { background: #15803d; }
-      .swap-btn-no  { padding: 8px 18px; background: #dc2626; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition:.15s; }
-      .swap-btn-no:hover  { background: #b91c1c; }
-      .swap-form-card {
-        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 20px;
-      }
-      .swap-form-card label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
-      .swap-form-card select, .swap-form-card textarea {
-        width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
-        font-size: 14px; background: #fff; color: #1e293b; font-family: inherit; box-sizing: border-box;
-      }
-      .swap-form-card textarea { resize: vertical; }
-      .swap-form-row { margin-bottom: 14px; }
-      .swap-submit-btn {
-        padding: 11px 28px; background: #2563eb; color: #fff; border: none; border-radius: 9px;
-        font-weight: 700; font-size: 14px; cursor: pointer; transition:.18s;
-      }
-      .swap-submit-btn:hover { background: #1d4ed8; }
-      .swap-req-card {
-        border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc;
-        padding: 16px; margin-bottom: 12px; display: flex; gap: 14px; align-items: flex-start;
-      }
-      .swap-req-avatar {
-        width: 40px; height: 40px; border-radius: 50%; background: #dbeafe; color: #1e40af;
-        display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0;
-      }
-      .swap-req-body  { flex: 1; min-width: 0; }
-      .swap-req-name  { font-weight: 700; font-size: 14px; color: #1e293b; }
-      .swap-req-shift { font-size: 12px; color: #64748b; margin-top: 2px; }
-      .swap-req-reason { font-size: 12px; color: #94a3b8; margin-top: 3px; font-style: italic; }
-      .swap-req-date  { font-size: 11px; color: #94a3b8; margin-top: 8px; }
-      .swap-req-side  { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-      .sbadge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-      .sbadge-pending  { background: #fef9c3; color: #854d0e; }
-      .sbadge-admin    { background: #dbeafe; color: #1e40af; }
-      .sbadge-approved { background: #dcfce7; color: #166534; }
-      .sbadge-rejected { background: #fee2e2; color: #991b1b; }
-      .sbadge-gray     { background: #f1f5f9; color: #64748b; }
-      .swap-timeline { display: flex; margin-top: 10px; }
-      .stl-step { flex: 1; text-align: center; position: relative; }
-      .stl-step::before {
-        content: ''; position: absolute; top: 8px; left: 50%; right: -50%;
-        height: 2px; background: #e2e8f0; z-index: 0;
-      }
-      .stl-step:last-child::before { display: none; }
-      .stl-dot {
-        width: 18px; height: 18px; border-radius: 50%; border: 2px solid #e2e8f0;
-        background: #fff; margin: 0 auto 4px; position: relative; z-index: 1;
-      }
-      .stl-dot.done   { background: #16a34a; border-color: #16a34a; }
-      .stl-dot.active { background: #2563eb; border-color: #2563eb; }
-      .stl-dot.fail   { background: #dc2626; border-color: #dc2626; }
-      .stl-lbl { font-size: 10px; color: #94a3b8; line-height: 1.3; }
-      .stl-lbl.done   { color: #16a34a; font-weight: 700; }
-      .stl-lbl.active { color: #2563eb; font-weight: 700; }
-      .stl-lbl.fail   { color: #dc2626; font-weight: 700; }
-      .swap-empty { text-align: center; padding: 36px 20px; }
-      .swap-empty .se-icon { font-size: 38px; opacity: 0.35; margin-bottom: 10px; }
-      .swap-empty .se-text { font-size: 14px; color: #94a3b8; }
-      /* dark mode overrides */
-      body.dark-mode .swap-my-shift  { background: linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%); }
-      body.dark-mode .swap-no-shift  { background: #3a1f00; border-color: #854d0e; color: #fde68a; }
-      body.dark-mode .swap-incoming  { background: #2a1e00; border-color: #854d0e; }
-      body.dark-mode .swap-incoming .si-name { color: #f1f5f9; }
-      body.dark-mode .swap-incoming .si-reason { color: #94a3b8; }
-      body.dark-mode .swap-incoming .si-pill  { background: #1e3a8a; color: #93c5fd; }
-      body.dark-mode .swap-inc-note { background: #111; border-color: #333; color: #f1f5f9; }
-      body.dark-mode .swap-req-card { background: #111; border-color: #222; }
-      body.dark-mode .swap-req-name { color: #f1f5f9; }
-      body.dark-mode .swap-req-shift, body.dark-mode .swap-req-reason { color: #64748b; }
-      body.dark-mode .swap-form-card { background: #111; border-color: #222; }
-      body.dark-mode .swap-form-card label { color: #94a3b8; }
-      body.dark-mode .swap-form-card select, body.dark-mode .swap-form-card textarea { background: #1a1a1a; border-color: #333; color: #f1f5f9; }
-      body.dark-mode .swap-section-heading { color: #f1f5f9; }
-      body.dark-mode .sbadge-pending  { background: #3a2200; color: #fde68a; }
-      body.dark-mode .sbadge-admin    { background: #1e3a8a; color: #93c5fd; }
-      body.dark-mode .sbadge-approved { background: #14532d; color: #86efac; }
-      body.dark-mode .sbadge-rejected { background: #7f1d1d; color: #fca5a5; }
-      body.dark-mode .sbadge-gray     { background: #1a1a1a; color: #64748b; }
-      body.dark-mode .stl-dot  { background: #111; }
-      body.dark-mode .stl-step::before { background: #333; }
-      body.dark-mode .stl-lbl  { color: #475569; }
-
       /* ── RESPONSIVE ── */
       @media (max-width: 768px) {
-        .sidebar {
-          position: fixed; left: 0; top: 0; height: 100dvh; width: 260px;
-          transform: translateX(-100%);
-        }
-        .sidebar.open { transform: translateX(0); }
-        .sb-toggle { display: flex; align-items: center; }
         .app-content { padding: 16px; }
       }
 
-      /* ── TOAST ── */
-      @keyframes toastHide {
+      /* ── ONE-SHOT CONFIRMATION BANNER (server-rendered post-redirect
+         message, e.g. "Leave request submitted") -- named flash-banner*
+         rather than toast* so it doesn't collide with static/toast.css's
+         floating .toast/.toast-container, which this page also loads (for
+         window.alert()'s toast override -- see static/toast.js). ── */
+      @keyframes flashBannerHide {
         0%,90%  { opacity:1; max-height:80px; margin-bottom:20px; padding:12px 18px; }
         100%    { opacity:0; max-height:0;   margin-bottom:0;    padding:0 18px; overflow:hidden; }
       }
-      .toast {
+      .flash-banner {
         border-radius: 10px; padding: 12px 18px;
         font-size: 14px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
-        animation: toastHide 30s forwards;
+        animation: flashBannerHide 30s forwards;
       }
-      .toast-green { background: #dcfce7; border: 1px solid #86efac; color: #15803d; }
-      .toast-red   { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; }
+      .flash-banner-green { background: #dcfce7; border: 1px solid #86efac; color: #15803d; }
+      .flash-banner-red   { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; }
 
       /* CARDS ROW */
       .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
       .card {
         background: #ffffff;
-        border: 1px solid #dbeafe;
+        border: 1px solid #E7ECF1;
         border-radius: 16px; padding: 30px;
         min-height: 200px;
       }
@@ -307,10 +80,10 @@
       /* PROFILE */
       .profile-avatar {
         width: 80px; height: 80px; border-radius: 50%;
-        background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+        background: linear-gradient(135deg, #1E3A5F, #1E3A5F);
         display: flex; align-items: center; justify-content: center;
         font-size: 28px; font-weight: 700; margin-bottom: 12px; color: white;
-        overflow: hidden; border: 3px solid #dbeafe; flex-shrink: 0;
+        overflow: hidden; border: 3px solid #E7ECF1; flex-shrink: 0;
       }
       .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
       .profile-name { font-size: 17px; font-weight: 700; color: #1e293b; }
@@ -321,21 +94,21 @@
       .profile-row .lbl { color: #94a3b8; width: 110px; flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
       .profile-row .val { font-size: 13px; color: #1e293b; }
       .badge-role {
-        display: inline-block; padding: 2px 9px; border-radius: 20px;
+        display: inline-block; padding: 2px 9px; border-radius:6px;
         font-size: 12px; font-weight: 600;
-        background: #dbeafe; color: #1d4ed8;
-        border: 1px solid #93c5fd;
+        background: #E7ECF1; color: #16293F;
+        border: 1px solid #B7C7D6;
       }
 
       /* TODAY CARD */
       .att-status {
         font-size: 15px; font-weight: 700; padding: 6px 14px;
-        border-radius: 20px; display: inline-block; margin-bottom: 14px;
+        border-radius:6px; display: inline-block; margin-bottom: 14px;
       }
       .s-green  { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
       .s-yellow { background: #fef9c3; color: #92400e; border: 1px solid #fde047; }
       .s-red    { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
-      .s-blue   { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+      .s-blue   { background: #E7ECF1; color: #16293F; border: 1px solid #B7C7D6; }
       .s-gray   { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
 
       .time-row { display: flex; gap: 16px; flex-wrap: wrap; }
@@ -350,32 +123,32 @@
         padding: 22px 16px; display: flex; align-items: center; gap: 14px;
         transition: 0.2s; min-height: 90px;
       }
-      .stat-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(30,58,138,0.08); }
+      .stat-card:hover { border-color: #B7C7D6; box-shadow: 0 4px 16px rgba(30, 58, 95,0.08); }
       .stat-icon {
         width: 52px; height: 52px; border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
         font-size: 24px; flex-shrink: 0;
       }
-      .si-blue   { background: #dbeafe; }
+      .si-blue   { background: #E7ECF1; }
       .si-green  { background: #dcfce7; }
       .si-red    { background: #fee2e2; }
       .si-yellow { background: #fef9c3; }
       .stat-num  { font-size: 28px; font-weight: 800; line-height: 1; }
       .stat-lbl  { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 500; }
-      .sn-blue   { color: #2563eb; }
+      .sn-blue   { color: #1E3A5F; }
       .sn-green  { color: #16a34a; }
       .sn-red    { color: #dc2626; }
       .sn-yellow { color: #d97706; }
       .stat-num-sm { font-size: 18px; }
 
       /* CALENDAR */
-      .cal-filter { background: #ffffff; border: 1px solid #dbeafe; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+      .cal-filter { background: #ffffff; border: 1px solid #E7ECF1; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
       .cal-filter label { font-size: 13px; color: #64748b; }
-      .cal-filter select { padding: 7px 10px; border: 1px solid #dbeafe; border-radius: 7px; background: #f8fafc; color: #1e293b; font-size: 13px; }
-      .cal-filter .btn-view { padding: 8px 18px; border: none; border-radius: 8px; background: #3b82f6; color: white; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+      .cal-filter select { padding: 7px 10px; border: 1px solid #E7ECF1; border-radius: 7px; background: #f8fafc; color: #1e293b; font-size: 13px; }
+      .cal-filter .btn-view { padding: 8px 18px; border: none; border-radius: 8px; background: #1E3A5F; color: white; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
       .cal-filter .btn-pdf  { padding: 8px 18px; border: none; border-radius: 8px; background: #16a34a; color: white; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
 
-      .calendar { background: #ffffff; border: 1px solid #dbeafe; border-radius: 14px; padding: 18px 22px; margin-bottom: 22px; }
+      .calendar { background: #ffffff; border: 1px solid #E7ECF1; border-radius: 14px; padding: 18px 22px; margin-bottom: 22px; }
       .cal-header { display: grid; grid-template-columns: repeat(7, 52px); gap: 6px; justify-content: center; text-align: center; margin-bottom: 6px; }
       .cal-header span { font-size: 12px; font-weight: 700; color: #94a3b8; padding: 4px 0; text-transform: uppercase; letter-spacing: 0.3px; }
       .cal-grid  { display: grid; grid-template-columns: repeat(7, 52px); gap: 6px; justify-content: center; }
@@ -406,67 +179,67 @@
       .cal-late   { background: #fef9c3; color: #92400e; border: 1.5px solid #fde047; }
       .cal-half   { background: #fff7ed; color: #c2410c; border: 1.5px solid #fdba74; }
       .cal-absent { background: #fee2e2; color: #dc2626; border: 1.5px solid #fca5a5; }
-      .cal-holiday{ background: #ede9fe; color: #6d28d9; border: 1.5px solid #c4b5fd; }
+      .cal-holiday{ background: #EEF2F6; color: #16293F; border: 1.5px solid #c4b5fd; }
       .cal-weekend{ background: #f8fafc; color: #cbd5e1; border: 1.5px solid #e2e8f0; }
       .cal-future { background: #f8fafc; color: #e2e8f0; border: 1.5px solid #f1f5f9; }
-      .cal-today  { box-shadow: 0 0 0 2px #3b82f6 !important; }
+      .cal-today  { box-shadow: 0 0 0 2px #1E3A5F !important; }
       .cal-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: #64748b; }
       .leg-item   { display: flex; align-items: center; gap: 5px; }
       .leg-dot    { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
 
       /* SECTION */
-      .section { background: #ffffff; border: 1px solid #dbeafe; border-radius: 16px; padding: 22px; margin-bottom: 22px; }
+      .section { background: #ffffff; border: 1px solid #E7ECF1; border-radius: 16px; padding: 22px; margin-bottom: 22px; }
       .section h3 { font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: #1e293b; }
 
       /* TABLE */
       .table-wrap { overflow-x: auto; border-radius: 10px; }
       table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      th { background: #dbeafe; color: #1e3a8a; padding: 10px 14px; text-align: left; font-weight: 600; white-space: nowrap; }
+      th { background: #E7ECF1; color: #1E3A5F; padding: 10px 14px; text-align: left; font-weight: 600; white-space: nowrap; }
       td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; color: #1e293b; }
       tr:last-child td { border-bottom: none; }
-      tr:hover td { background: #eff6ff; }
+      tr:hover td { background: #FAFAFA; }
       .empty-cell { text-align: center; padding: 30px; color: #94a3b8; }
 
       /* BADGES */
-      .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+      .badge { display: inline-block; padding: 3px 9px; border-radius:6px; font-size: 11px; font-weight: 600; }
       .b-green  { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
       .b-yellow { background: #fef9c3; color: #92400e; border: 1px solid #fde047; }
       .b-red    { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
-      .b-blue   { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+      .b-blue   { background: #E7ECF1; color: #16293F; border: 1px solid #B7C7D6; }
       .b-gray   { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
-      .b-purple { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+      .b-purple { background: #EEF2F6; color: #16293F; border: 1px solid #c4b5fd; }
 
       /* LEAVE FORM */
       .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
       .form-group label { font-size: 12px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
       .form-group input[type="date"] {
-        padding: 10px 13px; border: 1px solid #dbeafe; border-radius: 9px;
+        padding: 10px 13px; border: 1px solid #E7ECF1; border-radius: 9px;
         background: #f8fafc; color: #1e293b; font-size: 14px; outline: none;
         max-width: 220px; transition: 0.2s;
       }
-      .form-group input[type="date"]:focus { border-color: #93c5fd; background: #fff; }
+      .form-group input[type="date"]:focus { border-color: #B7C7D6; background: #fff; }
 
       .reasons-label { font-size: 12px; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; }
       .reason-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
       .reason-chip {
         padding: 8px 16px; border-radius: 25px; cursor: pointer;
-        border: 1px solid #dbeafe;
+        border: 1px solid #E7ECF1;
         background: #ffffff; color: #475569;
         font-size: 13px; transition: 0.2s; user-select: none;
       }
-      .reason-chip:hover { background: #dbeafe; border-color: #93c5fd; color: #1e3a8a; }
+      .reason-chip:hover { background: #E7ECF1; border-color: #B7C7D6; color: #1E3A5F; }
       .reason-chip.active {
-        background: #1e3a8a; color: white;
-        border-color: #1e3a8a; font-weight: 600;
+        background: #1E3A5F; color: white;
+        border-color: #1E3A5F; font-weight: 600;
       }
       .other-group { display: none; margin-bottom: 14px; }
       .other-group textarea {
-        width: 100%; padding: 10px 13px; border: 1px solid #dbeafe; border-radius: 9px;
+        width: 100%; padding: 10px 13px; border: 1px solid #E7ECF1; border-radius: 9px;
         background: #f8fafc; color: #1e293b; font-size: 14px;
         outline: none; resize: vertical; min-height: 80px; transition: 0.2s;
       }
       .other-group textarea::placeholder { color: #94a3b8; }
-      .other-group textarea:focus { border-color: #93c5fd; background: #fff; }
+      .other-group textarea:focus { border-color: #B7C7D6; background: #fff; }
 
       .btn-leave {
         padding: 11px 28px; border: none; border-radius: 10px;
@@ -499,36 +272,36 @@
       /* TICKETS */
       .ticket-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
       .ticket-input, .ticket-select, .ticket-textarea {
-        width: 100%; padding: 10px 13px; border: 1px solid #dbeafe; border-radius: 9px;
+        width: 100%; padding: 10px 13px; border: 1px solid #E7ECF1; border-radius: 9px;
         background: #f8fafc; color: #1e293b; font-size: 14px;
         outline: none; transition: 0.2s;
       }
-      .ticket-input:focus, .ticket-select:focus, .ticket-textarea:focus { border-color: #93c5fd; background: #fff; }
+      .ticket-input:focus, .ticket-select:focus, .ticket-textarea:focus { border-color: #B7C7D6; background: #fff; }
       .ticket-input::placeholder, .ticket-textarea::placeholder { color: #94a3b8; }
       .ticket-textarea { resize: vertical; min-height: 80px; }
       .ticket-full { grid-column: 1 / -1; }
       .btn-ticket {
         padding: 11px 28px; border: none; border-radius: 10px;
-        background: #6366f1;
+        background: #1E3A5F;
         color: white; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s;
       }
-      .btn-ticket:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(99,102,241,0.25); }
+      .btn-ticket:hover { background: #1E3A5F; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(30, 58, 95,0.25); }
       .ticket-row { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
       .ticket-row-header { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
       .ticket-subject { font-size: 14px; font-weight: 600; flex: 1; color: #1e293b; }
       .ticket-meta { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
-      .ticket-response { background: #ede9fe; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #4c1d95; margin-top: 8px; }
-      .ticket-response strong { display: block; font-size: 11px; color: #6d28d9; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
-      .b-indigo { background: #ede9fe; color: #4c1d95; border: 1px solid #c4b5fd; }
+      .ticket-response { background: #EEF2F6; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #16293F; margin-top: 8px; }
+      .ticket-response strong { display: block; font-size: 11px; color: #16293F; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+      .b-indigo { background: #EEF2F6; color: #16293F; border: 1px solid #c4b5fd; }
       .b-orange { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; }
       .nav-ticket { color: #ffffff !important; }
       .nav-ticket:hover { background: rgba(255,255,255,0.15) !important; }
       .nav-badge {
         margin-left: auto; background: #ef4444; color: #fff;
         font-size: 10px; font-weight: 700; padding: 2px 6px;
-        border-radius: 20px; min-width: 18px; text-align: center;
+        border-radius:6px; min-width: 18px; text-align: center;
       }
-      .toast-blue { background: #ede9fe; border: 1px solid #c4b5fd; color: #4c1d95; }
+      .flash-banner-blue { background: #EEF2F6; border: 1px solid #c4b5fd; color: #16293F; }
       .ticket-raise-form { margin-bottom: 28px; }
       .ticket-field { margin-bottom: 0; }
       .ticket-history-label { font-size: 14px; color: #64748b; margin-bottom: 12px; }
@@ -556,13 +329,13 @@
       .payslip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
       .payslip-card {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        padding: 18px 10px; background: #f8fafc; border: 1px solid #dbeafe;
+        padding: 18px 10px; background: #f8fafc; border: 1px solid #E7ECF1;
         border-radius: 12px; text-decoration: none; color: #1e293b;
         transition: background 0.2s, border-color 0.2s; gap: 6px;
       }
-      .payslip-card:hover { background: #dbeafe; border-color: #93c5fd; }
+      .payslip-card:hover { background: #E7ECF1; border-color: #B7C7D6; }
       .payslip-card .ps-icon { font-size: 22px; }
-      .payslip-card .ps-month { font-size: 13px; font-weight: 700; color: #1e3a8a; }
+      .payslip-card .ps-month { font-size: 13px; font-weight: 700; color: #1E3A5F; }
       .payslip-card .ps-cta { font-size: 11px; color: #94a3b8; }
 
       @media (max-width: 900px) {
@@ -576,7 +349,7 @@
       .mod-title {
         font-size: 20px; font-weight: 700; color: #1e293b;
         margin-bottom: 20px; padding-bottom: 14px;
-        border-bottom: 2px solid #dbeafe;
+        border-bottom: 2px solid #E7ECF1;
         display: flex; align-items: center; gap: 10px;
       }
       .mod-title span { font-size: 13px; font-weight: 400; color: #64748b; margin-left: 4px; }
@@ -587,61 +360,17 @@
 
       /* ── EMPLOYEE HOLIDAY CALENDAR ── */
       .hol-year-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-      .hol-year-nav a { padding: 7px 14px; border-radius: 9px; text-decoration: none; background: #dbeafe; color: #1e40af; font-weight: 700; font-size: 13px; transition: 0.2s; }
-      .hol-year-nav a:hover { background: #bfdbfe; }
-      .hol-year-nav .hol-cur-yr { font-size: 20px; font-weight: 900; color: #1e3a8a; min-width: 60px; text-align: center; }
-      .hol-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; font-size: 12px; color: #475569; }
-      .hol-leg { display: flex; align-items: center; gap: 5px; }
-      .hol-leg-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
-      /* ── HOL MONTH NAVIGATION ── */
-      .hol-month-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
-      .hol-mnav-btn {
-        padding: 9px 22px; border: none; border-radius: 10px;
-        background: #dbeafe; color: #1e40af; font-size: 14px; font-weight: 700;
-        cursor: pointer; transition: 0.2s;
-      }
-      .hol-mnav-btn:hover { background: #bfdbfe; transform: translateY(-1px); }
-      .hol-mnav-label {
-        font-size: 20px; font-weight: 900; color: #1e3a8a;
-        min-width: 220px; text-align: center;
-      }
-      .hol-cal-single-wrap {
-        max-width: 660px; margin: 0 auto 28px;
-        background: #fff; border: 1px solid #dbeafe; border-radius: 16px;
-        padding: 20px 20px 14px; box-shadow: 0 2px 8px rgba(30,58,138,0.06);
-      }
-      .hol-cal-month { display: none; }
-      .hol-cal-hdrs { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 6px; }
-      .hol-cal-hdrs span { text-align: center; font-size: 12px; font-weight: 700; color: #94a3b8; padding: 4px 0; letter-spacing: 0.5px; }
-      .hol-cal-hdrs span:first-child { color: #ef4444; }
-      .hol-cal-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
-      .hol-cal-day {
-        height: 66px; display: flex; flex-direction: column;
-        align-items: center; justify-content: flex-start;
-        padding-top: 10px; border-radius: 9px;
-        font-size: 15px; font-weight: 700; color: #1e293b;
-        border: 1.5px solid transparent; overflow: hidden;
-      }
-      .hol-cal-day.hd-empty   { background: transparent; border-color: transparent; }
-      .hol-cal-day.hd-sunday  { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
-      .hol-cal-day.hd-holiday { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
-      .hol-cal-day.hd-today   { background: #dbeafe; border-color: #3b82f6; color: #1e40af; }
-      .hol-cal-day.hd-normal  { background: #f8fafc; border-color: #e2e8f0; }
-      .hol-cal-day.hd-sunday.hd-holiday { background: #fee2e2; border-color: #f59e0b; color: #b45309; }
-      .hol-name-lbl {
-        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-        line-clamp: 2; overflow: hidden;
-        font-size: 9px; font-weight: 700; color: #92400e;
-        line-height: 1.2; width: 100%; text-align: center; padding: 0 3px; margin-top: 3px;
-      }
+      .hol-year-nav a { padding: 7px 14px; border-radius: 9px; text-decoration: none; background: #E7ECF1; color: #16293F; font-weight: 700; font-size: 13px; transition: 0.2s; }
+      .hol-year-nav a:hover { background: #DCE4EB; }
+      .hol-year-nav .hol-cur-yr { font-size: 20px; font-weight: 900; color: #1E3A5F; min-width: 60px; text-align: center; }
       .hol-list-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-      .hol-list-table th { background: #dbeafe; color: #1e3a8a; padding: 9px 13px; text-align: left; font-weight: 700; }
+      .hol-list-table th { background: #E7ECF1; color: #1E3A5F; padding: 9px 13px; text-align: left; font-weight: 700; }
       .hol-list-table td { padding: 8px 13px; border-bottom: 1px solid #e2e8f0; color: #1e293b; }
       .hol-list-table tr:last-child td { border-bottom: none; }
       .hol-list-table tr:hover td { background: #f0f9ff; }
-      .hol-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+      .hol-badge { display: inline-block; padding: 3px 10px; border-radius:6px; font-size: 12px; font-weight: 600; }
       .hol-badge-pub  { background: #fef9c3; color: #92400e; border: 1px solid #fde047; }
-      .hol-badge-comp { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+      .hol-badge-comp { background: #EEF2F6; color: #16293F; border: 1px solid #c4b5fd; }
 
       /* ── Dark mode ── */
       body.dark-mode{background:#0d1117!important}
@@ -654,7 +383,7 @@
       body.dark-mode .profile-row .val{color:#cdd9e5!important}
       body.dark-mode .stat-card{background:#161b22!important;border-color:#30363d!important}
       body.dark-mode .stat-lbl{color:#768390!important}
-      body.dark-mode .si-blue{background:#1e3a8a!important}
+      body.dark-mode .si-blue{background:#1E3A5F!important}
       body.dark-mode .si-green{background:#14532d!important}
       body.dark-mode .si-red{background:#7f1d1d!important}
       body.dark-mode .si-yellow{background:#713f12!important}
@@ -669,13 +398,13 @@
       body.dark-mode .cal-legend{color:#768390!important}
       body.dark-mode .section{background:#161b22!important;border-color:#30363d!important}
       body.dark-mode .section h3{color:#cdd9e5!important}
-      body.dark-mode th{background:#1e3a8a!important;color:#93c5fd!important}
+      body.dark-mode th{background:#1E3A5F!important;color:#B7C7D6!important}
       body.dark-mode td{border-color:#30363d!important;color:#cdd9e5!important}
       body.dark-mode tr:hover td{background:#1c2128!important}
       body.dark-mode .form-group label{color:#768390!important}
       body.dark-mode .form-group input[type="date"]{background:#0d1117!important;border-color:#30363d!important;color:#cdd9e5!important}
       body.dark-mode .reason-chip{background:#161b22!important;border-color:#30363d!important;color:#94a3b8!important}
-      body.dark-mode .reason-chip:hover{background:#1e3a8a!important;color:#cdd9e5!important}
+      body.dark-mode .reason-chip:hover{background:#1E3A5F!important;color:#cdd9e5!important}
       body.dark-mode .other-group textarea{background:#0d1117!important;border-color:#30363d!important;color:#cdd9e5!important}
       body.dark-mode .resign-warning{background:#3d1700!important;border-color:#92400e!important;color:#fb923c!important}
       body.dark-mode .resign-status-card{background:#3d1700!important;border-color:#92400e!important}
@@ -683,132 +412,37 @@
       body.dark-mode .rs-lbl{color:#768390!important}
       body.dark-mode .ticket-row{background:#161b22!important;border-color:#30363d!important}
       body.dark-mode .ticket-subject{color:#cdd9e5!important}
-      body.dark-mode .ticket-response{background:#1c1836!important;border-color:#4c1d95!important;color:#c4b5fd!important}
+      body.dark-mode .ticket-response{background:#1c1836!important;border-color:#16293F!important;color:#c4b5fd!important}
       body.dark-mode .payslip-card{background:#161b22!important;border-color:#30363d!important;color:#cdd9e5!important}
-      body.dark-mode .payslip-card:hover{background:#1e3a8a!important}
-      body.dark-mode .payslip-card .ps-month{color:#60a5fa!important}
+      body.dark-mode .payslip-card:hover{background:#1E3A5F!important}
+      body.dark-mode .payslip-card .ps-month{color:#6B93BB!important}
       body.dark-mode .mod-title{color:#cdd9e5!important;border-color:#30363d!important}
       body.dark-mode .page-header h1{color:#cdd9e5!important}
       body.dark-mode .page-header p{color:#768390!important}
-      body.dark-mode .hol-year-nav a{background:#1e3a8a!important;color:#60a5fa!important}
+      body.dark-mode .hol-year-nav a{background:#1E3A5F!important;color:#6B93BB!important}
       body.dark-mode .hol-year-nav .hol-cur-yr{color:#cdd9e5!important}
-      body.dark-mode .hol-legend{color:#768390!important}
-      body.dark-mode .hol-mnav-btn{background:#1e3a8a!important;color:#60a5fa!important}
-      body.dark-mode .hol-mnav-label{color:#cdd9e5!important}
-      body.dark-mode .hol-cal-single-wrap{background:#161b22!important;border-color:#30363d!important}
-      body.dark-mode .hol-cal-day.hd-normal{background:#1c2128!important;border-color:#30363d!important;color:#cdd9e5!important}
-      body.dark-mode .hol-cal-hdrs span{color:#768390!important}
-      body.dark-mode .hol-list-table th{background:#1e3a8a!important;color:#93c5fd!important}
+      body.dark-mode .hol-list-table th{background:#1E3A5F!important;color:#B7C7D6!important}
       body.dark-mode .hol-list-table td{border-color:#30363d!important;color:#cdd9e5!important}
       body.dark-mode .hol-list-table tr:hover td{background:#1c2128!important}
-      body.dark-mode .toast-green{background:#14532d!important;border-color:#166534!important;color:#4ade80!important}
-      body.dark-mode .toast-red{background:#7f1d1d!important;border-color:#991b1b!important;color:#f87171!important}
-      body.dark-mode .badge-role{background:#1e3a8a!important;color:#60a5fa!important;border-color:#3b82f6!important}
+      body.dark-mode .flash-banner-green{background:#14532d!important;border-color:#166534!important;color:#4ade80!important}
+      body.dark-mode .flash-banner-red{background:#7f1d1d!important;border-color:#991b1b!important;color:#f87171!important}
+      body.dark-mode .badge-role{background:#1E3A5F!important;color:#6B93BB!important;border-color:#1E3A5F!important}
     </style>
-  <link rel="stylesheet" href="/static/tabler-icons.min.css" />
-  <link rel="stylesheet" href="/static/shared.min.css" />
-  <link rel="stylesheet" href="/static/animate-core.min.css" />
+  <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('employee_sidebar.css') }}" />
+  <link rel="stylesheet" href="{{ static_url('animate-core.min.css') }}" />
   </head>
   <body>
 
-    <!-- ══ SIDEBAR OVERLAY (mobile) ══ -->
-    <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
-
-    <!-- ══ SIDEBAR ══ -->
-    <nav class="sidebar" id="sidebar">
-      {% if co.logo_url %}
-      <div class="sb-brand">
-        <div class="sb-brand-logo">
-          <img src="{{ co.logo_url }}" alt="{{ co.company_name }}" onerror="this.parentNode.style.display='none'" />
-        </div>
-        <div class="sb-brand-name">{{ co.company_name }}</div>
-      </div>
-      {% endif %}
-      <div class="sb-profile">
-        <div class="sb-avatar">
-          {% if emp[4] %}
-            <img src="/my_photo" alt="{{ emp[1] }}"
-                 onerror="this.parentNode.innerHTML='{{ emp[1][0] | upper }}'" />
-          {% else %}
-            {{ emp[1][0] | upper }}
-          {% endif %}
-        </div>
-        <div>
-          <div class="sb-name">{{ emp[1] }}</div>
-          <div class="sb-role">{{ emp[2] or 'Employee' }}</div>
-          <div class="sb-id">ID: {{ emp[0] }}</div>
-        </div>
-      </div>
-
-      <!-- Language Switcher, Touch ID & Theme Toggle -->
-      <div style="display:flex;gap:6px;margin-bottom:14px;padding:0 2px;">
-        <select id="langSelector" onchange="i18n.setLanguage(this.value)" style="flex:1;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.2);font-size:11px;font-weight:700;outline:none;cursor:pointer;">
-          <option value="en" style="color:#000;">🌐 EN (English)</option>
-          <option value="es" style="color:#000;">🌐 ES (Español)</option>
-          <option value="hi" style="color:#000;">🌐 HI (हिन्दी)</option>
-        </select>
-        <button type="button" onclick="enrollTouchID()" style="padding:6px 8px;border-radius:8px;background:rgba(34,197,94,0.25);color:#86efac;border:1px solid rgba(34,197,94,0.4);font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;" title="Register Touch ID / Biometric">
-          <i class="ti ti-fingerprint"></i>
-        </button>
-        <button type="button" onclick="toggleTheme()" style="padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.25);font-size:12px;font-weight:700;cursor:pointer;" id="themeToggleBtn" title="Toggle Light/Dark Theme">
-          🌙
-        </button>
-      </div>
-
-      <div class="sb-scroll-nav">
-        <div class="sb-nav-label">Main</div>
-        <button type="button" class="sb-item" id="sbn-dashboard" onclick="showView('dashboard')">
-          <span class="sb-icon"><i class="ti ti-home"></i></span>Dashboard
-        </button>
-        <button type="button" class="sb-item" id="sbn-attendance" onclick="showView('attendance')">
-          <span class="sb-icon"><i class="ti ti-calendar-check"></i></span>Attendance
-        </button>
-        <button type="button" class="sb-item" id="sbn-apply-leave" onclick="showView('apply-leave')">
-          <span class="sb-icon"><i class="ti ti-file-plus"></i></span>Apply Leave
-        </button>
-        <button type="button" class="sb-item" id="sbn-earnings" onclick="showView('earnings')">
-          <span class="sb-icon"><i class="ti ti-trophy"></i></span>Earnings
-        </button>
-        <button type="button" class="sb-item" id="sbn-holidays" onclick="showView('holidays')">
-          <span class="sb-icon"><i class="ti ti-calendar-event"></i></span>Holidays
-        </button>
-
-        <div class="sb-nav-label">Account</div>
-        <a href="{{ tpath('/my_compoff') }}" class="sb-item u-tdec-none">
-          <span class="sb-icon"><i class="ti ti-replace"></i></span>Comp-off / OT
-        </a>
-        <a href="{{ tpath('/my_performance') }}" class="sb-item u-tdec-none">
-          <span class="sb-icon"><i class="ti ti-chart-line"></i></span>My Performance
-        </a>
-        <a href="{{ tpath('/my_onboarding') }}" class="sb-item u-tdec-none">
-          <span class="sb-icon"><i class="ti ti-checklist"></i></span>My Onboarding
-        </a>
-        <button type="button" class="sb-item" id="sbn-shift-swap" onclick="showView('shift-swap')">
-          <span class="sb-icon"><i class="ti ti-switch-horizontal"></i></span>Shift Swap
-          {% if incoming_swap_requests %}<span class="badge b-red u-fs-10 u-p-1-6 u-ml-4">{{ incoming_swap_requests|length }}</span>{% endif %}
-        </button>
-        <button type="button" class="sb-item" id="sbn-tickets" onclick="showView('tickets')">
-          <span class="sb-icon"><i class="ti ti-ticket"></i></span>Support Tickets
-        </button>
-        <button type="button" class="sb-item" id="sbn-my-profile" onclick="showView('my-profile')">
-          <span class="sb-icon"><i class="ti ti-user"></i></span>My Profile
-        </button>
-
-        <div class="sb-nav-label">Policies</div>
-        <button type="button" class="sb-item" id="sbn-policies" onclick="showView('policies')">
-          <span class="sb-icon"><i class="ti ti-book"></i></span>Policies &amp; Guidelines
-        </button>
-      </div><!-- /sb-scroll-nav -->
-
-      <div class="sb-bottom">
-        <hr class="sb-sep" />
-        <a class="sb-item danger" href="{{ tpath('/employee_logout') }}">
-          <span class="sb-icon"><i class="ti ti-logout"></i></span>Logout
-        </a>
-  
-        <div class="sb-footer"><i class="ti ti-clock u-fs-13"></i> <span class="sb-live-clock"></span></div>
-      </div>
-    </nav>
+    {% set sb_mode = 'portal' %}
+    {% set sb_show_brand = true %}
+    {% set sb_name = emp[1] %}
+    {% set sb_role = emp[2] %}
+    {% set sb_id = emp[0] %}
+    {% set sb_has_photo = emp[4] %}
+    {% set sb_photo_url = '/my_photo?v=' ~ photo_v %}
+    {% include "_employee_sidebar.html" %}
 
     <!-- ══ MAIN AREA ══ -->
     <div class="main-area">
@@ -817,13 +451,13 @@
     <div class="app-content" id="appContent">
 
       {% if leave_sent %}
-      <div class="toast toast-green">✅ Leave request submitted! Admin has been notified by email.</div>
+      <div class="flash-banner flash-banner-green">✅ Leave request submitted! Admin has been notified by email.</div>
       {% endif %}
       {% if resigned %}
-      <div class="toast toast-red">📤 Resignation submitted. Admin has been notified by email.</div>
+      <div class="flash-banner flash-banner-red">📤 Resignation submitted. Admin has been notified by email.</div>
       {% endif %}
       {% if ticket_sent %}
-      <div class="toast toast-blue">🎫 Ticket raised successfully! Admin will respond shortly.</div>
+      <div class="flash-banner flash-banner-blue">🎫 Ticket raised successfully! Admin will respond shortly.</div>
       {% endif %}
 
       <!-- ═══ VIEW: DASHBOARD ═══ -->
@@ -842,7 +476,7 @@
           <div class="u-d-flex u-ai-center u-gap-18 u-mb-14">
             <div class="profile-avatar u-mb-0 u-fxs-0">
               {% if emp[4] %}
-                <img src="/my_photo" alt="{{ emp[1] }}"
+                <img src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}"
                      onerror="this.parentNode.innerHTML='{{ emp[1][0] | upper }}'" />
               {% else %}
                 {{ emp[1][0] | upper }}
@@ -1015,9 +649,6 @@
             📍 Mark Attendance
           </button>
           {% endif %}
-          <button class="u-mt-8 u-w-100pct u-p-11 u-bd-1-solid-dbeafe u-br-10 u-bg-fff u-c-1e3a8a u-fs-13 u-fw-700 u-cur-pointer u-d-flex u-ai-center u-jc-center u-gap-8" onclick="dmOpen()">
-            💻 My Devices
-          </button>
         </div>
         <script>
           (function(){
@@ -1137,17 +768,22 @@
       {% if announcements %}
       <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-20 u-mb-20">
         <div class="u-fs-14 u-fw-700 u-c-1e293b u-mb-14 u-d-flex u-ai-center u-gap-8">📢 Announcements</div>
-        {% for ann_id, ann_title, ann_content, ann_pri, ann_date in announcements %}
+        {% for ann_id, ann_title, ann_content, ann_pri, ann_date, ann_att in announcements %}
         <div style="border-radius:10px;padding:14px 16px;margin-bottom:10px;border-left:4px solid
-          {% if ann_pri=='Urgent' %}#ef4444{% elif ann_pri=='Important' %}#f59e0b{% else %}#3b82f6{% endif %};
+          {% if ann_pri=='Urgent' %}#ef4444{% elif ann_pri=='Important' %}#f59e0b{% else %}#1E3A5F{% endif %};
           background:{% if ann_pri=='Urgent' %}#fff5f5{% elif ann_pri=='Important' %}#fffbeb{% else %}#f0f7ff{% endif %};">
           <div class="u-fs-13 u-fw-700 u-c-1e293b u-mb-4">
             {% if ann_pri=='Urgent' %}🔴{% elif ann_pri=='Important' %}🟡{% else %}📢{% endif %}
             {{ ann_title }}
-            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-left:6px;
-              background:{% if ann_pri=='Urgent' %}#fee2e2;color:#dc2626{% elif ann_pri=='Important' %}#fef9c3;color:#92400e{% else %}#dbeafe;color:#1e40af{% endif %};">{{ ann_pri }}</span>
+            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;margin-left:6px;
+              background:{% if ann_pri=='Urgent' %}#fee2e2;color:#dc2626{% elif ann_pri=='Important' %}#fef9c3;color:#92400e{% else %}#E7ECF1;color:#16293F{% endif %};">{{ ann_pri }}</span>
           </div>
           <div class="u-fs-12 u-c-475569 u-lh-1d6">{{ ann_content }}</div>
+          {% if ann_att %}
+          <a class="u-fs-12 u-c-2563eb u-d-inline-flex u-ai-center u-gap-4 u-mt-6" href="{{ tpath('/download_announcement/' ~ ann_id) }}">
+            <i class="ti ti-paperclip"></i> {{ ann_att }}
+          </a>
+          {% endif %}
           <div class="u-fs-11 u-c-94a3b8 u-mt-6">{{ ann_date.strftime('%d %b %Y') if ann_date else '' }}</div>
         </div>
         {% endfor %}
@@ -1272,21 +908,21 @@
               <span class="u-fs-12 u-c-94a3b8">/ {{ ltb.quota }} days</span>
             </div>
             <div class="u-bg-f1f5f9 u-br-20 u-h-6 u-ov-hidden u-mb-6">
-              <div style="height:100%;border-radius:20px;width:{{ [pct_used,100]|min }}%;background:{% if pct_used >= 80 %}#ef4444{% elif pct_used >= 50 %}#f59e0b{% else %}#22c55e{% endif %};transition:.4s;"></div>
+              <div style="height:100%;border-radius:6px;width:{{ [pct_used,100]|min }}%;background:{% if pct_used >= 80 %}#ef4444{% elif pct_used >= 50 %}#f59e0b{% else %}#22c55e{% endif %};transition:.4s;"></div>
             </div>
             <div class="u-fs-10 u-c-94a3b8">{{ ltb.used }} used · {{ ltb.balance }} remaining</div>
           </div>
           {% endfor %}
           <!-- Comp-off balance card -->
           <a class="u-tdec-none" href="{{ tpath('/my_compoff') }}">
-          <div style="background:#fff;border:1.5px solid {% if compoff_avail_days > 0 %}#bbf7d0{% else %}#e2e8f0{% endif %};border-radius:12px;padding:14px;cursor:pointer;transition:.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='{% if compoff_avail_days > 0 %}#bbf7d0{% else %}#e2e8f0{% endif %}'">
+          <div style="background:#fff;border:1.5px solid {% if compoff_avail_days > 0 %}#bbf7d0{% else %}#e2e8f0{% endif %};border-radius:12px;padding:14px;cursor:pointer;transition:.2s;" onmouseover="this.style.borderColor='#1E3A5F'" onmouseout="this.style.borderColor='{% if compoff_avail_days > 0 %}#bbf7d0{% else %}#e2e8f0{% endif %}'">
             <div class="u-fs-10 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d4 u-mb-8">Comp-off <span class="u-bg-eff6ff u-c-3b82f6 u-br-4 u-p-1-5 u-fs-9">OT</span></div>
             <div class="u-d-flex u-ai-baseline u-gap-4 u-mb-6">
               <span style="font-size:26px;font-weight:800;color:{% if compoff_avail_days > 0 %}#16a34a{% else %}#94a3b8{% endif %};line-height:1;">{{ compoff_avail_days }}</span>
               <span class="u-fs-12 u-c-94a3b8">/ {{ compoff_earned_days }} days</span>
             </div>
             <div class="u-bg-f1f5f9 u-br-20 u-h-6 u-ov-hidden u-mb-6">
-              <div style="height:100%;border-radius:20px;width:{% if compoff_earned_days > 0 %}{{ [(compoff_avail_days / compoff_earned_days * 100)|int, 100]|min }}{% else %}0{% endif %}%;background:#22c55e;"></div>
+              <div style="height:100%;border-radius:6px;width:{% if compoff_earned_days > 0 %}{{ [(compoff_avail_days / compoff_earned_days * 100)|int, 100]|min }}{% else %}0{% endif %}%;background:#22c55e;"></div>
             </div>
             <div class="u-fs-10 u-c-94a3b8">{{ compoff_avail_days }} available · view details →</div>
           </div>
@@ -1378,42 +1014,6 @@
         </form>
       </div>
 
-      <!-- Upcoming Holidays for Leave Planning -->
-      <div class="section u-mt-20 u-bg-linear-gradien139ca0 u-bd-1-solid-fcd34d u-br-14 u-p-18-20">
-        <div class="u-d-flex u-ai-center u-gap-8 u-mb-14">
-          <span class="u-fs-18">🎉</span>
-          <div>
-            <div class="u-fs-14 u-fw-700 u-c-78350f">Upcoming Holidays</div>
-            <div class="u-fs-11 u-c-92400e u-mt-1">No need to apply leave on these dates</div>
-          </div>
-        </div>
-        {% if leave_holidays %}
-        <div class="u-d-flex u-fxd-column u-gap-8">
-          {% for hdate, hname in leave_holidays %}
-          <div class="u-d-flex u-ai-center u-jc-space-between u-bg-rgba255_255_255_0d7 u-bd-1-solid-fde68a u-br-9 u-p-9-13">
-            <div class="u-d-flex u-ai-center u-gap-10">
-              <div class="u-bg-f59e0b u-c-fff u-fs-11 u-fw-700 u-br-6 u-p-3-8 u-minw-40 u-ta-center">
-                {{ hdate.strftime('%d') }}
-              </div>
-              <div>
-                <div class="u-fs-13 u-fw-600 u-c-1c1917">{{ hname }}</div>
-                <div class="u-fs-11 u-c-78350f">{{ hdate.strftime('%A, %B %Y') }}</div>
-              </div>
-            </div>
-            {% set days_left = (hdate - today_date).days %}
-            <div class="u-fs-11 u-c-92400e u-fw-600 u-ta-right u-ws-nowrap">
-              {% if days_left == 0 %}Today{% elif days_left == 1 %}Tomorrow{% else %}in {{ days_left }} days{% endif %}
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="u-ta-center u-c-92400e u-fs-13 u-p-12-0">
-          No upcoming holidays for the rest of this year.
-        </div>
-        {% endif %}
-      </div>
-
       <div class="section u-mt-24">
         <h3 class="u-mb-14">📬 Leave History</h3>
         <div class="table-wrap">
@@ -1471,213 +1071,6 @@
         </div>
       </div>
       </div><!-- /view-apply-leave -->
-
-      <!-- ═══ VIEW: TICKETS ═══ -->
-      <!-- ═══ VIEW: SHIFT SWAP ═══ -->
-      <div id="view-shift-swap" class="view">
-      <div class="mod-title">🔄 Shift Swap <span>Request to swap your shift with a colleague</span></div>
-      <div class="section">
-
-        {% if swap_sent %}
-        <div class="toast toast-green">✅ Swap request sent! Waiting for your colleague to respond.</div>
-        {% endif %}
-        {% if swap_responded %}
-        <div class="toast toast-green">✅ Response submitted successfully.</div>
-        {% endif %}
-        {% if swap_error == 'invalid_target' %}
-        <div class="toast toast-red">❌ Invalid target employee selected.</div>
-        {% elif swap_error == 'no_shift' %}
-        <div class="toast toast-red">❌ You or the selected employee doesn't have a shift assigned.</div>
-        {% elif swap_error == 'same_shift' %}
-        <div class="toast toast-red">❌ You're already on the same shift — no swap needed.</div>
-        {% elif swap_error == 'duplicate' %}
-        <div class="toast toast-red">❌ You already have a pending swap request with this employee.</div>
-        {% endif %}
-
-        <!-- Current shift card -->
-        {% if emp[7] %}
-        <div class="swap-my-shift">
-          <div>
-            <div class="sms-label">Your Current Shift</div>
-            <div class="sms-name">{{ emp[7] }}</div>
-            <div class="sms-time">{{ emp[8]|fmt_time if emp[8] else '--' }} – {{ emp[9]|fmt_time if emp[9] else '--' }}</div>
-          </div>
-          <div class="u-fs-40 u-op-0d25">🕐</div>
-        </div>
-        {% else %}
-        <div class="swap-no-shift">
-          <div class="sns-icon">⚠️</div>
-          <div>
-            <div class="sns-title">No Shift Assigned</div>
-            <div class="sns-sub">Contact your admin to get a shift assigned before you can request a swap.</div>
-          </div>
-        </div>
-        {% endif %}
-
-        <!-- Incoming swap requests -->
-        {% if incoming_swap_requests %}
-        <div class="swap-section-heading inc">⚡ Incoming Requests
-          <span class="u-bg-f59e0b u-c-fff u-br-20 u-p-1-9 u-fs-11 u-ml-4">{{ incoming_swap_requests|length }}</span>
-        </div>
-        {% for sw in incoming_swap_requests %}
-        {% set sw_id, sw_req_id, sw_req_name, sw_req_shift, sw_reason, sw_status, sw_date = sw %}
-        <div class="swap-incoming">
-          <div class="si-header">
-            <div>
-              <span class="si-name">{{ sw_req_name }}</span>
-              <span class="si-id"> ({{ sw_req_id }})</span>
-              <span class="si-pill">{{ sw_req_shift }}</span>
-            </div>
-            <div class="si-date">{{ sw_date.strftime('%d %b %Y') if sw_date else '' }}</div>
-          </div>
-          {% if sw_reason %}<div class="si-reason">"{{ sw_reason }}"</div>{% endif %}
-          <div class="u-fs-13 u-c-64748b u-mb-12">
-            Wants to swap their <strong>{{ sw_req_shift }}</strong> shift
-            with your{% if emp[7] %} <strong>{{ emp[7] }}</strong>{% endif %} shift.
-          </div>
-          <form method="POST" action="/respond_shift_swap/{{ sw_id }}">
-            <input type="hidden" name="action" value="accept">
-            <div class="swap-inc-actions">
-              <input type="text" name="response" class="swap-inc-note" placeholder="Optional note (e.g. Happy to swap)" maxlength="200">
-              <button type="submit" class="swap-btn-ok">✅ Accept</button>
-            </div>
-          </form>
-          <form class="u-mt-8" method="POST" action="/respond_shift_swap/{{ sw_id }}">
-            <input type="hidden" name="action" value="reject">
-            <div class="swap-inc-actions">
-              <input type="text" name="response" class="swap-inc-note" placeholder="Reason for declining (optional)" maxlength="200">
-              <button type="submit" class="swap-btn-no">✗ Decline</button>
-            </div>
-          </form>
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        <!-- Request form -->
-        {% if emp[7] %}
-        <div class="swap-section-heading">🔄 Request a Swap</div>
-        <div class="swap-form-card">
-          <form method="POST" action="{{ tpath('/submit_shift_swap') }}" id="swapForm">
-            <input type="hidden" name="target_id" id="swapTargetId">
-
-            <!-- Search bar -->
-            <div class="u-d-grid u-gtc-1fr-1fr-1fr u-gap-10 u-mb-14">
-              <div>
-                <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d5 u-d-block u-mb-4">Search by Name</label>
-                <input class="u-w-100pct u-p-8-10 u-bd-1d5-solid-e2e8f0 u-br-8 u-fs-13 u-bxs-border-box" type="text" id="ssName" placeholder="e.g. Ravi" oninput="filterSwapCards()">
-              </div>
-              <div>
-                <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d5 u-d-block u-mb-4">Search by Emp ID</label>
-                <input class="u-w-100pct u-p-8-10 u-bd-1d5-solid-e2e8f0 u-br-8 u-fs-13 u-bxs-border-box" type="text" id="ssEmpId" placeholder="e.g. EMP001" oninput="filterSwapCards()">
-              </div>
-              <div>
-                <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d5 u-d-block u-mb-4">Filter by Shift</label>
-                <select class="u-w-100pct u-p-8-10 u-bd-1d5-solid-e2e8f0 u-br-8 u-fs-13 u-bg-fff u-bxs-border-box" id="ssShift" onchange="filterSwapCards()">
-                  <option value="">All Shifts</option>
-                  {% set seen_shifts = namespace(v=[]) %}
-                  {% for eid, ename, shift, st, et, dept, desig in swap_eligible_employees %}
-                    {% if shift and shift not in seen_shifts.v %}
-                      {% set seen_shifts.v = seen_shifts.v + [shift] %}
-                      <option value="{{ shift }}">{{ shift }}</option>
-                    {% endif %}
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-
-            <!-- Employee cards grid -->
-            <div class="u-d-grid u-gtc-repeatauto-fil8151f9 u-gap-10 u-maxh-340 u-ovy-auto u-p-2-0-10 u-mb-14" id="swapCardGrid">
-              {% for eid, ename, shift, st, et, dept, desig in swap_eligible_employees %}
-              <div class="swap-emp-card u-bd-2-solid-e2e8f0 u-br-12 u-p-12-14 u-cur-pointer u-trs-d15s u-bg-fff" data-id="{{ eid }}" data-name="{{ ename|lower }}" data-shift="{{ shift|lower }}" data-dept="{{ dept|lower }}"
-                   onclick="selectSwapCard(this,'{{ eid }}','{{ ename }}','{{ shift }}','{{ st }}','{{ et }}','{{ dept }}','{{ desig }}')">
-                <div class="u-d-flex u-ai-center u-gap-10 u-mb-8">
-                  <div class="u-w-38 u-h-38 u-br-50pct u-bg-linear-gradienc5d734 u-c-fff u-fs-16 u-fw-700 u-d-flex u-ai-center u-jc-center u-fxs-0">{{ ename[0]|upper }}</div>
-                  <div class="u-minw-0">
-                    <div class="u-fs-13 u-fw-700 u-c-1e293b u-ws-nowrap u-ov-hidden u-tov-ellipsis">{{ ename }}</div>
-                    <div class="u-fs-11 u-c-94a3b8">{{ eid }}</div>
-                  </div>
-                </div>
-                <div style="font-size:11px;background:{% if shift %}#eff6ff{% else %}#f1f5f9{% endif %};color:{% if shift %}#1e40af{% else %}#94a3b8{% endif %};border-radius:6px;padding:4px 8px;font-weight:600;margin-bottom:4px;">🕐 {% if shift %}{{ shift }}{% if st %} &nbsp;{{ st }}–{{ et }}{% endif %}{% else %}No shift assigned{% endif %}</div>
-                {% if dept %}<div class="u-fs-11 u-c-64748b">{{ dept }}{% if desig %} · {{ desig }}{% endif %}</div>{% endif %}
-              </div>
-              {% else %}
-              <div class="u-gc-1_-1 u-ta-center u-p-30 u-c-94a3b8 u-fs-13">No eligible colleagues found.</div>
-              {% endfor %}
-            </div>
-            <div class="u-d-none u-ta-center u-p-24 u-c-94a3b8 u-fs-13 u-bg-f8fafc u-br-10 u-mb-14" id="swapNoResults">No employees match your search.</div>
-
-            <!-- Selected employee preview -->
-            <div class="u-d-none u-bg-eff6ff u-bd-1d5-solid-bfdbfe u-br-12 u-p-14-16 u-mb-14" id="swapSelectedPreview">
-              <div class="u-fs-11 u-fw-700 u-c-3b82f6 u-ttr-uppercase u-ls-d5 u-mb-8">Selected Colleague</div>
-              <div class="u-d-flex u-ai-center u-gap-12">
-                <div class="u-w-42 u-h-42 u-br-50pct u-bg-linear-gradienc5d734 u-c-fff u-fs-18 u-fw-700 u-d-flex u-ai-center u-jc-center u-fxs-0" id="spAvatar"></div>
-                <div>
-                  <div class="u-fs-14 u-fw-700 u-c-1e293b" id="spName"></div>
-                  <div class="u-fs-12 u-c-64748b" id="spId"></div>
-                  <div class="u-fs-12 u-fw-600 u-c-1e40af u-mt-2" id="spShift"></div>
-                  <div class="u-fs-11 u-c-64748b" id="spDept"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="swap-form-row">
-              <label>Reason <span class="u-fw-400 u-c-94a3b8">(optional)</span></label>
-              <textarea name="reason" rows="2" maxlength="500" placeholder="Why do you want to swap shifts?"></textarea>
-            </div>
-            <button type="submit" class="swap-submit-btn u-op-d5 u-cur-not-allowed" id="swapSubmitBtn" disabled>🔄 Send Swap Request</button>
-          </form>
-        </div>
-        {% endif %}
-
-        <!-- My outgoing requests -->
-        <div class="swap-section-heading">📋 My Swap Requests</div>
-        {% if my_swap_requests %}
-        {% for sw in my_swap_requests %}
-        {% set sw_id, sw_tgt_id, sw_tgt_name, sw_tgt_shift, sw_reason, sw_status, sw_date = sw %}
-        {%- set s1 = 'done' -%}
-        {%- set s2 = 'done' if sw_status in ('Pending_Admin','Approved','Rejected_Admin') else ('fail' if sw_status == 'Rejected' else 'active') -%}
-        {%- set s3 = 'done' if sw_status == 'Approved' else ('fail' if sw_status == 'Rejected_Admin' else ('active' if sw_status == 'Pending_Admin' else '')) -%}
-        {%- set s4 = 'done' if sw_status == 'Approved' else ('fail' if sw_status in ('Rejected','Rejected_Admin') else '') -%}
-        <div class="swap-req-card">
-          <div class="swap-req-avatar">{{ sw_tgt_name[0]|upper }}</div>
-          <div class="swap-req-body">
-            <div class="swap-req-name">{{ sw_tgt_name }} <span class="u-fw-400 u-fs-12 u-c-94a3b8">({{ sw_tgt_id }})</span></div>
-            <div class="swap-req-shift">🕐 Their shift: {{ sw_tgt_shift }}</div>
-            {% if sw_reason %}<div class="swap-req-reason">"{{ sw_reason }}"</div>{% endif %}
-            <div class="swap-timeline">
-              <div class="stl-step"><div class="stl-dot {{ s1 }}"></div><div class="stl-lbl {{ s1 }}">Sent</div></div>
-              <div class="stl-step"><div class="stl-dot {{ s2 }}"></div><div class="stl-lbl {{ s2 }}">Colleague</div></div>
-              <div class="stl-step"><div class="stl-dot {{ s3 }}"></div><div class="stl-lbl {{ s3 }}">Admin</div></div>
-              <div class="stl-step"><div class="stl-dot {{ s4 }}"></div><div class="stl-lbl {{ s4 }}">{{ 'Done' if sw_status == 'Approved' else ('Declined' if sw_status in ('Rejected','Rejected_Admin') else 'Done') }}</div></div>
-            </div>
-            <div class="swap-req-date">{{ sw_date.strftime('%d %b %Y %H:%M') if sw_date else '—' }}</div>
-          </div>
-          <div class="swap-req-side">
-            {% if sw_status == 'Pending_Target' %}
-              <span class="sbadge sbadge-pending">Awaiting Colleague</span>
-            {% elif sw_status == 'Pending_Admin' %}
-              <span class="sbadge sbadge-admin">Awaiting Admin</span>
-            {% elif sw_status == 'Approved' %}
-              <span class="sbadge sbadge-approved">✅ Approved</span>
-            {% elif sw_status == 'Rejected' %}
-              <span class="sbadge sbadge-rejected">✗ Colleague Declined</span>
-            {% elif sw_status == 'Rejected_Admin' %}
-              <span class="sbadge sbadge-rejected">✗ Admin Rejected</span>
-            {% else %}
-              <span class="sbadge sbadge-gray">{{ sw_status }}</span>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div class="swap-empty">
-          <div class="se-icon">🔄</div>
-          <div class="se-text">No swap requests made yet.</div>
-        </div>
-        {% endif %}
-
-      </div>
-      </div><!-- /view-shift-swap -->
 
       <div id="view-tickets" class="view">
       <div class="mod-title">🎫 Support Tickets <span>Raise a complaint or request admin support</span></div>
@@ -2132,52 +1525,6 @@
           <a href="/employee_portal?hol_year={{ hol_year + 1 }}#holidays">{{ hol_year + 1 }} &#8594;</a>
         </div>
 
-        <!-- Legend -->
-        <div class="hol-legend">
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-fef3c7 u-bd-1d5-solid-f59e0b"></div>Public Holiday</div>
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-fee2e2 u-bd-1d5-solid-fca5a5"></div>Sunday (Weekly Off)</div>
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-dbeafe u-bd-1d5-solid-3b82f6"></div>Today</div>
-          <div class="hol-leg"><div class="hol-leg-dot u-bg-f8fafc u-bd-1d5-solid-e2e8f0"></div>Working Day</div>
-        </div>
-
-        <!-- Month navigation -->
-        <div class="hol-month-nav">
-          <button type="button" class="hol-mnav-btn" onclick="changeHolMonth(-1)">&#8592; Prev</button>
-          <span class="hol-mnav-label" id="hol-mnav-label"></span>
-          <button type="button" class="hol-mnav-btn" onclick="changeHolMonth(1)">Next &#8594;</button>
-        </div>
-
-        <!-- Single-month calendar -->
-        <div class="hol-cal-single-wrap" id="hol-cal-wrap" data-year="{{ hol_year }}">
-          {% for m in emp_hol_cal %}
-          <div class="hol-cal-month" id="hmpanel-{{ m.month_num }}" data-name="{{ m.month_name }}">
-            <div class="hol-cal-hdrs">
-              <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
-            </div>
-            {% for week in m.weeks %}
-            <div class="hol-cal-week">
-              {% for day in week %}
-                {% set col = loop.index0 %}
-                {% if day == 0 %}
-                  <div class="hol-cal-day hd-empty"></div>
-                {% else %}
-                  {% set is_sun     = (col == 0) %}
-                  {% set is_holiday = (day in m.holidays) %}
-                  {% set is_today   = (today_date.year == hol_year and today_date.month == m.month_num and today_date.day == day) %}
-                  {% set hname      = m.holidays[day][1] if is_holiday else '' %}
-                  <div class="hol-cal-day {% if is_holiday %}hd-holiday{% elif is_sun %}hd-sunday{% elif is_today %}hd-today{% else %}hd-normal{% endif %}"
-                       title="{{ hname if is_holiday else ('Sunday' if is_sun else (m.month_name + ' ' + day|string + ', ' + hol_year|string)) }}">
-                    {{ day }}
-                    {% if is_holiday %}<span class="hol-name-lbl">{{ hname }}</span>{% endif %}
-                  </div>
-                {% endif %}
-              {% endfor %}
-            </div>
-            {% endfor %}
-          </div>
-          {% endfor %}
-        </div>
-
         <!-- Holidays list -->
         <div class="section">
           <h3>📋 All Holidays &amp; Leaves ({{ hol_year }})</h3>
@@ -2234,30 +1581,30 @@
         <div class="mod-title">👤 My Profile <span>View and update your personal details</span></div>
 
         {% if request.args.get('profile_saved') %}
-        <div class="toast toast-green">✅ Profile updated successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Profile updated successfully.</div>
         {% endif %}
         {% if request.args.get('bank_saved') %}
-        <div class="toast toast-green">✅ Bank & ID details saved successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Bank & ID details saved successfully.</div>
         {% endif %}
         {% if request.args.get('photo_saved') %}
-        <div class="toast toast-green">✅ Profile photo updated successfully.</div>
+        <div class="flash-banner flash-banner-green">✅ Profile photo updated successfully.</div>
         {% endif %}
         {% if request.args.get('photo_error') == 'no_face' %}
-        <div class="toast toast-red">❌ No face detected. Please upload a clear front-facing photo.</div>
+        <div class="flash-banner flash-banner-red">❌ No face detected. Please upload a clear front-facing photo.</div>
         {% elif request.args.get('photo_error') %}
-        <div class="toast toast-red">❌ Photo upload failed. Please try again.</div>
+        <div class="flash-banner flash-banner-red">❌ Photo upload failed. Please try again.</div>
         {% endif %}
         {% if request.args.get('exp_saved') %}
-        <div class="toast toast-green">✅ Work experience entry added.</div>
+        <div class="flash-banner flash-banner-green">✅ Work experience entry added.</div>
         {% endif %}
         {% if request.args.get('edu_saved') %}
-        <div class="toast toast-green">✅ Education entry added.</div>
+        <div class="flash-banner flash-banner-green">✅ Education entry added.</div>
         {% endif %}
         {% if request.args.get('exp_error') %}
-        <div class="toast toast-red">❌ Please fill Company, Designation and From Year.</div>
+        <div class="flash-banner flash-banner-red">❌ Please fill Company, Designation and From Year.</div>
         {% endif %}
         {% if request.args.get('edu_error') %}
-        <div class="toast toast-red">❌ Please fill Degree and Institution.</div>
+        <div class="flash-banner flash-banner-red">❌ Please fill Degree and Institution.</div>
         {% endif %}
 
         <!-- PROFILE COMPLETION -->
@@ -2313,8 +1660,8 @@
             <div class="u-pos-relative u-w-100 u-h-100 u-fxs-0">
               <div class="profile-avatar u-w-100 u-h-100 u-fs-36 u-mb-0">
                 {% if emp[4] %}
-                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}" title="View full photo">
-                    <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo" alt="{{ emp[1] }}" id="profilePreview"
+                  <a class="u-d-block u-w-100pct u-h-100pct" href="{{ tpath('/my_photo') }}?v={{ photo_v }}" title="View full photo">
+                    <img class="u-w-100pct u-h-100pct u-objf-cover" src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}" id="profilePreview"
                          onerror="this.parentNode.parentNode.innerHTML='{{ emp[1][0]|upper }}'" />
                   </a>
                 {% else %}
@@ -2330,9 +1677,6 @@
               <form class="u-mt-10 u-d-flex u-ai-center u-gap-10" action="{{ tpath('/update_my_photo') }}" method="POST" enctype="multipart/form-data" id="photoForm">
                 <input class="u-d-none" type="file" name="photo" id="photoUpload" accept=".jpg,.jpeg,.png" onchange="previewPhoto(this)" />
                 <span class="u-fs-12 u-c-94a3b8" id="photoFileName">No file chosen</span>
-                <button class="u-d-none u-p-6-14 u-bd-none u-br-8 u-bg-3b82f6 u-c-white u-fs-12 u-fw-600 u-cur-pointer" type="submit" id="photoSubmitBtn">
-                  Upload
-                </button>
               </form>
             </div>
             <!-- Download buttons -->
@@ -2511,7 +1855,7 @@
           </div>
 
           <!-- Upload form -->
-          <form class="u-d-flex u-gap-10 u-fxw-wrap u-ai-flex-end u-mb-16" action="{{ tpath('/upload_my_document') }}" method="POST" enctype="multipart/form-data">
+          <form class="u-d-flex u-gap-10 u-fxw-wrap u-ai-flex-end u-mb-16" action="{{ tpath('/upload_my_document') }}" method="POST" enctype="multipart/form-data" onsubmit="this.querySelector('button[type=submit]').disabled=true;">
             <div class="u-fx-1 u-minw-160">
               <label class="u-fs-11 u-fw-700 u-c-475569 u-ttr-uppercase u-ls-d4 u-d-block u-mb-5">Document Type</label>
               <select class="u-w-100pct u-p-9-12 u-bd-1-solid-dbeafe u-br-9 u-bg-f8fafc u-c-1e293b u-fs-13 u-out-none" name="doc_type" required>
@@ -2553,7 +1897,7 @@
                   <td class="u-p-10-14 u-fs-13 u-c-374151 u-fw-600">{{ d[1] }}</td>
                   <td class="u-p-10-14 u-fs-13 u-c-64748b u-maxw-200 u-ov-hidden u-tov-ellipsis u-ws-nowrap" title="{{ d[2] }}">{{ d[2] }}</td>
                   <td class="u-p-10-14">
-                    <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;{% if d[3]=='employee' %}background:#f0fdf4;color:#16a34a{% else %}background:#eff6ff;color:#3b82f6{% endif %};">{{ d[3] }}</span>
+                    <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;{% if d[3]=='employee' %}background:#f0fdf4;color:#16a34a{% else %}background:#FAFAFA;color:#1E3A5F{% endif %};">{{ d[3] }}</span>
                   </td>
                   <td class="u-p-10-14 u-fs-12 u-c-94a3b8 u-ws-nowrap">{{ d[4].strftime('%d %b %Y') if d[4] else '—' }}</td>
                   <td class="u-p-10-14">
@@ -2744,13 +2088,13 @@
         <div class="section u-mt-22">
           <h3>🔒 Change Password</h3>
           {% if request.args.get('pwd_ok') %}
-            <div class="toast toast-green">✅ Password changed successfully.</div>
+            <div class="flash-banner flash-banner-green">✅ Password changed successfully.</div>
           {% elif request.args.get('pwd_error') == 'wrong' %}
-            <div class="toast toast-red">❌ Current password is incorrect.</div>
+            <div class="flash-banner flash-banner-red">❌ Current password is incorrect.</div>
           {% elif request.args.get('pwd_error') == 'short' %}
-            <div class="toast toast-red">❌ New password must be at least 6 characters.</div>
+            <div class="flash-banner flash-banner-red">❌ New password must be at least 6 characters.</div>
           {% elif request.args.get('pwd_error') == 'mismatch' %}
-            <div class="toast toast-red">❌ New passwords do not match.</div>
+            <div class="flash-banner flash-banner-red">❌ New passwords do not match.</div>
           {% endif %}
           <form class="u-d-grid u-gtc-1fr-1fr-1fr u-gap-14 u-ai-end u-maxw-760" action="{{ tpath('/change_password') }}" method="POST">
             <input type="text" name="username" value="{{ session.get('employee_id', '') }}" autocomplete="username" style="display:none" aria-hidden="true" />
@@ -3396,64 +2740,9 @@
       setInterval(updateClock, 1000);
       updateClock();
 
-      /* ── SIDEBAR TOGGLE ── */
-      function toggleSidebar() {
-        var sidebar  = document.getElementById("sidebar");
-        var overlay  = document.getElementById("sbOverlay");
-        if (sidebar.classList.contains("open")) {
-          sidebar.classList.remove("open");
-          overlay.classList.remove("open");
-        } else {
-          sidebar.classList.add("open");
-          overlay.classList.add("open");
-        }
-      }
-      function filterSwapCards() {
-        var name  = document.getElementById('ssName').value.toLowerCase().trim();
-        var empid = document.getElementById('ssEmpId').value.toLowerCase().trim();
-        var shift = document.getElementById('ssShift').value.toLowerCase().trim();
-        var cards = document.querySelectorAll('.swap-emp-card');
-        var visible = 0;
-        cards.forEach(function(c) {
-          var match = (!name  || c.dataset.name.includes(name))
-                   && (!empid || c.dataset.id.toLowerCase().includes(empid))
-                   && (!shift || c.dataset.shift === shift);
-          c.style.display = match ? '' : 'none';
-          if (match) visible++;
-        });
-        document.getElementById('swapNoResults').style.display = visible === 0 ? 'block' : 'none';
-        document.getElementById('swapCardGrid').style.display  = visible === 0 ? 'none' : 'grid';
-      }
-
-      function selectSwapCard(el, eid, ename, shift, st, et, dept, desig) {
-        document.querySelectorAll('.swap-emp-card').forEach(function(c) {
-          c.style.border = '2px solid #e2e8f0';
-          c.style.background = '#fff';
-        });
-        el.style.border = '2px solid #3b82f6';
-        el.style.background = '#eff6ff';
-
-        document.getElementById('swapTargetId').value = eid;
-        document.getElementById('spAvatar').textContent = ename.charAt(0).toUpperCase();
-        document.getElementById('spName').textContent   = ename;
-        document.getElementById('spId').textContent     = eid;
-        document.getElementById('spShift').textContent  = '🕐 ' + shift + (st ? '  ' + st + '–' + et : '');
-        document.getElementById('spDept').textContent   = dept + (desig ? ' · ' + desig : '');
-        document.getElementById('swapSelectedPreview').style.display = 'block';
-
-        var btn = document.getElementById('swapSubmitBtn');
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor  = 'pointer';
-      }
-
-      document.getElementById('swapForm') && document.getElementById('swapForm').addEventListener('submit', function(e) {
-        if (!document.getElementById('swapTargetId').value) {
-          e.preventDefault();
-          alert('Please select a colleague to swap with.');
-        }
-      });
-
+      /* ── SIDEBAR TOGGLE: toggleSidebar()/closeSidebar() now come from
+         static/employee_sidebar.js, shared with the standalone
+         my_performance/my_compoff/my_onboarding pages. ── */
       function showPolicy(tab) {
         var tabs = ['terms','rules','limitations','instructions','posh','resignation'];
         tabs.forEach(function(t) {
@@ -3462,9 +2751,9 @@
           if (el) el.style.display = (t === tab) ? 'block' : 'none';
           if (btn) {
             if (t === tab) {
-              btn.style.border = '1.5px solid #3b82f6';
-              btn.style.background = '#eff6ff';
-              btn.style.color = '#1e40af';
+              btn.style.border = '1.5px solid #1E3A5F';
+              btn.style.background = '#FAFAFA';
+              btn.style.color = '#16293F';
             } else {
               btn.style.border = '1.5px solid #e2e8f0';
               btn.style.background = '#f8fafc';
@@ -3474,35 +2763,7 @@
         });
       }
 
-      function closeSidebar() {
-        document.getElementById("sidebar").classList.remove("open");
-        document.getElementById("sbOverlay").classList.remove("open");
-      }
-
       /* ── VIEW SWITCHER ── */
-      /* ── HOL MONTH NAVIGATION ── */
-      var holCalYear = (function() {
-        var w = document.getElementById('hol-cal-wrap');
-        return w ? parseInt(w.dataset.year, 10) : new Date().getFullYear();
-      })();
-      var _nowDate = new Date();
-      var currentHolMonth = (_nowDate.getFullYear() === holCalYear) ? _nowDate.getMonth() + 1 : 1;
-
-      function showHolMonth(m) {
-        if (m < 1) m = 12;
-        if (m > 12) m = 1;
-        document.querySelectorAll('.hol-cal-month').forEach(function(el) { el.style.display = 'none'; });
-        var panel = document.getElementById('hmpanel-' + m);
-        if (panel) {
-          panel.style.display = 'block';
-          var lbl = document.getElementById('hol-mnav-label');
-          if (lbl) lbl.textContent = panel.dataset.name + ' ' + holCalYear;
-        }
-        currentHolMonth = m;
-      }
-
-      function changeHolMonth(dir) { showHolMonth(currentHolMonth + dir); }
-
       function showView(viewId) {
         document.querySelectorAll('.view').forEach(function(v) {
           v.classList.remove('active');
@@ -3514,8 +2775,6 @@
         document.querySelectorAll('.sb-item').forEach(function(b) { b.classList.remove('active'); });
         var sbnEl = document.getElementById('sbn-' + viewId);
         if (sbnEl) sbnEl.classList.add('active');
-
-        if (viewId === 'holidays') { showHolMonth(currentHolMonth); }
 
         var ac = document.getElementById('appContent');
         if (ac) ac.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3637,10 +2896,10 @@
         var lm  = document.getElementById('lbl-morning');
         var la  = document.getElementById('lbl-afternoon');
         if (!lm || !la) return;
-        lm.style.borderColor = (sel && sel.value === 'Morning')   ? '#1e3a8a' : '#dbeafe';
-        la.style.borderColor = (sel && sel.value === 'Afternoon') ? '#1e3a8a' : '#dbeafe';
-        lm.style.background  = (sel && sel.value === 'Morning')   ? '#eff6ff' : '#fff';
-        la.style.background  = (sel && sel.value === 'Afternoon') ? '#eff6ff' : '#fff';
+        lm.style.borderColor = (sel && sel.value === 'Morning')   ? '#1E3A5F' : '#E7ECF1';
+        la.style.borderColor = (sel && sel.value === 'Afternoon') ? '#1E3A5F' : '#E7ECF1';
+        lm.style.background  = (sel && sel.value === 'Morning')   ? '#FAFAFA' : '#fff';
+        la.style.background  = (sel && sel.value === 'Afternoon') ? '#FAFAFA' : '#fff';
         var badge = document.getElementById('leave-days-badge');
         if (badge && badge.style.display !== 'none')
           badge.textContent = '½ Half Day – ' + (sel ? sel.value : 'Morning') + ' selected';
@@ -3834,7 +3093,7 @@
       function switchEarningsTab(tab) {
         ['salary','incentives','overtime'].forEach(function(t) {
           document.getElementById('epanel-' + t).style.display    = tab === t ? '' : 'none';
-          document.getElementById('etab-' + t).style.background   = tab === t ? '#1e3a8a' : 'transparent';
+          document.getElementById('etab-' + t).style.background   = tab === t ? '#1E3A5F' : 'transparent';
           document.getElementById('etab-' + t).style.color        = tab === t ? '#fff' : '#64748b';
           document.getElementById('etab-' + t).style.fontWeight   = tab === t ? '700' : '600';
         });
@@ -3842,7 +3101,7 @@
 
       // On page load: restore last active view from hash → localStorage → dashboard
       (function() {
-        var validViews = ['dashboard','attendance','apply-leave','earnings','holidays','shift-swap','tickets','my-profile','resign','policies'];
+        var validViews = ['dashboard','attendance','apply-leave','earnings','holidays','tickets','my-profile','resign','policies'];
         var hash    = window.location.hash.replace('#', '');
         var stored  = '';
         try { stored = localStorage.getItem('portalView') || ''; } catch(e) {}
@@ -3949,15 +3208,15 @@
         lbl.style.display = "block";
         if (phase === "qr") {
           lbl.textContent = "📷 Show your QR code to the camera";
-          lbl.style.color = "#2563eb";
+          lbl.style.color = "#1E3A5F";
           document.getElementById("wfhScanLine").style.display = "block";
         } else if (phase === "face") {
           lbl.textContent = "👤 QR detected! Now look at the camera";
-          lbl.style.color = "#7c3aed";
+          lbl.style.color = "#1E3A5F";
           document.getElementById("wfhScanLine").style.display = "none";
         } else if (phase === "fingerprint") {
           lbl.textContent = "👆 Touch your fingerprint sensor now…";
-          lbl.style.color = "#7c3aed";
+          lbl.style.color = "#1E3A5F";
           document.getElementById("wfhScanLine").style.display = "none";
         } else if (phase === "ok") {
           lbl.textContent = "✅ Verified! Submitting…";
@@ -4136,8 +3395,8 @@
           var resType   = result.att_type ? (typeMap[result.att_type] || result.att_type) : "";
           resBox.innerHTML =
             "<div style='font-size:15px;font-weight:800;color:#15803d;margin-bottom:12px;'>" + resTitle + "</div>" +
-            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Employee</span><span style='font-weight:700;color:#2563eb;'>" + result.name + "</span></div>" +
-            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Time</span><span style='font-weight:700;color:#2563eb;'>" + result.time + "</span></div>" +
+            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Employee</span><span style='font-weight:700;color:#1E3A5F;'>" + result.name + "</span></div>" +
+            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Time</span><span style='font-weight:700;color:#1E3A5F;'>" + result.time + "</span></div>" +
             "<div style='display:flex;justify-content:space-between;padding:7px 0;" + (resType ? "border-bottom:1px solid #d1fae5;" : "") + "font-size:13px;'><span style='color:#64748b;'>Status</span><span style='font-weight:700;color:#16a34a;'>" + resStatus + "</span></div>" +
             (resType ? "<div style='display:flex;justify-content:space-between;padding:7px 0;font-size:13px;'><span style='color:#64748b;'>Attendance Type</span><span style='font-weight:700;color:#16a34a;'>" + resType + "</span></div>" : "");
           resBox.style.display = "block";
@@ -4156,8 +3415,7 @@
       function previewPhoto(input) {
         if (!input.files || !input.files[0]) return;
         var file = input.files[0];
-        document.getElementById('photoFileName').textContent = file.name;
-        document.getElementById('photoSubmitBtn').style.display = 'inline-block';
+        document.getElementById('photoFileName').textContent = 'Uploading ' + file.name + '…';
         var reader = new FileReader();
         reader.onload = function(e) {
           var prev = document.getElementById('profilePreview');
@@ -4173,6 +3431,15 @@
           }
         };
         reader.readAsDataURL(file);
+        // Submit immediately instead of waiting on a separate "Upload"
+        // click -- the photo picker is a single <label>-triggered file
+        // input with no visible affordance suggesting a second step is
+        // needed, so requiring one meant a selected photo could look
+        // "changed" here (via the local preview above) while never
+        // actually reaching the server -- explaining reports of a photo
+        // update that showed in Profile but never appeared anywhere else
+        // (sidebar, Dashboard), because it was never actually saved.
+        document.getElementById('photoForm').submit();
       }
     </script>
 
@@ -4347,15 +3614,16 @@
     </script>
     <!-- /BREAK TIME NOTIFICATION -->
 
-  <script src="/static/darkmode.min.js"></script>
-  <script src="/static/animate-core.min.js"></script>
+  <script src="{{ static_url('darkmode.min.js') }}"></script>
+  <script src="{{ static_url('employee_sidebar.js') }}"></script>
+  <script src="{{ static_url('animate-core.min.js') }}"></script>
 
   <!-- AI CHAT ASSISTANT -->
   <style>
     #aiChatBubble {
       position: fixed; right: 24px; bottom: 24px; z-index: 900;
       width: 56px; height: 56px; border-radius: 50%; border: none; cursor: pointer;
-      background: linear-gradient(135deg, #0f2460 0%, #1a3a8f 100%);
+      background: #101B2D;
       color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 8px 24px rgba(15,36,96,0.35); transition: transform 0.18s ease;
     }
@@ -4369,7 +3637,7 @@
     }
     #aiChatPanel.open { display: flex; }
     #aiChatHeader {
-      background: linear-gradient(135deg, #0f2460 0%, #1a3a8f 100%); color: #fff;
+      background: #101B2D; color: #fff;
       padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
     }
     #aiChatHeader .title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
@@ -4383,7 +3651,7 @@
       background: #f8fafc;
     }
     .ai-msg { max-width: 82%; padding: 9px 12px; border-radius: 14px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-    .ai-msg.user { align-self: flex-end; background: #1a3a8f; color: #fff; border-bottom-right-radius: 4px; }
+    .ai-msg.user { align-self: flex-end; background: #16293F; color: #fff; border-bottom-right-radius: 4px; }
     .ai-msg.bot { align-self: flex-start; background: #eef2f7; color: #1e293b; border-bottom-left-radius: 4px; }
     .ai-msg.bot.error { background: #fef2f2; color: #b91c1c; }
     .ai-msg.typing { align-self: flex-start; color: #94a3b8; font-size: 12px; font-style: italic; }
@@ -4394,9 +3662,9 @@
       flex: 1; border: 1px solid #cbd5e1; border-radius: 10px; padding: 9px 12px;
       font-size: 13px; font-family: inherit; outline: none;
     }
-    #aiChatInput:focus { border-color: #60a5fa; }
+    #aiChatInput:focus { border-color: #6B93BB; }
     #aiChatSend {
-      background: #1a3a8f; color: #fff; border: none; border-radius: 10px; width: 38px; flex-shrink: 0;
+      background: #16293F; color: #fff; border: none; border-radius: 10px; width: 38px; flex-shrink: 0;
       cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px;
     }
     #aiChatSend:disabled { opacity: 0.5; cursor: default; }
@@ -4494,7 +3762,7 @@
     #notifBell {
       position: fixed; right: 24px; top: 20px; z-index: 901;
       width: 44px; height: 44px; border-radius: 50%; border: 1px solid #e2e8f0; cursor: pointer;
-      background: #fff; color: #1a3a8f; font-size: 19px; display: flex; align-items: center; justify-content: center;
+      background: #fff; color: #16293F; font-size: 19px; display: flex; align-items: center; justify-content: center;
       box-shadow: 0 4px 14px rgba(15,23,42,0.12); transition: transform 0.15s ease;
     }
     #notifBell:hover { transform: scale(1.06); }
@@ -4517,14 +3785,14 @@
     }
     #notifHeader .title { font-size: 14px; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 8px; }
     #notifMarkAll {
-      background: none; border: none; color: #1a3a8f; font-size: 12px; font-weight: 600; cursor: pointer;
+      background: none; border: none; color: #16293F; font-size: 12px; font-weight: 600; cursor: pointer;
       display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 6px;
     }
     #notifMarkAll:hover { background: #eef2f7; }
     #notifMarkAll:disabled { opacity: 0.4; cursor: default; }
     #notifList { overflow-y: auto; flex: 1; }
     .notif-item { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; }
-    .notif-item.unread { background: #eff6ff; }
+    .notif-item.unread { background: #FAFAFA; }
     .notif-item .notif-title { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 3px; }
     .notif-item .notif-msg { font-size: 12.5px; color: #475569; line-height: 1.4; }
     .notif-item .notif-time { font-size: 11px; color: #94a3b8; margin-top: 5px; }
@@ -4690,7 +3958,7 @@
   })();
   </script>
   <!-- /DEVICE POSTURE RELAY -->
-  <script src="/static/js/i18n.js"></script>
+  <script src="{{ static_url('js/i18n.js') }}"></script>
   <script>
     function enrollTouchID() {
       if (!window.PublicKeyCredential) {
@@ -4716,7 +3984,5 @@
       }
     });
   </script>
-  <script>var DEVICE_API_BASE = '/api/employee/devices';</script>
-  {% include '_device_manager.html' %}
 </body>
 </html>

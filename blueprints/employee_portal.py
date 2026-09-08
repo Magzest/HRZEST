@@ -8,10 +8,11 @@ from flask import (
 )
 from extensions import app, app_log, limiter, log_security_event
 from database import get_db_connection
-from utils.auth import employee_required, employee_api_required, check_password_hash, generate_password_hash
+from utils.auth import employee_required, employee_api_required, validate_new_password
 from utils.helpers import (
     tpath,
     _audit, _db, encrypt_pii, decrypt_pii, decrypt_pii_date, _validate_image_file, get_auth_config,
+    company_today, company_now, coerce_datetime,
 )
 from utils.ai_assistant import build_employee_context, ask_assistant
 from utils.session_risk import ensure_session_id, evaluate_session_risk
@@ -19,14 +20,11 @@ from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, infer_type_legacy,
     fetch_holidays_set, get_billable_past_days, is_within_range,
     is_within_office_range, geofence_check_error, compute_session_worked_minutes,
+    fetch_employee_work_location,
 )
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available, _get_known_face_encoding
 from utils.webauthn_utils import _wa_fingerprint_recently_verified, _mobile_biometric_recently_verified
-from utils.device_utils import (
-    get_or_create_device_token, list_devices, rename_device,
-    add_asset_device, delete_asset_device, revoke_device,
-)
 from qr_generator import generate_qr
 import utils.config as cfg
 
@@ -199,7 +197,7 @@ def update_my_photo():
         img.save(save_path, "JPEG", quality=90)
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (emp_id + ".jpg", emp_id))
+        cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (save_path, emp_id))
         db.commit()
         cursor.close()
         db.close()
@@ -325,7 +323,7 @@ def employee_portal():
             emp[_pii_idx] = decrypt_pii(emp[_pii_idx])
     emp[12] = decrypt_pii_date(emp[12])
 
-    today = datetime.date.today()
+    today = company_today()
     cursor.execute(
         "SELECT login_time, logout_time, status, logout_status, attendance_type "
         "FROM attendance WHERE employee_id=%s AND date=%s",
@@ -482,13 +480,13 @@ def employee_portal():
 
     # Announcements for dashboard (public + private addressed to this employee)
     cursor.execute("""
-        SELECT id, title, content, priority, created_at
+        SELECT id, title, content, priority, created_at, attachment_original_name
         FROM announcements
         WHERE COALESCE(visibility,'public') = 'public'
            OR (visibility = 'private' AND target_employee_id = %s)
         ORDER BY created_at DESC LIMIT 10
     """, (emp_id,))
-    announcements = cursor.fetchall()
+    announcements = [r[:4] + (coerce_datetime(r[4]),) + r[5:] for r in cursor.fetchall()]
 
     # Pending leave count for nav badge
     cursor.execute("SELECT COUNT(*) FROM leave_requests WHERE employee_id=%s AND status='Pending'", (emp_id,))
@@ -522,28 +520,10 @@ def employee_portal():
     """, (today, today.year))
     leave_holidays = cursor.fetchall()
 
-    # Holiday calendar data for employee view
+    # Holiday list data for employee view
     hol_year = int(request.args.get("hol_year", today.year))
     cursor.execute("SELECT id, date, name FROM holidays WHERE EXTRACT(YEAR FROM date)=%s ORDER BY date", (hol_year,))
     hol_rows = cursor.fetchall()
-    hol_map = {}
-    for row in hol_rows:
-        date_val = row[1]
-        if isinstance(date_val, datetime.date):
-            hol_map[date_val] = (row[0], row[2])
-    sun_cal_obj = calendar.Calendar(firstweekday=6)
-    emp_hol_cal = []
-    for _m in range(1, 13):
-        m_hols = {}
-        for _d, (_hid, _hname) in hol_map.items():
-            if _d.month == _m:
-                m_hols[_d.day] = (_hid, _hname)
-        emp_hol_cal.append({
-            'month_num': _m,
-            'month_name': calendar.month_name[_m],
-            'weeks': sun_cal_obj.monthdayscalendar(hol_year, _m),
-            'holidays': m_hols,
-        })
 
     # Employee's own incentive history
     try:
@@ -697,42 +677,6 @@ def employee_portal():
             'present': p_full + p_late + p_half, 'absent': p_absent,
         })
 
-    # Shift swap data
-    try:
-        cursor.execute("""
-            SELECT ssr.id, ssr.target_id, et.name, ts.name AS tgt_shift,
-                   ssr.reason, ssr.status, ssr.created_at
-            FROM shift_swap_requests ssr
-            JOIN employees et ON et.employee_id = ssr.target_id
-            JOIN shifts ts ON ts.id = ssr.target_shift_id
-            WHERE ssr.requester_id=%s ORDER BY ssr.created_at DESC LIMIT 20
-        """, (emp_id,))
-        my_swap_requests = cursor.fetchall()
-        cursor.execute("""
-            SELECT ssr.id, ssr.requester_id, er.name, rs.name AS req_shift,
-                   ssr.reason, ssr.status, ssr.created_at
-            FROM shift_swap_requests ssr
-            JOIN employees er ON er.employee_id = ssr.requester_id
-            JOIN shifts rs ON rs.id = ssr.requester_shift_id
-            WHERE ssr.target_id=%s AND ssr.status='Pending_Target' ORDER BY ssr.created_at DESC
-        """, (emp_id,))
-        incoming_swap_requests = cursor.fetchall()
-        cursor.execute("""
-            SELECT e.employee_id, e.name, COALESCE(s.name,''),
-                   COALESCE(TO_CHAR(s.start_time,'HH24:MI'),''),
-                   COALESCE(TO_CHAR(s.end_time,'HH24:MI'),''),
-                   COALESCE(e.department,''), COALESCE(e.designation,'')
-            FROM employees e
-            LEFT JOIN shifts s ON s.id = e.shift_id
-            WHERE e.employee_id != %s AND e.is_active=1
-            ORDER BY e.name
-        """, (emp_id,))
-        swap_eligible_employees = cursor.fetchall()
-    except Exception:
-        my_swap_requests = []
-        incoming_swap_requests = []
-        swap_eligible_employees = []
-
     cursor.close()
     db.close()
 
@@ -746,8 +690,22 @@ def employee_portal():
             pm = 12
             py -= 1
 
+    # Cache-busting suffix for the /my_photo <img> src -- that URL is always
+    # the same regardless of which photo is behind it, so the browser (and
+    # send_from_directory's own Cache-Control/ETag headers) can keep showing
+    # a stale image after update_my_photo() saves a new one over the old
+    # file. Tying the query string to the file's own mtime forces a fresh
+    # fetch exactly when the photo actually changed, without needing a
+    # dedicated "photo updated at" column.
+    try:
+        _photo_path = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
+        photo_v = int(os.path.getmtime(_photo_path))
+    except OSError:
+        photo_v = 0
+
     return render_template("employee_portal.html",
                            emp=emp,
+                           photo_v=photo_v,
                            today_date=today,
                            today=today.strftime("%d %b %Y"),
                            today_long=today.strftime("%A, %d %B %Y"),
@@ -789,7 +747,6 @@ def employee_portal():
                            upcoming_holidays=upcoming_holidays,
                            leave_holidays=leave_holidays,
                            hol_year=hol_year,
-                           emp_hol_cal=emp_hol_cal,
                            all_holidays_list=hol_rows,
                            my_incentives=my_incentives,
                            total_incentive_year=total_incentive_year,
@@ -806,12 +763,6 @@ def employee_portal():
                            ot_pay_this_month=ot_pay_this_month,
                            net_this_month=net_this_month,
                            recent_payslips=recent_payslips,
-                           my_swap_requests=my_swap_requests,
-                           incoming_swap_requests=incoming_swap_requests,
-                           swap_eligible_employees=swap_eligible_employees,
-                           swap_sent=request.args.get("swap_sent") == "1",
-                           swap_responded=request.args.get("swap_responded") == "1",
-                           swap_error=request.args.get("swap_error", ""),
                            fp_enrolled=fp_enrolled,
                            fp_enabled=get_auth_config().get("fingerprint_enabled", False),
                            attendance_auth_cfg=get_auth_config(),
@@ -826,22 +777,14 @@ def api_employee_change_password():
     new_password = data.get("new_password", "").strip()
     if not current_password or not new_password:
         return jsonify({"ok": False, "msg": "current_password and new_password required"}), 400
-    if len(new_password) < 8:
-        return jsonify({"ok": False, "msg": "New password must be at least 8 characters"}), 400
+    _pw_ok, _pw_err = validate_new_password(new_password)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
     from flask import g as _g
+    from utils.auth import verify_and_update_password
     emp_id = _g.api_emp_id
-    with _db() as (cursor, conn):
-        cursor.execute("SELECT password FROM employees WHERE employee_id=%s", (emp_id,))
-        row = cursor.fetchone()
-        if not row:
-            return jsonify({"ok": False, "msg": "Employee not found"}), 404
-        if not row[0] or not check_password_hash(row[0], current_password):
-            return jsonify({"ok": False, "msg": "Current password is incorrect"}), 401
-        cursor.execute(
-            "UPDATE employees SET password=%s WHERE employee_id=%s",
-            (generate_password_hash(new_password), emp_id)
-        )
-        conn.commit()
+    if not verify_and_update_password("employees", "employee_id", emp_id, current_password, new_password):
+        return jsonify({"ok": False, "msg": "Current password is incorrect"}), 401
     return jsonify({"ok": True, "msg": "Password changed successfully"})
 
 
@@ -866,7 +809,7 @@ def api_employee_portal():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    today = datetime.date.today()
+    today = company_today()
 
     cursor.execute("""
         SELECT e.name, e.email, COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), '') AS company_name
@@ -968,8 +911,7 @@ def api_employee_checkin():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT name, work_mode, work_lat, work_lon FROM employees WHERE employee_id=%s", (emp_id,))
-    result = cursor.fetchone()
+    result = fetch_employee_work_location(cursor, emp_id)
     if not result:
         cursor.close()
         db.close()
@@ -997,19 +939,37 @@ def api_employee_checkin():
                 return jsonify({"ok": False, "msg": "You are outside the office premises."})
 
     punched_at_str = data.get("punched_at")
-    now = datetime.datetime.now()
+    now = company_now()
     if punched_at_str:
         try:
             _pt = datetime.datetime.fromisoformat(punched_at_str.replace("Z", "+00:00"))
-            _pt = _pt.replace(tzinfo=None)
+            if _pt.tzinfo is not None:
+                # Mobile sends Date.toISOString() (always UTC, "...Z") --
+                # convert to the tenant's configured timezone before using
+                # it as a wall-clock "now". Previously this just discarded
+                # the offset (.replace(tzinfo=None)) and treated the raw
+                # UTC digits as if they were already local, which shifted
+                # every offline check-in's date/time by the UTC offset
+                # (e.g. a 9am IST check-in landing as 3:30am).
+                _pt = _pt.astimezone(now.tzinfo)
+            else:
+                # No offset info on the string (e.g. this app's own test
+                # suite posts a naive isoformat()) -- assume it already
+                # represents company-local wall-clock time, same as before.
+                _pt = now.tzinfo.localize(_pt)
             if (now - _pt).total_seconds() <= 86400:
                 now = _pt
             else:
                 cursor.close()
                 db.close()
                 return jsonify({"ok": False, "msg": "Offline punch too old (>24 h). Rejected."}), 400
-        except (ValueError, TypeError):
-            pass
+        except (ValueError, TypeError) as exc:
+            # Deliberate fallback, not a bug being hidden: an unparseable
+            # client-supplied offline-punch timestamp just means `now`
+            # (already set above) is used instead -- still worth a trace
+            # for diagnosing a client that's persistently sending malformed
+            # timestamps.
+            app_log.debug("Unparseable offline-punch punched_at=%r: %s", punched_at_str, exc)
 
     today = now.date()
     current_time = now.time()
@@ -1091,8 +1051,7 @@ def api_employee_sync_punches():
 
     db2 = get_db_connection()
     cur2 = db2.cursor(buffered=True)
-    cur2.execute("SELECT name, work_mode, work_lat, work_lon FROM employees WHERE employee_id=%s", (emp_id,))
-    _emp_row = cur2.fetchone()
+    _emp_row = fetch_employee_work_location(cur2, emp_id)
     if not _emp_row:
         cur2.close()
         db2.close()
@@ -1126,8 +1085,15 @@ def api_employee_sync_punches():
                     continue
         try:
             _pt = datetime.datetime.fromisoformat(punched_at_str.replace("Z", "+00:00"))
-            _pt = _pt.replace(tzinfo=None)
-            _now = datetime.datetime.now()
+            _now = company_now()
+            if _pt.tzinfo is not None:
+                # See api_employee_checkin's punched_at handling above --
+                # mobile always sends UTC ("...Z"); convert to the tenant's
+                # configured timezone instead of discarding the offset and
+                # treating the raw UTC digits as local.
+                _pt = _pt.astimezone(_now.tzinfo)
+            else:
+                _pt = _now.tzinfo.localize(_pt)
             age = (_now - _pt).total_seconds()
             if age > 86400:
                 results.append({"id": punch.get("id"), "ok": False, "msg": "Too old (>24 h)"})
@@ -1211,7 +1177,6 @@ def api_employee_qr_face_checkin():
     kiosk device, which is never logged in), falls back to the posted
     employee_id exactly as before -- unauthenticated by design there, since
     the QR/face/fingerprint combo itself is the proof of identity."""
-    employee_id = (session.get("employee_id") or request.form.get("employee_id", "")).strip().upper()
     lat = request.form.get("lat")
     lon = request.form.get("lon")
     face_photo = request.files.get("face_photo")
@@ -1219,6 +1184,28 @@ def api_employee_qr_face_checkin():
 
     if auth_combo not in ("qr_face", "qr_fingerprint", "face_fingerprint"):
         return jsonify({"ok": False, "msg": "Invalid auth_combo"}), 400
+
+    _session_emp_id = session.get("employee_id")
+    if _session_emp_id:
+        employee_id = _session_emp_id.strip().upper()
+    elif auth_combo in ("qr_face", "qr_fingerprint"):
+        # Shared, unauthenticated kiosk device: the posted "employee_id" is
+        # really whatever text was scanned off the QR code, which must be
+        # this employee's signed "<id>.<hmac>" value (qr_generator.py), not
+        # a bare ID -- otherwise the QR/fingerprint combo below would be
+        # checking the RIGHT biometric against a WRONG (attacker-typed)
+        # employee_id if the two auth factors weren't cryptographically
+        # bound to the same source.
+        from qr_generator import verify_qr_value
+        _verified_id, _qr_valid = verify_qr_value(request.form.get("employee_id", "").strip())
+        if not _qr_valid:
+            return jsonify({"ok": False, "msg": "Invalid or unrecognized QR code. Please rescan."}), 400
+        employee_id = _verified_id.upper()
+    else:
+        # face_fingerprint has no QR component -- the ID is typed/pre-known
+        # at the kiosk, and a real face/fingerprint match against THAT ID's
+        # stored credential is what actually gates identity.
+        employee_id = request.form.get("employee_id", "").strip().upper()
 
     if not employee_id:
         return jsonify({"ok": False, "msg": "employee_id required"}), 400
@@ -1242,11 +1229,7 @@ def api_employee_qr_face_checkin():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT name, work_mode, work_lat, work_lon, face_image FROM employees WHERE employee_id=%s",
-        (employee_id,)
-    )
-    result = cursor.fetchone()
+    result = fetch_employee_work_location(cursor, employee_id, include_face=True)
     if not result:
         cursor.close()
         db.close()
@@ -1311,10 +1294,13 @@ def api_employee_qr_face_checkin():
             face_path = os.path.join(face_dir, f"{employee_id}_{ts}.jpg")
             img = _PILImage.open(face_photo.stream).convert("RGB")
             img.save(face_path, "JPEG", quality=80)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Best-effort audit-log attachment -- must not block attendance
+            # marking, but silently missing the face-log photo is worth
+            # knowing about.
+            app_log.warning("Face-log photo save failed for %s: %s", employee_id, exc, exc_info=True)
 
-    now = datetime.datetime.now()
+    now = company_now()
     today = now.date()
     current_time = now.time()
 
@@ -1517,7 +1503,7 @@ def api_employee_profile():
                e.bank_name, e.bank_account, e.bank_ifsc, e.pan_number, e.aadhar_number,
                COALESCE(s.salary_per_day, 0), COALESCE(e.joining_date, e.date_of_joining),
                COALESCE(c.name, (SELECT company_name FROM company_settings LIMIT 1), ''),
-               e.emergency_contact_relation, e.uan_number
+               e.emergency_contact_relation, e.uan_number, COALESCE(e.email_alerts_enabled, 1)
         FROM employees e
         LEFT JOIN salary_config s ON e.employee_id = s.employee_id
         LEFT JOIN companies c ON e.company_id = c.id
@@ -1548,8 +1534,31 @@ def api_employee_profile():
             "join_date": str(row[22]) if row[22] else None,
             "company_name": row[23],
             "photo_url": f"/dataset/{row[0]}.jpg",
+            "email_alerts_enabled": bool(row[26]),
         },
     })
+
+
+@employee_portal_bp.route("/api/employee/notification_preferences", methods=["POST"])
+@employee_api_required
+def api_update_notification_preferences():
+    """Toggles whether this employee receives the status-change alert emails
+    gated in blueprints/leave.py (leave approved/declined, resignation
+    accepted/declined) -- a dedicated route rather than folding this into
+    api_update_my_profile, since that route replaces the whole employees
+    row and every existing caller of it would need updating to keep
+    round-tripping this field."""
+    from flask import g as _g
+    emp_id = _g.api_emp_id
+    data = request.get_json(silent=True) or {}
+    enabled = 1 if data.get("email_alerts_enabled") else 0
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("UPDATE employees SET email_alerts_enabled=%s WHERE employee_id=%s", (enabled, emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    return jsonify({"ok": True, "email_alerts_enabled": bool(enabled)})
 
 
 @employee_portal_bp.route("/api/employee/profile", methods=["POST"])
@@ -1856,54 +1865,3 @@ def api_employee_device_risk():
                         "msg": "Device risk too high -- this session is being terminated."})
 
     return jsonify({"ok": True, "blocked": False})
-
-
-# ── Self-service device management (utils/device_utils.py) ─────────────────
-
-@employee_portal_bp.route("/api/employee/devices", methods=["GET"])
-@employee_required
-def api_employee_devices():
-    emp_id = session["employee_id"]
-    token, _ = get_or_create_device_token(request)
-    devices = list_devices(get_db_connection, "employee", emp_id, token)
-    return jsonify({"ok": True, "devices": devices})
-
-
-@employee_portal_bp.route("/api/employee/devices/<int:device_id>/rename", methods=["POST"])
-@employee_required
-def api_employee_device_rename(device_id):
-    emp_id = session["employee_id"]
-    data = request.get_json(silent=True) or {}
-    ok = rename_device(get_db_connection, "employee", emp_id, device_id, data.get("name"))
-    return jsonify({"ok": ok})
-
-
-@employee_portal_bp.route("/api/employee/devices/<int:device_id>/revoke", methods=["POST"])
-@employee_required
-def api_employee_device_revoke(device_id):
-    emp_id = session["employee_id"]
-    ok = revoke_device(get_db_connection, "employee", emp_id, device_id, emp_id)
-    if ok:
-        log_security_event(
-            "employee.device_revoked", f"Device {device_id} revoked by '{emp_id}'",
-            level="INFO", identifier=emp_id,
-        )
-    return jsonify({"ok": ok})
-
-
-@employee_portal_bp.route("/api/employee/devices/asset", methods=["POST"])
-@employee_required
-def api_employee_device_add_asset():
-    emp_id = session["employee_id"]
-    data = request.get_json(silent=True) or {}
-    new_id = add_asset_device(get_db_connection, "employee", emp_id,
-                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
-    return jsonify({"ok": new_id is not None, "id": new_id})
-
-
-@employee_portal_bp.route("/api/employee/devices/asset/<int:device_id>/delete", methods=["POST"])
-@employee_required
-def api_employee_device_delete_asset(device_id):
-    emp_id = session["employee_id"]
-    ok = delete_asset_device(get_db_connection, "employee", emp_id, device_id)
-    return jsonify({"ok": ok})

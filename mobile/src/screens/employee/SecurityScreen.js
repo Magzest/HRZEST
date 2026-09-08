@@ -16,10 +16,13 @@ import { Ionicons } from "@expo/vector-icons";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import SaveButton from "../../components/profile/SaveButton";
+import { useTheme } from "../../store/ThemeContext";
 import { changePassword } from "../../api/client";
 import { getBiometricLockEnabled, setBiometricLockEnabled } from "../../utils/preferences";
 
 export default function SecurityScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -98,14 +101,14 @@ export default function SecurityScreen() {
           placeholder={label}
           secureTextEntry={!secure}
           style={styles.input}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.textLight}
         />
 
         <TouchableOpacity onPress={onToggle}>
           <Ionicons
             name={secure ? "eye-outline" : "eye-off-outline"}
             size={22}
-            color="#64748B"
+            color={colors.textSecondary}
           />
         </TouchableOpacity>
       </View>
@@ -125,7 +128,7 @@ export default function SecurityScreen() {
           <Ionicons
             name={icon}
             size={22}
-            color="#173B8C"
+            color={colors.primary}
           />
         </View>
 
@@ -141,8 +144,8 @@ export default function SecurityScreen() {
         value={value}
         onValueChange={onValueChange}
         trackColor={{
-          false: "#CBD5E1",
-          true: "#173B8C",
+          false: colors.border,
+          true: colors.primary,
         }}
       />
     </View>
@@ -211,10 +214,10 @@ export default function SecurityScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 16,
     marginTop: 12,
   },
@@ -237,17 +240,17 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#334155",
+    color: colors.textSecondary,
     marginBottom: 8,
   },
 
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     paddingHorizontal: 16,
     height: 56,
   },
@@ -255,16 +258,16 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: "#0F172A",
+    color: colors.text,
   },
 
   optionCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -289,7 +292,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
@@ -298,21 +301,21 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
 
   optionSubtitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: colors.textSecondary,
     marginTop: 4,
   },
 
   activityCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 28,
@@ -331,7 +334,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 14,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
@@ -340,13 +343,13 @@ const styles = StyleSheet.create({
   activityTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
 
   activitySubtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: "#64748B",
+    color: colors.textSecondary,
   },
 
   activityTime: {

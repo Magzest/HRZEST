@@ -41,17 +41,6 @@ def _wait_for_async_writes():
     _write_queue.join()
 
 
-class TestViewHolidays:
-    def test_renders_for_admin(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/view_holidays")
-        assert resp.status_code == 200
-
-    def test_requires_admin(self, client):
-        resp = client.get("/view_holidays", follow_redirects=False)
-        assert resp.status_code in (302, 401)
-
-
 class TestAddHoliday:
     def test_adds_new_holiday(self, client, seed_admin, db_engine):
         _admin_session(client, seed_admin["username"])
@@ -117,39 +106,6 @@ class TestImportIndianHolidays:
         new_ids = [r[0] for r in cur.fetchall() if r[0] not in existing_ids]
         if new_ids:
             cur.execute("DELETE FROM holidays WHERE id = ANY(%s)", (new_ids,))
-        cur.close()
-
-
-class TestAdminLeaveTypes:
-    def test_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/admin_leave_types")
-        assert resp.status_code == 200
-
-    def test_add_edit_toggle_delete_cycle(self, client, seed_admin, db_engine):
-        _admin_session(client, seed_admin["username"])
-        client.post("/admin_leave_types", data={
-            "action": "add", "name": "Route Test Leave", "annual_quota": "5",
-        })
-        cur = db_engine.cursor()
-        cur.execute("SELECT id, is_active FROM leave_types WHERE name='Route Test Leave'")
-        lt_id, is_active = cur.fetchone()
-        assert is_active == 1
-
-        client.post("/admin_leave_types", data={
-            "action": "edit", "lt_id": str(lt_id), "name": "Route Test Leave 2", "annual_quota": "8",
-        })
-        cur.execute("SELECT name, annual_quota FROM leave_types WHERE id=%s", (lt_id,))
-        name, quota = cur.fetchone()
-        assert name == "Route Test Leave 2" and quota == 8
-
-        client.post("/admin_leave_types", data={"action": "toggle", "lt_id": str(lt_id)})
-        cur.execute("SELECT is_active FROM leave_types WHERE id=%s", (lt_id,))
-        assert cur.fetchone()[0] == 0
-
-        client.post("/admin_leave_types", data={"action": "delete", "lt_id": str(lt_id)})
-        cur.execute("SELECT * FROM leave_types WHERE id=%s", (lt_id,))
-        assert cur.fetchone() is None
         cur.close()
 
 
@@ -371,13 +327,6 @@ class TestRequestResignation:
         cur.execute("SELECT COUNT(*) FROM resignation_requests WHERE employee_id=%s", (seed_employee["employee_id"],))
         assert cur.fetchone()[0] == 0
         cur.close()
-
-
-class TestResignationRequestsView:
-    def test_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/resignation_requests")
-        assert resp.status_code == 200
 
 
 class TestResignationAction:
@@ -822,11 +771,6 @@ class TestCompoffRedirectAndSettings:
         resp = client.get("/compoff", follow_redirects=False)
         assert resp.status_code == 302
         assert "tab=compoff" in resp.headers["Location"]
-
-    def test_compoff_old_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/compoff_old")
-        assert resp.status_code == 200
 
     def test_compoff_settings_saves(self, client, seed_admin, db_engine):
         _admin_session(client, seed_admin["username"])

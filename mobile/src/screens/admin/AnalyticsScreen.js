@@ -15,10 +15,13 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import AdminHeader from "../../components/admin/AdminHeader";
 import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchDashboard, fetchEmployees } from "../../api/client";
 import { shareTextFile } from "../../utils/fileShare";
 
 export default function AnalyticsScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [selectedPeriod, setSelectedPeriod] = useState("Month");
   const [overview, setOverview] = useState({ attendance: 0, present: 0, absent: 0, employees: 0, late: 0, leave: 0 });
   const [departments, setDepartments] = useState([]);
@@ -136,7 +139,7 @@ export default function AnalyticsScreen({ navigation }) {
   };
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
           title="Analytics & Insights"
@@ -224,7 +227,7 @@ export default function AnalyticsScreen({ navigation }) {
           <View style={styles.kpiGrid}>
             <View style={styles.kpiCard}>
               <View style={styles.kpiTopRow}>
-                <View style={[styles.kpiIconBox, { backgroundColor: "#EEF4FF" }]}>
+                <View style={[styles.kpiIconBox, { backgroundColor: colors.primaryLight }]}>
                   <Ionicons name="people" size={20} color="#173B8C" />
                 </View>
                 <View style={styles.kpiTag}>
@@ -238,10 +241,10 @@ export default function AnalyticsScreen({ navigation }) {
 
             <View style={styles.kpiCard}>
               <View style={styles.kpiTopRow}>
-                <View style={[styles.kpiIconBox, { backgroundColor: "#ECFDF5" }]}>
+                <View style={[styles.kpiIconBox, { backgroundColor: colors.greenBg }]}>
                   <Ionicons name="checkmark-circle" size={20} color="#10B981" />
                 </View>
-                <View style={[styles.kpiTag, { backgroundColor: "#ECFDF5" }]}>
+                <View style={[styles.kpiTag, { backgroundColor: colors.greenBg }]}>
                   <Text style={[styles.kpiTagText, { color: "#065F46" }]}>
                     {overview.employees > 0 ? `${Math.round((overview.present / overview.employees) * 100)}%` : "--"}
                   </Text>
@@ -254,10 +257,10 @@ export default function AnalyticsScreen({ navigation }) {
 
             <View style={styles.kpiCard}>
               <View style={styles.kpiTopRow}>
-                <View style={[styles.kpiIconBox, { backgroundColor: "#FEF2F2" }]}>
-                  <Ionicons name="close-circle" size={20} color="#EF4444" />
+                <View style={[styles.kpiIconBox, { backgroundColor: colors.redBg }]}>
+                  <Ionicons name="close-circle" size={20} color={colors.danger} />
                 </View>
-                <View style={[styles.kpiTag, { backgroundColor: "#FEF2F2" }]}>
+                <View style={[styles.kpiTag, { backgroundColor: colors.redBg }]}>
                   <Text style={[styles.kpiTagText, { color: "#991B1B" }]}>
                     {overview.employees > 0 ? `${Math.round((overview.absent / overview.employees) * 100)}%` : "--"}
                   </Text>
@@ -270,10 +273,10 @@ export default function AnalyticsScreen({ navigation }) {
 
             <View style={styles.kpiCard}>
               <View style={styles.kpiTopRow}>
-                <View style={[styles.kpiIconBox, { backgroundColor: "#FFFBEB" }]}>
-                  <Ionicons name="time" size={20} color="#F59E0B" />
+                <View style={[styles.kpiIconBox, { backgroundColor: colors.yellowBg }]}>
+                  <Ionicons name="time" size={20} color={colors.warning} />
                 </View>
-                <View style={[styles.kpiTag, { backgroundColor: "#FFFBEB" }]}>
+                <View style={[styles.kpiTag, { backgroundColor: colors.yellowBg }]}>
                   <Text style={[styles.kpiTagText, { color: "#92400E" }]}>Grace</Text>
                 </View>
               </View>
@@ -333,7 +336,7 @@ export default function AnalyticsScreen({ navigation }) {
                 <Text style={{ fontSize: 13, color: "#64748B", fontWeight: "600" }}>
                   No Active Staff Yet
                 </Text>
-                <Text style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: colors.textLight, marginTop: 4 }}>
                   Active employees will be listed here once registered.
                 </Text>
               </View>
@@ -378,7 +381,7 @@ export default function AnalyticsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 18, paddingTop: 14 },
 
@@ -391,11 +394,11 @@ const styles = StyleSheet.create({
   },
   periodPillContainer: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 4,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 1,
   },
   periodPill: {
@@ -417,12 +420,12 @@ const styles = StyleSheet.create({
   exportBtn: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 1,
   },
   exportBtnText: {
@@ -434,12 +437,12 @@ const styles = StyleSheet.create({
 
   // Hero Card
   heroCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 3,
     shadowColor: "#0F172A",
     shadowOpacity: 0.05,
@@ -460,14 +463,14 @@ const styles = StyleSheet.create({
   heroValue: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     letterSpacing: -0.4,
     marginTop: 4,
   },
   trendBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ECFDF5",
+    backgroundColor: colors.greenBg,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 14,
@@ -512,7 +515,7 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#475569",
+    color: colors.textSecondary,
   },
 
   // KPI Grid
@@ -524,12 +527,12 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     width: "48.5%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 2,
   },
   kpiTopRow: {
@@ -545,7 +548,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   kpiTag: {
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -558,14 +561,14 @@ const styles = StyleSheet.create({
   kpiNumber: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     letterSpacing: -0.3,
     marginTop: 10,
   },
   kpiTitle: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
     marginTop: 2,
   },
   kpiSub: {
@@ -576,12 +579,12 @@ const styles = StyleSheet.create({
 
   // Section Card Base
   sectionCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 18,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 2,
   },
   sectionHeaderRow: {
@@ -593,7 +596,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   sectionSubtitle: {
     fontSize: 12,
@@ -609,7 +612,7 @@ const styles = StyleSheet.create({
   badgePillText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#475569",
+    color: colors.textSecondary,
   },
 
   // Bar Chart
@@ -669,12 +672,12 @@ const styles = StyleSheet.create({
   deptName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   deptRate: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   deptProgressTrack: {
     height: 7,
@@ -689,7 +692,7 @@ const styles = StyleSheet.create({
   },
   deptEmpCount: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: colors.textLight,
   },
 
   // Top Performers
@@ -716,7 +719,7 @@ const styles = StyleSheet.create({
   performerName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   performerSub: {
     fontSize: 12,
@@ -724,7 +727,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   scoreBadge: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: colors.greenBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
@@ -753,7 +756,7 @@ const styles = StyleSheet.create({
   alertTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   alertSub: {
     fontSize: 11,

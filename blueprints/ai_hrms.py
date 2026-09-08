@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Blueprint for AI-powered HRMS features (Recruitment, Helpdesk, Interview Evaluation, Attrition Analytics)."""
+"""Blueprint for AI-powered HRMS features (Helpdesk, Interview Evaluation, Attrition Analytics)."""
 
-from flask import Blueprint, request, jsonify, render_template, session
-from utils.ai_resume_parser import parse_resume, match_candidate_job
+from flask import Blueprint, request, jsonify, session
 from utils.ai_helpdesk import process_helpdesk_query
 from utils.ai_interview_evaluator import evaluate_interview_notes
 from utils.ai_attrition_analytics import compute_attrition_and_burnout_analytics
-from utils.auth import admin_required, _hash_token
+from utils.auth import resolve_admin_identity, _hash_token
 from utils.helpers import _db
 
 ai_hrms_bp = Blueprint("ai_hrms", __name__)
@@ -34,54 +33,6 @@ def _resolve_bearer_identity():
     return row[0] if row else None
 
 
-@ai_hrms_bp.route("/recruitment")
-@admin_required
-def recruitment_page():
-    """Render the AI-Powered Recruitment & Candidate Screening Portal."""
-    return render_template("recruitment.html")
-
-
-@ai_hrms_bp.route("/api/ai/parse-resume", methods=["POST"])
-@admin_required
-def api_parse_resume():
-    """API Endpoint: Parse uploaded resume document or raw text."""
-    file = request.files.get("resume_file")
-    if file:
-        content = file.read()
-        parsed = parse_resume(content, filename=file.filename)
-    else:
-        raw_text = request.form.get("resume_text") or (request.get_json(silent=True) or {}).get("resume_text", "")
-        if not raw_text:
-            return jsonify({"ok": False, "msg": "No resume file or text provided."}), 400
-        parsed = parse_resume(raw_text.encode("utf-8"), filename="Resume.txt")
-        
-    return jsonify({"ok": True, "parsed_profile": parsed})
-
-
-@ai_hrms_bp.route("/api/ai/screen-candidate", methods=["POST"])
-@admin_required
-def api_screen_candidate():
-    """API Endpoint: Score and match parsed candidate profile against job description."""
-    data = request.get_json(silent=True) or {}
-    parsed_candidate = data.get("parsed_profile")
-    job_description = data.get("job_description", "")
-    
-    if not parsed_candidate:
-        # Fallback if raw resume_text was passed
-        resume_text = data.get("resume_text", "")
-        if resume_text:
-            parsed_candidate = parse_resume(resume_text.encode("utf-8"))
-        else:
-            return jsonify({"ok": False, "msg": "Candidate profile or resume text required."}), 400
-
-    match_result = match_candidate_job(parsed_candidate, job_description)
-    return jsonify({
-        "ok": True,
-        "parsed_profile": parsed_candidate,
-        "match_result": match_result,
-    })
-
-
 @ai_hrms_bp.route("/api/ai/hr-helpdesk", methods=["POST"])
 def api_hr_helpdesk():
     """API Endpoint: Conversational HR Helpdesk Q&A with automatic ticket escalation."""
@@ -100,9 +51,10 @@ def api_hr_helpdesk():
 
 
 @ai_hrms_bp.route("/api/ai/evaluate-interview", methods=["POST"])
-@admin_required
 def api_evaluate_interview():
     """API Endpoint: Synthesize interviewer notes into structured scorecard & sentiment analysis."""
+    if not resolve_admin_identity():
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
     data = request.get_json(silent=True) or {}
     candidate_name = data.get("candidate_name", "Candidate")
     position = data.get("position", "Software Engineer")
@@ -116,9 +68,10 @@ def api_evaluate_interview():
 
 
 @ai_hrms_bp.route("/api/ai/attrition-analytics")
-@admin_required
 def api_attrition_analytics():
     """API Endpoint: Predict turnover trends and burnout risk indicators."""
+    if not resolve_admin_identity():
+        return jsonify({"ok": False, "msg": "Unauthorized access."}), 401
     active_cid = session.get("active_company_id")
     analytics = compute_attrition_and_burnout_analytics(company_id=active_cid)
     return jsonify({"ok": True, "analytics": analytics})

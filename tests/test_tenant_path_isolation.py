@@ -24,7 +24,35 @@ def _drop_schema(db_engine, schema_name):
     cur.close()
 
 
-def _provision(client, subdomain, admin_username, admin_password):
+def _provision(client, monkeypatch, subdomain, admin_username, admin_password):
+    """Signup is gated now (blueprints/org.py's tenant_applications state
+    machine: OTP verification -> KYC document upload -> platform-admin
+    approval) rather than a single instant-provisioning POST -- walk the
+    whole pipeline so this fixture still ends with a real, live tenant
+    schema. See tests/test_org.py's TestGatedSignupFlow for the dedicated
+    coverage of each individual step; this just needs the end result."""
+    import io as _io
+    import blueprints.org as org_module
+
+    # org.py has an APP_ENV=development convenience branch that skips the
+    # OTP screen entirely for local browser testing without real SMTP --
+    # conftest.py forces APP_ENV=development for the whole suite, so
+    # without this override the assert below would always fail (see
+    # tests/test_org.py's identical fix for the same reason).
+    monkeypatch.setenv("APP_ENV", "production")
+    # See tests/test_org.py's identical comment: _scan_for_malware() also
+    # keys off APP_ENV to fail open/closed when ClamAV is unreachable, so
+    # forcing "production" above for the OTP gate would otherwise reject
+    # this fixture's document upload too (no local ClamAV in this
+    # environment). Patched directly since it's read once at import time.
+    import utils.helpers as helpers_module
+    monkeypatch.setattr(helpers_module, "_MALWARE_SCAN_ENABLED", False)
+    captured = {}
+    monkeypatch.setattr(
+        org_module, "send_org_signup_otp_email",
+        lambda email, company, otp: captured.setdefault("otp", otp) or True
+    )
+
     resp = client.post("/create_org", data={
         "company_name": f"{subdomain} Inc",
         "subdomain": subdomain,
@@ -33,12 +61,39 @@ def _provision(client, subdomain, admin_username, admin_password):
         "admin_email": f"{admin_username}@test.local",
         "email_domain": "test.local",
     }, follow_redirects=False)
-    assert resp.status_code == 200, resp.data
+    assert resp.status_code in (301, 302), resp.data
+    application_id = int(resp.headers["Location"].rsplit("=", 1)[-1])
+    assert captured.get("otp"), "OTP email was never sent"
+
+    resp = client.post("/create_org/verify_otp", data={
+        "application_id": application_id, "otp_code": captured["otp"],
+    }, follow_redirects=False)
+    assert resp.status_code in (301, 302), resp.data
+
+    fake_pdf = b"%PDF-1.4\n" + b"x" * 20
+    fake_png = b"\x89PNG\r\n\x1a\n" + b"x" * 20
+    resp = client.post("/create_org/upload_documents", data={
+        "application_id": str(application_id),
+        "registration_cert": (_io.BytesIO(fake_pdf), "cert.pdf"),
+        "address_proof": (_io.BytesIO(fake_pdf), "address.pdf"),
+        "visiting_card": (_io.BytesIO(fake_png), "card.png"),
+        "name_board_photo": (_io.BytesIO(fake_png), "board.png"),
+    }, content_type="multipart/form-data", follow_redirects=False)
+    assert resp.status_code in (301, 302), resp.data
+
+    with client.session_transaction() as sess:
+        sess["platform_admin_logged_in"] = True
+        sess["platform_admin_username"] = "tpi_platform_admin"
+        import time as _time
+        sess["platform_admin_last_activity"] = _time.time()
+    resp = client.post(f"/super_admin/applications/{application_id}/approve", follow_redirects=False)
+    assert resp.status_code in (301, 302), resp.data
+
     return "att_" + subdomain.replace("-", "_")
 
 
 @pytest.fixture
-def two_tenants(client, db_engine):
+def two_tenants(client, db_engine, monkeypatch):
     from app import init_master_db
     init_master_db()
 
@@ -48,12 +103,13 @@ def two_tenants(client, db_engine):
     _drop_schema(db_engine, schema_a)
     _drop_schema(db_engine, schema_b)
     try:
-        _provision(client, slug_a, "tpi_admin_a", "password123")
-        _provision(client, slug_b, "tpi_admin_b", "password123")
-        # Provisioning itself resolves g.tenant_db/session["tenant_db"] as a
-        # side effect (blueprints/org.py's provision_tenant -> init_tenant_db)
-        # -- clear the session so the isolation tests below start from a
-        # clean, logged-out slate rather than accidentally inheriting it.
+        _provision(client, monkeypatch, slug_a, "tpi_admin_a", "password123")
+        _provision(client, monkeypatch, slug_b, "tpi_admin_b", "password123")
+        # Provisioning (via the platform-admin approve step) resolves
+        # g.tenant_db/session["tenant_db"] and sets platform_admin_* keys as
+        # a side effect -- clear the session so the isolation tests below
+        # start from a clean, logged-out slate rather than accidentally
+        # inheriting either.
         with client.session_transaction() as sess:
             sess.clear()
         yield slug_a, schema_a, slug_b, schema_b
@@ -144,3 +200,56 @@ class TestCrossTenantSessionIsolation:
         with client.session_transaction() as sess:
             assert sess.get("admin_logged_in") is True
             assert sess.get("tenant_slug") == slug_a
+
+
+class TestFormFieldCannotSelectTenant:
+    """Defense-in-depth regression coverage: a POST body field that happens
+    to look like a tenant/company identifier (company_id) must never be able
+    to select a *different* tenant's schema than the one already bound by
+    the session/URL slug. g.tenant_db is resolved once per request by
+    app.py's _resolve_tenant() from the URL slug alone (see module docstring
+    above); nothing downstream re-derives it from request.form. This test
+    proves that property holds for a real handler (set_company_pin) rather
+    than just asserting it by reading the code."""
+
+    def test_company_id_form_field_cannot_write_into_other_tenant_schema(
+        self, client, db_engine, two_tenants
+    ):
+        slug_a, schema_a, slug_b, schema_b = two_tenants
+
+        # A company row that lives only in tenant B's schema.
+        cur = db_engine.cursor()
+        cur.execute(f'SET search_path TO "{schema_b}", public')
+        cur.execute("INSERT INTO companies (name, code) VALUES (%s, %s) RETURNING id",
+                    ("Tenant B Co", "TBC"))
+        company_id_in_b = cur.fetchone()[0]
+        cur.execute("SET search_path TO public")
+        cur.close()
+
+        # Log in as tenant A's admin -- session/tenant_db is now bound to
+        # schema_a, exactly like every other request in this file.
+        client.post(f"/{slug_a}/login", data={
+            "identifier": "tpi_admin_a", "password": "password123",
+        }, follow_redirects=False)
+        with client.session_transaction() as sess:
+            assert sess.get("tenant_db") == schema_a  # sanity check
+
+        # Try to set a PIN on tenant B's company by id, from tenant A's
+        # session. If g.tenant_db were ever derived from this form field
+        # instead of the session, this write would land in schema_b.
+        resp = client.post("/set_company_pin", data={
+            "company_id": str(company_id_in_b), "pin": "9999",
+        }, follow_redirects=False)
+        assert resp.status_code == 302
+
+        # Tenant B's row must be untouched -- the request executed (if at
+        # all) against schema_a, where this id doesn't correspond to any
+        # row tenant B owns.
+        cur = db_engine.cursor()
+        cur.execute(f'SET search_path TO "{schema_b}", public')
+        cur.execute("SELECT pin FROM companies WHERE id=%s", (company_id_in_b,))
+        row = cur.fetchone()
+        cur.execute("SET search_path TO public")
+        cur.close()
+        assert row is not None
+        assert row[0] is None, "cross-tenant company_id form field wrote into another tenant's schema"

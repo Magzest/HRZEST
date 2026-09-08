@@ -11,7 +11,7 @@ from werkzeug.utils import secure_filename
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
 from utils.helpers import tpath, get_company_settings, _safe_app_url, _db
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async
-from extensions import limiter
+from extensions import limiter, app_log
 
 onboarding_bp = Blueprint("onboarding", __name__)
 
@@ -231,6 +231,14 @@ def bulk_assign_onboarding():
     today = datetime.date.today()
     due_date = (today + datetime.timedelta(days=30)).isoformat()
     assigned = 0
+    # Fetched once outside the loop -- tid is fixed for the whole bulk
+    # action, so re-running these same two SELECTs per employee (as the
+    # loop used to) is redundant work repeated N times for no reason.
+    cursor.execute(
+        "SELECT id, task_title, task_description, requires_document, due_days FROM onboarding_template_tasks WHERE template_id=%s ORDER BY sort_order, id", (tid,))
+    template_tasks = cursor.fetchall()
+    cursor.execute("SELECT name FROM onboarding_templates WHERE id=%s", (tid,))
+    _tr = cursor.fetchone()
     for emp_id in emp_ids:
         cursor.execute(
             "SELECT id FROM employee_onboarding WHERE employee_id=%s AND template_id=%s AND status='In Progress'", (emp_id, tid))
@@ -239,26 +247,24 @@ def bulk_assign_onboarding():
         cursor.execute("INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date, status) VALUES (%s,%s,%s,%s,'In Progress') RETURNING id",
                        (emp_id, tid, today, due_date))
         ob_id = cursor.fetchone()[0]
-        cursor.execute(
-            "SELECT id, task_title, task_description, requires_document, due_days FROM onboarding_template_tasks WHERE template_id=%s ORDER BY sort_order, id", (tid,))
-        for tt in cursor.fetchall():
-            cursor.execute("INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, task_description, requires_document, due_days, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'Pending')",
-                           (ob_id, tt[0], emp_id, tt[1], tt[2], tt[3], tt[4]))
+        if template_tasks:
+            cursor.executemany(
+                "INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, task_description, requires_document, due_days, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'Pending')",
+                [(ob_id, tt[0], emp_id, tt[1], tt[2], tt[3], tt[4]) for tt in template_tasks]
+            )
         assigned += 1
         # Email notification
         try:
             cursor.execute("SELECT name, email FROM employees WHERE employee_id=%s", (emp_id,))
             _er = cursor.fetchone()
-            cursor.execute("SELECT name FROM onboarding_templates WHERE id=%s", (tid,))
-            _tr = cursor.fetchone()
             if _er and _er[1] and _tr:
                 _ecfg = get_email_config()
                 if _ecfg:
                     _html = (f"<p>Hi <strong>{_er[0]}</strong>,</p>"
                              f"<p>A new onboarding checklist <strong>'{_tr[0]}'</strong> has been assigned to you. Please complete all tasks by <strong>{due_date}</strong>.</p>")
                     send_email_async(_er[1], f"New Onboarding Checklist -- {_tr[0]}", _html, _ecfg)
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Onboarding-assigned notification email failed for %s: %s", emp_id, exc, exc_info=True)
     db.commit()
     cursor.close()
     db.close()
@@ -464,8 +470,8 @@ def onboarding_assign():
                           VALUES (%s, 'Onboarding Started', %s, 'info')""",
                        (emp_id, f"Your onboarding checklist '{tname}' has been assigned. Please complete all tasks."))
         db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("In-app onboarding-started notification failed for %s: %s", emp_id, exc, exc_info=True)
 
     cursor.execute("SELECT name, email FROM employees WHERE employee_id=%s", (emp_id,))
     _er = cursor.fetchone()
@@ -483,8 +489,8 @@ def onboarding_assign():
                             f"<p>Due date: <strong>{due_date or 'Not set'}</strong></p>"
                             f"<p>Please log in to your employee portal and complete all tasks on time.</p>")
                 send_email_async(emp_email, f"New Onboarding Checklist Assigned -- {tname}", _ob_html, _ecfg)
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("Onboarding-assigned email failed for %s: %s", emp_id, exc, exc_info=True)
     cursor.close()
     db.close()
     flash(f"Onboarding assigned to {emp_name}.", "success")
@@ -1402,8 +1408,8 @@ def my_onboarding_task_done():
             else:
                 _msg += f"<p>{remaining} task(s) remaining.</p>"
             send_email_async(admin_email, f"Onboarding Task Done -- {emp_name_ob}", _msg, _ecfg)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Onboarding-task-done admin notification failed for %s: %s", emp_id, exc, exc_info=True)
 
     cursor.close()
     db.close()
@@ -1529,8 +1535,8 @@ def api_my_onboarding_task_done(task_id):
             else:
                 _msg += f"<p>{remaining} task(s) remaining.</p>"
             send_email_async(admin_email, f"Onboarding Task Done -- {emp_name_ob}", _msg, _ecfg)
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Onboarding-task-done admin notification failed for %s: %s", emp_id, exc, exc_info=True)
 
     cursor.close()
     db.close()

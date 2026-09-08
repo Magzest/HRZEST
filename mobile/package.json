@@ -26,6 +26,7 @@
     "expo-asset": "~12.0.13",
     "expo-blur": "~15.0.8",
     "expo-camera": "~17.0.10",
+    "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.24",
     "expo-font": "~14.0.12",
     "expo-image-picker": "~17.0.11",
@@ -64,8 +65,11 @@
   "jest": {
     "preset": "jest-expo",
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)/)"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|expo-.*|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg)/)"
     ],
+    "moduleNameMapper": {
+      "^@react-native-async-storage/async-storage$": "@react-native-async-storage/async-storage/jest/async-storage-mock"
+    },
     "collectCoverageFrom": [
       "src/**/*.js",
       "!src/**/screens/**",

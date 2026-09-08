@@ -13,6 +13,7 @@ from database import get_db_connection
 from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
+    validate_new_password,
 )
 from utils.helpers import (
     _db, get_auth_config, validate_employee_email_domain,
@@ -52,8 +53,8 @@ def csp_report():
                 "source_file": violation.get("source-file", ""),
             },
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.debug("Malformed CSP violation report: %s", exc)
     return "", 204
 
 
@@ -64,9 +65,9 @@ def home():
     # visits used to be auto-redirected straight to their portal/login;
     # now everyone lands here first and clicks through themselves.
     from utils.analytics import track_page_view
-    from utils.plan_limits import PER_EMPLOYEE_PAISE
+    from utils.plan_limits import get_per_employee_paise
     track_page_view("/")
-    return render_template("landing.html", per_employee_paise=PER_EMPLOYEE_PAISE)
+    return render_template("landing.html", per_employee_paise=get_per_employee_paise())
 
 
 @core_bp.route("/checkin")
@@ -313,13 +314,28 @@ def api_mobile_web_session_link():
     username = g.api_user
     raw_token = secrets.token_hex(32)
     token_hash = _hash_token(raw_token)
-    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=5)
+    # Bug fix: this used to compute expires_at in Python as
+    # datetime.utcnow() + timedelta(minutes=5) and bind it as a plain
+    # parameter into a TIMESTAMP (no time zone) column, then compare it
+    # against SQL's NOW() at redemption time. Postgres interprets a naive
+    # timestamp being compared to NOW() (timestamptz) in the *session's*
+    # TimeZone setting, not UTC -- on any server where that setting isn't
+    # UTC (e.g. Asia/Calcutta, +5:30 here), the naive UTC value silently
+    # gets read back as local wall-clock time, landing hours in the past
+    # and making every bridge token look already-expired the instant it's
+    # minted, a total feature break rather than a rare edge case. The
+    # token-minting code right above this in the same file
+    # (api_login/api_employee_login's api_tokens.expires_at) never hits
+    # this because it computes expiry with "NOW() + INTERVAL" directly in
+    # SQL instead of mixing in a Python-side datetime -- doing the same
+    # here keeps expiry computation and comparison in the same timezone
+    # frame of reference no matter what the server's TimeZone GUC is.
     with _db() as (cursor, conn):
         cursor.execute("DELETE FROM mobile_bridge_tokens WHERE expires_at < NOW()")
         cursor.execute(
             "INSERT INTO mobile_bridge_tokens (token_hash, admin_username, target_path, expires_at) "
-            "VALUES (%s, %s, %s, %s)",
-            (token_hash, username, target, expires_at)
+            "VALUES (%s, %s, %s, NOW() + INTERVAL '5 minutes')",
+            (token_hash, username, target)
         )
         conn.commit()
 
@@ -503,8 +519,9 @@ def api_employee_signup():
     if not emp_id or not name or not password:
         return jsonify({"ok": False, "msg": "Employee ID, Full Name, and Password are required."}), 400
 
-    if len(password) < 6:
-        return jsonify({"ok": False, "msg": "Password must be at least 6 characters."}), 400
+    _pw_ok, _pw_err = validate_new_password(password)
+    if not _pw_ok:
+        return jsonify({"ok": False, "msg": _pw_err}), 400
 
     _domain_error = validate_employee_email_domain(email)
     if _domain_error:
@@ -561,12 +578,12 @@ def api_employee_signup():
         if cursor:
             try:
                 cursor.close()
-            except Exception:
-                pass
+            except Exception as _close_exc:
+                app_log.debug("api_employee_signup error-path cursor.close() failed: %s", _close_exc)
         if db:
             try:
                 db.close()
-            except Exception:
-                pass
+            except Exception as _close_exc:
+                app_log.debug("api_employee_signup error-path db.close() failed: %s", _close_exc)
         return jsonify({"ok": False, "msg": f"Failed to register employee: {exc}"}), 500
 

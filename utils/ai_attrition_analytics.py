@@ -16,7 +16,7 @@ def compute_attrition_and_burnout_analytics(company_id=None):
     where_clause = "WHERE company_id = %s" if company_id else ""
     params = (company_id,) if company_id else ()
     
-    cursor.execute(f"SELECT employee_id, name, department, designation FROM employees {where_clause}", params)
+    cursor.execute(f"SELECT employee_id, name, department, designation FROM employees {where_clause}", params)  # nosec B608 -- where_clause is one of two fixed literal strings above, company_id itself is always passed as a %s param, never interpolated
     employees = cursor.fetchall()
     
     high_risk_count = 0

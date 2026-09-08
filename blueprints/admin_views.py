@@ -15,13 +15,17 @@ All actual values are always passed as %s-bound params, never interpolated.
 """
 import os
 import re
+import uuid
 import json
 import secrets
 import datetime
 import calendar
+from io import BytesIO
 from flask import (
     Blueprint, request, session, redirect, jsonify, render_template, flash, abort, g,
+    send_file,
 )
+from werkzeug.utils import secure_filename
 
 from database import get_db_connection, transaction
 from extensions import app, app_log, log_security_event, limiter
@@ -30,21 +34,21 @@ from utils.auth import (
     email_settings_step_up_refresh, email_settings_step_up_clear,
     security_settings_step_up_clear,
     check_password_hash, generate_password_hash, HR_ROLE,
-    api_required, api_role_required,
-)
-from utils.device_utils import (
-    get_or_create_device_token, list_devices, rename_device,
-    add_asset_device, delete_asset_device, revoke_device,
+    api_required, api_role_required, validate_new_password,
 )
 from utils import chat_utils
 from utils.helpers import (
     tpath,
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
-    _create_notification, encrypt_pii, decrypt_pii, invalidate_companies_cache,
+    encrypt_pii, decrypt_pii, invalidate_companies_cache,
     _validate_image_file, get_pending_action_counts, _audit, invalidate_settings_cache,
+    post_announcement, _validate_upload,
 )
+from utils.storage import save_private, open_private, delete_private
 from utils.email_utils import get_email_config, send_email_smtp
+
+_ANN_ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
 from utils.totp import (
     get_or_create_admin_totp_secret, mark_totp_enabled, verify_totp_code, totp_qr_data_uri,
     reset_admin_totp_secret,
@@ -153,10 +157,6 @@ def admin():
         ob_active = ob_completed = ob_overdue = 0
         ob_overdue_list = []
 
-    cursor.execute("SELECT email FROM admin_users WHERE username=%s", (session.get("admin_username"),))
-    _admin_row = cursor.fetchone()
-    admin_recovery_email = _admin_row[0] if _admin_row else ""
-
     cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active FROM break_config ORDER BY break_time")
     break_rows = cursor.fetchall()
     breaks_display = []
@@ -204,7 +204,6 @@ def admin():
                            ob_completed=ob_completed,
                            ob_overdue=ob_overdue,
                            ob_overdue_list=ob_overdue_list,
-                           admin_recovery_email=admin_recovery_email,
                            )
 
 
@@ -430,6 +429,10 @@ def settings_page():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
+    cursor.execute("SELECT email FROM admin_users WHERE username=%s", (session.get("admin_username"),))
+    _admin_row = cursor.fetchone()
+    admin_recovery_email = _admin_row[0] if _admin_row else ""
+
     # Email config: intentionally NOT fetched here. The Email Settings tab
     # sits behind a 2FA step-up gate (utils/auth.py:require_email_2fa) and is
     # loaded client-side via /api/settings/email only after verification --
@@ -557,7 +560,7 @@ def settings_page():
 
     cursor.execute("""
         SELECT c.id, c.name, COALESCE(c.code,''), c.created_at,
-               COUNT(e.id) AS emp_count,
+               COUNT(e.employee_id) AS emp_count,
                COALESCE(c.working_days,'Mon,Tue,Wed,Thu,Fri'),
                CASE WHEN c.pin IS NOT NULL AND c.pin != '' THEN 1 ELSE 0 END AS has_pin,
                COALESCE(c.logo_path,''),
@@ -634,6 +637,7 @@ def settings_page():
     db.close()
     return render_template("settings.html",
                            tab=tab,
+                           admin_recovery_email=admin_recovery_email,
                            company_code=company_code,
                            total_employees=total_employees,
                            active_employees=active_employees,
@@ -1399,8 +1403,8 @@ def _delete_company_image(rel_path):
         return
     try:
         os.remove(os.path.join(app.root_path, "static", rel_path))
-    except OSError:
-        pass
+    except OSError as exc:
+        app_log.warning("Could not remove company image file %s: %s", rel_path, exc)
 
 
 @admin_views_bp.route("/companies/add", methods=["POST"])
@@ -1557,15 +1561,19 @@ def edit_company(cid):
                 old_ids = [p[0] for p in to_rename]
                 new_ids = [p[1] for p in to_rename]
                 for tbl in related_tables:
-                    try:
-                        cursor.execute(
-                            f"UPDATE {tbl} AS t SET employee_id = m.new_eid "  # nosec B608
-                            f"FROM (SELECT * FROM UNNEST(%s::text[], %s::text[]) AS m(old_eid, new_eid)) AS m "
-                            f"WHERE t.employee_id = m.old_eid",
-                            (old_ids, new_ids)
-                        )
-                    except Exception:
-                        pass
+                    # No inner try/except here on purpose: a failure partway
+                    # through this per-table loop must propagate to the
+                    # outer except below (which rolls the whole rename back
+                    # and flashes "no changes were made") -- swallowing it
+                    # locally previously let some related tables keep the
+                    # old employee_id while others got the new one, leaving
+                    # the rename applied inconsistently across tables.
+                    cursor.execute(
+                        f"UPDATE {tbl} AS t SET employee_id = m.new_eid "  # nosec B608 -- tbl is one of the fixed related_tables literals above, never user input
+                        f"FROM (SELECT * FROM UNNEST(%s::text[], %s::text[]) AS m(old_eid, new_eid)) AS m "
+                        f"WHERE t.employee_id = m.old_eid",
+                        (old_ids, new_ids)
+                    )
 
                 for old_eid, new_eid in to_rename:
                     new_img = os.path.join(app.config["UPLOAD_FOLDER"], new_eid + ".jpg")
@@ -1594,13 +1602,13 @@ def edit_company(cid):
         if os.path.exists(old_img):
             try:
                 os.rename(old_img, new_img)
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("Could not rename employee photo %s -> %s during company edit: %s", old_img, new_img, exc)
         if os.path.exists(old_qr):
             try:
                 os.rename(old_qr, new_qr)
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("Could not rename employee QR %s -> %s during company edit: %s", old_qr, new_qr, exc)
 
     if logo_file and logo_file.filename:
         new_logo_path = _save_company_image(logo_file, cid, "logo")
@@ -1794,8 +1802,8 @@ def id_card_template_save_positions(cid):
         if "font_size" in box:
             try:
                 entry["font_size"] = max(6, min(72, int(box["font_size"])))
-            except (TypeError, ValueError):
-                pass
+            except (TypeError, ValueError) as exc:
+                app_log.debug("ID card template: invalid font_size %r ignored: %s", box.get("font_size"), exc)
         if box.get("bold"):
             entry["bold"] = True
         if box.get("square"):
@@ -1852,42 +1860,72 @@ def announcements_admin():
         action = request.form.get("action")
         if action == "add":
             visibility = request.form.get("visibility", "public")
-            target_emp = request.form.get("target_employee_id", "").strip() or None
-            if visibility == "private" and not target_emp:
-                flash("Please select an employee for a private announcement.", "error")
+            target_emps = [e.strip() for e in request.form.getlist("target_employee_ids") if e.strip()]
+            if visibility == "private" and not target_emps:
+                flash("Please select at least one employee for a private announcement.", "error")
                 cursor.close()
                 db.close()
                 return redirect(tpath("/performance?tab=announcements"))
-            if visibility == "public":
-                target_emp = None
             title = request.form["title"]
             content = request.form.get("content", "")
-            cursor.execute(
-                "INSERT INTO announcements (title, content, priority, visibility, target_employee_id) VALUES (%s,%s,%s,%s,%s)",
-                (title, content, request.form.get("priority", "Normal"), visibility, target_emp)
-            )
-            db.commit()
-            snippet = (content[:117] + "...") if len(content) > 120 else content
-            if visibility == "private":
-                _create_notification('employee', f"📢 {title}", snippet, target_emp)
+            priority = request.form.get("priority", "Normal")
+            attachment_name = None
+            f = request.files.get("attachment")
+            if f and f.filename:
+                ok, err = _validate_upload(f, _ANN_ALLOWED_EXT)
+                if not ok:
+                    flash(err, "error")
+                    cursor.close()
+                    db.close()
+                    return redirect(tpath("/performance?tab=announcements"))
+                attachment_name = f.filename
+
+            def _save_attachment_copy():
+                """Each announcement row owns an independent copy of the file
+                (re-saved from the still-open upload stream) so deleting one
+                row's attachment can never remove a file another row still
+                references -- cheaper than reference-counting a shared file
+                for the handful-of-employees case this targets."""
+                if not f or not f.filename:
+                    return None, None
+                f.stream.seek(0)
+                rel_path = f"announcements/{uuid.uuid4()}_{secure_filename(attachment_name)}"
+                ref, err = save_private(app.root_path, f, rel_path)
+                if err:
+                    app_log.warning("Announcement attachment save failed: %s", err)
+                return ref, err
+
+            if visibility == "public":
+                attachment_ref, err = _save_attachment_copy()
+                if attachment_name and err:
+                    flash(f"Attachment upload failed: {err}", "error")
+                    cursor.close()
+                    db.close()
+                    return redirect(tpath("/performance?tab=announcements"))
+                post_announcement(cursor, db, title, content, priority, "public", None,
+                                   attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
+                flash("Announcement posted.", "success")
             else:
-                # Batched on the connection already open in this handler,
-                # rather than _create_notification's one-connection-per-call
-                # pattern, which previously opened/committed/closed a
-                # separate pooled connection per active employee.
-                cursor.execute("SELECT employee_id FROM employees WHERE is_active=1")
-                emp_ids = [eid for (eid,) in cursor.fetchall()]
-                if emp_ids:
-                    cursor.executemany(
-                        "INSERT INTO notifications (recipient_type, employee_id, title, message) "
-                        "VALUES ('employee', %s, %s, %s)",
-                        [(eid, f"📢 {title}", snippet) for eid in emp_ids]
-                    )
-                    db.commit()
-            flash("Announcement posted.", "success")
+                for target_emp in target_emps:
+                    attachment_ref, err = _save_attachment_copy()
+                    if attachment_name and err:
+                        flash(f"Attachment upload failed: {err}", "error")
+                        cursor.close()
+                        db.close()
+                        return redirect(tpath("/performance?tab=announcements"))
+                    post_announcement(cursor, db, title, content, priority, "private", target_emp,
+                                       attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
+                flash(f"Announcement posted to {len(target_emps)} employee(s).", "success")
         elif action == "delete":
+            cursor.execute("SELECT attachment_stored_ref FROM announcements WHERE id=%s", (request.form["ann_id"],))
+            row = cursor.fetchone()
             cursor.execute("DELETE FROM announcements WHERE id=%s", (request.form["ann_id"],))
             db.commit()
+            if row and row[0]:
+                try:
+                    delete_private(row[0])
+                except Exception as exc:
+                    app_log.warning("Could not remove announcement attachment %s: %s", row[0], exc)
             flash("Announcement deleted.", "success")
         cursor.close()
         db.close()
@@ -1895,6 +1933,40 @@ def announcements_admin():
     cursor.close()
     db.close()
     return redirect(tpath("/performance?tab=announcements"))
+
+
+@admin_views_bp.route("/download_announcement/<int:aid>")
+def download_announcement(aid):
+    is_admin = session.get("admin_logged_in")
+    emp_id = session.get("employee_id")
+    if not is_admin and not emp_id:
+        return redirect(tpath("/login"))
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT COALESCE(visibility,'public'), target_employee_id, attachment_original_name, attachment_stored_ref "
+        "FROM announcements WHERE id=%s", (aid,)
+    )
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+    fallback = tpath("/employee_portal") if emp_id else tpath("/leave_holidays?tab=announcements")
+    if not row or not row[3]:
+        flash("Attachment not found.", "danger")
+        return redirect(fallback)
+    visibility, target_emp, orig_name, stored_ref = row
+    if not is_admin and visibility == "private" and target_emp != emp_id:
+        log_security_event(
+            "access.denied", "Attempt to download an announcement attachment not addressed to this employee",
+            level="WARNING", identifier=emp_id,
+        )
+        abort(403)
+    try:
+        data = open_private(stored_ref)
+    except Exception:
+        flash("Attachment file is missing or unreadable.", "danger")
+        return redirect(fallback)
+    return send_file(BytesIO(data), as_attachment=True, download_name=orig_name)
 
 
 @admin_views_bp.route("/test_email", methods=["POST"])
@@ -2151,6 +2223,11 @@ def analytics():
     # up front so the alert-building logic below just reads the results.
     week_start = today - datetime.timedelta(days=today.weekday())
     last_week_start = week_start - datetime.timedelta(days=7)
+    # expiry_date bounds computed in Python (today / today+30d) rather than
+    # Postgres's CURRENT_DATE + INTERVAL '30 days' -- the latter has no
+    # SQLite equivalent, so under the local dev fallback (database.py) this
+    # whole 4-column query silently failed and fetchone() returned None.
+    thirty_days_out = today + datetime.timedelta(days=30)
     cursor.execute("""
         SELECT
             (SELECT COUNT(*) FROM leave_requests WHERE leave_date >= %s),
@@ -2158,9 +2235,9 @@ def analytics():
             (SELECT COUNT(*) FROM overtime_records WHERE status='Pending'),
             (SELECT COUNT(*) FROM employee_documents
                 WHERE expiry_date IS NOT NULL
-                  AND expiry_date >= CURRENT_DATE
-                  AND expiry_date <= CURRENT_DATE + INTERVAL '30 days')
-    """, (week_start, last_week_start, week_start))
+                  AND expiry_date >= %s
+                  AND expiry_date <= %s)
+    """, (week_start, last_week_start, week_start, today, thirty_days_out))
     (leaves_this_week, leaves_last_week,
      ot_pending_count, expiring_docs) = cursor.fetchone()
 
@@ -2276,7 +2353,7 @@ def analytics():
             'icon': 'ti-file-alert',
             'title': f'{expiring_docs} employee document{"s" if expiring_docs > 1 else ""} expiring within 30 days',
             'detail': 'Review and renew documents before they expire',
-            'link': '/documents'
+            'link': '/employees'
         })
 
     if not smart_alerts:
@@ -2472,281 +2549,11 @@ def api_test_email():
         return jsonify({"ok": False, "msg": f"SMTP test failed: {exc}"}), 500
 
 
-# ── HR account management ───────────────────────────────────────────────────
-# Lets an admin create/list/terminate/reactivate role='hr' rows in
-# admin_users on demand, per company requirements, rather than these being
-# fixed accounts set up once. HR accounts log in through the normal
-# /admin_login form (see blueprints/auth.py) and land on /employees, scoped
-# away from admin-only pages by the existing role_required("admin") checks
-# elsewhere -- this page only manages the account records themselves.
-
-@admin_views_bp.route("/hr_accounts")
-@role_required("admin")
-def hr_accounts():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT username, email, is_active, created_at FROM admin_users WHERE role=%s ORDER BY created_at DESC",
-        (HR_ROLE,)
-    )
-    accounts = cursor.fetchall()
-    pending_leaves, pending_resignations, pending_tickets = get_pending_action_counts(cursor)
-    cursor.close()
-    db.close()
-    return render_template(
-        "hr_accounts.html",
-        accounts=accounts,
-        co=get_company_settings(),
-        pending_leaves=pending_leaves,
-        pending_resignations=pending_resignations,
-        pending_tickets=pending_tickets,
-        active_nav="hr_accounts",
-    )
-
-
-@admin_views_bp.route("/api/hr_accounts", methods=["POST"])
-@role_required("admin")
-def api_hr_accounts_create():
-    data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
-    email = (data.get("email") or "").strip()
-    password = data.get("password") or ""
-
-    if not username or not re.match(r"^[a-zA-Z0-9_.-]{3,40}$", username):
-        return jsonify({"ok": False, "msg": "Username must be 3-40 characters (letters, numbers, . _ - only)."}), 400
-    if len(password) < 8:
-        return jsonify({"ok": False, "msg": "Password must be at least 8 characters."}), 400
-
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT 1 FROM admin_users WHERE username=%s", (username,))
-    if cursor.fetchone():
-        cursor.close()
-        db.close()
-        return jsonify({"ok": False, "msg": "That username is already taken."}), 409
-
-    cursor.execute(
-        "INSERT INTO admin_users (username, password, email, role, is_active) VALUES (%s,%s,%s,%s,1)",
-        (username, generate_password_hash(password), email or None, HR_ROLE)
-    )
-    db.commit()
-    cursor.close()
-    db.close()
-    _audit("create_hr_account", "admin_users", username, f"Created HR account '{username}'")
-    log_security_event(
-        "admin.hr_account_created", f"HR account '{username}' created by '{session.get('admin_username')}'",
-        level="INFO", identifier=username,
-    )
-    return jsonify({"ok": True, "msg": f"HR account '{username}' created."})
-
-
-@admin_views_bp.route("/api/hr_accounts/<username>/status", methods=["POST"])
-@role_required("admin")
-def api_hr_accounts_set_status(username):
-    data = request.get_json(silent=True) or {}
-    active = bool(data.get("active"))
-
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT role FROM admin_users WHERE username=%s", (username,))
-    row = cursor.fetchone()
-    if not row or row[0] != HR_ROLE:
-        cursor.close()
-        db.close()
-        return jsonify({"ok": False, "msg": "HR account not found."}), 404
-
-    cursor.execute("UPDATE admin_users SET is_active=%s WHERE username=%s", (1 if active else 0, username))
-    db.commit()
-    cursor.close()
-    db.close()
-    action = "activate_hr_account" if active else "terminate_hr_account"
-    _audit(action, "admin_users", username, f"{'Activated' if active else 'Terminated'} HR account '{username}'")
-    log_security_event(
-        "admin.hr_account_status_changed",
-        f"HR account '{username}' {'activated' if active else 'terminated'} by '{session.get('admin_username')}'",
-        level="INFO", identifier=username,
-    )
-    return jsonify({"ok": True, "msg": f"HR account '{username}' {'activated' if active else 'terminated'}."})
-
-
-@admin_views_bp.route("/api/hr_accounts/<username>/history")
-@role_required("admin")
-def api_hr_accounts_history(username):
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT 1 FROM admin_users WHERE username=%s AND role=%s", (username, HR_ROLE))
-    if not cursor.fetchone():
-        cursor.close()
-        db.close()
-        return jsonify({"ok": False, "msg": "HR account not found."}), 404
-
-    cursor.execute(
-        "SELECT event_type, level, message, ip, created_at FROM security_events "
-        "WHERE identifier=%s AND event_type LIKE 'auth.%%' ORDER BY created_at DESC LIMIT 25",
-        (username,)
-    )
-    events = [
-        {"event_type": r[0], "level": r[1], "message": r[2], "ip": r[3], "created_at": str(r[4])}
-        for r in cursor.fetchall()
-    ]
-    cursor.close()
-    db.close()
-    return jsonify({"ok": True, "events": events})
-
-
-# ── HR Accounts (Bearer-token API) ──────────────────────────────────────────
-# Bearer twins of the four session-only (@role_required("admin")) routes
-# just above -- same table, same audit/security-event trail, so creating or
-# deactivating an HR account from mobile is indistinguishable from doing it
-# on web. Distinct paths (not the same /api/hr_accounts* paths reusing a
-# hybrid decorator) since those are already claimed by the session-guarded
-# view functions above and Flask can't register two view functions on one
-# (path, method) pair.
-
-@admin_views_bp.route("/api/hr/accounts", methods=["GET"])
-@api_required
-@api_role_required("admin")
-def api_hr_accounts_list():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute(
-        "SELECT username, email, is_active, created_at FROM admin_users WHERE role=%s ORDER BY created_at DESC",
-        (HR_ROLE,)
-    )
-    accounts = [
-        {"username": r[0], "email": r[1] or "", "is_active": bool(r[2]), "created_at": str(r[3]) if r[3] else ""}
-        for r in cursor.fetchall()
-    ]
-    cursor.close()
-    db.close()
-    return jsonify({"ok": True, "accounts": accounts})
-
-
-@admin_views_bp.route("/api/hr/accounts", methods=["POST"])
-@api_required
-@api_role_required("admin")
-def api_hr_accounts_create_bearer():
-    from flask import g as _g
-    data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
-    email = (data.get("email") or "").strip()
-    password = data.get("password") or ""
-
-    if not username or not re.match(r"^[a-zA-Z0-9_.-]{3,40}$", username):
-        return jsonify({"ok": False, "msg": "Username must be 3-40 characters (letters, numbers, . _ - only)."}), 400
-    if len(password) < 8:
-        return jsonify({"ok": False, "msg": "Password must be at least 8 characters."}), 400
-
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT 1 FROM admin_users WHERE username=%s", (username,))
-    if cursor.fetchone():
-        cursor.close()
-        db.close()
-        return jsonify({"ok": False, "msg": "That username is already taken."}), 409
-
-    cursor.execute(
-        "INSERT INTO admin_users (username, password, email, role, is_active) VALUES (%s,%s,%s,%s,1)",
-        (username, generate_password_hash(password), email or None, HR_ROLE)
-    )
-    db.commit()
-    cursor.close()
-    db.close()
-    _audit("create_hr_account", "admin_users", username, f"Created HR account '{username}'")
-    log_security_event(
-        "admin.hr_account_created", f"HR account '{username}' created by '{_g.api_user}'",
-        level="INFO", identifier=username,
-    )
-    return jsonify({"ok": True, "msg": f"HR account '{username}' created."})
-
-
-@admin_views_bp.route("/api/hr/accounts/<username>/status", methods=["POST"])
-@api_required
-@api_role_required("admin")
-def api_hr_accounts_set_status_bearer(username):
-    from flask import g as _g
-    data = request.get_json(silent=True) or {}
-    active = bool(data.get("active"))
-
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT role FROM admin_users WHERE username=%s", (username,))
-    row = cursor.fetchone()
-    if not row or row[0] != HR_ROLE:
-        cursor.close()
-        db.close()
-        return jsonify({"ok": False, "msg": "HR account not found."}), 404
-
-    cursor.execute("UPDATE admin_users SET is_active=%s WHERE username=%s", (1 if active else 0, username))
-    db.commit()
-    cursor.close()
-    db.close()
-    action = "activate_hr_account" if active else "terminate_hr_account"
-    _audit(action, "admin_users", username, f"{'Activated' if active else 'Terminated'} HR account '{username}'")
-    log_security_event(
-        "admin.hr_account_status_changed",
-        f"HR account '{username}' {'activated' if active else 'terminated'} by '{_g.api_user}'",
-        level="INFO", identifier=username,
-    )
-    return jsonify({"ok": True, "msg": f"HR account '{username}' {'activated' if active else 'terminated'}."})
-
-
-# ── Self-service device management (utils/device_utils.py) ─────────────────
-# Shared by both admin and hr roles -- admin_required covers either (only
-# role_required("admin") elsewhere is HR-exclusive), and each account only
-# ever sees/manages its own rows (owner_id=admin_username).
-
+# 'admin' or HR_ROLE for whichever role this admin session actually has --
+# used to scope rows owned by this account (e.g. chat_messages.sender_kind
+# below) across the shared admin/hr login.
 def _device_owner_kind():
     return HR_ROLE if session.get("admin_role") == HR_ROLE else "admin"
-
-
-@admin_views_bp.route("/api/admin/devices", methods=["GET"])
-@admin_required
-def api_admin_devices():
-    username = session["admin_username"]
-    token, _ = get_or_create_device_token(request)
-    devices = list_devices(get_db_connection, _device_owner_kind(), username, token)
-    return jsonify({"ok": True, "devices": devices})
-
-
-@admin_views_bp.route("/api/admin/devices/<int:device_id>/rename", methods=["POST"])
-@admin_required
-def api_admin_device_rename(device_id):
-    username = session["admin_username"]
-    data = request.get_json(silent=True) or {}
-    ok = rename_device(get_db_connection, _device_owner_kind(), username, device_id, data.get("name"))
-    return jsonify({"ok": ok})
-
-
-@admin_views_bp.route("/api/admin/devices/<int:device_id>/revoke", methods=["POST"])
-@admin_required
-def api_admin_device_revoke(device_id):
-    username = session["admin_username"]
-    ok = revoke_device(get_db_connection, _device_owner_kind(), username, device_id, username)
-    if ok:
-        log_security_event(
-            "admin.device_revoked", f"Device {device_id} revoked by '{username}'",
-            level="INFO", identifier=username,
-        )
-    return jsonify({"ok": ok})
-
-
-@admin_views_bp.route("/api/admin/devices/asset", methods=["POST"])
-@admin_required
-def api_admin_device_add_asset():
-    username = session["admin_username"]
-    data = request.get_json(silent=True) or {}
-    new_id = add_asset_device(get_db_connection, _device_owner_kind(), username,
-                               data.get("device_name"), data.get("asset_model"), data.get("asset_serial"))
-    return jsonify({"ok": new_id is not None, "id": new_id})
-
-
-@admin_views_bp.route("/api/admin/devices/asset/<int:device_id>/delete", methods=["POST"])
-@admin_required
-def api_admin_device_delete_asset(device_id):
-    username = session["admin_username"]
-    ok = delete_asset_device(get_db_connection, _device_owner_kind(), username, device_id)
-    return jsonify({"ok": ok})
 
 
 # ── Internal chat with the platform operator (utils/chat_utils.py) ─────────

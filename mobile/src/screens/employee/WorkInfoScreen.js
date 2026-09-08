@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchEmployeeProfile } from "../../api/client";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import DetailCard from "../../components/profile/DetailCard";
@@ -22,6 +23,8 @@ import DetailCard from "../../components/profile/DetailCard";
 // invented "Full-Time / Headquarters / Engineering Lead / Active" defaults.
 export default function WorkInfoScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
 
   const [workInfo, setWorkInfo] = useState({
@@ -58,7 +61,7 @@ export default function WorkInfoScreen() {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color="#173B8C" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
@@ -82,7 +85,7 @@ export default function WorkInfoScreen() {
           <DetailCard icon="mail-outline" label="Office Email" value={workInfo.officeEmail} />
 
           <View style={styles.infoNoteCard}>
-            <Ionicons name="information-circle-outline" size={18} color="#173B8C" style={{ marginRight: 8 }} />
+            <Ionicons name="information-circle-outline" size={18} color={colors.primary} style={{ marginRight: 8 }} />
             <Text style={styles.infoNoteText}>
               Official role assignments are managed by HR/Admin on the web dashboard.
             </Text>
@@ -95,35 +98,35 @@ export default function WorkInfoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+const makeStyles = (colors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { padding: 18, paddingBottom: 130 },
   summaryCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
   },
   summaryText: { flex: 1 },
-  name: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
-  subText: { fontSize: 12, fontWeight: "600", color: "#64748B", marginTop: 2 },
+  name: { fontSize: 14, fontWeight: "800", color: colors.text },
+  subText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginTop: 2 },
   infoNoteCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     borderRadius: 14,
     padding: 14,
     marginTop: 14,

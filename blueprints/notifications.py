@@ -13,6 +13,7 @@ Migrated from app.py (lines 13255–13354). Routes:
 from flask import Blueprint, jsonify, session, request, g as _g
 from database import get_db_connection
 from utils.auth import api_required, api_role_required, employee_api_required, employee_required
+from utils.helpers import post_announcement
 
 notifications_bp = Blueprint("notifications", __name__)
 
@@ -87,26 +88,7 @@ def api_broadcast_notification():
             db.close()
             return jsonify({"ok": False, "msg": f"Unknown employee_id '{target_emp}'."}), 400
 
-    cursor.execute(
-        "INSERT INTO announcements (title, content, priority, visibility, target_employee_id) VALUES (%s,%s,%s,%s,%s)",
-        (title, message, "Normal", "public" if is_public else "private", target_emp)
-    )
-    snippet = (message[:117] + "...") if len(message) > 120 else message
-    if is_public:
-        cursor.execute("SELECT employee_id FROM employees WHERE is_active=1")
-        emp_ids = [eid for (eid,) in cursor.fetchall()]
-        if emp_ids:
-            cursor.executemany(
-                "INSERT INTO notifications (recipient_type, employee_id, title, message) "
-                "VALUES ('employee', %s, %s, %s)",
-                [(eid, f"📢 {title}", snippet) for eid in emp_ids]
-            )
-    else:
-        cursor.execute(
-            "INSERT INTO notifications (recipient_type, employee_id, title, message) VALUES ('employee', %s, %s, %s)",
-            (target_emp, f"📢 {title}", snippet)
-        )
-    db.commit()
+    post_announcement(cursor, db, title, message, "Normal", "public" if is_public else "private", target_emp)
     cursor.close()
     db.close()
     return jsonify({"ok": True, "msg": "Announcement posted."})

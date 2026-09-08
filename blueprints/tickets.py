@@ -43,7 +43,7 @@ def tickets_view():
     /ticket_action/<tid> handler below, which meant two separately-
     maintained UIs for one feature. This route stays as a redirect (not
     deleted) so old bookmarks/links to /tickets keep working."""
-    return redirect(tpath("/leave_holidays?tab=leaves#tickets"))
+    return redirect(tpath("/leave_holidays?tab=tickets"))
 
 
 @tickets_bp.route("/ticket_action/<int:tid>", methods=["POST"])

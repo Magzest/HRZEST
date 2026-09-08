@@ -18,6 +18,7 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 import { fetchEmployees, fetchDashboard, fetchMonthlyReport } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -27,6 +28,8 @@ const MONTHS = [
 const YEARS = ["2024", "2025", "2026", "2027"];
 
 export default function AttendanceScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("August");
   const [selectedYear, setSelectedYear] = useState("2026");
@@ -176,7 +179,7 @@ export default function AttendanceScreen({ navigation }) {
   );
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
           title="Daily Attendance"
@@ -213,7 +216,7 @@ export default function AttendanceScreen({ navigation }) {
               activeOpacity={0.8}
               onPress={() => setMonthModalVisible(true)}
             >
-              <Ionicons name="calendar-outline" size={16} color="#0B2253" />
+              <Ionicons name="calendar-outline" size={16} color={colors.primary} />
               <Text style={styles.selectorPillText}>{selectedMonth}</Text>
               <Ionicons name="chevron-down" size={14} color="#64748B" />
             </TouchableOpacity>
@@ -223,7 +226,7 @@ export default function AttendanceScreen({ navigation }) {
               activeOpacity={0.8}
               onPress={() => setYearModalVisible(true)}
             >
-              <Ionicons name="time-outline" size={16} color="#0B2253" />
+              <Ionicons name="time-outline" size={16} color={colors.primary} />
               <Text style={styles.selectorPillText}>{selectedYear}</Text>
               <Ionicons name="chevron-down" size={14} color="#64748B" />
             </TouchableOpacity>
@@ -265,7 +268,7 @@ export default function AttendanceScreen({ navigation }) {
           {/* Summary Grid */}
           <View style={styles.summaryGrid}>
             <View style={styles.summaryCard}>
-              <Ionicons name="people" size={24} color="#0B2253" />
+              <Ionicons name="people" size={24} color={colors.primary} />
               <Text style={styles.summaryValue}>{summary.employees}</Text>
               <Text style={styles.summaryLabel}>Total Staff</Text>
             </View>
@@ -277,13 +280,13 @@ export default function AttendanceScreen({ navigation }) {
             </View>
 
             <View style={styles.summaryCard}>
-              <Ionicons name="checkmark-circle" size={24} color="#F59E0B" />
+              <Ionicons name="checkmark-circle" size={24} color={colors.warning} />
               <Text style={styles.summaryValue}>{summary.attendance}%</Text>
               <Text style={styles.summaryLabel}>Avg Attendance</Text>
             </View>
 
             <View style={styles.summaryCard}>
-              <Ionicons name="gift" size={24} color="#EF4444" />
+              <Ionicons name="gift" size={24} color={colors.danger} />
               <Text style={styles.summaryValue}>{summary.holidays}</Text>
               <Text style={styles.summaryLabel}>Holidays</Text>
             </View>
@@ -316,7 +319,7 @@ export default function AttendanceScreen({ navigation }) {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Month</Text>
                 <TouchableOpacity onPress={() => setMonthModalVisible(false)}>
-                  <Ionicons name="close" size={22} color="#0F172A" />
+                  <Ionicons name="close" size={22} color={colors.text} />
                 </TouchableOpacity>
               </View>
               <FlatList
@@ -342,7 +345,7 @@ export default function AttendanceScreen({ navigation }) {
                       {item}
                     </Text>
                     {selectedMonth === item && (
-                      <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                      <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -363,7 +366,7 @@ export default function AttendanceScreen({ navigation }) {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Year</Text>
                 <TouchableOpacity onPress={() => setYearModalVisible(false)}>
-                  <Ionicons name="close" size={22} color="#0F172A" />
+                  <Ionicons name="close" size={22} color={colors.text} />
                 </TouchableOpacity>
               </View>
               <FlatList
@@ -389,7 +392,7 @@ export default function AttendanceScreen({ navigation }) {
                       {item}
                     </Text>
                     {selectedYear === item && (
-                      <Ionicons name="checkmark-circle" size={18} color="#0B2253" />
+                      <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
                     )}
                   </TouchableOpacity>
                 )}
@@ -420,7 +423,7 @@ export default function AttendanceScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -432,7 +435,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#0B2253",
+    backgroundColor: colors.primary,
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
@@ -466,17 +469,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   selectorPillText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   filterRow: {
     flexDirection: "row",
@@ -486,14 +489,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   filterChipActive: {
-    backgroundColor: "#0B2253",
-    borderColor: "#0B2253",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterChipText: {
     fontSize: 13,
@@ -511,18 +514,18 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     width: "48.5%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     alignItems: "center",
   },
   summaryValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginTop: 8,
   },
   summaryLabel: {
@@ -540,24 +543,24 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   sectionBadge: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0B2253",
-    backgroundColor: "#EFF6FF",
+    color: colors.primary,
+    backgroundColor: colors.blueBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   employeeCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   employeeHeader: {
     flexDirection: "row",
@@ -568,7 +571,7 @@ const styles = StyleSheet.create({
   employeeName: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   employeeId: {
     fontSize: 12,
@@ -576,7 +579,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   percentBadge: {
-    backgroundColor: "#ECFDF5",
+    backgroundColor: colors.greenBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
@@ -595,7 +598,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: "100%",
-    backgroundColor: "#22C55E",
+    backgroundColor: colors.success,
     borderRadius: 3,
   },
   statsRow: {
@@ -604,7 +607,7 @@ const styles = StyleSheet.create({
   },
   statChipGreen: {
     flex: 1,
-    backgroundColor: "#ECFDF5",
+    backgroundColor: colors.greenBg,
     borderRadius: 10,
     paddingVertical: 6,
     alignItems: "center",
@@ -612,7 +615,7 @@ const styles = StyleSheet.create({
   },
   statChipOrange: {
     flex: 1,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: colors.yellowBg,
     borderRadius: 10,
     paddingVertical: 6,
     alignItems: "center",
@@ -620,7 +623,7 @@ const styles = StyleSheet.create({
   },
   statChipBlue: {
     flex: 1,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     borderRadius: 10,
     paddingVertical: 6,
     alignItems: "center",
@@ -628,7 +631,7 @@ const styles = StyleSheet.create({
   },
   statChipRed: {
     flex: 1,
-    backgroundColor: "#FEF2F2",
+    backgroundColor: colors.redBg,
     borderRadius: 10,
     paddingVertical: 6,
     alignItems: "center",
@@ -636,7 +639,7 @@ const styles = StyleSheet.create({
   chipValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   chipLabel: {
     fontSize: 10,
@@ -653,7 +656,7 @@ const styles = StyleSheet.create({
   modalCard: {
     width: "100%",
     maxHeight: 380,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 20,
     elevation: 10,
@@ -668,12 +671,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E8F0",
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   pickerOption: {
     flexDirection: "row",
@@ -685,7 +688,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pickerOptionActive: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
   },
   pickerOptionText: {
     fontSize: 15,
@@ -694,6 +697,6 @@ const styles = StyleSheet.create({
   },
   pickerOptionTextActive: {
     fontWeight: "800",
-    color: "#0B2253",
+    color: colors.primary,
   },
 });

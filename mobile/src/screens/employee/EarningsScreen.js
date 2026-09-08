@@ -20,9 +20,12 @@ import StatChip from "../../components/earnings/StatChip";
 
 import { StyleSheet } from "react-native";
 import { fetchEmployeeSalary } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function EarningsScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
@@ -55,8 +58,8 @@ export default function EarningsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <ActivityIndicator size="large" color="#173B8C" />
-        <Text style={{ marginTop: 12, color: "#64748B", fontWeight: "600" }}>Loading salary data…</Text>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 12, color: colors.textSecondary, fontWeight: "600" }}>Loading salary data…</Text>
       </SafeAreaView>
     );
   }
@@ -72,13 +75,13 @@ export default function EarningsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={() => { setRefreshing(true); loadSalary(); }}
-            colors={["#173B8C"]}
+            colors={[colors.primary]}
           />
         }
       >
         {error ? (
-          <View style={{ backgroundColor: "#FEF2F2", borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: "#FECACA" }}>
-            <Text style={{ color: "#DC2626", fontWeight: "600", textAlign: "center" }}>{error}</Text>
+          <View style={{ backgroundColor: colors.redBg, borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: "#FECACA" }}>
+            <Text style={{ color: colors.danger, fontWeight: "600", textAlign: "center" }}>{error}</Text>
           </View>
         ) : null}
 
@@ -95,13 +98,13 @@ export default function EarningsScreen() {
 
             <View style={styles.chipContainer}>
               <StatChip label="Salary Credited" color="#16A34A" background="#DCFCE7" />
-              <StatChip label="Payslip Available" color="#173B8C" background="#EEF4FF" />
+              <StatChip label="Payslip Available" color={colors.primary} background={colors.primaryLight} />
             </View>
 
             <Text style={styles.sectionTitle}>Salary Summary</Text>
 
-            <SummaryCard icon="wallet-outline" title="Gross Pay" value={earnings.gross ?? 0} color="#173B8C" background="#EEF4FF" />
-            <SummaryCard icon="trophy-outline" title="Deductions" value={earnings.deduction ?? 0} color="#EF4444" background="#FEF2F2" />
+            <SummaryCard icon="wallet-outline" title="Gross Pay" value={earnings.gross ?? 0} color={colors.primary} background={colors.primaryLight} />
+            <SummaryCard icon="trophy-outline" title="Deductions" value={earnings.deduction ?? 0} color={colors.danger} background={colors.redBg} />
             <SummaryCard icon="cash-outline" title="Net Pay" value={earnings.net ?? 0} color="#16A34A" background="#DCFCE7" />
 
             <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
@@ -110,18 +113,18 @@ export default function EarningsScreen() {
               <BreakdownRow icon="checkmark-circle-outline" label="Full Days" value={`${earnings.full_days ?? "--"} Days`} color="#16A34A" background="#DCFCE7" valueColor="#16A34A" />
               <BreakdownRow icon="remove-circle-outline" label="Half Days" value={`${earnings.half_days ?? "--"} Days`} color="#F59E0B" background="#FFF7ED" valueColor="#D97706" />
               <BreakdownRow icon="alarm-outline" label="Late Days" value={`${earnings.late_days ?? "--"} Days`} color="#EA580C" background="#FFF7ED" valueColor="#EA580C" />
-              <BreakdownRow icon="close-circle-outline" label="Absent" value={`${earnings.absent ?? "--"} Days`} color="#EF4444" background="#FEF2F2" valueColor="#DC2626" />
+              <BreakdownRow icon="close-circle-outline" label="Absent" value={`${earnings.absent ?? "--"} Days`} color={colors.danger} background={colors.redBg} valueColor={colors.danger} />
               <BreakdownRow icon="calendar-outline" label="Approved Leaves" value={`${earnings.leave_days ?? "--"} Days`} color="#8B5CF6" background="#EDE9FE" valueColor="#7C3AED" />
-              <BreakdownRow icon="cash-outline" label="Daily Rate" value={earnings.spd ? `₹${Number(earnings.spd).toLocaleString()}` : "--"} color="#173B8C" background="#EEF4FF" valueColor="#173B8C" />
+              <BreakdownRow icon="cash-outline" label="Daily Rate" value={earnings.spd ? `₹${Number(earnings.spd).toLocaleString()}` : "--"} color={colors.primary} background={colors.primaryLight} valueColor={colors.primary} />
             </View>
 
             <PayslipCard onViewPayslip={() => navigation.navigate("Payslips")} />
           </>
         ) : (
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 20, padding: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0", marginTop: 20 }}>
-            <Ionicons name="wallet-outline" size={48} color="#94A3B8" />
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginTop: 12 }}>No Salary Record Published</Text>
-            <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 6 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, marginTop: 20 }}>
+            <Ionicons name="wallet-outline" size={48} color={colors.textLight} />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>No Salary Record Published</Text>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: "center", marginTop: 6 }}>
               Earnings details for {monthName} {year} will be displayed here once generated by payroll admin.
             </Text>
           </View>
@@ -132,10 +135,10 @@ export default function EarningsScreen() {
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -152,13 +155,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 12,
     marginTop: 6,
   },
 
   breakdownCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     borderRadius: 22,
 
@@ -166,7 +169,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
 
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
 
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
@@ -182,14 +185,14 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     borderRadius: 20,
 
     padding: 18,
 
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
 
     marginBottom: 18,
 
@@ -214,7 +217,7 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
 
   row: {
@@ -225,23 +228,23 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
 
     borderBottomWidth: 1,
-    borderBottomColor: "#EEF2F7",
+    borderBottomColor: colors.border,
   },
 
   rowLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#475569",
+    color: colors.textSecondary,
   },
 
   rowValue: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#173B8C",
+    color: colors.primary,
   },
 
   infoCard: {
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
 
     borderRadius: 18,
 
@@ -251,38 +254,38 @@ const styles = StyleSheet.create({
     marginBottom: 18,
 
     borderLeftWidth: 4,
-    borderLeftColor: "#173B8C",
+    borderLeftColor: colors.primary,
   },
 
   infoTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#173B8C",
+    color: colors.primary,
     marginBottom: 8,
   },
 
   infoText: {
     fontSize: 14,
     lineHeight: 22,
-    color: "#475569",
+    color: colors.textSecondary,
     fontWeight: "500",
   },
 
   divider: {
     height: 1,
-    backgroundColor: "#EEF2F7",
+    backgroundColor: colors.border,
     marginVertical: 18,
   },
 
   footerCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     borderRadius: 20,
 
     padding: 18,
 
     borderWidth: 1,
-    borderColor: "#E8EDF3",
+    borderColor: colors.border,
 
     marginTop: 20,
 
@@ -300,13 +303,13 @@ const styles = StyleSheet.create({
   footerTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
     marginBottom: 10,
   },
 
   footerText: {
     fontSize: 14,
     lineHeight: 22,
-    color: "#64748B",
+    color: colors.textSecondary,
   },
 });

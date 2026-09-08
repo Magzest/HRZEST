@@ -6,18 +6,18 @@
   <style>
     *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",sans-serif}
     html,body{height:100%}
-    body{background:#eff6ff;display:flex;min-height:100vh}
-    .sidebar{width:240px;height:100vh;position:sticky;top:0;overflow-y:auto;background:linear-gradient(180deg,#0f2460,#1a3a8f);padding:22px 14px;color:#fff;display:flex;flex-direction:column;flex-shrink:0;box-shadow:4px 0 20px rgba(0,0,0,.18)}
+    body{background:#FAFAFA;display:flex;min-height:100vh}
+    .sidebar{width:240px;height:100vh;position:sticky;top:0;overflow-y:auto;background:#101B2D;padding:22px 14px;color:#fff;display:flex;flex-direction:column;flex-shrink:0;box-shadow:4px 0 20px rgba(0,0,0,.18)}
     .brand-wrap{display:flex;align-items:center;gap:11px;margin-bottom:28px;padding:0 4px}
-    .brand-icon{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+    .brand-icon{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#1E3A5F,#1E3A5F);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
     .brand{font-size:15px;font-weight:800;color:#fff;line-height:1.2}
     .brand-sub{font-size:11px;color:rgba(255,255,255,.5);margin-top:2px}
     .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;margin:1px 0;color:rgba(255,255,255,.75);text-decoration:none;border-radius:10px;font-size:13px;font-weight:500;transition:.18s;position:relative}
     .nav-item:hover{background:rgba(255,255,255,.1);color:#fff}
     .nav-item.active{background:rgba(255,255,255,.15);color:#fff;font-weight:700}
-    .nav-item.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;border-radius:2px;background:#60a5fa}
+    .nav-item.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;border-radius:2px;background:#6B93BB}
     .nav-icon{width:30px;height:30px;border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08)}
-    .nav-item.active .nav-icon{background:rgba(96,165,250,.2)}
+    .nav-item.active .nav-icon{background:rgba(107, 147, 187,.2)}
     .nav-item:hover .nav-icon{background:rgba(255,255,255,.12)}
     .nav-sep{border:none;border-top:1px solid rgba(255,255,255,.08);margin:8px 0}
     .badge-count{margin-left:auto;background:#ef4444;color:#fff;border-radius:20px;padding:1px 7px;font-size:10px;font-weight:700}
@@ -28,10 +28,10 @@
     .page-hdr h1{font-size:22px;font-weight:800;color:#1e293b}
     .page-hdr p{font-size:13px;color:#64748b;margin-top:4px}
     /* Tabs */
-    .tab-bar{display:flex;gap:0;border-bottom:2px solid #dbeafe;margin-bottom:22px}
+    .tab-bar{display:flex;gap:0;border-bottom:2px solid #E7ECF1;margin-bottom:22px}
     .tab{padding:10px 24px;font-size:13px;font-weight:700;color:#64748b;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;display:flex;align-items:center;gap:7px;transition:.15s}
-    .tab:hover{color:#1e3a8a}
-    .tab.active{color:#1e3a8a;border-bottom-color:#1e3a8a;background:#eff6ff;border-radius:8px 8px 0 0}
+    .tab:hover{color:#1E3A5F}
+    .tab.active{color:#1E3A5F;border-bottom-color:#1E3A5F;background:#FAFAFA;border-radius:8px 8px 0 0}
     .tab-content{display:none}
     .tab-content.active{display:block}
     /* Flash */
@@ -40,21 +40,21 @@
     .flash-danger{background:#fef2f2;color:#ef4444;border:1px solid #fecaca}
     /* Performance styles */
     .quarter-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
-    .q-tab{padding:7px 18px;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;border:1.5px solid #dbeafe;color:#64748b;background:#fff;transition:.15s}
-    .q-tab:hover{background:#eff6ff;color:#1e3a8a}
-    .q-tab.active{background:#1e3a8a;color:#fff;border-color:#1e3a8a}
-    .filters{background:#fff;border:1px solid #dbeafe;border-radius:14px;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+    .q-tab{padding:7px 18px;border-radius:9px;font-size:13px;font-weight:700;text-decoration:none;border:1.5px solid #E7ECF1;color:#64748b;background:#fff;transition:.15s}
+    .q-tab:hover{background:#FAFAFA;color:#1E3A5F}
+    .q-tab.active{background:#1E3A5F;color:#fff;border-color:#1E3A5F}
+    .filters{background:#fff;border:1px solid #E7ECF1;border-radius:14px;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
     .filters label{font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
-    .filters select{padding:8px 12px;border:1.5px solid #dbeafe;border-radius:8px;font-size:13px;color:#1e293b;background:#f8fafc;outline:none}
+    .filters select{padding:8px 12px;border:1.5px solid #E7ECF1;border-radius:8px;font-size:13px;color:#1e293b;background:#f8fafc;outline:none}
     .stats-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px}
-    .stat-card{background:#fff;border:1px solid #dbeafe;border-radius:14px;padding:16px;text-align:center}
+    .stat-card{background:#fff;border:1px solid #E7ECF1;border-radius:14px;padding:16px;text-align:center}
     .stat-card .num{font-size:26px;font-weight:800;margin-bottom:4px}
     .stat-card .lbl{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
-    .card{background:#fff;border:1px solid #dbeafe;border-radius:14px;overflow:hidden;margin-bottom:18px}
+    .card{background:#fff;border:1px solid #E7ECF1;border-radius:14px;overflow:hidden;margin-bottom:18px}
     .card-pad{padding:20px}
-    .sec-title{font-size:12px;font-weight:800;color:#1e3a8a;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+    .sec-title{font-size:12px;font-weight:800;color:#1E3A5F;text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
     table{width:100%;border-collapse:collapse;font-size:13px}
-    th{background:#dbeafe;color:#1e3a8a;padding:10px 14px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+    th{position:sticky;top:0;z-index:1;background:#E7ECF1;color:#1E3A5F;padding:10px 14px;text-align:left;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
     td{padding:10px 14px;border-bottom:1px solid #f1f5f9;color:#1e293b;vertical-align:middle}
     tr:last-child td{border-bottom:none}
     tr:hover td{background:#f8fafc}
@@ -64,51 +64,17 @@
     .star.empty{color:#e2e8f0}
     .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
     .b-draft{background:#f1f5f9;color:#64748b}
-    .b-submitted{background:#dbeafe;color:#1e3a8a}
+    .b-submitted{background:#E7ECF1;color:#1E3A5F}
     .b-acknowledged{background:#dcfce7;color:#15803d}
     .b-none{background:#f1f5f9;color:#94a3b8}
     .progress-wrap{background:#e2e8f0;border-radius:20px;height:6px;overflow:hidden;width:100px}
     .progress-fill{height:100%;border-radius:20px}
     .search-box{position:relative;margin-left:auto}
-    .search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#3b82f6;font-size:14px;pointer-events:none}
-    .search-box input{padding:8px 12px 8px 32px;border:2px solid #bfdbfe;border-radius:9px;background:#f8fafc;font-size:13px;outline:none;color:#1e293b;width:200px}
+    .search-box i{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#1E3A5F;font-size:14px;pointer-events:none}
+    .search-box input{padding:8px 12px 8px 32px;border:2px solid #DCE4EB;border-radius:9px;background:#f8fafc;font-size:13px;outline:none;color:#1e293b;width:200px}
     .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:none;text-decoration:none;transition:.15s}
-    .btn-primary{background:#1e3a8a;color:#fff}
-    .btn-primary:hover{background:#1e40af}
-    /* Announcement styles */
-    .ann-form-card{background:#fff;border:1px solid #dbeafe;border-radius:14px;padding:22px;margin-bottom:18px}
-    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .form-group{display:flex;flex-direction:column;gap:6px}
-    .form-group label{font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
-    .form-group input,.form-group select,.form-group textarea{padding:10px 12px;border:1.5px solid #dbeafe;border-radius:9px;background:#f8fafc;color:#1e293b;font-size:13px;outline:none;font-family:inherit}
-    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#3b82f6}
-    .form-group textarea{resize:vertical;min-height:80px}
-    .ann-card{border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px}
-    .ann-card.priority-urgent{border-left:4px solid #ef4444}
-    .ann-card.priority-important{border-left:4px solid #f59e0b}
-    .ann-card.priority-normal{border-left:4px solid #3b82f6}
-    .ann-icon{font-size:24px;flex-shrink:0;margin-top:2px}
-    .ann-body{flex:1}
-    .ann-title{font-size:15px;font-weight:700;color:#1e293b;margin-bottom:4px}
-    .ann-content{font-size:13px;color:#475569;line-height:1.6}
-    .ann-meta{font-size:11px;color:#94a3b8;margin-top:8px;display:flex;align-items:center;gap:10px}
-    .badge-pri{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
-    .pri-urgent{background:#fee2e2;color:#dc2626}
-    .pri-important{background:#fef9c3;color:#92400e}
-    .pri-normal{background:#dbeafe;color:#1e40af}
-    .btn-del{padding:5px 12px;border:none;border-radius:7px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;font-size:12px;cursor:pointer}
-    .btn-del:hover{background:#ef4444;color:#fff}
-    .empty-state{text-align:center;padding:40px;color:#94a3b8;font-size:13px}
-    .badge-vis{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px}
-    .vis-public{background:#dcfce7;color:#166534}
-    .vis-private{background:#fef3c7;color:#92400e}
-    .ann-sec-label{font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.8px;padding:8px 0 6px;border-bottom:1px solid #e2e8f0;margin-bottom:12px}
-    .vis-toggle{display:flex;gap:0;border:1.5px solid #dbeafe;border-radius:10px;overflow:hidden;margin-bottom:2px}
-    .vis-toggle label{flex:1;text-align:center;padding:9px 0;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;color:#64748b}
-    .vis-toggle input{display:none}
-    .vis-toggle input:checked+span{background:#1e3a8a;color:#fff}
-    .vis-toggle label span{display:block;width:100%;padding:9px 0;border-radius:0;transition:.15s}
-    #privateEmpRow{display:none}
+    .btn-primary{background:#1E3A5F;color:#fff}
+    .btn-primary:hover{background:#16293F}
     /* ── Dark mode ── */
     body.dark-mode{background:#0d1117 !important}
     body.dark-mode .main{background:#0d1117 !important;color:#cdd9e5 !important}
@@ -122,7 +88,7 @@
     /* Quarter / year tabs */
     body.dark-mode .q-tab{background:#161b22 !important;border-color:#30363d !important;color:#768390 !important}
     body.dark-mode .q-tab:hover{background:#1c2128 !important;color:#cdd9e5 !important}
-    body.dark-mode .q-tab.active{background:#1e3a8a !important;color:#93c5fd !important;border-color:#1d4ed8 !important}
+    body.dark-mode .q-tab.active{background:#1E3A5F !important;color:#B7C7D6 !important;border-color:#16293F !important}
     /* Filters bar */
     body.dark-mode .filters{background:#161b22 !important;border-color:#30363d !important}
     body.dark-mode .filters label{color:#768390 !important}
@@ -134,7 +100,6 @@
     body.dark-mode .stat-card .lbl{color:#768390 !important}
     body.dark-mode .stat-card .num{color:#cdd9e5 !important}
     body.dark-mode .card{background:#161b22 !important;border-color:#30363d !important}
-    body.dark-mode .ann-form-card{background:#161b22 !important;border-color:#30363d !important}
     body.dark-mode .sec-title{color:#4d9de0 !important}
     /* Table */
     body.dark-mode th{background:#1c2128 !important;color:#768390 !important;border-color:#30363d !important}
@@ -142,29 +107,11 @@
     body.dark-mode tr:hover td{background:#1c2128 !important}
     /* Status badges */
     body.dark-mode .b-draft{background:#1c2128 !important;color:#768390 !important}
-    body.dark-mode .b-submitted{background:#1e3a8a !important;color:#93c5fd !important}
+    body.dark-mode .b-submitted{background:#1E3A5F !important;color:#B7C7D6 !important}
     body.dark-mode .b-acknowledged{background:#14532d !important;color:#86efac !important}
     body.dark-mode .b-none{background:#1c2128 !important;color:#768390 !important}
     /* Star rating */
     body.dark-mode .star.empty{color:#30363d !important}
-    /* Form inputs */
-    body.dark-mode .form-group label{color:#768390 !important}
-    body.dark-mode .form-group input,
-    body.dark-mode .form-group select,
-    body.dark-mode .form-group textarea{background:#0d1117 !important;border-color:#30363d !important;color:#cdd9e5 !important}
-    /* Announcement cards */
-    body.dark-mode .ann-card{background:#161b22 !important;border-color:#30363d !important}
-    body.dark-mode .ann-title{color:#cdd9e5 !important}
-    body.dark-mode .ann-content{color:#768390 !important}
-    body.dark-mode .ann-meta{color:#768390 !important}
-    /* Priority badges */
-    body.dark-mode .pri-urgent{background:#7f1d1d !important;color:#fca5a5 !important}
-    body.dark-mode .pri-important{background:#713f12 !important;color:#fbbf24 !important}
-    body.dark-mode .pri-normal{background:#1e3a8a !important;color:#93c5fd !important}
-    /* Delete btn */
-    body.dark-mode .btn-del{background:#7f1d1d !important;border-color:#991b1b !important;color:#fca5a5 !important}
-    /* Empty state */
-    body.dark-mode .empty-state{color:#768390 !important}
     /* Flash */
     body.dark-mode .flash-success{background:#14532d !important;border-color:#166534 !important;color:#86efac !important}
     body.dark-mode .flash-danger{background:#7f1d1d !important;border-color:#991b1b !important;color:#fca5a5 !important}
@@ -176,8 +123,8 @@
 
   <div class="page-hdr">
     <div>
-      <h1><i class="ti ti-chart-line u-c-3b82f6"></i> Performance &amp; Announcements</h1>
-      <p>Quarterly KPI reviews, ratings, and company-wide communications</p>
+      <h1><i class="ti ti-chart-line u-c-3b82f6"></i> Performance &amp; Comms</h1>
+      <p>Quarterly KPI reviews, ratings, hikes and incentives</p>
     </div>
     <div class="u-d-flex u-gap-10 u-ai-center u-fxw-wrap">
       <button type="button" onclick="openImportModal()" class="btn u-bg-f0fdf4 u-c-15803d u-bd-1d5-solid-86efac u-fs-13 u-p-9-16">
@@ -224,7 +171,7 @@
         <div class="u-mb-16">
           <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d4 u-d-block u-mb-6">Excel File <span class="u-c-dc2626">*</span></label>
           <div class="u-bd-2-dashed-93c5fd u-br-12 u-p-28 u-ta-center u-cur-pointer u-bg-f8fafc u-trs-d15s" id="dropZone" onclick="document.getElementById('importFile').click()"
-               ondragover="event.preventDefault();this.style.borderColor='#1e3a8a'" ondragleave="this.style.borderColor='#93c5fd'"
+               ondragover="event.preventDefault();this.style.borderColor='#1E3A5F'" ondragleave="this.style.borderColor='#B7C7D6'"
                ondrop="handleDrop(event)">
             <i class="ti ti-cloud-upload u-fs-28 u-c-3b82f6 u-d-block u-mb-6"></i>
             <div class="u-fs-13 u-c-64748b" id="dropLabel">Click to browse or drag &amp; drop .xlsx file here</div>
@@ -257,15 +204,6 @@
     </div>
     <div class="tab {% if active_tab == 'hike' %}active{% endif %}" onclick="switchTab('hike',this)">
       <i class="ti ti-trending-up"></i> Hike &amp; Incentives
-    </div>
-    <a class="tab {% if active_tab == '9box' %}active{% endif %}"
-       href="/performance?tab=9box&quarter={{ quarter }}&year={{ year }}{% if selected_dept %}&dept={{ selected_dept }}{% endif %}"
-       style="text-decoration:none;">
-      <i class="ti ti-grid-dots"></i> 9-Box Talent Matrix
-    </a>
-    <div class="tab {% if active_tab == 'announcements' %}active{% endif %}" onclick="switchTab('announcements',this)">
-      <i class="ti ti-speakerphone"></i> Announcements
-      {% if ann_list %}<span class="u-bg-3b82f6 u-c-fff u-br-20 u-p-1-7 u-fs-10 u-fw-700">{{ ann_list|length }}</span>{% endif %}
     </div>
   </div>
 
@@ -360,7 +298,7 @@
                 </div>
                 <div class="u-fs-11 u-c-64748b u-mt-2">{{ rating_labels.get(rating|int,'') }}</div>
                 <div class="progress-wrap u-mt-4">
-                  <div class="progress-fill" style="width:{{ (rating/5*100)|int }}%;background:{% if rating>=4 %}#22c55e{% elif rating>=3 %}#3b82f6{% elif rating>=2 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+                  <div class="progress-fill" style="width:{{ (rating/5*100)|int }}%;background:{% if rating>=4 %}#22c55e{% elif rating>=3 %}#1E3A5F{% elif rating>=2 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
                 </div>
                 {% else %}
                 <span class="u-c-94a3b8 u-fs-12">Not rated yet</span>
@@ -521,7 +459,7 @@
               </td>
               <td>
                 {% if h_rating > 0 %}
-                <span style="font-weight:700;color:{% if h_rating >= 4.5 %}#15803d{% elif h_rating >= 4.0 %}#2563eb{% elif h_rating >= 3.0 %}#7c3aed{% elif h_rating >= 2.0 %}#d97706{% else %}#dc2626{% endif %};">
+                <span style="font-weight:700;color:{% if h_rating >= 4.5 %}#15803d{% elif h_rating >= 4.0 %}#1E3A5F{% elif h_rating >= 3.0 %}#1E3A5F{% elif h_rating >= 2.0 %}#d97706{% else %}#dc2626{% endif %};">
                   {{ "%.1f"|format(h_rating) }} / 5
                 </span>
                 {% else %}
@@ -574,214 +512,11 @@
     {% endif %}
   </div>
 
-  <!-- ═══════════════ TAB: 9-BOX TALENT MATRIX ═══════════════ -->
-  <div class="tab-content {% if active_tab == '9box' %}active{% endif %}" id="tab-9box">
-    {% if active_tab == '9box' %}
-    <div class="filters">
-      <label>Department</label>
-      <select onchange="location.href='/performance?tab=9box&quarter={{ quarter }}&year={{ year }}&dept='+this.value">
-        <option value="">All Departments</option>
-        {% for d in departments %}
-        <option value="{{ d }}" {% if d == selected_dept %}selected{% endif %}>{{ d }}</option>
-        {% endfor %}
-      </select>
-      <div class="u-ml-auto u-d-flex u-ai-center u-gap-8">
-        {% for q_num, q_label in [(1,'Q1'),(2,'Q2'),(3,'Q3'),(4,'Q4')] %}
-        <a class="q-tab {% if q_num == quarter %}active{% endif %}"
-           href="/performance?tab=9box&quarter={{ q_num }}&year={{ year }}{% if selected_dept %}&dept={{ selected_dept }}{% endif %}">
-          {{ q_label }}
-        </a>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div class="u-fs-12 u-c-64748b u-mb-16">
-      <i class="ti ti-info-circle"></i>
-      Plots employees who have both an overall performance rating (from KPIs) and a manager-set potential rating
-      for Q{{ quarter }} {{ year }} — set the latter from the <strong>Feedback</strong> tab of an employee's review.
-      {{ nine_box_rated_count }} employee{{ '' if nine_box_rated_count == 1 else 's' }} plotted.
-    </div>
-
-    <div class="card" style="padding:24px;">
-      <div style="display:grid;grid-template-columns:28px 1fr;gap:0;">
-        <div style="display:flex;align-items:center;justify-content:center;">
-          <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">
-            Potential &rarr;
-          </div>
-        </div>
-        <div style="display:grid;grid-template-rows:repeat(3,1fr);gap:10px;">
-          {% for pot_tier in [2,1,0] %}
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-            {% for perf_tier in [0,1,2] %}
-            {% set cell = nine_box_grid[pot_tier][perf_tier] %}
-            <div style="border-radius:12px;border:1.5px solid {{ nine_box_colors[pot_tier][perf_tier] }}33;background:{{ nine_box_colors[pot_tier][perf_tier] }}0d;padding:12px;min-height:120px;">
-              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:{{ nine_box_colors[pot_tier][perf_tier] }};margin-bottom:8px;">
-                {{ nine_box_labels[pot_tier][perf_tier] }} <span style="opacity:.6;">({{ cell|length }})</span>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:5px;">
-                {% for c_eid, c_name, c_dept, c_perf, c_pot in cell %}
-                <a href="/performance_review/{{ c_eid }}?quarter={{ quarter }}&year={{ year }}"
-                   style="text-decoration:none;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 9px;font-size:12px;color:#1e293b;display:block;">
-                  <div style="font-weight:700;">{{ c_name }}</div>
-                  <div style="font-size:10px;color:#94a3b8;">{{ c_dept or c_eid }} &middot; P{{ "%.1f"|format(c_perf) }} / Pt{{ "%.1f"|format(c_pot) }}</div>
-                </a>
-                {% else %}
-                <div style="font-size:11px;color:#cbd5e1;font-style:italic;">Empty</div>
-                {% endfor %}
-              </div>
-            </div>
-            {% endfor %}
-          </div>
-          {% endfor %}
-          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;padding:0 4px;">
-            <span>Low</span><span>Performance &rarr;</span><span>High</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-
-  <!-- ═══════════════ TAB: ANNOUNCEMENTS ═══════════════ -->
-  <div class="tab-content {% if active_tab == 'announcements' %}active{% endif %}" id="tab-announcements">
-
-    <!-- Post form -->
-    <div class="ann-form-card">
-      <div class="sec-title"><i class="ti ti-plus"></i> Post New Announcement</div>
-      <form action="{{ tpath('/announcements') }}" method="POST">
-        <input type="hidden" name="action" value="add"/>
-        <div class="form-row u-mb-12">
-          <div class="form-group u-gc-span-2">
-            <label>Title</label>
-            <input type="text" name="title" placeholder="Announcement title…" required maxlength="255"/>
-          </div>
-          <div class="form-group u-gc-span-2">
-            <label>Content</label>
-            <textarea name="content" placeholder="Write the announcement details…" required rows="3"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Priority</label>
-            <select name="priority">
-              <option value="Normal">Normal</option>
-              <option value="Important">Important</option>
-              <option value="Urgent">Urgent</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Visibility</label>
-            <div class="vis-toggle">
-              <label>
-                <input type="radio" name="visibility" value="public" checked onchange="annVisChange(this)"/>
-                <span><i class="ti ti-world u-fs-13 u-va-middle u-mr-4"></i>Public</span>
-              </label>
-              <label>
-                <input type="radio" name="visibility" value="private" onchange="annVisChange(this)"/>
-                <span><i class="ti ti-lock u-fs-13 u-va-middle u-mr-4"></i>Private</span>
-              </label>
-            </div>
-          </div>
-          <div class="form-group u-gc-span-2" id="privateEmpRow">
-            <label>Send To (Employee)</label>
-            <select name="target_employee_id" id="annTargetEmp">
-              <option value="">— Select employee —</option>
-              {% for eid, ename in ann_emp_list %}
-              <option value="{{ eid }}">{{ ename }} ({{ eid }})</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="u-ta-right">
-          <button type="submit" class="btn btn-primary"><i class="ti ti-speakerphone"></i> Post Announcement</button>
-        </div>
-      </form>
-    </div>
-
-    <!-- List -->
-    <div class="card card-pad">
-      <div class="sec-title"><i class="ti ti-list"></i> All Announcements ({{ ann_list|length }})</div>
-      {% if ann_list %}
-        {% if pub_anns %}
-        <div class="ann-sec-label"><i class="ti ti-world u-va-middle u-mr-4"></i>Public ({{ pub_anns|length }})</div>
-        {% for aid, atitle, acontent, apri, adate, avis, atgt_id, atgt_name in pub_anns %}
-        <div class="ann-card priority-{{ apri|lower }}">
-          <div class="ann-icon">
-            {% if apri == 'Urgent' %}<i class="ti ti-alert-circle u-c-ef4444 u-fs-22"></i>
-            {% elif apri == 'Important' %}<i class="ti ti-alert-triangle u-c-f59e0b u-fs-22"></i>
-            {% else %}<i class="ti ti-speakerphone u-c-3b82f6 u-fs-22"></i>{% endif %}
-          </div>
-          <div class="ann-body">
-            <div class="ann-title">{{ atitle }}</div>
-            <div class="ann-content">{{ acontent }}</div>
-            <div class="ann-meta">
-              <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
-              <span class="badge-vis vis-public"><i class="ti ti-world u-fs-10"></i> Public</span>
-              <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
-              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
-                <input type="hidden" name="action" value="delete"/>
-                <input type="hidden" name="ann_id" value="{{ aid }}"/>
-                <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
-                  <i class="ti ti-trash"></i> Delete
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        {% if priv_anns %}
-        <div class="ann-sec-label u-mt-18"><i class="ti ti-lock u-va-middle u-mr-4"></i>Private ({{ priv_anns|length }})</div>
-        {% for aid, atitle, acontent, apri, adate, avis, atgt_id, atgt_name in priv_anns %}
-        <div class="ann-card priority-{{ apri|lower }}">
-          <div class="ann-icon">
-            {% if apri == 'Urgent' %}<i class="ti ti-alert-circle u-c-ef4444 u-fs-22"></i>
-            {% elif apri == 'Important' %}<i class="ti ti-alert-triangle u-c-f59e0b u-fs-22"></i>
-            {% else %}<i class="ti ti-lock u-c-f59e0b u-fs-22"></i>{% endif %}
-          </div>
-          <div class="ann-body">
-            <div class="ann-title">{{ atitle }}</div>
-            <div class="ann-content">{{ acontent }}</div>
-            <div class="ann-meta">
-              <span class="badge-pri pri-{{ apri|lower }}">{{ apri }}</span>
-              <span class="badge-vis vis-private"><i class="ti ti-lock u-fs-10"></i> Private</span>
-              {% if atgt_name %}<span class="u-c-64748b u-fs-11"><i class="ti ti-user u-fs-10"></i> To: {{ atgt_name }}</span>{% endif %}
-              <span>{{ adate.strftime('%d %b %Y, %I:%M %p') if adate else '—' }}</span>
-              <form class="u-d-inline u-ml-auto" action="{{ tpath('/announcements') }}" method="POST">
-                <input type="hidden" name="action" value="delete"/>
-                <input type="hidden" name="ann_id" value="{{ aid }}"/>
-                <button type="submit" class="btn-del" onclick="return confirm('Delete this announcement?')">
-                  <i class="ti ti-trash"></i> Delete
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
-        {% endif %}
-      {% else %}
-        <div class="empty-state"><i class="ti ti-speakerphone u-fs-40 u-d-block u-mb-12"></i>No announcements posted yet.</div>
-      {% endif %}
-    </div>
-  </div>
-
 {% endblock %}
 
 {% block scripts %}
 
 <script>
-function annVisChange(radio) {
-  var row = document.getElementById('privateEmpRow');
-  var sel = document.getElementById('annTargetEmp');
-  if (radio.value === 'private') {
-    row.style.display = 'flex';
-    sel.required = true;
-  } else {
-    row.style.display = 'none';
-    sel.required = false;
-    sel.value = '';
-  }
-}
-
 function switchTab(id, el) {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -822,7 +557,7 @@ function onFileChosen(input) {
 }
 function handleDrop(e) {
   e.preventDefault();
-  document.getElementById('dropZone').style.borderColor = '#93c5fd';
+  document.getElementById('dropZone').style.borderColor = '#B7C7D6';
   var file = e.dataTransfer.files[0];
   if (!file) return;
   var inp = document.getElementById('importFile');

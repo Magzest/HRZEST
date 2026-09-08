@@ -18,51 +18,12 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info, coerce_datetime
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
-from utils.leave_utils import assign_leave_balances_for_employee, get_indian_holidays
+from utils.leave_utils import get_indian_holidays
 import utils.config as cfg
 
 leave_bp = Blueprint("leave", __name__)
-
-
-# ---------------- VIEW HOLIDAYS ----------------
-@leave_bp.route("/view_holidays")
-@admin_required
-def view_holidays():
-    year = int(request.args.get("year", datetime.date.today().year))
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT * FROM holidays ORDER BY date")
-    data = cursor.fetchall()
-    cursor.close()
-    db.close()
-
-    # Build holiday map: date -> (id, name)
-    holiday_map = {}
-    for row in data:
-        date_val = row[1]
-        if isinstance(date_val, datetime.date):
-            holiday_map[date_val] = (row[0], row[2])
-
-    # Build calendar data, weeks starting Sunday (firstweekday=6)
-    sun_cal = calendar.Calendar(firstweekday=6)
-    today = datetime.date.today()
-    cal_data = []
-    for month in range(1, 13):
-        month_holidays = {}  # day_number -> (id, name)
-        for date_obj, (hid, hname) in holiday_map.items():
-            if date_obj.year == year and date_obj.month == month:
-                month_holidays[date_obj.day] = (hid, hname)
-        cal_data.append({
-            'month_num': month,
-            'month_name': calendar.month_name[month],
-            'weeks': sun_cal.monthdayscalendar(year, month),
-            'holidays': month_holidays,
-        })
-
-    return render_template("holidays.html", holidays=data, cal_data=cal_data,
-                           year=year, today=today)
 
 
 @leave_bp.route("/add_holiday", methods=["POST"])
@@ -86,54 +47,6 @@ def add_holiday():
     return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
 
 
-@leave_bp.route("/admin_leave_types", methods=["GET", "POST"])
-@admin_required
-def admin_leave_types():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    if request.method == "POST":
-        action = request.form.get("action", "")
-        if action == "add":
-            name = request.form.get("name", "").strip()
-            quota = int(request.form.get("annual_quota", 12) or 12)
-            is_paid = 1 if request.form.get("is_paid") else 0
-            if name:
-                cursor.execute(
-                    "INSERT INTO leave_types (name, annual_quota, is_paid) VALUES (%s,%s,%s)",
-                    (name, quota, is_paid)
-                )
-        elif action == "edit":
-            lt_id = int(request.form.get("lt_id", 0))
-            name = request.form.get("name", "").strip()
-            quota = int(request.form.get("annual_quota", 12) or 12)
-            is_paid = 1 if request.form.get("is_paid") else 0
-            if lt_id and name:
-                cursor.execute(
-                    "UPDATE leave_types SET name=%s, annual_quota=%s, is_paid=%s WHERE id=%s",
-                    (name, quota, is_paid, lt_id)
-                )
-        elif action == "toggle":
-            lt_id = int(request.form.get("lt_id", 0))
-            if lt_id:
-                cursor.execute(
-                    "UPDATE leave_types SET is_active = 1 - is_active WHERE id=%s", (lt_id,)
-                )
-        elif action == "delete":
-            lt_id = int(request.form.get("lt_id", 0))
-            if lt_id:
-                cursor.execute("DELETE FROM leave_types WHERE id=%s", (lt_id,))
-        db.commit()
-        cursor.close()
-        db.close()
-        return redirect(tpath("/admin_leave_types"))
-
-    cursor.execute("SELECT id, name, annual_quota, is_paid, is_active FROM leave_types ORDER BY id")
-    leave_types = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("leave_types_admin.html", leave_types=leave_types,
-        active_nav="leaves",
-    )
 
 
 @leave_bp.route("/import_indian_holidays", methods=["POST"])
@@ -149,8 +62,8 @@ def import_indian_holidays():
                 "INSERT INTO holidays (date, name) VALUES (%s, %s) ON CONFLICT (date) DO NOTHING",
                 (date_obj, name)
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Import Indian holiday '%s' (%s) failed: %s", name, date_obj, exc, exc_info=True)
     db.commit()
     cursor.close()
     db.close()
@@ -287,11 +200,23 @@ def leave_balance():
     cursor.execute("SELECT id, name, annual_quota FROM leave_types WHERE is_active=1 ORDER BY id")
     leave_types = cursor.fetchall()
 
-    # Auto-assign balances for employees who don't have them yet
-    cursor.execute("SELECT employee_id FROM employees")
-    all_emps = [r[0] for r in cursor.fetchall()]
-    for eid in all_emps:
-        assign_leave_balances_for_employee(cursor, eid, year)
+    # Auto-assign balances for employees who don't have them yet -- one
+    # set-based upsert for every (employee, active leave type) pair instead
+    # of a Python loop calling assign_leave_balances_for_employee() per
+    # employee, which re-ran "SELECT ... FROM leave_types" and one INSERT
+    # per leave type on every single page load (500 employees x 5 leave
+    # types was ~3,000 round-trips for a single GET). Same net effect --
+    # same ON CONFLICT semantics (only refresh total_days while the balance
+    # is still untouched) -- just expressed as one statement.
+    cursor.execute("""
+        INSERT INTO leave_balances (employee_id, leave_type_id, year, total_days, used_days)
+        SELECT e.employee_id, lt.id, %s, lt.annual_quota, 0
+        FROM employees e CROSS JOIN leave_types lt
+        WHERE lt.is_active = 1
+        ON CONFLICT (employee_id, leave_type_id, year) DO UPDATE SET
+            total_days = CASE WHEN leave_balances.used_days = 0
+                              THEN EXCLUDED.total_days ELSE leave_balances.total_days END
+    """, (year,))
     db.commit()
 
     # Fetch all balances
@@ -432,6 +357,25 @@ def leave_holidays():
                          'weeks': sun_cal.monthdayscalendar(year, month), 'holidays': month_holidays})
 
     co = get_company_settings()
+
+    # Announcements (admin sees all) -- same shared table/route as
+    # blueprints/performance.py's Announcements tab (blueprints/
+    # admin_views.py's announcements_admin() handles create/delete for both).
+    cursor.execute("""
+        SELECT a.id, a.title, a.content, a.priority, a.created_at,
+               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,''),
+               a.attachment_original_name
+        FROM announcements a
+        LEFT JOIN employees e ON e.employee_id = a.target_employee_id
+        ORDER BY a.created_at DESC
+    """)
+    ann_list = [r[:4] + (coerce_datetime(r[4]),) + r[5:] for r in cursor.fetchall()]
+    pub_anns = [r for r in ann_list if r[5] == 'public']
+    priv_anns = [r for r in ann_list if r[5] == 'private']
+
+    cursor.execute("SELECT employee_id, name FROM employees WHERE is_active=1 ORDER BY name")
+    ann_emp_list = cursor.fetchall()
+
     cursor.close()
     db.close()
     return render_template("leave_holidays.html",
@@ -441,6 +385,8 @@ def leave_holidays():
                            pending_leaves=pending_leaves, pending_tickets=pending_tickets,
                            pending_resignations=pending_resignations,
                            holidays=holidays_data, cal_data=cal_data, year=year, today=today,
+                           ann_list=ann_list, pub_anns=pub_anns, priv_anns=priv_anns,
+                           ann_emp_list=ann_emp_list,
                            active_nav="leaves",
                            )
 
@@ -458,7 +404,7 @@ def leave_action(lid):
     # Fetch leave + employee details before updating
     cursor.execute("""
         SELECT lr.employee_id, lr.leave_date, lr.reason,
-               e.name, e.email, COALESCE(lr.is_half_day, 0)
+               e.name, e.email, COALESCE(lr.is_half_day, 0), COALESCE(e.email_alerts_enabled, 1)
         FROM leave_requests lr
         JOIN employees e ON e.employee_id = lr.employee_id
         WHERE lr.id = %s
@@ -473,7 +419,7 @@ def leave_action(lid):
     cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (action, lid))
 
     if action == "Approved" and leave_row:
-        emp_id, leave_date, _, _, _, is_half = leave_row
+        emp_id, leave_date, _, _, _, is_half, _ = leave_row
         att_type = 'Half Day' if is_half else 'Approved Leave'
         cursor.execute("""
             INSERT INTO attendance (employee_id, date, attendance_type)
@@ -518,7 +464,7 @@ def leave_action(lid):
 
     # Send email + in-app notification to employee
     if leave_row:
-        emp_id, leave_date, reason, emp_name, emp_email, _ = leave_row
+        emp_id, leave_date, reason, emp_name, emp_email, _, email_alerts_enabled = leave_row
         icon = "✅" if action == "Approved" else "❌"
         _create_notification(
             'employee',
@@ -526,7 +472,9 @@ def leave_action(lid):
             f"Your leave request for {leave_date} has been {action.lower()}.",
             emp_id
         )
-        if not emp_email:
+        if not email_alerts_enabled:
+            flash(f"Leave {action} -- email alerts are disabled for {emp_name}, only in-app notification sent.", "success")
+        elif not emp_email:
             flash(f"Leave {action} but no email on record for {emp_name} -- notification not sent.", "warning")
         else:
             cfg_row = get_email_config()
@@ -646,7 +594,7 @@ def request_resignation():
     except ValueError:
         return redirect(tpath("/employee_portal#resign"))
 
-    min_lwd = datetime.date.today() + datetime.timedelta(days=30)
+    min_lwd = company_today() + datetime.timedelta(days=30)
     if lwd < min_lwd:
         return redirect(tpath("/employee_portal#resign"))
 
@@ -694,37 +642,18 @@ def request_resignation():
     return redirect(tpath("/employee_portal?resigned=1#resign"))
 
 
-@leave_bp.route("/resignation_requests")
-@admin_required
-def resignation_requests_view():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT rr.id, e.name, rr.employee_id, rr.last_working_day, rr.reason, rr.status, rr.created_at
-        FROM resignation_requests rr
-        JOIN employees e ON rr.employee_id = e.employee_id
-        ORDER BY CASE WHEN rr.status='Pending' THEN 0 WHEN rr.status='Accepted' THEN 1 WHEN rr.status='Declined' THEN 2 ELSE 3 END, rr.created_at DESC
-    """)
-    resignations = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("resignation_requests.html", resignations=resignations,
-        active_nav="leaves",
-    )
-
-
 @leave_bp.route("/resignation_action/<int:rid>", methods=["POST"])
 @admin_required
 def resignation_action(rid):
     action = request.form.get("action", "")
     if action not in ("Accepted", "Declined"):
-        return redirect(tpath("/resignation_requests"))
+        return redirect(tpath("/leave_holidays?tab=resignations"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
         SELECT rr.employee_id, rr.last_working_day, rr.reason,
-               e.name, e.email
+               e.name, e.email, COALESCE(e.email_alerts_enabled, 1)
         FROM resignation_requests rr
         JOIN employees e ON e.employee_id = rr.employee_id
         WHERE rr.id = %s
@@ -739,7 +668,7 @@ def resignation_action(rid):
                f"Employee {resign_row[0]} resignation {action}")
 
     if resign_row:
-        emp_id, lwd, reason, emp_name, emp_email = resign_row
+        emp_id, lwd, reason, emp_name, emp_email, email_alerts_enabled = resign_row
         icon = "✅" if action == "Accepted" else "❌"
         _create_notification(
             'employee',
@@ -747,7 +676,7 @@ def resignation_action(rid):
             f"Your resignation request has been {action.lower()}.",
             emp_id
         )
-        if emp_email:
+        if emp_email and email_alerts_enabled:
             cfg_row = get_email_config()
             if cfg_row:
                 color = "#16a34a" if action == "Accepted" else "#dc2626"
@@ -779,7 +708,7 @@ def resignation_action(rid):
 </div>"""
                 send_email_async(emp_email, f"Resignation {action} -- {emp_name}", html_body, cfg_row)
 
-    return redirect(tpath("/resignation_requests"))
+    return redirect(tpath("/leave_holidays?tab=resignations"))
 
 
 @leave_bp.route("/bulk_leave_action", methods=["POST"])
@@ -801,7 +730,7 @@ def bulk_leave_action():
 
     for lid in ids:
         cursor.execute("""
-            SELECT lr.employee_id, lr.leave_date, lr.reason, e.name, e.email
+            SELECT lr.employee_id, lr.leave_date, lr.reason, e.name, e.email, COALESCE(e.email_alerts_enabled, 1)
             FROM leave_requests lr
             JOIN employees e ON e.employee_id = lr.employee_id
             WHERE lr.id = %s AND lr.status = 'Pending'
@@ -809,7 +738,7 @@ def bulk_leave_action():
         row = cursor.fetchone()
         if not row:
             continue
-        emp_id, leave_date, reason, emp_name, emp_email = row
+        emp_id, leave_date, reason, emp_name, emp_email, email_alerts_enabled = row
         cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (action, lid))
         if action == "Approved":
             cursor.execute("""
@@ -818,7 +747,7 @@ def bulk_leave_action():
                 ON CONFLICT (employee_id, date) DO UPDATE SET attendance_type='Approved Leave'
             """, (emp_id, leave_date))
         done += 1
-        if emp_email and cfg_row:
+        if emp_email and cfg_row and email_alerts_enabled:
             color = "#16a34a" if action == "Approved" else "#dc2626"
             icon = "✅" if action == "Approved" else "❌"
             date_str = leave_date.strftime('%d %b %Y') if hasattr(leave_date, 'strftime') else str(leave_date)
@@ -963,20 +892,62 @@ def api_resignation_action(rid):
         return jsonify({"ok": False, "msg": "action must be Accepted or Declined"}), 400
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT employee_id, last_working_day FROM resignation_requests WHERE id=%s", (rid,))
-    row = cursor.fetchone()
+    cursor.execute("""
+        SELECT rr.employee_id, rr.last_working_day, rr.reason,
+               e.name, e.email, COALESCE(e.email_alerts_enabled, 1)
+        FROM resignation_requests rr
+        JOIN employees e ON e.employee_id = rr.employee_id
+        WHERE rr.id = %s
+    """, (rid,))
+    resign_row = cursor.fetchone()
     cursor.execute("UPDATE resignation_requests SET status=%s WHERE id=%s", (action, rid))
     db.commit()
     cursor.close()
     db.close()
-    if row:
-        icon = "✅" if action == "Accepted" else "❌"
-        _create_notification(
-            'employee',
-            f"{icon} Resignation {action}",
-            f"Your resignation request (last working day: {row[1]}) has been {action.lower()}.",
-            row[0]
-        )
+    if not resign_row:
+        return jsonify({"ok": True, "status": action})
+
+    emp_id, lwd, reason, emp_name, emp_email, email_alerts_enabled = resign_row
+    _audit(f"resignation_{action.lower()}", "resignation_requests", rid,
+           f"Employee {emp_id} resignation {action}")
+    icon = "✅" if action == "Accepted" else "❌"
+    _create_notification(
+        'employee',
+        f"{icon} Resignation {action}",
+        f"Your resignation request has been {action.lower()}.",
+        emp_id
+    )
+    if emp_email and email_alerts_enabled:
+        cfg_row = get_email_config()
+        if cfg_row:
+            color = "#16a34a" if action == "Accepted" else "#dc2626"
+            lwd_str = lwd.strftime('%d %b %Y') if hasattr(lwd, 'strftime') else str(lwd)
+            _safe_name = _html.escape(str(emp_name))
+            _safe_reason = _html.escape(str(reason)) if reason else '--'
+            html_body = f"""
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+  <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
+    <h2 style="margin:0;font-size:22px;">{icon} Resignation {action}</h2>
+    <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
+  </div>
+  <div style="padding:28px 32px;">
+    <p style="font-size:15px;color:#1e293b;">Hi <strong>{_safe_name}</strong>,</p>
+    <p style="font-size:14px;color:#475569;margin-top:10px;">
+      Your resignation request has been <strong style="color:{color};">{action.lower()}</strong>.
+    </p>
+    <div style="background:#f8fafc;border-left:4px solid {color};border-radius:8px;padding:14px 18px;margin:20px 0;">
+      <p style="margin:0;font-size:13px;color:#64748b;">📅 <strong>Last Working Day:</strong> {lwd_str}</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#64748b;">📝 <strong>Reason:</strong> {_safe_reason}</p>
+      <p style="margin:6px 0 0;font-size:13px;color:#64748b;">📌 <strong>Status:</strong> <span style="color:{color};font-weight:700;">{action}</span></p>
+    </div>
+    <p style="font-size:13px;color:#94a3b8;margin-top:20px;">For queries, contact your HR administrator.</p>
+  </div>
+  <div style="background:#f1f5f9;padding:14px;text-align:center;font-size:11px;color:#94a3b8;">
+    HRzest.com &bull; Automated Notification
+  </div>
+</div>"""
+            send_email_async(emp_email, f"Resignation {action} -- {emp_name}", html_body, cfg_row)
+
     return jsonify({"ok": True, "status": action})
 
 
@@ -1019,7 +990,7 @@ def api_employee_resign():
         lwd = datetime.datetime.strptime(last_working_day, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"ok": False, "msg": "Invalid date format. Use YYYY-MM-DD"}), 400
-    min_lwd = datetime.date.today() + datetime.timedelta(days=30)
+    min_lwd = company_today() + datetime.timedelta(days=30)
     if lwd < min_lwd:
         return jsonify({"ok": False, "msg": "Last working day must be at least 30 days from today"}), 400
     db = get_db_connection()
@@ -1111,7 +1082,7 @@ def api_employee_cancel_leave(lid):
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": f"Cannot cancel a leave that is already {row[0]}."}), 400
-    if row[1] <= datetime.date.today():
+    if row[1] <= company_today():
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": "Cannot cancel a leave for today or a past date."}), 400
@@ -1138,7 +1109,7 @@ def cancel_leave_web(lid):
         flash("Leave request not found.", "error")
     elif row[0] != "Pending":
         flash(f"Cannot cancel a leave that is already {row[0]}.", "error")
-    elif row[1] <= datetime.date.today():
+    elif row[1] <= company_today():
         flash("Cannot cancel a leave for today or a past date.", "error")
     else:
         cursor.execute(
@@ -1165,7 +1136,7 @@ def api_employee_request_overtime():
         ot_date = datetime.date.fromisoformat(ot_date)
     except ValueError:
         return jsonify({"ok": False, "msg": "Invalid date."}), 400
-    if ot_date < datetime.date.today():
+    if ot_date < company_today():
         return jsonify({"ok": False, "msg": "Cannot request OT for a past date."}), 400
 
     db = get_db_connection()
@@ -1227,7 +1198,7 @@ def api_employee_holidays():
     rows = cursor.fetchall()
     cursor.close()
     db.close()
-    today = datetime.date.today()
+    today = company_today()
     return jsonify({
         "ok": True,
         "holidays": [
@@ -1523,62 +1494,6 @@ def compoff():
     return redirect(tpath("/overtime?tab=compoff"))
 
 
-@leave_bp.route("/compoff_old")
-@admin_required
-def compoff_old():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-
-    # Settings
-    cursor.execute(
-        "SELECT COALESCE(compoff_min_ot_minutes,120), COALESCE(compoff_minutes_per_day,480), COALESCE(company_name,'') FROM company_settings LIMIT 1")
-    cfg_row = cursor.fetchone() or (120, 480, '')
-    min_ot_minutes = int(cfg_row[0])
-    minutes_per_day = int(cfg_row[1])
-    company_name = cfg_row[2]
-
-    # Employee balances
-    cursor.execute("""
-        SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
-               COALESCE(cb.earned_minutes,0), COALESCE(cb.used_minutes,0)
-        FROM employees e
-        LEFT JOIN compoff_balance cb ON cb.employee_id=e.employee_id
-        WHERE e.is_active=1 ORDER BY e.name
-    """)
-    balances = []
-    for emp_id, name, role, dept, earned, used in cursor.fetchall():
-        earned_days = round(earned / minutes_per_day, 2) if minutes_per_day else 0
-        used_days = round(used / minutes_per_day, 2) if minutes_per_day else 0
-        avail_days = max(0, round((earned - used) / minutes_per_day, 2)) if minutes_per_day else 0
-        balances.append({
-            "emp_id": emp_id, "name": name, "role": role, "dept": dept,
-            "earned_min": earned, "used_min": used,
-            "earned_days": earned_days, "used_days": used_days, "avail_days": avail_days
-        })
-
-    # Recent OT records (last 30 days)
-    cursor.execute("""
-        SELECT o.id, e.name, o.employee_id, o.date, o.ot_minutes, o.ot_pay, o.status
-        FROM overtime_records o JOIN employees e ON e.employee_id=o.employee_id
-        ORDER BY o.date DESC LIMIT 50
-    """)
-    ot_records = cursor.fetchall()
-
-    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
-    cursor.close()
-    db.close()
-
-    return render_template("compoff.html",
-                           balances=balances, ot_records=ot_records,
-                           min_ot_minutes=min_ot_minutes, minutes_per_day=minutes_per_day,
-                           company_name=company_name,
-                           pending_leaves=pending_leaves,
-                           pending_resignations=pending_resignations,
-                           pending_tickets=pending_tickets,
-                           active_nav="overtime",
-                           )
-
-
 @leave_bp.route("/compoff_settings", methods=["POST"])
 @admin_required
 def compoff_settings():
@@ -1638,9 +1553,7 @@ def my_compoff():
     lt_row = cursor.fetchone()
     compoff_lt_id = lt_row[0] if lt_row else None
 
-    cursor.execute(
-        "SELECT name, COALESCE(role,''), COALESCE(department,''), face_image FROM employees WHERE employee_id=%s", (emp_id,))
-    emp_info = cursor.fetchone()
+    emp_info = get_employee_sidebar_info(cursor, emp_id)
     cursor.close()
     db.close()
 

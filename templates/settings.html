@@ -10,22 +10,22 @@
     /* ── SIDEBAR ── */
     .sidebar {
       width: 240px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
-      background: linear-gradient(180deg, #0f2460 0%, #1a3a8f 100%);
+      background: #101B2D;
       padding: 22px 14px; color: white;
       display: flex; flex-direction: column; flex-shrink: 0;
       box-shadow: 4px 0 20px rgba(0,0,0,0.18);
     }
     .brand-wrap { display: flex; align-items: center; gap: 11px; margin-bottom: 28px; padding: 0 4px; }
-    .brand-icon { width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, #3b82f6, #6366f1); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(99,102,241,0.4); }
+    .brand-icon { width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, #1E3A5F, #1E3A5F); display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(30, 58, 95,0.4); }
     .brand     { font-size: 15px; font-weight: 800; color: #fff; line-height: 1.2; }
     .brand-sub { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }
     .nav-group-label { font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 1px; padding: 0 10px; margin: 14px 0 4px; }
     .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; margin: 1px 0; color: rgba(255,255,255,0.75); text-decoration: none; border-radius: 10px; font-size: 13px; font-weight: 500; transition: 0.18s; position: relative; }
     .nav-item:hover  { background: rgba(255,255,255,0.1); color: #fff; }
     .nav-item.active { background: rgba(255,255,255,0.15); color: #fff; font-weight: 700; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12); }
-    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 2px; background: #60a5fa; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 2px; background: #6B93BB; }
     .nav-icon { width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.08); }
-    .nav-item.active .nav-icon { background: rgba(96,165,250,0.2); }
+    .nav-item.active .nav-icon { background: rgba(107, 147, 187,0.2); }
     .nav-item:hover .nav-icon  { background: rgba(255,255,255,0.12); }
     .nav-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
     .badge-count { margin-left: auto; background: #ef4444; color: white; border-radius: 20px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
@@ -41,9 +41,9 @@
     }
     .page-header-icon {
       width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
-      background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+      background: linear-gradient(135deg, #1E3A5F, #1E3A5F);
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 12px rgba(30,58,138,0.3);
+      box-shadow: 0 4px 12px rgba(30, 58, 95,0.3);
     }
     .page-header-icon i { font-size: 22px; color: #fff; }
     .page-header-text h1 { font-size: 20px; font-weight: 800; color: #0f172a; }
@@ -52,7 +52,7 @@
     /* ── TABS ── */
     .tab-bar {
       display: flex; gap: 6px; flex-wrap: wrap;
-      background: #fff; border: 1px solid #dbeafe; border-radius: 14px;
+      background: #fff; border: 1px solid #E7ECF1; border-radius: 14px;
       padding: 10px 12px; margin-bottom: 22px;
     }
     .tab-btn {
@@ -61,7 +61,7 @@
       font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.18s;
     }
     .tab-btn:hover { background: #f1f5f9; color: #1e293b; }
-    .tab-btn.active { background: #1e3a8a; color: #fff; }
+    .tab-btn.active { background: #1E3A5F; color: #fff; }
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
 
@@ -79,7 +79,7 @@
       background: #fff; border: 1px solid #e8edf3; border-radius: 18px;
       padding: 24px; margin-bottom: 18px;
       box-shadow: 0 2px 8px rgba(15,23,42,0.05);
-      border-top: 3px solid #3b82f6;
+      border-top: 3px solid #1E3A5F;
     }
     .section-title { font-size: 15px; font-weight: 800; color: #1e293b; margin-bottom: 16px; display: flex; align-items: center; gap: 9px; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -100,7 +100,7 @@
       font-weight: 500;
     }
     .field input:focus, .field select:focus, .field textarea:focus {
-      border-color: #3b82f6; background: #fff;
+      border-color: #1E3A5F; background: #fff;
       box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
     }
     .field textarea { resize: vertical; min-height: 80px; }
@@ -114,53 +114,53 @@
     /* ── BUTTONS ── */
     .btn-submit {
       padding: 13px 28px; border: none; border-radius: 12px;
-      background: linear-gradient(135deg, #1e3a8a, #2563eb);
+      background: linear-gradient(135deg, #1E3A5F, #1E3A5F);
       color: white; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s;
-      box-shadow: 0 4px 14px rgba(30,58,138,0.35);
+      box-shadow: 0 4px 14px rgba(30, 58, 95,0.35);
       letter-spacing: 0.2px;
     }
-    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(30,58,138,0.4); }
+    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(30, 58, 95,0.4); }
     .btn-submit:active { transform: translateY(0); }
     .btn-save   { padding: 9px 20px; border: none; border-radius: 9px; background: linear-gradient(135deg,#16a34a,#22c55e); color: white; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; box-shadow: 0 3px 10px rgba(22,163,74,0.3); }
     .btn-save:hover { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(22,163,74,0.35); }
-    .btn-edit   { padding: 5px 12px; border: 1px solid #93c5fd; border-radius: 7px; background: #dbeafe; color: #1d4ed8; font-size: 12px; cursor: pointer; transition: 0.2s; }
-    .btn-edit:hover { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+    .btn-edit   { padding: 5px 12px; border: 1px solid #B7C7D6; border-radius: 7px; background: #E7ECF1; color: #16293F; font-size: 12px; cursor: pointer; transition: 0.2s; }
+    .btn-edit:hover { background: #1E3A5F; color: #fff; border-color: #1E3A5F; }
     .btn-del    { padding: 5px 11px; border: 1px solid #fca5a5; border-radius: 7px; background: #fee2e2; color: #dc2626; font-size: 12px; cursor: pointer; transition: 0.2s; }
     .btn-del:hover { background: #ef4444; color: #fff; }
-    .btn-add    { padding: 10px 22px; border: none; border-radius: 10px; background: #6366f1; color: white; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-    .btn-add:hover { background: #4f46e5; transform: translateY(-1px); }
+    .btn-add    { padding: 10px 22px; border: none; border-radius: 10px; background: #1E3A5F; color: white; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .btn-add:hover { background: #1E3A5F; transform: translateY(-1px); }
     .btn-cancel-sm { padding: 5px 12px; border: 1px solid #e2e8f0; border-radius: 7px; background: #f1f5f9; color: #64748b; font-size: 12px; cursor: pointer; }
-    .btn-test   { padding: 9px 18px; border: none; border-radius: 8px; background: #6366f1; color: white; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .btn-test   { padding: 9px 18px; border: none; border-radius: 8px; background: #1E3A5F; color: white; font-size: 13px; font-weight: 700; cursor: pointer; }
 
     /* ── DARK MODE TOGGLE SWITCH ── */
     .dm-switch{position:relative;display:inline-block;width:52px;height:28px;flex-shrink:0}
     .dm-switch input{opacity:0;width:0;height:0}
     .dm-slider{position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:28px;transition:0.3s}
     .dm-slider:before{content:"";position:absolute;width:22px;height:22px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:0.3s;box-shadow:0 2px 4px rgba(0,0,0,0.2)}
-    .dm-switch input:checked + .dm-slider{background:#6366f1}
+    .dm-switch input:checked + .dm-slider{background:#1E3A5F}
     .dm-switch input:checked + .dm-slider:before{transform:translateX(24px)}
 
     /* ── TABLE ── */
     .table-wrap { overflow-x: auto; border-radius: 10px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { background: #dbeafe; color: #1e3a8a; padding: 10px 14px; text-align: left; font-weight: 700; white-space: nowrap; }
+    th{position:sticky;top:0;z-index:1; background: #E7ECF1; color: #1E3A5F; padding: 10px 14px; text-align: left; font-weight: 700; white-space: nowrap; }
     td { padding: 9px 14px; border-bottom: 1px solid #e2e8f0; color: #1e293b; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #eff6ff; }
+    tr:hover td { background: #FAFAFA; }
     .empty-row { text-align: center; padding: 28px; color: #94a3b8; }
 
     /* ── BADGES ── */
     .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-    .b-blue   { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+    .b-blue   { background: #E7ECF1; color: #16293F; border: 1px solid #B7C7D6; }
     .b-green  { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
     .b-gray   { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
     .b-yellow { background: #fef9c3; color: #92400e; border: 1px solid #fde047; }
     .b-red    { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
-    .b-purple { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+    .b-purple { background: #EEF2F6; color: #16293F; border: 1px solid #C7D4DF; }
 
     /* ── SHIFT LIST ── */
     .shift-list { display: flex; flex-direction: column; gap: 8px; }
-    .shift-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #dbeafe; border-radius: 10px; background: #f8fafc; }
+    .shift-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid #E7ECF1; border-radius: 10px; background: #f8fafc; }
     .shift-item.default-shift { background: #f0fdf4; border-color: #86efac; }
     .shift-name { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
     .shift-times { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: #64748b; }
@@ -169,38 +169,38 @@
     .dot-yellow { background: #f59e0b; }
     .dot-red { background: #ef4444; }
     .shift-actions { display: flex; gap: 7px; flex-shrink: 0; margin-left: 10px; }
-    .emp-badge { display: inline-block; background: #dbeafe; color: #1e40af; border-radius: 20px; font-size: 10px; font-weight: 700; padding: 1px 7px; margin-left: 6px; }
+    .emp-badge { display: inline-block; background: #E7ECF1; color: #16293F; border-radius: 20px; font-size: 10px; font-weight: 700; padding: 1px 7px; margin-left: 6px; }
 
     /* ── BREAK LIST ── */
     .break-list { display: flex; flex-direction: column; gap: 8px; }
-    .break-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #dbeafe; border-radius: 10px; background: #f8fafc; }
+    .break-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #E7ECF1; border-radius: 10px; background: #f8fafc; }
     .break-item.inactive { opacity: 0.55; }
     .break-icon { font-size: 20px; flex-shrink: 0; }
     .break-info { flex: 1; min-width: 0; }
     .break-name { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 3px; }
     .break-meta { font-size: 12px; color: #64748b; display: flex; gap: 12px; }
-    .break-badge { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #dbeafe; color: #1e40af; margin-left: 6px; }
+    .break-badge { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 10px; font-weight: 700; background: #E7ECF1; color: #16293F; margin-left: 6px; }
     .break-badge.lunch { background: #fef3c7; color: #92400e; }
     .break-actions { display: flex; gap: 7px; flex-shrink: 0; }
     .toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 14px; color: #1e293b; }
-    .toggle-row input { width: 16px; height: 16px; accent-color: #1e3a8a; }
+    .toggle-row input { width: 16px; height: 16px; accent-color: #1E3A5F; }
 
     /* ── SALARY ── */
     .salary-stack { display: flex; flex-direction: column; gap: 2px; }
     .s-row { display: flex; align-items: center; gap: 6px; font-size: 12px; }
     .s-row .lbl { font-size: 10px; color: #94a3b8; min-width: 50px; }
     .s-day { font-weight: 800; color: #16a34a; font-size: 14px; }
-    .s-mon { font-weight: 700; color: #2563eb; }
-    .s-yr  { font-weight: 800; color: #7c3aed; }
+    .s-mon { font-weight: 700; color: #1E3A5F; }
+    .s-yr  { font-weight: 800; color: #1E3A5F; }
     .lpa-txt { font-size: 10px; color: #a78bfa; }
-    .rev-badge { font-size: 10px; color: #7c3aed; background: #f3e8ff; border: 1px solid #ddd6fe; border-radius: 20px; padding: 1px 7px; font-weight: 600; margin-top: 2px; display: inline-block; }
+    .rev-badge { font-size: 10px; color: #1E3A5F; background: #EEF2F6; border: 1px solid #C7D4DF; border-radius: 20px; padding: 1px 7px; font-weight: 600; margin-top: 2px; display: inline-block; }
     .rev-badge.muted { color: #94a3b8; background: #f8fafc; border-color: #e2e8f0; }
     .edit-form { display: none; flex-direction: column; gap: 7px; margin-top: 6px; min-width: 240px; }
     .edit-form.open { display: flex; }
     .ef-row { display: flex; align-items: center; gap: 8px; }
     .ef-lbl { font-size: 11px; color: #64748b; min-width: 80px; font-weight: 600; flex-shrink: 0; }
-    .ef-inp { flex: 1; padding: 6px 9px; border: 1px solid #dbeafe; border-radius: 7px; background: #f8fafc; color: #1e293b; font-size: 13px; outline: none; min-width: 0; }
-    .ef-inp:focus { border-color: #93c5fd; background: #fff; }
+    .ef-inp { flex: 1; padding: 6px 9px; border: 1px solid #E7ECF1; border-radius: 7px; background: #f8fafc; color: #1e293b; font-size: 13px; outline: none; min-width: 0; }
+    .ef-inp:focus { border-color: #B7C7D6; background: #fff; }
     .ef-hint { font-size: 10px; color: #94a3b8; padding-left: 88px; }
     .ef-btns { display: flex; gap: 7px; }
 
@@ -208,20 +208,20 @@
     .ann-card { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; margin-bottom: 10px; }
     .ann-card.priority-urgent   { background: #fff5f5; border-left: 4px solid #ef4444; border: 1px solid #fca5a5; border-left: 4px solid #ef4444; }
     .ann-card.priority-important { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; }
-    .ann-card.priority-normal   { background: #f0f7ff; border: 1px solid #bfdbfe; border-left: 4px solid #3b82f6; }
+    .ann-card.priority-normal   { background: #f0f7ff; border: 1px solid #DCE4EB; border-left: 4px solid #1E3A5F; }
     .ann-icon { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
     .ann-body { flex: 1; min-width: 0; }
     .ann-title { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
     .ann-content { font-size: 13px; color: #475569; line-height: 1.5; margin-bottom: 8px; }
     .ann-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: #94a3b8; flex-wrap: wrap; }
-    .pri-normal    { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .pri-normal    { background: #E7ECF1; color: #16293F; border: 1px solid #B7C7D6; }
     .pri-important { background: #fef9c3; color: #92400e; border: 1px solid #fde047; }
     .pri-urgent    { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
 
     /* ── EMAIL TEST ── */
-    .test-card { background: #f8fafc; border: 1px solid #dbeafe; border-radius: 12px; padding: 16px; }
+    .test-card { background: #f8fafc; border: 1px solid #E7ECF1; border-radius: 12px; padding: 16px; }
     .test-row { display: flex; gap: 8px; margin-top: 10px; }
-    .test-row input { flex: 1; padding: 9px 12px; border: 1px solid #dbeafe; border-radius: 8px; background: #fff; font-size: 13px; outline: none; }
+    .test-row input { flex: 1; padding: 9px 12px; border: 1px solid #E7ECF1; border-radius: 8px; background: #fff; font-size: 13px; outline: none; }
     #testResult { margin-top: 8px; font-size: 13px; padding: 8px 12px; border-radius: 8px; display: none; }
     #testResult.ok  { background: #dcfce7; color: #15803d; }
     #testResult.err { background: #fee2e2; color: #dc2626; }
@@ -241,11 +241,11 @@
     .bulk-bar select { padding: 7px 10px; border: 1px solid #bae6fd; border-radius: 7px; background: #fff; font-size: 13px; }
     .bulk-bar .btn-bulk { padding: 8px 18px; border: none; border-radius: 8px; background: #0369a1; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
     .saved-tick { font-size: 12px; color: #16a34a; font-weight: 700; display: none; }
-    .shift-select { padding: 6px 9px; border: 1px solid #dbeafe; border-radius: 7px; background: #f8fafc; font-size: 12px; }
+    .shift-select { padding: 6px 9px; border: 1px solid #E7ECF1; border-radius: 7px; background: #f8fafc; font-size: 12px; }
 
     /* ── SEARCH ── */
     .search-wrap { position: relative; }
-    .search-wrap input { padding: 8px 12px 8px 32px; border: 1px solid #dbeafe; border-radius: 9px; background: #f8fafc; font-size: 13px; outline: none; width: 200px; }
+    .search-wrap input { padding: 8px 12px 8px 32px; border: 1px solid #E7ECF1; border-radius: 9px; background: #f8fafc; font-size: 13px; outline: none; width: 200px; }
     .search-wrap::before { content: '🔍'; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 13px; pointer-events: none; }
     .section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 
@@ -261,7 +261,7 @@
     .toggle input { opacity:0;width:0;height:0; }
     .toggle-slider { position:absolute;cursor:pointer;inset:0;background:#cbd5e1;border-radius:24px;transition:.22s; }
     .toggle-slider:before { content:'';position:absolute;width:18px;height:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.22s;box-shadow:0 1px 3px rgba(0,0,0,.18); }
-    .toggle input:checked + .toggle-slider { background:#1e3a8a; }
+    .toggle input:checked + .toggle-slider { background:#1E3A5F; }
     .toggle input:checked + .toggle-slider:before { transform:translateX(20px); }
     .toggle input:disabled + .toggle-slider { opacity:.45;cursor:not-allowed; }
 
@@ -278,11 +278,11 @@
       transition:all .2s;position:relative;overflow:hidden;
       box-shadow:0 1px 3px rgba(15,23,42,0.04);
     }
-    .s3-tab:hover { border-color:#93c5fd; box-shadow:0 4px 16px rgba(30,58,138,0.1); transform:translateY(-1px); }
+    .s3-tab:hover { border-color:#B7C7D6; box-shadow:0 4px 16px rgba(30, 58, 95,0.1); transform:translateY(-1px); }
     .s3-tab.active {
       border-color:transparent;
-      background:linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%);
-      box-shadow:0 8px 24px rgba(30,58,138,0.3);
+      background:linear-gradient(135deg,#1E3A5F 0%,#1E3A5F 100%);
+      box-shadow:0 8px 24px rgba(30, 58, 95,0.3);
       transform:translateY(-2px);
     }
     .s3-tab-icon {
@@ -326,7 +326,7 @@
       cursor:pointer;font-family:inherit;
       transition:all .15s;box-shadow:0 2px 6px rgba(15,23,42,.06);
     }
-    .subnav-dd-btn:hover { border-color:#93c5fd;color:#1e3a8a;background:#f0f7ff;box-shadow:0 4px 12px rgba(30,58,138,.1); }
+    .subnav-dd-btn:hover { border-color:#B7C7D6;color:#1E3A5F;background:#f0f7ff;box-shadow:0 4px 12px rgba(30, 58, 95,.1); }
     .subnav-dd-btn .lines { display:flex;flex-direction:column;gap:3px; }
     .subnav-dd-btn .lines span {
       display:block;height:2px;background:currentColor;border-radius:2px;
@@ -354,11 +354,11 @@
     }
     .subnav-dd-item:last-child { border-bottom:none; }
     .subnav-dd-item i { font-size:15px;color:#94a3b8;flex-shrink:0;transition:color .12s; }
-    .subnav-dd-item:hover { background:#f0f7ff;color:#1e3a8a; }
-    .subnav-dd-item:hover i { color:#2563eb; }
-    .subnav-dd-item.active { background:#eff6ff;color:#1e3a8a;font-weight:700; }
-    .subnav-dd-item.active i { color:#2563eb; }
-    .subnav-dd-item.active::after { content:'✓';margin-left:auto;font-size:12px;color:#2563eb;font-weight:800; }
+    .subnav-dd-item:hover { background:#f0f7ff;color:#1E3A5F; }
+    .subnav-dd-item:hover i { color:#1E3A5F; }
+    .subnav-dd-item.active { background:#FAFAFA;color:#1E3A5F;font-weight:700; }
+    .subnav-dd-item.active i { color:#1E3A5F; }
+    .subnav-dd-item.active::after { content:'✓';margin-left:auto;font-size:12px;color:#1E3A5F;font-weight:800; }
 
     /* Section header — visible title card at top of each section */
     .sec-header {
@@ -417,7 +417,7 @@
       display:flex; align-items:center; justify-content:center;
       color:#64748b; transition:0.15s; font-family:inherit; line-height:1;
     }
-    .ded-step:hover { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
+    .ded-step:hover { background:#1E3A5F; color:#fff; border-color:#1E3A5F; }
     .ded-inp {
       width:44px; text-align:center; font-size:26px; font-weight:800;
       border:none; background:transparent; outline:none; line-height:1;
@@ -458,17 +458,17 @@
         <div class="s3-tab-icon u-bg-eff6ff"><i class="ti ti-building u-c-1e3a8a"></i></div>
         <div class="s3-tab-text">
           <div class="s3-tab-title">Organisation</div>
-          <div class="s3-tab-sub">Attendance</div>
+          <div class="s3-tab-sub">Attendance · Company</div>
         </div>
-        <span class="s3-tab-count">1</span>
+        <span class="s3-tab-count">2</span>
       </button>
       <button class="s3-tab" id="s3tab-fin" onclick="switchGroup('fin')">
         <div class="s3-tab-icon u-bg-fefce8"><i class="ti ti-coin u-c-ca8a04"></i></div>
         <div class="s3-tab-text">
           <div class="s3-tab-title">Finances</div>
-          <div class="s3-tab-sub">Payroll · Salary</div>
+          <div class="s3-tab-sub">Payroll · Salary · Billing</div>
         </div>
-        <span class="s3-tab-count">2</span>
+        <span class="s3-tab-count">3</span>
       </button>
       <button class="s3-tab" id="s3tab-sys" onclick="switchGroup('sys')">
         <div class="s3-tab-icon u-bg-f0f9ff"><i class="ti ti-settings u-c-0284c7"></i></div>
@@ -554,17 +554,6 @@
                 </div>
               </div>
 
-              <!-- PIN -->
-              <div class="u-bg-fff u-bd-1d5-solid-e2e8f0 u-br-14 u-p-18 u-d-flex u-fxd-column u-gap-14 u-trs-border-color-d15s">
-                <div class="u-d-flex u-ai-flex-start u-jc-space-between u-gap-12">
-                  <div class="u-d-flex u-ai-center u-gap-12">
-                    <div class="u-w-44 u-h-44 u-br-12 u-bg-dbeafe u-d-flex u-ai-center u-jc-center u-fxs-0"><i class="ti ti-password u-fs-22 u-c-2563eb"></i></div>
-                    <div><div class="u-fs-14 u-fw-700 u-c-0f172a">PIN Code</div><div class="u-fs-12 u-c-64748b u-mt-2">4-digit PIN punch-in</div></div>
-                  </div>
-                  <label class="toggle u-fxs-0 u-mt-2"><input type="checkbox" {% if features.pin %}checked{% endif %} onchange="saveToggle('pin_enabled',this.checked)" /><span class="toggle-slider"></span></label>
-                </div>
-              </div>
-
               <!-- Fingerprint -->
               <div class="u-bg-fff u-bd-1d5-solid-e2e8f0 u-br-14 u-p-18 u-d-flex u-fxd-column u-gap-14 u-trs-border-color-d15s">
                 <div class="u-d-flex u-ai-flex-start u-jc-space-between u-gap-12">
@@ -573,17 +562,6 @@
                     <div><div class="u-fs-14 u-fw-700 u-c-0f172a">Fingerprint</div><div class="u-fs-12 u-c-64748b u-mt-2">Physical fingerprint reader device</div></div>
                   </div>
                   <label class="toggle u-fxs-0 u-mt-2"><input type="checkbox" {% if features.fingerprint %}checked{% endif %} onchange="saveToggle('fingerprint_enabled',this.checked)" /><span class="toggle-slider"></span></label>
-                </div>
-              </div>
-
-              <!-- Biometric -->
-              <div class="u-bg-fff u-bd-1d5-solid-e2e8f0 u-br-14 u-p-18 u-d-flex u-fxd-column u-gap-14 u-trs-border-color-d15s">
-                <div class="u-d-flex u-ai-flex-start u-jc-space-between u-gap-12">
-                  <div class="u-d-flex u-ai-center u-gap-12">
-                    <div class="u-w-44 u-h-44 u-br-12 u-bg-f1f5f9 u-d-flex u-ai-center u-jc-center u-fxs-0"><i class="ti ti-device-desktop-analytics u-fs-22 u-c-475569"></i></div>
-                    <div><div class="u-fs-14 u-fw-700 u-c-0f172a">Biometric Device</div><div class="u-fs-12 u-c-64748b u-mt-2">Biometric time-attendance machine</div></div>
-                  </div>
-                  <label class="toggle u-fxs-0 u-mt-2"><input type="checkbox" {% if features.biometric %}checked{% endif %} onchange="saveToggle('biometric_enabled',this.checked)" /><span class="toggle-slider"></span></label>
                 </div>
               </div>
 
@@ -604,6 +582,7 @@
         <div class="subnav-dd-menu" id="dd-fin">
           <button class="subnav-dd-item active" id="ddi-payroll"    onclick="switchSub('fin','payroll')">   <i class="ti ti-coin"></i>   Payroll</button>
           <button class="subnav-dd-item"        id="ddi-salary"     onclick="switchSub('fin','salary')">    <i class="ti ti-cash"></i>   Salary</button>
+          <a class="subnav-dd-item" href="{{ tpath('/settings/seats') }}" style="text-decoration:none;"><i class="ti ti-ticket"></i> Billing{% if co.paid_employee_slots is not none and employee_count is defined and employee_count >= co.paid_employee_slots %}<span class="badge-count">Full</span>{% endif %}</a>
         </div>
       </div>
     </div>
@@ -626,33 +605,50 @@
 
               <style>
                 /* ── Payroll Rules  Professional ── */
-                .py-wrap { display:flex; flex-direction:column; gap:8px; }
+                .py-wrap { display:flex; flex-direction:column; gap:18px; }
 
-                .py-card { background:#fff; border:1px solid #e4e7ec; border-radius:12px; overflow:hidden; }
+                .py-card { background:#fff; border:1px solid #e4e7ec; border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(15,23,42,.04); transition:box-shadow .18s, border-color .18s, transform .18s; }
+                .py-card:hover { box-shadow:0 10px 24px rgba(15,23,42,.08); border-color:#d8dce3; transform:translateY(-1px); }
+                .py-card--accent { border-left:4px solid #1E3A5F; background:linear-gradient(135deg,#f7faff,#FAFAFA); }
+                .py-card--accent .py-hdr { border-bottom-color:#e0ecff; }
 
-                .py-hdr { padding:13px 18px 11px; border-bottom:1px solid #f3f4f6; }
-                .py-hdr-title { font-size:12.5px; font-weight:700; color:#111827; letter-spacing:-.01em; }
-                .py-hdr-sub   { font-size:11px; color:#9ca3af; margin-top:2px; }
+                .py-hdr { padding:15px 20px 13px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:13px; background:linear-gradient(180deg,#fbfcfe,#ffffff); }
+                .py-hdr-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(15,23,42,.04); }
+                .py-hdr-icon i { font-size:17px; }
+                .py-hdr-title { font-size:13px; font-weight:800; color:#0f172a; letter-spacing:-.01em; }
+                .py-hdr-sub   { font-size:11.5px; color:#94a3b8; margin-top:2px; }
+                .py-badge-lock { font-size:10px; color:#c3c9d3; }
 
-                .py-row { display:flex; align-items:center; gap:16px; padding:12px 18px; border-bottom:1px solid #f9fafb; }
+                .py-row { display:flex; align-items:center; gap:16px; padding:13px 20px; border-bottom:1px solid #f9fafb; transition:background .15s; }
                 .py-row:last-child { border-bottom:none; }
+                .py-row:hover { background:#fafbfd; }
 
                 .py-info { flex:1; min-width:0; }
-                .py-label { font-size:12.5px; font-weight:600; color:#1f2937; }
-                .py-hint  { font-size:11px; color:#9ca3af; margin-top:2px; }
+                .py-label { font-size:12.5px; font-weight:700; color:#1f2937; }
+                .py-hint  { font-size:11.5px; color:#9ca3af; margin-top:2px; }
 
                 /* Segmented sliding control */
-                .py-seg { display:inline-flex; background:#f3f4f6; border-radius:9px; padding:3px; position:relative; flex-shrink:0; }
-                .py-seg-track { position:absolute; top:3px; left:3px; height:calc(100% - 6px); background:#fff; border-radius:6px; box-shadow:0 1px 2px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.05); transition:transform .2s cubic-bezier(.4,0,.2,1), width .2s cubic-bezier(.4,0,.2,1); pointer-events:none; }
-                .py-seg-btn { position:relative; z-index:1; padding:6px 11px; border:none; background:transparent; border-radius:6px; font-size:11.5px; font-weight:600; color:#9ca3af; cursor:pointer; white-space:nowrap; transition:color .15s; }
-                .py-seg-btn.on  { color:#111827; font-weight:700; }
-                .py-seg-btn:hover:not(.on) { color:#6b7280; }
+                .py-seg { display:inline-flex; background:#f1f3f6; border-radius:11px; padding:4px; position:relative; flex-shrink:0; box-shadow:inset 0 1px 2px rgba(15,23,42,.05); }
+                .py-seg-track {
+                  position:absolute; top:4px; left:4px; height:calc(100% - 8px);
+                  background:linear-gradient(135deg,#1E3A5F,#16293F); border-radius:8px;
+                  box-shadow:0 3px 8px rgba(30, 58, 95,.35), 0 1px 2px rgba(30, 58, 95,.2);
+                  transition:transform .22s cubic-bezier(.4,0,.2,1), width .22s cubic-bezier(.4,0,.2,1);
+                  pointer-events:none;
+                }
+                .py-seg-btn {
+                  position:relative; z-index:1; padding:7px 13px; border:none; background:transparent; border-radius:8px;
+                  font-size:12px; font-weight:700; color:#8b95a5; cursor:pointer; white-space:nowrap;
+                  transition:color .2s;
+                }
+                .py-seg-btn.on  { color:#fff; font-weight:800; }
+                .py-seg-btn:hover:not(.on) { color:#475569; }
 
                 /* Locked value badge */
-                .py-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; background:#f9fafb; border:1px solid #e4e7ec; border-radius:7px; flex-shrink:0; }
-                .py-badge-val { font-size:13px; font-weight:800; color:#9ca3af; letter-spacing:-.02em; }
+                .py-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:repeating-linear-gradient(135deg,#f9fafb,#f9fafb 6px,#f3f4f6 6px,#f3f4f6 12px); border:1px solid #e4e7ec; border-radius:8px; flex-shrink:0; }
+                .py-badge-val { font-size:13px; font-weight:800; color:#6b7280; letter-spacing:-.02em; }
                 .py-badge-sep { font-size:9px; color:#d1d5db; }
-                .py-badge-tag { font-size:10px; font-weight:600; color:#d1d5db; letter-spacing:.03em; text-transform:uppercase; }
+                .py-badge-tag { font-size:10px; font-weight:700; color:#9ca3af; letter-spacing:.03em; text-transform:uppercase; }
 
                 /* Toggle */
                 .py-tog-row { display:flex; align-items:center; gap:9px; flex-shrink:0; }
@@ -661,38 +657,52 @@
                 .py-tog { position:relative; width:44px; height:24px; cursor:pointer; flex-shrink:0; }
                 .py-tog input { opacity:0; position:absolute; }
                 .py-tog-track { position:absolute; inset:0; border-radius:12px; background:#e5e7eb; transition:background .2s; }
-                .py-tog input:checked ~ .py-tog-track { background:#2563eb; }
+                .py-tog input:checked ~ .py-tog-track { background:#1E3A5F; }
                 .py-tog-knob { position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.18); transition:left .2s cubic-bezier(.4,0,.2,1); }
                 .py-tog input:checked ~ .py-tog-track .py-tog-knob { left:23px; }
 
                 /* Save button */
-                .py-save { display:flex; align-items:center; justify-content:center; gap:7px; width:100%; padding:13px; background:#2563eb; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; letter-spacing:.01em; transition:background .15s, transform .1s; margin-top:6px; }
-                .py-save:hover  { background:#1d4ed8; }
+                .py-save {
+                  display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:14px;
+                  background:#1E3A5F; color:#fff; border:none; border-radius:12px;
+                  font-size:13.5px; font-weight:800; letter-spacing:.01em; cursor:pointer;
+                  box-shadow:0 6px 16px rgba(30,58,95,.28); transition:filter .15s, transform .12s, box-shadow .15s;
+                  margin-top:4px;
+                }
+                .py-save:hover  { filter:brightness(1.06); box-shadow:0 8px 20px rgba(30,58,95,.34); transform:translateY(-1px); }
                 .py-save:active { transform:scale(.99); }
 
                 /* Dark mode */
-                body.dark-mode .py-card  { background:#161b22; border-color:#30363d; }
-                body.dark-mode .py-hdr   { border-color:#21262d; }
+                body.dark-mode .py-card  { background:#161b22; border-color:#30363d; box-shadow:none; }
+                body.dark-mode .py-hdr   { border-color:#21262d; background:linear-gradient(180deg,#171d26,#161b22); }
                 body.dark-mode .py-hdr-title { color:#cdd9e5; }
                 body.dark-mode .py-row   { border-color:#1c2128; }
+                body.dark-mode .py-row:hover { background:#1a2029; }
                 body.dark-mode .py-label { color:#cdd9e5; }
-                body.dark-mode .py-seg   { background:#21262d; }
-                body.dark-mode .py-seg-track { background:#30363d; box-shadow:none; }
+                body.dark-mode .py-seg   { background:#0d1117; box-shadow:inset 0 1px 2px rgba(0,0,0,.4); }
+                body.dark-mode .py-seg-track { background:linear-gradient(135deg,#1E3A5F,#1E3A5F); box-shadow:0 3px 8px rgba(30, 58, 95,.4); }
                 body.dark-mode .py-seg-btn   { color:#6e7681; }
-                body.dark-mode .py-seg-btn.on { color:#cdd9e5; }
-                body.dark-mode .py-badge { background:#1c2128; border-color:#30363d; }
+                body.dark-mode .py-seg-btn.on { color:#fff; }
+                body.dark-mode .py-seg-btn:hover:not(.on) { color:#9ca3af; }
+                body.dark-mode .py-badge { background:repeating-linear-gradient(135deg,#1c2128,#1c2128 6px,#20262e 6px,#20262e 12px); border-color:#30363d; }
+                body.dark-mode .py-badge-val { color:#8b949e; }
+                body.dark-mode .py-badge-lock { color:#4b5563; }
                 body.dark-mode .py-tog-lbl.on { color:#cdd9e5; }
                 body.dark-mode .py-tog-track  { background:#30363d; }
-                body.dark-mode .py-tog input:checked ~ .py-tog-track { background:#2563eb; }
+                body.dark-mode .py-tog input:checked ~ .py-tog-track { background:#1E3A5F; }
+                body.dark-mode .py-card:hover { box-shadow:0 10px 24px rgba(0,0,0,.35); border-color:#3d4551; }
+                body.dark-mode .py-card--accent { background:linear-gradient(135deg,#132030,#0f1a28); border-left-color:#1E3A5F; }
+                body.dark-mode .py-card--accent .py-hdr { border-bottom-color:#1e2b3d; background:transparent; }
               </style>
 
               <div class="py-wrap">
 
               <!-- Billing Card -->
-              <div class="py-card" style="border-left: 4px solid #2563eb; background: #f0f7ff; margin-bottom: 20px;">
-                <div class="py-hdr" style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="py-card py-card--accent u-mb-20">
+                <div class="py-hdr">
+                  <div class="py-hdr-icon u-bg-dbeafe"><i class="ti ti-credit-card u-c-2563eb"></i></div>
                   <div>
-                    <div class="py-hdr-title" style="font-size:16px;">Monthly Bill: <span style="font-size:12px; padding:3px 10px; background:#dbeafe; color:#1d4ed8; border-radius:20px; font-weight:800; display:inline-block;">{{ monthly_bill_display|default('₹0') }}</span></div>
+                    <div class="py-hdr-title" style="font-size:15px;">Monthly Bill: <span style="font-size:12px; padding:3px 10px; background:#E7ECF1; color:#16293F; border-radius:20px; font-weight:800; display:inline-block;">{{ monthly_bill_display|default('₹0') }}</span></div>
                     <div class="py-hdr-sub">{{ per_employee_paise|default(9900)|plan_price }}/employee/month, flat — {{ employee_count|default(0) }} employee{{ '' if employee_count == 1 else 's' }} currently. Every feature is included, no tiers to manage.</div>
                   </div>
                 </div>
@@ -701,8 +711,11 @@
               <!-- Card 1: Shift Timings -->
               <div class="py-card">
                 <div class="py-hdr">
-                  <div class="py-hdr-title">Shift Timings</div>
-                  <div class="py-hdr-sub">Define the daily attendance cutoffs</div>
+                  <div class="py-hdr-icon u-bg-fef3c7"><i class="ti ti-clock u-c-d97706"></i></div>
+                  <div>
+                    <div class="py-hdr-title">Shift Timings</div>
+                    <div class="py-hdr-sub">Define the daily attendance cutoffs</div>
+                  </div>
                 </div>
                 <div class="py-row">
                   <div class="py-info">
@@ -766,8 +779,11 @@
               <!-- Card 2: Salary Deductions -->
               <div class="py-card">
                 <div class="py-hdr">
-                  <div class="py-hdr-title">Salary Deductions</div>
-                  <div class="py-hdr-sub">Daily percentage deducted per attendance status</div>
+                  <div class="py-hdr-icon u-bg-dcfce7"><i class="ti ti-percentage u-c-16a34a"></i></div>
+                  <div>
+                    <div class="py-hdr-title">Salary Deductions</div>
+                    <div class="py-hdr-sub">Daily percentage deducted per attendance status</div>
+                  </div>
                 </div>
                 <div class="py-row">
                   <div class="py-info">
@@ -775,6 +791,7 @@
                     <div class="py-hint">On time — full shift completed</div>
                   </div>
                   <div class="py-badge">
+                    <i class="ti ti-lock py-badge-lock"></i>
                     <span class="py-badge-val">0%</span>
                     <span class="py-badge-sep">·</span>
                     <span class="py-badge-tag">Fixed</span>
@@ -814,6 +831,7 @@
                     <div class="py-hint">No attendance record for the day</div>
                   </div>
                   <div class="py-badge">
+                    <i class="ti ti-lock py-badge-lock"></i>
                     <span class="py-badge-val">100%</span>
                     <span class="py-badge-sep">·</span>
                     <span class="py-badge-tag">Fixed</span>
@@ -824,8 +842,11 @@
               <!-- Card 3: Policies -->
               <div class="py-card">
                 <div class="py-hdr">
-                  <div class="py-hdr-title">Special Day Policies</div>
-                  <div class="py-hdr-sub">How holidays and approved leaves affect payroll</div>
+                  <div class="py-hdr-icon u-bg-ede9fe"><i class="ti ti-calendar-event u-c-7c3aed"></i></div>
+                  <div>
+                    <div class="py-hdr-title">Special Day Policies</div>
+                    <div class="py-hdr-sub">How holidays and approved leaves affect payroll</div>
+                  </div>
                 </div>
                 <div class="py-row">
                   <div class="py-info">
@@ -954,14 +975,108 @@
           Sections
         </button>
         <div class="subnav-dd-menu" id="dd-sys">
-          <button class="subnav-dd-item active" id="ddi-email"      onclick="switchSub('sys','email')">      <i class="ti ti-mail"></i>       Email</button>
+          <button class="subnav-dd-item active" id="ddi-company"    onclick="switchSub('sys','company')">    <i class="ti ti-building"></i>   Companies</button>
+          <button class="subnav-dd-item"        id="ddi-email"      onclick="switchSub('sys','email')">      <i class="ti ti-mail"></i>       Email</button>
           <button class="subnav-dd-item"        id="ddi-appearance" onclick="switchSub('sys','appearance')"> <i class="ti ti-palette"></i>    Appearance</button>
         </div>
       </div>
     </div>
 
+          <!-- COMPANIES -->
+          <div class="s3-section active" id="ss-company">
+            <div class="sec-header">
+              <div class="sec-icon" style="background:#FAFAFA;"><i class="ti ti-building" style="color:#1E3A5F;font-size:20px;"></i></div>
+              <div><div class="sec-title">Companies</div><div class="sec-sub">Manage company/branch profiles, contact details, and PIN protection</div></div>
+            </div>
+            <div class="section">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <div style="font-size:13px;color:#64748b;">{{ companies|length }} compan{{ 'y' if companies|length == 1 else 'ies' }}</div>
+                <button type="button" class="btn-submit" style="width:auto;padding:9px 18px;" onclick="acOpenModal()">+ Add Company</button>
+              </div>
+
+              {% for c in companies %}
+              <div id="co-view-{{ c[0] }}" style="border:1px solid #e2e8f0;border-radius:14px;padding:18px 20px;margin-bottom:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:14px;">
+                  <div style="width:52px;height:52px;border-radius:12px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+                    {% if c[7] %}<img src="/{{ c[7] }}" style="width:100%;height:100%;object-fit:contain;" alt="{{ c[1] }} logo" />{% else %}<i class="ti ti-building" style="font-size:22px;color:#94a3b8;"></i>{% endif %}
+                  </div>
+                  <div>
+                    <div style="font-size:15px;font-weight:800;color:#0f172a;">
+                      {{ c[1] }}{% if c[2] %} <span style="font-size:11px;font-weight:700;color:#64748b;font-family:monospace;">({{ c[2] }})</span>{% endif %}
+                    </div>
+                    <div style="font-size:12px;color:#64748b;margin-top:3px;">{{ c[4] }} employee{{ 's' if c[4] != 1 else '' }} &middot; Working days: {{ c[5] }}</div>
+                    {% if c[9] or c[10] or c[11] or c[12] %}
+                    <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
+                      {% if c[9] %}<i class="ti ti-map-pin"></i> {{ c[9] }}{% endif %}
+                      {% if c[10] %}{% if c[9] %} &middot; {% endif %}{{ c[10] }}{% endif %}
+                      {% if c[11] %}{% if c[9] or c[10] %} &middot; {% endif %}{{ c[11] }}{% endif %}
+                      {% if c[12] %}{% if c[9] or c[10] or c[11] %} &middot; {% endif %}{{ c[12] }}{% endif %}
+                    </div>
+                    {% endif %}
+                    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                      {% if c[6] %}<span style="font-size:10px;font-weight:700;background:#fef9c3;color:#854d0e;padding:3px 8px;border-radius:20px;"><i class="ti ti-lock"></i> PIN protected</span>{% endif %}
+                      {% if c[8] %}<span style="font-size:10px;font-weight:700;background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:20px;"><i class="ti ti-id-badge-2"></i> ID card set up</span>{% endif %}
+                    </div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                  <button type="button" class="btn-test" onclick="openEditCompany({{ c[0] }})"><i class="ti ti-pencil"></i> Edit</button>
+                  <button type="button" class="btn-test" onclick="openSetPin({{ c[0] }}, {{ c[1]|tojson }}, {{ c[6] }})"><i class="ti ti-lock"></i> PIN</button>
+                  <a class="btn-test" style="text-decoration:none;display:inline-flex;align-items:center;" href="{{ tpath('/companies/' ~ c[0] ~ '/id_card_template/editor') }}"><i class="ti ti-id-badge-2"></i> ID Card</a>
+                  <form method="POST" action="{{ tpath('/companies/' ~ c[0] ~ '/delete') }}" onsubmit="return confirm('Delete {{ c[1]|e }}? This only works if it has no employees assigned.');" style="display:inline;">
+                    <input type="hidden" name="redirect_to" value="settings" />
+                    <button type="submit" class="btn-test" style="border-color:#fecaca;background:#fff5f5;color:#dc2626;"><i class="ti ti-trash"></i></button>
+                  </form>
+                </div>
+              </div>
+
+              <div id="co-edit-{{ c[0] }}" class="section" style="display:none;margin-bottom:12px;">
+                <form method="POST" action="{{ tpath('/companies/' ~ c[0] ~ '/edit') }}" enctype="multipart/form-data">
+                  <input type="hidden" name="redirect_to" value="settings" />
+                  <div style="display:grid;grid-template-columns:1fr 160px;gap:0 10px;">
+                    <div class="field"><label>Company Name</label><input type="text" name="name" value="{{ c[1] }}" required /></div>
+                    <div class="field"><label>Code</label><input style="font-family:monospace;letter-spacing:1px;" type="text" name="code" value="{{ c[2] }}" maxlength="20" /></div>
+                  </div>
+                  <div class="field">
+                    <label>Logo</label>
+                    <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/bmp" />
+                    {% if c[7] %}<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Current logo is kept unless you upload a new one.</div>{% endif %}
+                  </div>
+                  <div class="field"><label>Office Address</label><input type="text" name="address" value="{{ c[9] }}" placeholder="Shown on ID cards" /></div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;">
+                    <div class="field"><label>Website</label><input type="text" name="website" value="{{ c[10] }}" /></div>
+                    <div class="field"><label>Contact Email</label><input type="email" name="email" value="{{ c[11] }}" /></div>
+                  </div>
+                  <div class="field"><label>Contact Phone</label><input type="text" name="phone" value="{{ c[12] }}" /></div>
+                  <div class="field">
+                    <label>Working Days</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">
+                      {% set wd_list = c[5].split(',') %}
+                      {% for _d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+                      <label style="cursor:pointer;">
+                        <input type="checkbox" style="display:none;" name="working_days" value="{{ _d }}" {% if _d in wd_list %}checked{% endif %} onchange="styleCoWd(this)" />
+                        <span style="display:inline-block;padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid {% if _d in wd_list %}#1E3A5F{% else %}#e2e8f0{% endif %};background:{% if _d in wd_list %}#FAFAFA{% else %}#f8fafc{% endif %};color:{% if _d in wd_list %}#1E3A5F{% else %}#94a3b8{% endif %};">{{ _d }}</span>
+                      </label>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:10px;margin-top:16px;">
+                    <button type="button" style="flex:1;padding:11px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#475569;font-size:14px;font-weight:600;cursor:pointer;" onclick="closeEditCompany({{ c[0] }})">Cancel</button>
+                    <button type="submit" style="flex:2;padding:11px;border:none;border-radius:10px;background:#1E3A5F;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Save Changes</button>
+                  </div>
+                </form>
+              </div>
+              {% else %}
+              <div style="text-align:center;padding:40px;color:#94a3b8;">
+                <i class="ti ti-building-skyscraper" style="font-size:40px;"></i>
+                <div style="font-size:13px;margin-top:10px;">No companies yet. Add your first one to get started.</div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
           <!-- EMAIL -->
-          <div class="s3-section active" id="ss-email">
+          <div class="s3-section" id="ss-email">
             <div class="sec-header">
               <div class="sec-icon u-bg-f0f9ff"><i class="ti ti-mail u-c-0284c7 u-fs-20"></i></div>
               <div><div class="sec-title">Email</div><div class="sec-sub">SMTP configuration and notification preferences</div></div>
@@ -1031,6 +1146,86 @@
                   {% endfor %}
                 </div>
               </div>
+            </div>
+
+            <div class="section" id="password-management">
+              <div class="section-title">🔐 Password Management</div>
+
+              {% if request.args.get('pwd_ok') %}
+                <div class="u-mb-14 u-c-15803d u-fs-13"><i class="ti ti-circle-check"></i> Password updated successfully.</div>
+              {% elif request.args.get('pwd_error') == 'wrong' %}
+                <div class="u-mb-14 u-c-dc2626 u-fs-13"><i class="ti ti-circle-x"></i> Current password is incorrect.</div>
+              {% elif request.args.get('pwd_error') == 'mismatch' %}
+                <div class="u-mb-14 u-c-dc2626 u-fs-13"><i class="ti ti-circle-x"></i> New passwords do not match.</div>
+              {% elif request.args.get('pwd_error') == 'weak' %}
+                <div class="u-mb-14 u-c-dc2626 u-fs-13"><i class="ti ti-circle-x"></i> Password must be at least 8 characters.</div>
+              {% endif %}
+
+              <div class="u-d-grid u-gtc-1fr-1fr u-gap-24 u-ai-start">
+
+                <!-- Change Admin Password -->
+                <div class="u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-14 u-p-22">
+                  <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-16"><i class="ti ti-lock"></i> Change Admin Password</div>
+                  <form action="{{ tpath('/change_admin_password') }}" method="POST">
+                    <input type="hidden" autocomplete="username" value="admin" />
+                    <div class="field">
+                      <label>Current Password</label>
+                      <input type="password" name="current_password" placeholder="Enter current password" autocomplete="current-password" required />
+                    </div>
+                    <div class="field">
+                      <label>New Password</label>
+                      <input type="password" name="new_password" placeholder="Enter new password" autocomplete="new-password" required />
+                    </div>
+                    <div class="field">
+                      <label>Confirm New Password</label>
+                      <input type="password" name="confirm_password" placeholder="Re-enter new password" autocomplete="new-password" required />
+                    </div>
+                    <button type="submit" class="btn-submit"><i class="ti ti-lock"></i> Update Password</button>
+                  </form>
+                </div>
+
+                <!-- Reset Employee Password -->
+                <div class="u-bg-f8fafc u-bd-1-solid-e2e8f0 u-br-14 u-p-22">
+                  <div class="u-fs-13 u-fw-700 u-c-0f172a u-mb-4"><i class="ti ti-key"></i> Reset Employee Password</div>
+                  <div class="u-fs-12 u-c-94a3b8 u-mb-18">Resets the employee's PIN back to their Employee ID</div>
+                  <form action="{{ tpath('/admin_action') }}" method="POST">
+                    <input type="hidden" name="action" value="reset_password" />
+                    <input type="hidden" name="next" value="settings" />
+                    <div class="field">
+                      <label>Employee ID</label>
+                      <input type="text" name="emp_id" placeholder="e.g. EMP001" required />
+                    </div>
+                    <button type="submit" class="btn-submit"
+                      onclick="return confirm('Reset this employee\'s password to their Employee ID?')">
+                      <i class="ti ti-key"></i> Reset Password
+                    </button>
+                  </form>
+                </div>
+
+              </div>
+
+              <!-- Set Admin Recovery Email -->
+              <div class="u-mt-20 u-bg-eff6ff u-bd-1-solid-bfdbfe u-br-14 u-p-22">
+                <div class="u-fs-13 u-fw-700 u-c-1e3a8a u-mb-4"><i class="ti ti-mail"></i> Admin Recovery Email</div>
+                <div class="u-fs-12 u-c-64748b u-mb-16">Set the email address used to receive password reset links when you forget your admin password.</div>
+
+                <div id="recoveryEmailView" class="u-d-flex u-ai-center u-gap-12 u-fxw-wrap{% if not admin_recovery_email %} u-d-none{% endif %}">
+                  <div class="u-fx-1 u-minw-200 u-fs-14 u-fw-600 u-c-1e293b">{{ admin_recovery_email }}</div>
+                  <button type="button" class="btn-test" onclick="document.getElementById('recoveryEmailView').classList.add('u-d-none');document.getElementById('recoveryEmailForm').classList.remove('u-d-none');document.getElementById('recoveryEmailInput').focus();"><i class="ti ti-edit"></i> Edit</button>
+                </div>
+
+                <form id="recoveryEmailForm" class="u-d-flex u-ai-flex-end u-gap-12 u-fxw-wrap{% if admin_recovery_email %} u-d-none{% endif %}" action="{{ tpath('/admin_set_recovery_email') }}" method="POST">
+                  <div class="field u-fx-1 u-minw-200 u-mb-0">
+                    <label>Recovery Email</label>
+                    <input type="email" id="recoveryEmailInput" name="recovery_email" placeholder="admin@example.com" value="{{ admin_recovery_email or '' }}" required />
+                  </div>
+                  <button type="submit" class="btn-submit u-mb-0"><i class="ti ti-device-floppy"></i> Save Email</button>
+                </form>
+                {% if request.args.get('email_ok') %}
+                  <div class="u-mt-12 u-c-15803d u-fs-13"><i class="ti ti-circle-check"></i> Recovery email saved successfully.</div>
+                {% endif %}
+              </div>
+
             </div>
           </div>
 
@@ -1119,6 +1314,8 @@
 
 {% block scripts %}
 
+  <script src="{{ static_url('a11y-tabs.js') }}"></script>
+
   <!-- ══ SET COMPANY PIN MODAL ══ -->
   <div class="u-d-none u-pos-fixed u-ins-0 u-bg-rgba15_23_42_0d55 u-zi-10002 u-ai-center u-jc-center" id="setPinModal">
     <div class="u-bg-fff u-br-20 u-p-28 u-w-360 u-shad-0-24-64-rgba0_0_0_0d25">
@@ -1142,7 +1339,7 @@
         <div class="u-d-none u-mb-14" id="spn_pin_section">
           <label class="u-fs-12 u-fw-700 u-c-475569 u-d-block u-mb-8">PIN Code</label>
           <input class="u-w-100pct u-p-13 u-bd-2-solid-e2e8f0 u-br-11 u-fs-22 u-ls-7 u-ta-center u-ff-monospace u-out-none u-trs-border-d15s u-bxs-border-box" type="password" name="pin" id="spn_pin" maxlength="10" placeholder="• • • •" autocomplete="off"
-            oninput="this.style.borderColor=this.value?'#1e3a8a':'#e2e8f0'" />
+            oninput="this.style.borderColor=this.value?'#1E3A5F':'#e2e8f0'" />
           <div class="u-fs-11 u-c-94a3b8 u-mt-5 u-ta-center">4–10 characters (numbers or letters)</div>
         </div>
         <div class="u-fs-11 u-c-64748b u-bg-fffbeb u-bd-1-solid-fde68a u-br-8 u-p-9-12 u-mb-16 u-lh-1d5">
@@ -1201,7 +1398,7 @@
               {% for _d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
               <label class="u-cur-pointer">
                 <input class="u-d-none" type="checkbox" name="working_days" value="{{ _d }}" {% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}checked{% endif %} onchange="styleCoWd(this)" />
-                <span style="display:inline-block;padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid {% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}#1e3a8a{% else %}#e2e8f0{% endif %};background:{% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}#eff6ff{% else %}#f8fafc{% endif %};color:{% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}#1e3a8a{% else %}#94a3b8{% endif %};">{{ _d }}</span>
+                <span style="display:inline-block;padding:6px 14px;border-radius:16px;font-size:12px;font-weight:700;border:1.5px solid {% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}#1E3A5F{% else %}#e2e8f0{% endif %};background:{% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}#FAFAFA{% else %}#f8fafc{% endif %};color:{% if _d in ['Mon','Tue','Wed','Thu','Fri'] %}#1E3A5F{% else %}#94a3b8{% endif %};">{{ _d }}</span>
               </label>
               {% endfor %}
             </div>
@@ -1254,11 +1451,13 @@
 
   <script>
     /* ── 3-TAB + DROPDOWN SUB-NAV ── */
-    var groupMap  = { attendance:'org',payroll:'fin',salary:'fin',email:'sys',appearance:'sys' };
-    var firstSub  = { org:'attendance', fin:'payroll', sys:'email' };
+    var groupMap  = { company:'sys', attendance:'org',payroll:'fin',salary:'fin',email:'sys',appearance:'sys' };
+    var firstSub  = { org:'attendance', fin:'payroll', sys:'company' };
     var crumbData = {
-      appearance: { icon:'<i class="ti ti-palette u-c-7c3aed"></i>',     bg:'#f5f3ff', title:'Appearance',     sub:'Theme and display' },
+      company:    { icon:'<i class="ti ti-building u-c-1e3a8a"></i>',    bg:'#FAFAFA', title:'Companies',      sub:'Profiles, branches and branding' },
+      appearance: { icon:'<i class="ti ti-palette u-c-7c3aed"></i>',     bg:'#EEF2F6', title:'Appearance',     sub:'Theme and display' },
       attendance: { icon:'<i class="ti ti-fingerprint u-c-16a34a"></i>', bg:'#f0fdf4', title:'Attendance',     sub:'Punch-in methods' },
+      company:    { icon:'<i class="ti ti-building u-c-1e3a8a"></i>',    bg:'#FAFAFA', title:'Company',        sub:'Company management' },
       payroll:    { icon:'<i class="ti ti-coin u-c-ca8a04"></i>',        bg:'#fefce8', title:'Payroll',        sub:'Salary rules' },
       salary:     { icon:'<i class="ti ti-cash u-c-16a34a"></i>',        bg:'#f0fdf4', title:'Salary',         sub:'Per-employee rates' },
       email:      { icon:'<i class="ti ti-mail u-c-0284c7"></i>',        bg:'#f0f9ff', title:'Email',          sub:'SMTP and notifications' }
@@ -1279,7 +1478,7 @@
     function closeSetPin() { document.getElementById('setPinModal').style.display = 'none'; }
     function spnToggleChange(cb, skipAnim) {
       var on = cb.checked;
-      document.getElementById('spn_track').style.background = on ? '#1e3a8a' : '#e2e8f0';
+      document.getElementById('spn_track').style.background = on ? '#1E3A5F' : '#e2e8f0';
       document.getElementById('spn_thumb').style.left = on ? '24px' : '3px';
       document.getElementById('spn_pin_section').style.display = on ? 'block' : 'none';
       // When OFF, clear the pin field so empty string is submitted (removes PIN)
@@ -1379,7 +1578,7 @@
     function styleCoWd(cb) {
       var span = cb.nextElementSibling;
       if (cb.checked) {
-        span.style.borderColor = '#1e3a8a'; span.style.background = '#eff6ff'; span.style.color = '#1e3a8a';
+        span.style.borderColor = '#1E3A5F'; span.style.background = '#FAFAFA'; span.style.color = '#1E3A5F';
       } else {
         span.style.borderColor = '#e2e8f0'; span.style.background = '#f8fafc'; span.style.color = '#94a3b8';
       }
@@ -1470,6 +1669,19 @@
       }
     })();
 
+    /* ── Accessibility: ARIA roles + keyboard nav for the tab/dropdown system
+       (see static/a11y-tabs.js — wraps the switchGroup/switchSub logic above
+       without changing it) ── */
+    if (window.ezWireTabList) {
+      window.ezWireTabList('.s3-tab', function (tab) { return 's3panel-' + tab.id.replace('s3tab-', ''); }, { observe: true });
+      document.querySelectorAll('.subnav-dd-menu').forEach(function (menu) {
+        window.ezWireTabList('#' + menu.id + ' .subnav-dd-item', function (item) { return 'ss-' + item.id.replace('ddi-', ''); }, { observe: true });
+      });
+    }
+    if (window.ezWireDropdown) {
+      window.ezWireDropdown('.subnav-dd-btn', '.subnav-dd-menu');
+    }
+
     /* ── FEATURE TOGGLE (AJAX) ── */
     function saveToggle(feature, value, extraId) {
       fetch('/toggle_feature', {
@@ -1493,7 +1705,7 @@
       var span = document.getElementById('wdspan_' + day);
       if (!span) return;
       if (cb.checked) {
-        span.style.borderColor = '#1e3a8a'; span.style.background = '#eff6ff'; span.style.color = '#1e3a8a';
+        span.style.borderColor = '#1E3A5F'; span.style.background = '#FAFAFA'; span.style.color = '#1E3A5F';
       } else {
         span.style.borderColor = '#e2e8f0'; span.style.background = '#f8fafc'; span.style.color = '#64748b';
       }
@@ -1539,11 +1751,11 @@
       var b = document.getElementById('preview_leave_badge');
       if (b) {
         b.textContent = v === 'exclude' ? 'No deduction' : '100% deducted';
-        b.style.background = v === 'exclude' ? '#ede9fe' : '#fee2e2';
-        b.style.color = v === 'exclude' ? '#5b21b6' : '#991b1b';
+        b.style.background = v === 'exclude' ? '#EEF2F6' : '#fee2e2';
+        b.style.color = v === 'exclude' ? '#16293F' : '#991b1b';
       }
       var el = document.getElementById('lp_excl_lbl'), al = document.getElementById('lp_abs_lbl');
-      if (el) { el.style.borderColor = v==='exclude'?'#ddd6fe':'#e2e8f0'; el.style.background = v==='exclude'?'#f5f3ff':'#fafafa'; }
+      if (el) { el.style.borderColor = v==='exclude'?'#C7D4DF':'#e2e8f0'; el.style.background = v==='exclude'?'#EEF2F6':'#fafafa'; }
       if (al) { al.style.borderColor = v==='absent'?'#fca5a5':'#e2e8f0'; al.style.background = v==='absent'?'#fff8f8':'#fafafa'; }
     }
     document.addEventListener('DOMContentLoaded', updatePreviews);

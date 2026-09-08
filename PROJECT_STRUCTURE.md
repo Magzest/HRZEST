@@ -35,7 +35,6 @@ employee-attendance/
 │   ├── payroll.py               # Salary structure, payslips, & bulk email distribution
 │   ├── performance.py           # KPI metrics, reviews, & appraisals
 │   ├── platform_admin.py       # SaaS Platform Super Admin console (/super_admin)
-│   ├── secops.py                # SecOps Telemetry Command Center (/sp_admin)
 │   └── tickets.py               # HR helpdesk ticketing & resignation requests
 │
 ├── utils/                      # Core Business Logic & Security Helpers
@@ -44,7 +43,7 @@ employee-attendance/
 │   ├── auth.py                 # Password hashing (bcrypt) & lockout mechanisms
 │   ├── clamav.py               # Uploaded document malware scanner
 │   ├── device_risk.py          # Network & device risk posture evaluation
-│   ├── email.py                # SMTP email dispatcher (Brevo / SendGrid)
+│   ├── email.py                # SMTP email dispatcher (any provider)
 │   ├── geo.py                  # Geofenced check-in distance math (Haversine)
 │   ├── helpers.py              # Cryptographic helper functions & DB context wrappers
 │   ├── mfa.py                  # Multi-factor TOTP authentication logic
@@ -65,7 +64,6 @@ employee-attendance/
 │   ├── employees.html          # Employee Directory & Shift Management
 │   ├── pricing.html            # Product Tiers & Pricing Page
 │   ├── settings.html           # System Settings Page
-│   ├── soc_security_dashboard.html # SecOps Telemetry Dashboard
 │   └── super_admin_dashboard.html  # Platform Admin Console
 │
 ├── static/                     # Static Web Assets (CSS, JS, Fonts)

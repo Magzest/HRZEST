@@ -21,9 +21,12 @@ import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
 import EmployeePerformanceCard from "../../components/performance/EmployeePerformanceCard";
 
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchEmployeeProfile, fetchMyPerformance, submitMyPerformanceComment } from "../../api/client";
 
 function ReviewCard({ review, onSubmitComment, submittingId }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [comment, setComment] = useState(review.employee_comment || "");
   const isSubmitting = submittingId === review.id;
 
@@ -32,7 +35,7 @@ function ReviewCard({ review, onSubmitComment, submittingId }) {
       <View style={styles.reviewHeader}>
         <Text style={styles.reviewQuarter}>Q{review.quarter} {review.year}</Text>
         <View style={styles.ratingPill}>
-          <Ionicons name="star" size={12} color="#F59E0B" />
+          <Ionicons name="star" size={12} color={colors.warning} />
           <Text style={styles.ratingPillText}>{review.overall_rating_label}</Text>
         </View>
       </View>
@@ -84,6 +87,8 @@ function ReviewCard({ review, onSubmitComment, submittingId }) {
 
 export default function PerformanceScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [profile, setProfile] = useState(null);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -186,10 +191,10 @@ export default function PerformanceScreen() {
     </SafeAreaView>
   );
 }
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
 
   content: {
@@ -199,49 +204,49 @@ const styles = StyleSheet.create({
   },
 
   reviewCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   reviewHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  reviewQuarter: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
+  reviewQuarter: { fontSize: 15, fontWeight: "800", color: colors.text },
   ratingPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#FFFBEB",
+    backgroundColor: colors.yellowBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
   },
-  ratingPillText: { fontSize: 11.5, fontWeight: "700", color: "#B45309" },
-  reviewStatus: { fontSize: 11.5, color: "#64748B", fontWeight: "600", marginTop: 3 },
-  kpiSection: { marginTop: 14, borderTopWidth: 1, borderTopColor: "#F1F5F9", paddingTop: 10 },
+  ratingPillText: { fontSize: 11.5, fontWeight: "700", color: colors.warning },
+  reviewStatus: { fontSize: 11.5, color: colors.textSecondary, fontWeight: "600", marginTop: 3 },
+  kpiSection: { marginTop: 14, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
   kpiRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
-  kpiTitle: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
-  kpiTarget: { fontSize: 11.5, color: "#94A3B8", marginTop: 2 },
-  kpiRating: { fontSize: 13, fontWeight: "800", color: "#173B8C" },
-  feedbackBox: { backgroundColor: "#EEF4FF", borderRadius: 12, padding: 12, marginTop: 12 },
-  feedbackLabel: { fontSize: 10.5, fontWeight: "800", color: "#173B8C", letterSpacing: 0.4 },
-  feedbackText: { fontSize: 13, color: "#1E293B", marginTop: 6, lineHeight: 18 },
-  commentLabel: { fontSize: 10.5, fontWeight: "800", color: "#64748B", letterSpacing: 0.4, marginTop: 14 },
+  kpiTitle: { fontSize: 13, fontWeight: "700", color: colors.text },
+  kpiTarget: { fontSize: 11.5, color: colors.textLight, marginTop: 2 },
+  kpiRating: { fontSize: 13, fontWeight: "800", color: colors.primary },
+  feedbackBox: { backgroundColor: colors.primaryLight, borderRadius: 12, padding: 12, marginTop: 12 },
+  feedbackLabel: { fontSize: 10.5, fontWeight: "800", color: colors.primary, letterSpacing: 0.4 },
+  feedbackText: { fontSize: 13, color: colors.text, marginTop: 6, lineHeight: 18 },
+  commentLabel: { fontSize: 10.5, fontWeight: "800", color: colors.textSecondary, letterSpacing: 0.4, marginTop: 14 },
   commentInput: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     borderRadius: 10,
     padding: 10,
     marginTop: 6,
     fontSize: 13,
-    color: "#0F172A",
+    color: colors.text,
     minHeight: 60,
     textAlignVertical: "top",
   },
   commentBtn: {
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 11,
     alignItems: "center",

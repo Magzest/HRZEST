@@ -56,7 +56,7 @@ def _cleanup_employee(db_engine, employee_id):
 # ===========================================================================
 
 class TestCheckinGeofencing:
-    def test_checkin_office_employee_outside_radius_returns_json_not_500(self, client, db_engine):
+    def test_checkin_office_employee_outside_radius_returns_json_not_500(self, client, db_engine, signed_qr):
         """The exact bug: auth_cfg = get_auth_config() used to be named `cfg`,
         shadowing `import utils.config as cfg` for the whole function. Once
         an office employee with valid lat/lon hit the geofence-distance
@@ -77,7 +77,7 @@ class TestCheckinGeofencing:
         invalidate_settings_cache()
         try:
             resp = client.post("/attendance", json={
-                "employee_id": emp_id,
+                "employee_id": signed_qr(emp_id),
                 "auth_combo": "qr_only",
                 "lat": "1.0",
                 "lon": "1.0",
@@ -93,9 +93,9 @@ class TestCheckinGeofencing:
             cur.close()
             invalidate_settings_cache()
 
-    def test_checkin_unknown_employee_returns_not_found(self, client):
+    def test_checkin_unknown_employee_returns_not_found(self, client, signed_qr):
         resp = client.post("/attendance", json={
-            "employee_id": "NO_SUCH_EMP",
+            "employee_id": signed_qr("NO_SUCH_EMP"),
             "auth_combo": "qr_only",
         })
         assert resp.status_code == 200
@@ -201,11 +201,11 @@ class TestCheckinStateMachine:
         cur.close()
         return employee_id
 
-    def test_first_checkin_of_day_creates_login_record(self, client, db_engine):
+    def test_first_checkin_of_day_creates_login_record(self, client, db_engine, signed_qr):
         emp_id = self._make_wfh_employee(db_engine)
         try:
             resp = client.post("/attendance", json={
-                "employee_id": emp_id,
+                "employee_id": signed_qr(emp_id),
                 "auth_combo": "qr_only",
                 "lat": "12.9716",
                 "lon": "77.5946",
@@ -218,10 +218,10 @@ class TestCheckinStateMachine:
         finally:
             _cleanup_employee(db_engine, emp_id)
 
-    def test_second_checkin_same_day_is_logout(self, client, db_engine):
+    def test_second_checkin_same_day_is_logout(self, client, db_engine, signed_qr):
         emp_id = self._make_wfh_employee(db_engine, "ATT_WFH02")
         try:
-            payload = {"employee_id": emp_id, "auth_combo": "qr_only", "lat": "12.9716", "lon": "77.5946"}
+            payload = {"employee_id": signed_qr(emp_id), "auth_combo": "qr_only", "lat": "12.9716", "lon": "77.5946"}
             r1 = client.post("/attendance", json=payload)
             assert r1.get_json()["type"] == "login"
             r2 = client.post("/attendance", json=payload)
@@ -232,10 +232,10 @@ class TestCheckinStateMachine:
         finally:
             _cleanup_employee(db_engine, emp_id)
 
-    def test_third_checkin_same_day_reopens_session(self, client, db_engine):
+    def test_third_checkin_same_day_reopens_session(self, client, db_engine, signed_qr):
         emp_id = self._make_wfh_employee(db_engine, "ATT_WFH03")
         try:
-            payload = {"employee_id": emp_id, "auth_combo": "qr_only", "lat": "12.9716", "lon": "77.5946"}
+            payload = {"employee_id": signed_qr(emp_id), "auth_combo": "qr_only", "lat": "12.9716", "lon": "77.5946"}
             client.post("/attendance", json=payload)
             client.post("/attendance", json=payload)
             r3 = client.post("/attendance", json=payload)
@@ -283,7 +283,7 @@ class TestQrFaceMatchTolerance:
         cur.close()
         return employee_id
 
-    def test_compare_faces_called_with_strict_tolerance(self, client, db_engine, tmp_path, mocker):
+    def test_compare_faces_called_with_strict_tolerance(self, client, db_engine, tmp_path, mocker, signed_qr):
         emp_id = self._make_face_employee(db_engine, tmp_path)
         captured = []
 
@@ -297,7 +297,7 @@ class TestQrFaceMatchTolerance:
         mocker.patch("blueprints.attendance.face_recognition.compare_faces", side_effect=_fake_compare)
         try:
             resp = client.post("/attendance", json={
-                "employee_id": emp_id,
+                "employee_id": signed_qr(emp_id),
                 "auth_combo": "qr_face",
                 "face_image": _fake_face_b64(),
                 "lat": "12.9716",
@@ -309,7 +309,7 @@ class TestQrFaceMatchTolerance:
         finally:
             _cleanup_employee(db_engine, emp_id)
 
-    def test_stricter_tolerance_rejects_a_borderline_face(self, client, db_engine, tmp_path, mocker):
+    def test_stricter_tolerance_rejects_a_borderline_face(self, client, db_engine, tmp_path, mocker, signed_qr):
         """A face that would pass under the library's default 0.6 but fail
         under this app's 0.5 must be rejected -- proves the tolerance value
         actually reaches the comparison, not just that it's passed as an
@@ -323,7 +323,7 @@ class TestQrFaceMatchTolerance:
                      side_effect=lambda known, test, tolerance=0.6: [tolerance >= 0.6])
         try:
             resp = client.post("/attendance", json={
-                "employee_id": emp_id,
+                "employee_id": signed_qr(emp_id),
                 "auth_combo": "qr_face",
                 "face_image": _fake_face_b64(),
                 "lat": "12.9716",
@@ -452,32 +452,6 @@ class TestShiftsCRUD:
     def test_assign_shift_requires_admin(self, client):
         resp = client.post("/assign_shift", data={}, follow_redirects=False)
         assert resp.status_code in (302, 401, 403)
-
-
-# ===========================================================================
-# Shift swaps
-# ===========================================================================
-
-class TestShiftSwaps:
-    def test_admin_shift_swaps_page_for_admin(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        resp = client.get("/admin_shift_swaps")
-        assert resp.status_code == 200
-
-    def test_submit_shift_swap_requires_employee_session(self, client):
-        resp = client.post("/submit_shift_swap", data={}, follow_redirects=False)
-        assert resp.status_code in (302, 401, 403)
-
-    def test_respond_shift_swap_nonexistent(self, client, seed_employee):
-        with client.session_transaction() as sess:
-            sess["employee_id"] = seed_employee["employee_id"]
-        resp = client.post("/respond_shift_swap/999999", data={"response": "accept"}, follow_redirects=False)
-        assert resp.status_code in (200, 302, 404)
-
-    def test_admin_shift_swap_nonexistent(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        resp = client.post("/admin_shift_swap/999999", data={"action": "approve"}, follow_redirects=False)
-        assert resp.status_code in (200, 302, 404)
 
 
 # ===========================================================================

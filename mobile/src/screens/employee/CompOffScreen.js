@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { fetchMyOvertime, fetchEmployeeProfile } from "../../api/client";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 
 import CompOffHeaderCard from "../../components/compoff/CompOffHeaderCard";
 import CompOffStatsGrid from "../../components/compoff/CompOffStatsGrid";
@@ -17,6 +18,8 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 
 export default function CompOffScreen() {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [overtimeRecords, setOvertimeRecords] = React.useState([]);
@@ -67,11 +70,7 @@ export default function CompOffScreen() {
 
   return (
   <LinearGradient
-    colors={[
-      "#F8FAFC",
-      "#F6F9FE",
-      "#EEF4FF",
-    ]}
+    colors={colors.screenGradient}
     style={styles.container}
   >
 
@@ -111,7 +110,7 @@ export default function CompOffScreen() {
 );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },

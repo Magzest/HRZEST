@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ application.company_name }} — Application Review</title>
+    <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
+    <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <style>
+      :root {
+        --bg-main: #f3f4f8; --bg-card: #ffffff; --surface-2: #f8f9fc;
+        --border-color: #e3e5ec;
+        --primary: #1E3A5F; --primary-dark: #16293F; --primary-light: #1E3A5F;
+        --primary-soft: #EEF2F6; --primary-soft-border: #C7D4DF;
+        --danger: #dc2626; --warning: #b45309; --success: #15803d;
+        --text-bright: #0b1220; --text-muted: #4b5568; --text-dim: #8991a6;
+        --shadow-sm: 0 1px 2px rgba(15, 23, 42, .05), 0 1px 1px rgba(15, 23, 42, .03);
+        --radius-lg: 14px; --radius-md: 10px;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+      body {
+        background: radial-gradient(1200px 560px at 50% -14%, #eef0fb 0%, var(--bg-main) 55%) fixed, var(--bg-main);
+        color: var(--text-bright); min-height: 100vh; padding: 24px;
+      }
+      .container { max-width: 900px; margin: 0 auto; }
+      .header {
+        display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+        padding: 18px 24px; background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg); margin-bottom: 24px; box-shadow: var(--shadow-sm);
+        border-top: 3px solid var(--primary);
+      }
+      .header h1 { font-size: 19px; font-weight: 800; letter-spacing: -.2px; }
+      .back-link { color: var(--text-muted); text-decoration: none; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: color .15s; }
+      .back-link:hover { color: var(--primary); }
+      .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 22px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
+      .card h2 { font-size: 13px; font-weight: 800; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; }
+      .card h2 i { color: var(--primary); }
+      .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 24px; }
+      .info-row .label { font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; font-weight: 700; }
+      .info-row .value { font-size: 14px; font-weight: 600; }
+      .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+      .doc-tile {
+        border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; text-align: center;
+        text-decoration: none; color: var(--text-bright); background: var(--surface-2); transition: border-color .15s, background-color .15s;
+      }
+      .doc-tile:hover { border-color: var(--primary); background: var(--primary-soft); }
+      .doc-tile i { font-size: 26px; color: var(--primary); margin-bottom: 8px; display: block; }
+      .doc-tile .doc-label { font-size: 12.5px; font-weight: 700; }
+      .doc-tile.missing { opacity: .4; pointer-events: none; }
+      .actions-row { display: flex; gap: 12px; flex-wrap: wrap; }
+      .btn-approve, .btn-reject {
+        flex: 1; min-width: 180px; padding: 13px; border-radius: var(--radius-md); font-size: 14px; font-weight: 700;
+        cursor: pointer; border: none; display: flex; align-items: center; justify-content: center; gap: 8px;
+        transition: background-color .15s, box-shadow .15s;
+      }
+      .btn-approve { background: var(--success); color: #fff; }
+      .btn-approve:hover { background: #14602f; box-shadow: var(--shadow-sm); }
+      .btn-reject { background: #fff; border: 1px solid #fecaca; color: var(--danger); }
+      .btn-reject:hover { background: #fef2f2; }
+      .reject-reason {
+        width: 100%; margin-bottom: 10px; padding: 10px 12px; background: #fff; border: 1px solid var(--border-color);
+        color: var(--text-bright); border-radius: 8px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 60px;
+      }
+      .reject-reason:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px var(--primary-soft); }
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+      .badge-pending_review { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+      .badge-rejected { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      .badge-approved, .badge-approved_pending_payment, .badge-provisioned { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>{{ application.company_name }} <span class="badge badge-{{ application.status }}">{{ application.status.replace('_', ' ') }}</span></h1>
+        <a href="/super_admin/applications" class="back-link"><i class="ti ti-arrow-left"></i> Back to Applications</a>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+        <div style="padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:18px;{{ 'background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;' if cat == 'error' else 'background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;' }}">
+          {{ msg }}
+        </div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="card">
+        <h2><i class="ti ti-building"></i> Company & Admin Details</h2>
+        <div class="info-grid">
+          <div class="info-row"><div class="label">Company Name</div><div class="value">{{ application.company_name }}</div></div>
+          <div class="info-row"><div class="label">Subdomain</div><div class="value">{{ application.subdomain }}</div></div>
+          <div class="info-row"><div class="label">Admin Username</div><div class="value">{{ application.admin_username }}</div></div>
+          <div class="info-row"><div class="label">Admin Email</div><div class="value">{{ application.admin_email }}</div></div>
+          <div class="info-row"><div class="label">Email Domain</div><div class="value">{{ application.email_domain or '—' }}</div></div>
+          <div class="info-row"><div class="label">Payment Option</div><div class="value">{{ application.payment_option }}</div></div>
+          <div class="info-row"><div class="label">Email Verified</div><div class="value">{{ 'Yes, ' + application.email_verified_at.strftime('%Y-%m-%d %H:%M') if application.email_verified_at else 'No' }}</div></div>
+          <div class="info-row"><div class="label">Submitted</div><div class="value">{{ application.created_at.strftime('%Y-%m-%d %H:%M') if application.created_at else '—' }}</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2><i class="ti ti-files"></i> Uploaded Documents</h2>
+        <div class="doc-grid">
+          {% for kind in doc_kinds %}
+          {% set has_doc = application['doc_' + kind] %}
+          <a class="doc-tile {{ '' if has_doc else 'missing' }}" href="/super_admin/applications/{{ application.id }}/documents/{{ kind }}" target="_blank" rel="noopener">
+            <i class="ti ti-{{ 'file-check' if has_doc else 'file-off' }}"></i>
+            <div class="doc-label">{{ kind.replace('_', ' ').title() }}</div>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if application.status == 'pending_review' %}
+      <div class="card">
+        <h2><i class="ti ti-gavel"></i> Decision</h2>
+        <div class="actions-row">
+          <form action="/super_admin/applications/{{ application.id }}/approve" method="POST" style="flex:1;min-width:180px;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+            <button type="submit" class="btn-approve"><i class="ti ti-check"></i> Approve</button>
+          </form>
+          <form action="/super_admin/applications/{{ application.id }}/reject" method="POST" style="flex:1;min-width:180px;" onsubmit="return document.getElementById('rejectReason').value.trim().length > 0 || confirm('Reject without a reason?');">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+            <textarea class="reject-reason" name="reason" id="rejectReason" placeholder="Reason (shown to the applicant)..."></textarea>
+            <button type="submit" class="btn-reject"><i class="ti ti-x"></i> Reject</button>
+          </form>
+        </div>
+      </div>
+      {% elif application.status == 'rejected' and application.rejection_reason %}
+      <div class="card">
+        <h2><i class="ti ti-info-circle"></i> Rejection Reason</h2>
+        <p style="color:var(--text-muted);font-size:13.5px;">{{ application.rejection_reason }}</p>
+      </div>
+      {% endif %}
+    </div>
+  </body>
+</html>

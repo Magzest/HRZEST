@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
 import ProfileHeader from "../../components/profile/ProfileHeader";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchEmployeePortal, submitResignation } from "../../api/client";
 
 const REASONS = [
@@ -33,6 +34,8 @@ function addDays(n) {
 }
 
 export default function ResignScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [existing, setExisting] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -100,8 +103,8 @@ export default function ResignScreen() {
 
   if (loading) {
     return (
-      <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#173B8C" />
+      <LinearGradient colors={colors.screenGradient} style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </LinearGradient>
     );
   }
@@ -112,7 +115,7 @@ export default function ResignScreen() {
     const isPending = existing.status === "Pending" || !existing.status;
 
     return (
-      <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+      <LinearGradient colors={colors.screenGradient} style={styles.container}>
         <SafeAreaView style={{ flex: 1 }}>
           <ProfileHeader title="Resignation Status" subtitle="EMPLOYEE PORTAL" />
 
@@ -125,18 +128,18 @@ export default function ResignScreen() {
               <View style={styles.statusHeaderRow}>
                 <View style={styles.statusTitleGroup}>
                   <Text style={styles.statusHeaderLabel}>CURRENT STATUS</Text>
-                  <Text style={[styles.statusHeaderTitle, { color: isAccepted ? "#059669" : "#D97706" }]}>
+                  <Text style={[styles.statusHeaderTitle, { color: isAccepted ? colors.success : colors.warning }]}>
                     {existing.status}
                   </Text>
                 </View>
-                <View style={[styles.badgePill, { backgroundColor: isAccepted ? "#D1FAE5" : "#FEF3C7" }]}>
+                <View style={[styles.badgePill, { backgroundColor: isAccepted ? colors.greenBg : colors.yellowBg }]}>
                   <Ionicons
                     name={isAccepted ? "checkmark-circle" : "time"}
                     size={14}
-                    color={isAccepted ? "#059669" : "#D97706"}
+                    color={isAccepted ? colors.success : colors.warning}
                     style={{ marginRight: 4 }}
                   />
-                  <Text style={[styles.badgeText, { color: isAccepted ? "#059669" : "#D97706" }]}>
+                  <Text style={[styles.badgeText, { color: isAccepted ? colors.success : colors.warning }]}>
                     {existing.status}
                   </Text>
                 </View>
@@ -146,7 +149,7 @@ export default function ResignScreen() {
 
               <View style={styles.detailItem}>
                 <View style={styles.detailIconCircle}>
-                  <Ionicons name="calendar-outline" size={16} color="#DC2626" />
+                  <Ionicons name="calendar-outline" size={16} color={colors.danger} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.detailLabel}>Last Working Day</Text>
@@ -163,7 +166,7 @@ export default function ResignScreen() {
 
               {!!existing.created_at && (
                 <View style={styles.submittedRow}>
-                  <Ionicons name="time-outline" size={13} color="#64748B" />
+                  <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
                   <Text style={styles.submittedText}>
                     Submitted on {existing.created_at?.slice(0, 10)}
                   </Text>
@@ -174,7 +177,7 @@ export default function ResignScreen() {
             {/* Info Hint Card */}
             {isPending && (
               <View style={styles.infoBanner}>
-                <Ionicons name="hourglass-outline" size={20} color="#D97706" style={{ marginRight: 10 }} />
+                <Ionicons name="hourglass-outline" size={20} color={colors.warning} style={{ marginRight: 10 }} />
                 <Text style={styles.infoBannerText}>
                   Your resignation request is currently under review by management. You will be notified once a decision is made.
                 </Text>
@@ -182,9 +185,9 @@ export default function ResignScreen() {
             )}
 
             {isAccepted && (
-              <View style={[styles.infoBanner, { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" }]}>
-                <Ionicons name="checkmark-done-circle-outline" size={20} color="#059669" style={{ marginRight: 10 }} />
-                <Text style={[styles.infoBannerText, { color: "#065F46" }]}>
+              <View style={[styles.infoBanner, { backgroundColor: colors.greenBg, borderColor: "#A7F3D0" }]}>
+                <Ionicons name="checkmark-done-circle-outline" size={20} color={colors.success} style={{ marginRight: 10 }} />
+                <Text style={[styles.infoBannerText, { color: colors.success }]}>
                   Your resignation request has been accepted. Please coordinate with HR for handover and offboarding formalities.
                 </Text>
               </View>
@@ -196,7 +199,7 @@ export default function ResignScreen() {
   }
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <ProfileHeader title="Resignation Request" subtitle="EMPLOYEE PORTAL" />
 
@@ -206,7 +209,7 @@ export default function ResignScreen() {
         >
           {existing?.status === "Declined" && (
             <View style={styles.declinedNotice}>
-              <Ionicons name="alert-circle" size={18} color="#DC2626" style={{ marginRight: 8 }} />
+              <Ionicons name="alert-circle" size={18} color={colors.danger} style={{ marginRight: 8 }} />
               <Text style={styles.declinedNoticeText}>
                 Your previous resignation request was declined by management. You may submit a new request if needed.
               </Text>
@@ -216,7 +219,7 @@ export default function ResignScreen() {
           {/* Warning Notice Card */}
           <View style={styles.warningCard}>
             <View style={styles.warningTitleRow}>
-              <Ionicons name="warning" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+              <Ionicons name="warning" size={18} color={colors.danger} style={{ marginRight: 6 }} />
               <Text style={styles.warningTitle}>Notice Policy Guidelines</Text>
             </View>
             <Text style={styles.warningText}>• Standard 30-day notice period is required.</Text>
@@ -263,9 +266,9 @@ export default function ResignScreen() {
             </ScrollView>
 
             <View style={styles.selectedDateBadge}>
-              <Ionicons name="calendar-sharp" size={14} color="#173B8C" style={{ marginRight: 6 }} />
+              <Ionicons name="calendar-sharp" size={14} color={colors.primary} style={{ marginRight: 6 }} />
               <Text style={styles.selectedDateText}>
-                Selected Last Day: <Text style={{ fontWeight: "800", color: "#173B8C" }}>{new Date(lastDay).toDateString()}</Text>
+                Selected Last Day: <Text style={{ fontWeight: "800", color: colors.primary }}>{new Date(lastDay).toDateString()}</Text>
               </Text>
             </View>
           </View>
@@ -288,7 +291,7 @@ export default function ResignScreen() {
                     <Ionicons
                       name={r.icon}
                       size={14}
-                      color={active ? "#FFFFFF" : "#475569"}
+                      color={active ? "#FFFFFF" : colors.textSecondary}
                       style={{ marginRight: 6 }}
                     />
                     <Text style={[styles.reasonChipText, active && styles.reasonChipTextActive]}>
@@ -305,7 +308,7 @@ export default function ResignScreen() {
             <Switch
               value={confirmed}
               onValueChange={setConfirmed}
-              trackColor={{ true: "#DC2626", false: "#CBD5E1" }}
+              trackColor={{ true: colors.danger, false: colors.border }}
               thumbColor="#FFFFFF"
             />
             <Text style={styles.confirmText}>
@@ -335,7 +338,7 @@ export default function ResignScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -351,7 +354,7 @@ const styles = StyleSheet.create({
   declinedNotice: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FEE2E2",
+    backgroundColor: colors.redBg,
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
@@ -361,11 +364,11 @@ const styles = StyleSheet.create({
   declinedNoticeText: {
     flex: 1,
     fontSize: 12,
-    color: "#DC2626",
+    color: colors.danger,
     fontWeight: "600",
   },
   warningCard: {
-    backgroundColor: "#FEF2F2",
+    backgroundColor: colors.redBg,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
@@ -380,21 +383,21 @@ const styles = StyleSheet.create({
   warningTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#DC2626",
+    color: colors.danger,
   },
   warningText: {
     fontSize: 12,
-    color: "#991B1B",
+    color: colors.danger,
     lineHeight: 18,
     marginTop: 2,
   },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E8EDF5",
+    borderColor: colors.border,
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
     shadowRadius: 8,
@@ -404,11 +407,11 @@ const styles = StyleSheet.create({
   cardHeaderTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   cardHeaderSubtitle: {
     fontSize: 12,
-    color: "#64748B",
+    color: colors.textSecondary,
     marginTop: 2,
   },
   dateChipsRow: {
@@ -421,20 +424,20 @@ const styles = StyleSheet.create({
     width: 58,
     height: 64,
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     justifyContent: "center",
     alignItems: "center",
   },
   dateChipActive: {
-    backgroundColor: "#DC2626",
-    borderColor: "#DC2626",
+    backgroundColor: colors.danger,
+    borderColor: colors.danger,
   },
   dateNum: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   dateNumActive: {
     color: "#FFFFFF",
@@ -442,7 +445,7 @@ const styles = StyleSheet.create({
   dateMon: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#64748B",
+    color: colors.textSecondary,
     marginTop: 2,
   },
   dateMonActive: {
@@ -451,7 +454,7 @@ const styles = StyleSheet.create({
   selectedDateBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -459,7 +462,7 @@ const styles = StyleSheet.create({
   },
   selectedDateText: {
     fontSize: 12,
-    color: "#475569",
+    color: colors.textSecondary,
   },
   reasonChipsGrid: {
     flexDirection: "row",
@@ -473,18 +476,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   reasonChipActive: {
-    backgroundColor: "#173B8C",
-    borderColor: "#173B8C",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   reasonChipText: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#475569",
+    color: colors.textSecondary,
   },
   reasonChipTextActive: {
     color: "#FFFFFF",
@@ -493,28 +496,28 @@ const styles = StyleSheet.create({
   confirmCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#E8EDF5",
+    borderColor: colors.border,
     gap: 12,
   },
   confirmText: {
     flex: 1,
     fontSize: 12,
-    color: "#475569",
+    color: colors.textSecondary,
     lineHeight: 17,
   },
   submitBtn: {
-    backgroundColor: "#DC2626",
+    backgroundColor: colors.danger,
     height: 50,
     borderRadius: 14,
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#DC2626",
+    shadowColor: colors.danger,
     shadowOpacity: 0.2,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
@@ -534,11 +537,11 @@ const styles = StyleSheet.create({
   // Existing Resignation Card Styles
   cardPending: {
     borderLeftWidth: 4,
-    borderLeftColor: "#D97706",
+    borderLeftColor: colors.warning,
   },
   cardAccepted: {
     borderLeftWidth: 4,
-    borderLeftColor: "#059669",
+    borderLeftColor: colors.success,
   },
   statusHeaderRow: {
     flexDirection: "row",
@@ -551,7 +554,7 @@ const styles = StyleSheet.create({
   statusHeaderLabel: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#64748B",
+    color: colors.textSecondary,
     letterSpacing: 0.6,
   },
   statusHeaderTitle: {
@@ -572,7 +575,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: colors.border,
     marginVertical: 12,
   },
   detailItem: {
@@ -584,40 +587,40 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: colors.redBg,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 10,
   },
   detailLabel: {
     fontSize: 11,
-    color: "#64748B",
+    color: colors.textSecondary,
     fontWeight: "500",
   },
   detailValueRed: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#DC2626",
+    color: colors.danger,
     marginTop: 1,
   },
   reasonBox: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: colors.border,
   },
   reasonBoxLabel: {
     fontSize: 9,
     fontWeight: "800",
-    color: "#94A3B8",
+    color: colors.textLight,
     letterSpacing: 0.6,
     marginBottom: 2,
   },
   reasonBoxText: {
     fontSize: 13,
-    color: "#334155",
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   submittedRow: {
@@ -627,12 +630,12 @@ const styles = StyleSheet.create({
   },
   submittedText: {
     fontSize: 11,
-    color: "#64748B",
+    color: colors.textSecondary,
   },
   infoBanner: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FEF3C7",
+    backgroundColor: colors.yellowBg,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -641,7 +644,7 @@ const styles = StyleSheet.create({
   infoBannerText: {
     flex: 1,
     fontSize: 12,
-    color: "#92400E",
+    color: colors.warning,
     lineHeight: 18,
     fontWeight: "500",
   },

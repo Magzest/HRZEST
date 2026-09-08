@@ -24,7 +24,7 @@ from flask import (
 from database import get_db_connection
 from extensions import app_log, limiter, log_security_event
 from utils.auth import admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required
-from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings
+from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
@@ -78,12 +78,12 @@ def update_salary():
     if cursor.fetchone():
         cursor.execute(
             "UPDATE salary_config SET salary_per_day=%s, last_revised=%s WHERE employee_id=%s",
-            (salary, hike_date or datetime.date.today(), emp_id)
+            (salary, hike_date or company_today(), emp_id)
         )
     else:
         cursor.execute(
             "INSERT INTO salary_config (employee_id, salary_per_day, last_revised) VALUES (%s,%s,%s)",
-            (emp_id, salary, hike_date or datetime.date.today())
+            (emp_id, salary, hike_date or company_today())
         )
     db.commit()
     cursor.close()
@@ -149,7 +149,7 @@ def salary_report():
     )
     lock_row = cursor.fetchone()
     is_locked = lock_row is not None
-    lock_info = {"at": lock_row[0], "by": lock_row[1], "count": lock_row[2]} if lock_row else None
+    lock_info = {"at": coerce_datetime(lock_row[0]), "by": lock_row[1], "count": lock_row[2]} if lock_row else None
 
     cursor.close()
     db.close()
@@ -903,7 +903,7 @@ def apply_hike():
     )
     salaries = {row[0]: (float(row[1]), row[2], row[3]) for row in cursor.fetchall()}
 
-    today = datetime.date.today()
+    today = company_today()
     updated = 0
     for emp_id in emp_ids:
         rating = ratings.get(emp_id, 0.0)
@@ -1139,7 +1139,7 @@ def api_monthly_report():
     db.close()
     holidays = fetch_holidays_set(year, month)
     working_days = get_working_days(year, month)
-    today = datetime.date.today()
+    today = company_today()
     report = []
     for emp_id, name in employees:
         emp_att = att_map.get(emp_id, {})
@@ -1357,6 +1357,22 @@ def view_payslip(emp_id, year, month):
 
 @payroll_bp.route("/download_payslip/<emp_id>/<int:year>/<int:month>")
 def download_payslip(emp_id, year, month):
+    # Same IDOR/role guard as view_payslip() below -- this route is safe
+    # today only because it happens to call view_payslip() as a plain
+    # Python function (which runs its own inline ownership check first),
+    # not because it has a guard of its own. A future refactor that reuses
+    # the payslip-rendering logic through a different path (a shared
+    # helper, a bulk-export route) could silently lose that guard, so it's
+    # checked explicitly here too rather than relying on it being inherited.
+    if not enforce_ownership(emp_id, "payslip", f"{year}-{month:02d}"):
+        return redirect(tpath("/login"))
+    if session.get("admin_logged_in") and session.get("admin_role", "admin") != "admin":
+        log_security_event(
+            "access.denied", "Non-admin role attempted to download an employee payslip",
+            level="ERROR", identifier=session.get("admin_username"),
+            resource_type="payslip", resource_id=f"{emp_id}:{year}-{month:02d}",
+        )
+        return redirect(tpath("/login"))
     html = view_payslip(emp_id, year, month)
     if not isinstance(html, str):
         return html  # redirect or error response

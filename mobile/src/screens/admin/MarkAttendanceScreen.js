@@ -18,6 +18,7 @@ import DateTimePicker from "react-native-date-picker";
 import { Picker } from "@react-native-picker/picker";
 
 import AdminHeader from "../../components/admin/AdminHeader";
+import { useTheme } from "../../store/ThemeContext";
 import { fetchAttendanceEmployees, fetchEmployees, markAttendance } from "../../api/client";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -85,6 +86,8 @@ const getInitials = (name) =>
 // ── Main Screen ────────────────────────────────────────────────────
 
 export default function MarkAttendanceScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -264,7 +267,7 @@ export default function MarkAttendanceScreen({ navigation }) {
       <View style={styles.employeeCard}>
         {/* Header: Avatar + Name + ID */}
         <View style={styles.empHeader}>
-          <View style={[styles.avatar, { backgroundColor: "#3B82F6" }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.employee }]}>
             <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
           </View>
           <View style={styles.empInfo}>
@@ -329,7 +332,7 @@ export default function MarkAttendanceScreen({ navigation }) {
                 ❌ {ms.absent}A
               </Text>
             </View>
-            <View style={[styles.statPill, { backgroundColor: "#F5F3FF" }]}>
+            <View style={[styles.statPill, { backgroundColor: colors.purpleBg }]}>
               <Text style={[styles.statPillText, { color: "#6D28D9" }]}>
                 🌴 {ms.leave}L
               </Text>
@@ -345,15 +348,15 @@ export default function MarkAttendanceScreen({ navigation }) {
             selectedValue={att.type}
             onValueChange={(val) => handleStatusChange(item.employee_id, val)}
             style={styles.picker}
-            dropdownIconColor="#94A3B8"
-            itemStyle={{ fontSize: 14, color: "#0F172A" }}
+            dropdownIconColor={colors.textLight}
+            itemStyle={{ fontSize: 14, color: colors.text }}
           >
             {ATT_STATUS_OPTIONS.map((opt) => (
               <Picker.Item
                 key={opt.value}
                 label={opt.label}
                 value={opt.value}
-                color="#0F172A"
+                color={colors.text}
               />
             ))}
           </Picker>
@@ -382,7 +385,7 @@ export default function MarkAttendanceScreen({ navigation }) {
 
   return (
     <LinearGradient
-      colors={["#F8FAFC", "#F6F9FE", "#EEF4FF"]}
+      colors={colors.screenGradient}
       style={{ flex: 1 }}
     >
       <SafeAreaView style={{ flex: 1 }}>
@@ -402,9 +405,9 @@ export default function MarkAttendanceScreen({ navigation }) {
               style={styles.dateButton}
               onPress={() => setDatePickerOpen(true)}
             >
-              <Ionicons name="calendar" size={18} color="#3B82F6" />
+              <Ionicons name="calendar" size={18} color={colors.employee} />
               <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
-              <Ionicons name="chevron-down" size={16} color="#94A3B8" />
+              <Ionicons name="chevron-down" size={16} color={colors.textLight} />
             </TouchableOpacity>
             <Text style={styles.empCount}>
               Showing <Text style={styles.empCountBold}>{employees.length}</Text>{" "}
@@ -428,10 +431,10 @@ export default function MarkAttendanceScreen({ navigation }) {
 
           {/* Search */}
           <View style={styles.searchWrap}>
-            <Ionicons name="search" size={18} color="#3B82F6" />
+            <Ionicons name="search" size={18} color={colors.employee} />
             <TextInput
               placeholder="Search employee by name or ID…"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={colors.textLight}
               value={search}
               onChangeText={setSearch}
               style={styles.searchInput}
@@ -441,7 +444,7 @@ export default function MarkAttendanceScreen({ navigation }) {
           {/* Employee List */}
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#3B82F6" />
+              <ActivityIndicator size="large" color={colors.employee} />
               <Text style={styles.loadingText}>Loading employees…</Text>
             </View>
           ) : filteredEmployees.length === 0 ? (
@@ -517,7 +520,7 @@ export default function MarkAttendanceScreen({ navigation }) {
 
 // ── Styles ─────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 20,
@@ -525,7 +528,7 @@ const styles = StyleSheet.create({
 
   // Date Bar
   dateBar: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 18,
     marginBottom: 18,
@@ -551,7 +554,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 10,
     borderWidth: 1.5,
     borderColor: "#DBEAFE",
@@ -583,7 +586,7 @@ const styles = StyleSheet.create({
   quickLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: colors.textLight,
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
@@ -591,14 +594,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   qbtnText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#475569",
+    color: colors.textSecondary,
   },
 
   // Search
@@ -613,10 +616,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     fontWeight: "500",
-    color: "#0F172A",
+    color: colors.text,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: "#DBEAFE",
@@ -624,7 +627,7 @@ const styles = StyleSheet.create({
 
   // Employee Card
   employeeCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 18,
     marginBottom: 14,
@@ -660,11 +663,11 @@ const styles = StyleSheet.create({
   empName: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0F172A",
+    color: colors.text,
   },
   empId: {
     fontSize: 12,
-    color: "#94A3B8",
+    color: colors.textLight,
     marginTop: 2,
   },
   empRole: {
@@ -685,7 +688,7 @@ const styles = StyleSheet.create({
   },
   empDesig: {
     fontSize: 11,
-    color: "#94A3B8",
+    color: colors.textLight,
     marginTop: 2,
   },
   empNA: {
@@ -701,7 +704,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   shiftBadge: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: colors.blueBg,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -754,10 +757,10 @@ const styles = StyleSheet.create({
 
   // Picker
   pickerContainer: {
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     marginBottom: 14,
     overflow: "hidden",
   },
@@ -777,10 +780,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   timeText: {
     fontSize: 13,
@@ -806,7 +809,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 15,
     fontWeight: "700",
-    color: "#94A3B8",
+    color: colors.textLight,
   },
   emptySubtext: {
     marginTop: 6,
@@ -821,7 +824,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
   },
@@ -836,7 +839,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    backgroundColor: "#3B82F6",
+    backgroundColor: colors.employee,
     borderRadius: 12,
     shadowColor: "#3B82F6",
     shadowOpacity: 0.3,

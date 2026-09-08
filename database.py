@@ -83,8 +83,12 @@ class _PooledConnection:
         # every Python implementation), just a backstop for the common case.
         try:
             self.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            # debug, not warning: __del__ can run during interpreter
+            # shutdown when logging handlers may already be torn down --
+            # this is a documented backstop for the uncommon case anyway,
+            # not a signal something is actually wrong in the normal path.
+            _log.debug("_PooledConnection.__del__ close failed: %s", exc)
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
@@ -103,10 +107,23 @@ def _set_search_path(conn, schema_name):
 
 
 import sqlite3
+import threading
+
+# The SQLite fallback below shares ONE sqlite3.Connection across every
+# thread (check_same_thread=False just disables Python's own guard --
+# it does NOT make concurrent access safe, per the sqlite3 docs: "you
+# have to serialize accesses yourself"). Without this lock, two threads
+# racing to execute/commit on the same connection can corrupt its
+# in-flight cursor state or throw spurious "database is locked" errors.
+# SQLite has no real concurrent-writer story anyway, so serializing here
+# costs nothing over the pooled-connection concurrency Postgres normally
+# provides -- this path only runs at all when Postgres is unreachable.
+_sqlite_lock = threading.Lock()
 
 class _SqliteCursor:
     def __init__(self, conn):
-        self._cur = conn.cursor()
+        with _sqlite_lock:
+            self._cur = conn.cursor()
         self.rowcount = -1
 
     def execute(self, query, params=()):
@@ -115,23 +132,25 @@ class _SqliteCursor:
         q = re.sub(r'\bILIKE\b', 'LIKE', q, flags=re.IGNORECASE)
         q = re.sub(r'\bTIMESTAMP WITH TIME ZONE\b', 'TEXT', q, flags=re.IGNORECASE)
         q = re.sub(r'\bNOW\(\)', 'CURRENT_TIMESTAMP', q, flags=re.IGNORECASE)
-        try:
-            res = self._cur.execute(q, params)
-            self.rowcount = self._cur.rowcount
-            return res
-        except Exception as e:
-            _log.debug("SQLite query warning: %s | Query: %s", e, query)
-            return self
+        with _sqlite_lock:
+            try:
+                res = self._cur.execute(q, params)
+                self.rowcount = self._cur.rowcount
+                return res
+            except Exception as e:
+                _log.debug("SQLite query warning: %s | Query: %s", e, query)
+                return self
 
     def executemany(self, query, seq_of_params=()):
         q = query.replace("%s", "?")
-        try:
-            res = self._cur.executemany(q, seq_of_params)
-            self.rowcount = self._cur.rowcount
-            return res
-        except Exception as e:
-            _log.debug("SQLite executemany warning: %s", e)
-            return self
+        with _sqlite_lock:
+            try:
+                res = self._cur.executemany(q, seq_of_params)
+                self.rowcount = self._cur.rowcount
+                return res
+            except Exception as e:
+                _log.debug("SQLite executemany warning: %s", e)
+                return self
 
     def fetchone(self):
         try:
@@ -155,8 +174,8 @@ class _SqliteCursor:
     def close(self):
         try:
             self._cur.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("_SqliteCursor.close failed: %s", exc)
 
 _SQLITE_FALLBACK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance", "local_fallback.db")
 
@@ -174,18 +193,20 @@ class _SqliteConnWrapper:
         pass
 
     def commit(self):
-        self.conn.commit()
+        with _sqlite_lock:
+            self.conn.commit()
 
     def rollback(self):
-        self.conn.rollback()
+        with _sqlite_lock:
+            self.conn.rollback()
 
 class _SqlitePool:
     def __init__(self):
         self.conn = _SqliteConnWrapper()
         try:
             _seed_sqlite_db(self.conn.conn)
-        except Exception:
-            pass
+        except Exception as exc:
+            _log.debug("_seed_sqlite_db failed: %s", exc)
     def getconn(self):
         return self.conn
     def putconn(self, conn):
@@ -210,7 +231,11 @@ def _seed_sqlite_db(raw_conn):
             email TEXT,
             plan TEXT DEFAULT 'premium',
             totp_secret TEXT,
-            totp_enabled INTEGER DEFAULT 0
+            totp_enabled INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            reset_token TEXT,
+            reset_token_expiry TEXT
         );
         ''')
         cur.execute('''
@@ -249,8 +274,19 @@ def _seed_sqlite_db(raw_conn):
             uan_number TEXT,
             about_me TEXT,
             manager_name TEXT,
+            manager_id TEXT,
             shift_id INTEGER,
-            fingerprint_credential_id TEXT
+            fingerprint_credential_id TEXT,
+            fingerprint_public_key TEXT,
+            fingerprint_sign_count INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            work_lat TEXT,
+            work_lon TEXT,
+            designation TEXT,
+            email_alerts_enabled INTEGER DEFAULT 1,
+            joining_date TEXT,
+            reset_token TEXT,
+            reset_token_expiry TEXT
         );
         ''')
         cur.execute('''
@@ -269,7 +305,9 @@ def _seed_sqlite_db(raw_conn):
             attendance_type TEXT,
             att_type TEXT,
             date TEXT,
-            company_id INTEGER DEFAULT 1
+            company_id INTEGER DEFAULT 1,
+            worked_minutes INTEGER,
+            last_relogin TEXT
         );
         ''')
         cur.execute('''
@@ -277,7 +315,11 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id TEXT UNIQUE,
             salary_per_day REAL DEFAULT 1000.0,
-            monthly_ctc REAL DEFAULT 30000.0
+            monthly_ctc REAL DEFAULT 30000.0,
+            basic_pct INTEGER DEFAULT 50,
+            last_revised TEXT,
+            last_hike_quarter INTEGER,
+            last_hike_year INTEGER
         );
         ''')
         cur.execute('''
@@ -285,27 +327,46 @@ def _seed_sqlite_db(raw_conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT DEFAULT 'General Shift',
             start_time TEXT DEFAULT '09:00:00',
-            end_time TEXT DEFAULT '18:00:00'
+            half_time TEXT DEFAULT '13:00:00',
+            end_time TEXT DEFAULT '18:00:00',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            company_id INTEGER
         );
         ''')
         cur.execute('''
         CREATE TABLE IF NOT EXISTS leave_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id TEXT,
-            leave_type TEXT,
-            start_date TEXT,
-            end_date TEXT,
+            leave_date TEXT,
             reason TEXT,
             status TEXT DEFAULT 'Pending',
-            company_id INTEGER DEFAULT 1
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            leave_type_id INTEGER,
+            is_half_day INTEGER DEFAULT 0,
+            half_day_session TEXT,
+            cancelled_at TEXT
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS employee_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id TEXT NOT NULL,
+            doc_type TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            stored_name TEXT NOT NULL,
+            uploaded_by TEXT DEFAULT 'admin',
+            uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expiry_date TEXT
         );
         ''')
         cur.execute('''
         CREATE TABLE IF NOT EXISTS resignation_requests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id TEXT,
+            last_working_day TEXT,
             reason TEXT,
             status TEXT DEFAULT 'Pending',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             company_id INTEGER DEFAULT 1
         );
         ''')
@@ -316,7 +377,12 @@ def _seed_sqlite_db(raw_conn):
             subject TEXT,
             description TEXT,
             status TEXT DEFAULT 'Open',
-            company_id INTEGER DEFAULT 1
+            company_id INTEGER DEFAULT 1,
+            category TEXT,
+            priority TEXT DEFAULT 'Medium',
+            admin_response TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ''')
         cur.execute('''
@@ -327,11 +393,46 @@ def _seed_sqlite_db(raw_conn):
         );
         ''')
         cur.execute('''
+        CREATE TABLE IF NOT EXISTS announcements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            priority TEXT DEFAULT 'Normal',
+            visibility TEXT DEFAULT 'public',
+            target_employee_id TEXT,
+            attachment_original_name TEXT,
+            attachment_stored_ref TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        ''')
+        cur.execute('''
+        CREATE TABLE IF NOT EXISTS email_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            to_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            html_body TEXT NOT NULL,
+            attachment_b64 TEXT,
+            attachment_filename TEXT,
+            status TEXT DEFAULT 'pending',
+            attempts INTEGER DEFAULT 0,
+            last_error TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            sent_at TEXT
+        );
+        ''')
+        cur.execute('''
         CREATE TABLE IF NOT EXISTS companies (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
             code TEXT,
-            pin TEXT
+            pin TEXT,
+            logo_path TEXT,
+            address TEXT,
+            website TEXT,
+            email TEXT,
+            phone TEXT,
+            working_days TEXT DEFAULT 'Mon,Tue,Wed,Thu,Fri',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ''')
         cur.execute('''
@@ -346,7 +447,40 @@ def _seed_sqlite_db(raw_conn):
             work_start TEXT DEFAULT '09:00',
             work_end TEXT DEFAULT '18:00',
             setup_done INTEGER DEFAULT 0,
-            compoff_minutes_per_day INTEGER DEFAULT 480
+            compoff_minutes_per_day INTEGER DEFAULT 480,
+            shift_start TEXT DEFAULT '09:00:00',
+            shift_half TEXT DEFAULT '13:00:00',
+            shift_end TEXT DEFAULT '18:00:00',
+            email_domain TEXT,
+            paid_employee_slots INTEGER,
+            compoff_min_ot_minutes INTEGER DEFAULT 120,
+            late_deduction_pct REAL DEFAULT 10.00,
+            half_day_deduction_pct REAL DEFAULT 50.00,
+            grace_minutes INTEGER DEFAULT 15,
+            holiday_pay TEXT DEFAULT 'paid',
+            leave_pay TEXT DEFAULT 'exclude',
+            default_onboarding_template_id INTEGER,
+            fingerprint_enabled INTEGER DEFAULT 0,
+            qr_enabled INTEGER DEFAULT 1,
+            face_enabled INTEGER DEFAULT 1,
+            location_enabled INTEGER DEFAULT 1,
+            employee_password_auth INTEGER DEFAULT 1,
+            face_auth_enabled INTEGER DEFAULT 0,
+            geo_enabled INTEGER DEFAULT 0,
+            geo_radius INTEGER DEFAULT 100,
+            office_lat REAL,
+            office_lon REAL,
+            pin_enabled INTEGER DEFAULT 1,
+            biometric_enabled INTEGER DEFAULT 0,
+            notify_leave INTEGER DEFAULT 1,
+            notify_payslip INTEGER DEFAULT 1,
+            notify_resignation INTEGER DEFAULT 1,
+            notify_doc_expiry INTEGER DEFAULT 1,
+            session_timeout INTEGER DEFAULT 30,
+            working_days TEXT DEFAULT 'Mon,Tue,Wed,Thu,Fri',
+            company_logo TEXT,
+            timezone TEXT DEFAULT 'Asia/Kolkata',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
         ''')
 
@@ -357,6 +491,13 @@ def _seed_sqlite_db(raw_conn):
 
 # ── Default tenant pool ──────────────────────────────────────────────────────
 _pool = None
+# Guards every _pool creation/replacement below -- without it, concurrent
+# requests hitting a cold start (or a caught getconn() failure resetting
+# _pool to None) can each construct their own ThreadedConnectionPool and
+# stomp the shared global reference; whichever pool object loses that race
+# is simply dropped, leaking its connections (never .closeall()'d) until
+# Postgres's own idle-connection reaping kicks in.
+_pool_lock = threading.Lock()
 
 
 def _ensure_pg_schema(raw_conn):
@@ -378,8 +519,20 @@ def _create_pool(retries=1, delay=0.1):
     for attempt in range(1, retries + 1):
         try:
             _pool = psycopg2.pool.ThreadedConnectionPool(
-                minconn=1,
-                maxconn=20,
+                # psycopg2's pool only *keeps* up to `minconn` idle connections on
+                # putconn() -- anything returned past that count is closed outright
+                # (see psycopg2.pool.AbstractConnectionPool._putconn), so minconn
+                # isn't just a startup warm-up size, it's the ongoing retention
+                # floor. At minconn=1, any request that legitimately needs 2+
+                # simultaneous connections (a route holding its own connection
+                # open while calling a helper like fetch_holidays_set()/
+                # get_co_features() that borrows another) was constantly
+                # thrashing the pool back down to 1 idle connection, forcing a
+                # brand-new TCP+auth handshake to Postgres (tens of ms) on the
+                # next such request instead of reusing an idle one -- this is
+                # what made admin pages intermittently feel slow to load.
+                minconn=int(os.environ.get("DB_POOL_MIN_CONN", "5")),
+                maxconn=int(os.environ.get("DB_POOL_MAX_CONN", "20")),
                 **_DB_CONFIG,
             )
             _log.info('"Connected to PostgreSQL (attempt %d)"', attempt)
@@ -424,13 +577,20 @@ def _borrow_connection():
     MySQL's behavior."""
     global _pool
     if _pool is None:
-        _create_pool()
+        with _pool_lock:
+            if _pool is None:  # re-check: another thread may have built it while we waited
+                _create_pool()
     try:
         conn = _pool.getconn()
     except Exception:
-        if not isinstance(_pool, _SqlitePool):
-            _pool = None
-            _create_pool(retries=1, delay=0.1)
+        _failed_pool = _pool
+        if not isinstance(_failed_pool, _SqlitePool):
+            with _pool_lock:
+                # Only rebuild if _pool is still the same broken object we
+                # just failed against -- another thread may have already
+                # replaced it while we waited for the lock.
+                if _pool is _failed_pool:
+                    _create_pool(retries=1, delay=0.1)
         conn = _pool.getconn()
     conn.autocommit = True
     return conn
@@ -503,7 +663,9 @@ def create_tenant_schema(schema_name: str):
     if not re.match(r'^[a-zA-Z0-9_]+$', schema_name):
         raise ValueError(f"Invalid tenant schema name: {schema_name!r}")
     if _pool is None:
-        _create_pool()
+        with _pool_lock:
+            if _pool is None:
+                _create_pool()
     conn = _pool.getconn()
     try:
         cur = conn.cursor()

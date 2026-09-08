@@ -473,3 +473,120 @@ class TestSalaryReportExportApi:
         token = _emp_token(client, seed_employee)
         resp = client.get("/api/payroll/salary_report_export", headers=_auth(token))
         assert resp.status_code == 401
+
+
+class TestEmailBlastApi:
+    def test_blast_to_all_via_bearer_token(self, client, seed_admin, seed_employee, db_engine):
+        token = _admin_token(client, seed_admin)
+        resp = client.post("/api/admin/email-blast", json={
+            "target_type": "all", "subject": "Pending-Work Test Blast", "body": "Hello everyone",
+        }, headers=_auth(token))
+        assert resp.status_code == 202
+        data = resp.get_json()
+        assert data["ok"] is True
+        assert data["queued_count"] >= 1
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT sender_username FROM broadcast_emails WHERE subject=%s ORDER BY id DESC LIMIT 1",
+                    ("Pending-Work Test Blast",))
+        row = cur.fetchone()
+        cur.close()
+        assert row is not None
+        assert row[0] == seed_admin["username"]
+
+    def test_blast_requires_auth(self, client):
+        resp = client.post("/api/admin/email-blast", json={
+            "target_type": "all", "subject": "x", "body": "y",
+        })
+        assert resp.status_code == 401
+
+    def test_blast_rejects_employee_token(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        resp = client.post("/api/admin/email-blast", json={
+            "target_type": "all", "subject": "x", "body": "y",
+        }, headers=_auth(token))
+        assert resp.status_code == 401
+
+    def test_blast_missing_fields_rejected(self, client, seed_admin):
+        token = _admin_token(client, seed_admin)
+        resp = client.post("/api/admin/email-blast", json={"target_type": "all"}, headers=_auth(token))
+        assert resp.status_code == 400
+
+
+class TestNotificationPreferencesApi:
+    def test_round_trips_and_reflects_in_profile(self, client, seed_employee):
+        token = _emp_token(client, seed_employee)
+        resp = client.post("/api/employee/notification_preferences", json={"email_alerts_enabled": False},
+                            headers=_auth(token))
+        assert resp.status_code == 200
+        assert resp.get_json()["email_alerts_enabled"] is False
+
+        prof = client.get("/api/employee/profile", headers=_auth(token)).get_json()["profile"]
+        assert prof["email_alerts_enabled"] is False
+
+        resp2 = client.post("/api/employee/notification_preferences", json={"email_alerts_enabled": True},
+                             headers=_auth(token))
+        assert resp2.get_json()["email_alerts_enabled"] is True
+
+    def test_leave_approval_skips_email_when_disabled(self, client, seed_admin, seed_employee, db_engine, monkeypatch):
+        import blueprints.leave as leave_mod
+        monkeypatch.setattr(leave_mod, "get_email_config", lambda: {
+            "host": "x", "port": 587, "user": "u", "password": "p", "from_name": "N", "from_email": "u@x.com"})
+
+        emp_id = seed_employee["employee_id"]
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET email_alerts_enabled=0, email='alerts-off@test.local' WHERE employee_id=%s", (emp_id,))
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason, status) VALUES (%s, '2031-04-01', 'test', 'Pending') RETURNING id",
+            (emp_id,))
+        lid = cur.fetchone()[0]
+        db_engine.commit()
+        cur.close()
+
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_admin["username"]
+            sess["admin_role"] = "admin"
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT COUNT(*) FROM email_queue WHERE to_email='alerts-off@test.local'")
+        before = cur.fetchone()[0]
+        cur.close()
+
+        resp = client.post(f"/leave_action/{lid}", data={"action": "Approved"}, follow_redirects=True)
+        assert resp.status_code == 200
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT COUNT(*) FROM email_queue WHERE to_email='alerts-off@test.local'")
+        after = cur.fetchone()[0]
+        cur.close()
+        assert after == before  # no new email queued -- alerts disabled
+
+    def test_leave_approval_sends_email_when_enabled(self, client, seed_admin, seed_employee, db_engine, monkeypatch):
+        import blueprints.leave as leave_mod
+        monkeypatch.setattr(leave_mod, "get_email_config", lambda: {
+            "host": "x", "port": 587, "user": "u", "password": "p", "from_name": "N", "from_email": "u@x.com"})
+
+        emp_id = seed_employee["employee_id"]
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET email_alerts_enabled=1, email='alerts-on@test.local' WHERE employee_id=%s", (emp_id,))
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason, status) VALUES (%s, '2031-04-02', 'test', 'Pending') RETURNING id",
+            (emp_id,))
+        lid = cur.fetchone()[0]
+        db_engine.commit()
+        cur.close()
+
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_admin["username"]
+            sess["admin_role"] = "admin"
+
+        resp = client.post(f"/leave_action/{lid}", data={"action": "Approved"}, follow_redirects=True)
+        assert resp.status_code == 200
+
+        cur = db_engine.cursor()
+        cur.execute("SELECT COUNT(*) FROM email_queue WHERE to_email='alerts-on@test.local'")
+        count = cur.fetchone()[0]
+        cur.close()
+        assert count >= 1

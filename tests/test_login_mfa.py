@@ -70,27 +70,6 @@ class TestAdminLoginMfa:
         assert resp.status_code == 200
         assert b"expired" in resp.data.lower()
 
-    def test_soc_analyst_role_cannot_use_admin_login_even_with_mfa_enabled(self, client, seed_admin, db_engine, mandatory_login_mfa_enabled):
-        """SOC analyst stays a separate credential (blueprints/secops.py's
-        /sp_admin/login) -- unlike HR (see the hr_role tests below), it's
-        never let through the general admin login."""
-        db_engine.cursor().execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
-        db_engine.commit()
-        try:
-            resp = client.post("/login", data={
-                "identifier": seed_admin["username"], "password": seed_admin["password"],
-            })
-            assert b"Invalid credentials" in resp.data
-        finally:
-            # Without try/finally, a failed assertion above would leave
-            # 'test_admin' stuck on role='soc_analyst' for the rest of the
-            # run -- admin_login() explicitly rejects that role even with
-            # the correct password, so every later test doing a plain
-            # admin login for this shared identifier would then fail with
-            # a spurious "Invalid credentials" of its own.
-            db_engine.cursor().execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
-            db_engine.commit()
-
     def test_hr_role_can_use_admin_login_and_completes_mfa(self, client, seed_admin, db_engine, mandatory_login_mfa_enabled):
         """HR accounts (blueprints/admin_views.py's /hr_accounts management
         page) use the same general login as admin, and land on /employees

@@ -18,9 +18,11 @@ import AdminHeader from "../../components/admin/AdminHeader";
 import AdminSearchBar from "../../components/admin/AdminSearchBar";
 import SaasFilterSheet from "../../components/common/SaasFilterSheet";
 import { fetchLeaveRequests, leaveAction } from "../../api/client";
-import THEME from "../../constants/theme";
+import { useTheme } from "../../store/ThemeContext";
 
 export default function LeaveRequestsScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("Pending");
   const [selectedLeaveType, setSelectedLeaveType] = useState("All");
@@ -123,7 +125,7 @@ export default function LeaveRequestsScreen({ navigation }) {
   const rejectedCount = requests.filter((r) => r.status === "Rejected").length;
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <SafeAreaView style={{ flex: 1 }}>
         <AdminHeader
           title="Approvals Hub"
@@ -137,13 +139,13 @@ export default function LeaveRequestsScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[THEME.colors.primary]}
+              colors={[colors.primary]}
             />
           }
         >
           {/* Summary Stats Grid */}
           <View style={styles.statsGrid}>
-            <View style={[styles.statCard, { borderLeftColor: "#F59E0B" }]}>
+            <View style={[styles.statCard, { borderLeftColor: colors.warning }]}>
               <Text style={styles.statNumber}>{pendingCount}</Text>
               <Text style={styles.statLabel}>Pending</Text>
             </View>
@@ -151,7 +153,7 @@ export default function LeaveRequestsScreen({ navigation }) {
               <Text style={styles.statNumber}>{approvedCount}</Text>
               <Text style={styles.statLabel}>Approved</Text>
             </View>
-            <View style={[styles.statCard, { borderLeftColor: "#EF4444" }]}>
+            <View style={[styles.statCard, { borderLeftColor: colors.danger }]}>
               <Text style={styles.statNumber}>{rejectedCount}</Text>
               <Text style={styles.statLabel}>Rejected</Text>
             </View>
@@ -245,7 +247,7 @@ export default function LeaveRequestsScreen({ navigation }) {
                       style={styles.rejectBtn}
                       onPress={() => handleAction(item.id, "Rejected")}
                     >
-                      <Ionicons name="close-circle-outline" size={18} color="#EF4444" />
+                      <Ionicons name="close-circle-outline" size={18} color={colors.danger} />
                       <Text style={styles.rejectBtnText}>Reject</Text>
                     </TouchableOpacity>
 
@@ -291,13 +293,13 @@ export default function LeaveRequestsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 10 },
   statsGrid: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
   statCard: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 14,
     marginRight: 8,
@@ -305,26 +307,26 @@ const styles = StyleSheet.create({
     elevation: 2,
     alignItems: "center",
   },
-  statNumber: { fontSize: 18, fontWeight: "800", color: "#0F172A" },
+  statNumber: { fontSize: 18, fontWeight: "800", color: colors.text },
   statLabel: { fontSize: 11, color: "#64748B", fontWeight: "600", marginTop: 2 },
-  tabsRow: { flexDirection: "row", backgroundColor: "#E2E8F0", borderRadius: 14, padding: 4, marginVertical: 12 },
+  tabsRow: { flexDirection: "row", backgroundColor: colors.border, borderRadius: 14, padding: 4, marginVertical: 12 },
   tab: { flex: 1, paddingVertical: 8, alignItems: "center", borderRadius: 10 },
-  tabActive: { backgroundColor: "#FFFFFF", elevation: 2 },
+  tabActive: { backgroundColor: colors.card, elevation: 2 },
   tabText: { fontSize: 12, fontWeight: "600", color: "#64748B" },
   tabTextActive: { color: "#173B8C", fontWeight: "800" },
   requestCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     elevation: 2,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   cardHeader: { flexDirection: "row", alignItems: "center" },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#EEF4FF", justifyContent: "center", alignItems: "center" },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryLight, justifyContent: "center", alignItems: "center" },
   avatarText: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
-  empName: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
+  empName: { fontSize: 13, fontWeight: "700", color: colors.text },
   leaveType: { fontSize: 12, color: "#173B8C", fontWeight: "600", marginTop: 2 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   pillApproved: { backgroundColor: "#DCFCE7" },
@@ -334,12 +336,12 @@ const styles = StyleSheet.create({
   textApproved: { color: "#166534" },
   textRejected: { color: "#991B1B" },
   textPending: { color: "#B45309" },
-  detailsBox: { backgroundColor: "#F8FAFC", borderRadius: 12, padding: 12, marginTop: 12 },
+  detailsBox: { backgroundColor: colors.background, borderRadius: 12, padding: 12, marginTop: 12 },
   detailRow: { flexDirection: "row", alignItems: "center" },
   detailText: { fontSize: 13, color: "#334155", marginLeft: 8, flex: 1 },
   actionsRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
   rejectBtn: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FEE2E2", paddingVertical: 10, borderRadius: 14, marginRight: 8 },
-  rejectBtnText: { color: "#EF4444", fontWeight: "700", marginLeft: 6 },
+  rejectBtnText: { color: colors.danger, fontWeight: "700", marginLeft: 6 },
   approveBtn: { flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#10B981", paddingVertical: 10, borderRadius: 14 },
   approveBtnText: { color: "#FFFFFF", fontWeight: "700", marginLeft: 6 },
 });

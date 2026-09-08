@@ -1,0 +1,105 @@
+/* Shared employee sidebar -- backs templates/_employee_sidebar.html.
+   Previously duplicated (with small drifts, e.g. the active-item accent
+   color) across employee_portal.html, my_performance.html, my_compoff.html
+   and my_onboarding.html; the 3 standalone pages never had a working
+   mobile toggle even though employee_portal.html's own CSS referenced
+   .sb-toggle/.app-header without ever rendering that button. */
+
+.sb-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 250; }
+.sb-overlay.open { display: block; }
+
+.sb-toggle {
+  display: none; position: fixed; top: 14px; left: 14px; z-index: 260;
+  width: 40px; height: 40px; align-items: center; justify-content: center;
+  background: #101B2D; color: #fff; border: none; border-radius: 10px;
+  font-size: 20px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+}
+
+.sidebar {
+  width: 240px; height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  background: #101B2D;
+  padding: 20px 14px; color: white;
+  display: flex; flex-direction: column; flex-shrink: 0;
+  box-shadow: 4px 0 20px rgba(0,0,0,0.18); z-index: 300;
+  transition: transform 0.28s ease;
+}
+.sb-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 14px; margin-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.sb-brand-logo {
+  width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0;
+  background: #fff; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+}
+.sb-brand-logo img { width: 100%; height: 100%; object-fit: contain; }
+.sb-brand-name { font-size: 13px; font-weight: 700; color: #fff; line-height: 1.2; }
+.sb-profile {
+  display: flex; align-items: center; gap: 12px;
+  padding-bottom: 18px; margin-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.sb-avatar {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4);
+  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: white;
+}
+.sb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.sb-name { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.2; }
+.sb-role { font-size: 11px; color: rgba(255,255,255,0.55); margin-top: 2px; }
+.sb-id   { font-size: 10px; color: rgba(255,255,255,0.35); margin-top: 1px; }
+.sb-nav-label {
+  font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.35);
+  text-transform: uppercase; letter-spacing: 1px;
+  padding: 0 10px; margin: 12px 0 4px;
+}
+.sb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; margin: 1px 0;
+  color: rgba(255,255,255,0.75);
+  border-radius: 10px; font-size: 13px; font-weight: 500; transition: 0.18s;
+  position: relative; border: none; background: none; width: 100%;
+  text-align: left; cursor: pointer; font-family: inherit; text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.sb-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.sb-item.active {
+  background: rgba(255,255,255,0.15); color: #fff; font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+}
+.sb-item.active::before {
+  content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
+  width: 3px; border-radius: 2px; background: #6B93BB;
+}
+.sb-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.08); font-size: 16px;
+}
+.sb-icon i { font-size: 16px; line-height: 1; }
+.sb-item.active .sb-icon { background: rgba(96,165,250,0.2); }
+.sb-item:hover .sb-icon  { background: rgba(255,255,255,0.12); }
+.sb-item.danger { color: rgba(252,165,165,0.85); }
+.sb-item.danger:hover { background: rgba(239,68,68,0.15); color: #fca5a5; }
+.sb-sep { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 8px 0; }
+.sb-scroll-nav { flex: 1; }
+.sidebar::-webkit-scrollbar { width: 3px; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+.sb-bottom { flex-shrink: 0; padding-top: 4px; }
+.sb-footer {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 11px; color: rgba(255,255,255,0.4);
+  display: flex; align-items: center; gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed; left: 0; top: 0; height: 100dvh; width: 260px;
+    transform: translateX(-100%);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sb-toggle { display: flex; }
+}

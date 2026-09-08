@@ -132,14 +132,6 @@ class TestDeviceManagement:
         resp = client.delete("/api/biometric/devices/NOSUCHDEVICE")
         assert resp.status_code == 404
 
-    def test_page_renders_with_and_without_devices(self, client, seed_admin, biometric_device):
-        _admin_session(client, seed_admin)
-        resp = client.get("/biometric_devices")
-        assert resp.status_code == 200
-        assert b"Biometric Devices" in resp.data
-        assert biometric_device.encode() in resp.data
-        assert b"iclock/cdata" in resp.data
-
 
 # ── Device-facing /iclock/* push protocol ────────────────────────────────────
 

@@ -5,11 +5,14 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { fetchEmployeeSalary } from "../../api/client";
+import { useTheme } from "../../store/ThemeContext";
 
 const MONTHS = ["January","February","March","April","May","June",
                  "July","August","September","October","November","December"];
 
 function MonthPicker({ year, month, onChange }) {
+  const { colors } = useTheme();
+  const mp = React.useMemo(() => makeMp(colors), [colors]);
   const prev = () => {
     if (month === 1) onChange(year - 1, 12);
     else onChange(year, month - 1);
@@ -23,23 +26,25 @@ function MonthPicker({ year, month, onChange }) {
   return (
     <View style={mp.row}>
       <TouchableOpacity onPress={prev} style={mp.btn}>
-        <Ionicons name="chevron-back" size={20} color="#173B8C" />
+        <Ionicons name="chevron-back" size={20} color={colors.primary} />
       </TouchableOpacity>
       <Text style={mp.label}>{MONTHS[month - 1]} {year}</Text>
       <TouchableOpacity onPress={next} style={mp.btn}>
-        <Ionicons name="chevron-forward" size={20} color="#173B8C" />
+        <Ionicons name="chevron-forward" size={20} color={colors.primary} />
       </TouchableOpacity>
     </View>
   );
 }
 
-const mp = StyleSheet.create({
+const makeMp = (colors) => StyleSheet.create({
   row:   { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 20 },
-  btn:   { width: 36, height: 36, borderRadius: 10, backgroundColor: "#EEF4FF", justifyContent: "center", alignItems: "center" },
-  label: { width: 180, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#0F172A" },
+  btn:   { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primaryLight, justifyContent: "center", alignItems: "center" },
+  label: { width: 180, textAlign: "center", fontSize: 17, fontWeight: "700", color: colors.text },
 });
 
 function Row({ label, value, bold, highlight }) {
+  const { colors } = useTheme();
+  const row = React.useMemo(() => makeRow(colors), [colors]);
   return (
     <View style={[row.wrap, highlight && row.highlighted]}>
       <Text style={[row.label, bold && row.bold]}>{label}</Text>
@@ -48,16 +53,18 @@ function Row({ label, value, bold, highlight }) {
   );
 }
 
-const row = StyleSheet.create({
-  wrap:        { flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: 1, borderColor: "#F1F5F9" },
-  highlighted: { backgroundColor: "#EEF4FF", borderRadius: 10, paddingHorizontal: 10, borderBottomWidth: 0, marginHorizontal: -10 },
-  label:       { fontSize: 14, color: "#64748B" },
-  bold:        { fontWeight: "700", color: "#0F172A" },
-  value:       { fontSize: 14, color: "#0F172A" },
-  highlightVal:{ color: "#173B8C", fontSize: 16 },
+const makeRow = (colors) => StyleSheet.create({
+  wrap:        { flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, borderBottomWidth: 1, borderColor: colors.border },
+  highlighted: { backgroundColor: colors.primaryLight, borderRadius: 10, paddingHorizontal: 10, borderBottomWidth: 0, marginHorizontal: -10 },
+  label:       { fontSize: 14, color: colors.textSecondary },
+  bold:        { fontWeight: "700", color: colors.text },
+  value:       { fontSize: 14, color: colors.text },
+  highlightVal:{ color: colors.primary, fontSize: 16 },
 });
 
 export default function PayslipsScreen({ navigation }) {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const now = new Date();
   const [year, setYear]     = useState(now.getFullYear());
   const [month, setMonth]   = useState(now.getMonth() + 1);
@@ -83,10 +90,10 @@ export default function PayslipsScreen({ navigation }) {
   const s = data?.salary;
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]} style={styles.container}>
+    <LinearGradient colors={colors.screenGradient} style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color="#173B8C" />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Payslips</Text>
         <View style={{ width: 40 }} />
@@ -102,12 +109,12 @@ export default function PayslipsScreen({ navigation }) {
         <MonthPicker year={year} month={month} onChange={(y, m) => { setYear(y); setMonth(m); }} />
 
         {loading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color="#173B8C" /></View>
+          <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
         ) : !s ? (
-          <View style={{ backgroundColor: "#FFFFFF", borderRadius: 20, padding: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#E2E8F0", marginTop: 20 }}>
-            <Ionicons name="document-text-outline" size={48} color="#94A3B8" />
-            <Text style={{ fontSize: 16, fontWeight: "700", color: "#0F172A", marginTop: 12 }}>No Payslip Generated Yet</Text>
-            <Text style={{ fontSize: 13, color: "#64748B", textAlign: "center", marginTop: 6 }}>
+          <View style={{ backgroundColor: colors.card, borderRadius: 20, padding: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border, marginTop: 20 }}>
+            <Ionicons name="document-text-outline" size={48} color={colors.textLight} />
+            <Text style={{ fontSize: 16, fontWeight: "700", color: colors.text, marginTop: 12 }}>No Payslip Generated Yet</Text>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, textAlign: "center", marginTop: 6 }}>
               Payslips for {MONTHS[month - 1]} {year} have not been published by payroll administration yet.
             </Text>
           </View>
@@ -147,17 +154,17 @@ export default function PayslipsScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingTop: 55, paddingHorizontal: 20, paddingBottom: 16,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-  backBtn:     { width: 40, height: 40, borderRadius: 12, backgroundColor: "#EEF4FF", justifyContent: "center", alignItems: "center" },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#0F172A" },
+  backBtn:     { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryLight, justifyContent: "center", alignItems: "center" },
+  headerTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
   scroll:      { padding: 20 },
   center:      { alignItems: "center", paddingVertical: 60 },
   hero: {
@@ -167,9 +174,9 @@ const styles = StyleSheet.create({
   heroAmount: { color: "#FFFFFF", fontSize: 24, fontWeight: "800", marginTop: 4 },
   heroSub:    { color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 4 },
   card: {
-    backgroundColor: "#FFFFFF", borderRadius: 18, padding: 18, marginBottom: 14,
+    backgroundColor: colors.card, borderRadius: 18, padding: 18, marginBottom: 14,
     shadowColor: "#000", shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cardTitle: { fontSize: 13, fontWeight: "700", color: "#0F172A", marginBottom: 8 },
+  cardTitle: { fontSize: 13, fontWeight: "700", color: colors.text, marginBottom: 8 },
 });

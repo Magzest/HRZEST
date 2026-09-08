@@ -345,14 +345,6 @@ class TestRegenerateQr:
         assert b"regenerated" in resp.data
 
 
-class TestViewQrcodesRedirect:
-    def test_redirects_to_view_photos(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/view_qrcodes", follow_redirects=False)
-        assert resp.status_code == 302
-        assert "/view_photos" in resp.headers["Location"]
-
-
 class TestServeDataset:
     def test_missing_file_404(self, client, seed_admin):
         _admin_session(client, seed_admin["username"])
@@ -370,29 +362,6 @@ class TestMyPhoto:
             sess["employee_id"] = seed_employee["employee_id"]
         resp = client.get("/my_photo")
         assert resp.status_code == 404
-
-
-class TestViewPhotos:
-    def test_renders(self, client, seed_admin, seed_employee):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/view_photos")
-        assert resp.status_code == 200
-
-
-class TestUpdatePhoto:
-    def test_invalid_file_returns_400(self, client, seed_admin, seed_employee):
-        _admin_session(client, seed_admin["username"])
-        resp = client.post(f"/update_photo/{seed_employee['employee_id']}", data={
-            "photo": (io.BytesIO(b"not-an-image"), "f.txt")})
-        assert resp.status_code == 400
-
-    def test_success(self, client, seed_admin, seed_employee, cleanup_emp_files):
-        cleanup_emp_files.append(seed_employee["employee_id"])
-        _admin_session(client, seed_admin["username"])
-        resp = client.post(f"/update_photo/{seed_employee['employee_id']}", data={
-            "photo": (io.BytesIO(_jpeg_bytes()), "f.jpg")})
-        assert resp.status_code == 200
-        assert resp.get_json()["ok"] is True
 
 
 class TestGenerateEmpId:
@@ -512,11 +481,15 @@ class TestApiDeleteEmployee:
 
     def test_success(self, client, seed_admin, db_engine):
         cur = db_engine.cursor()
-        cur.execute("INSERT INTO employees (employee_id, name) VALUES (%s,%s)",
-                    ("APIDEL1", "Api Delete Target"))
-        token = _admin_bearer_token(client, seed_admin)
-        resp = client.delete("/api/employees/APIDEL1", headers={"Authorization": f"Bearer {token}"})
-        assert resp.status_code == 200
-        cur.execute("SELECT 1 FROM employees WHERE employee_id='APIDEL1'")
-        assert cur.fetchone() is None
-        cur.close()
+        try:
+            cur.execute("DELETE FROM employees WHERE employee_id='APIDEL1'")
+            cur.execute("INSERT INTO employees (employee_id, name) VALUES (%s,%s)",
+                        ("APIDEL1", "Api Delete Target"))
+            token = _admin_bearer_token(client, seed_admin)
+            resp = client.delete("/api/employees/APIDEL1", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+            cur.execute("SELECT 1 FROM employees WHERE employee_id='APIDEL1'")
+            assert cur.fetchone() is None
+        finally:
+            cur.execute("DELETE FROM employees WHERE employee_id='APIDEL1'")
+            cur.close()

@@ -17,6 +17,10 @@ import os
 import sys
 
 # ── Encoding fix for Windows ──────────────────────────────────────────────────
+# Runs before `from extensions import app_log` below, so there's no logger
+# available yet to report a failure here to -- harmless either way (fails
+# only on a stream that doesn't support .reconfigure(), e.g. Python <3.7 or
+# a fully redirected/piped stdout that's already fixed-encoding).
 try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -94,6 +98,7 @@ try:
     from apscheduler.schedulers.background import BackgroundScheduler
     from blueprints.daily_report import generate_and_send_daily_report
     from blueprints.auto_debit import sync_and_bill_auto_debit
+    from blueprints.billing_dunning import check_tenant_billing
     _scheduler = BackgroundScheduler(daemon=True)
     _scheduler.add_job(
         func=generate_and_send_daily_report,
@@ -109,9 +114,17 @@ try:
         id="auto_debit_sync_and_bill",
         replace_existing=True,
     )
+    _scheduler.add_job(
+        func=check_tenant_billing,
+        trigger="cron",
+        hour=3, minute=0,
+        id="tenant_billing_dunning_check",
+        replace_existing=True,
+    )
     _scheduler.start()
     app_log.info("Daily report scheduler started -- fires at 23:59 every night")
     app_log.info("Auto-debit sync/billing scheduler started -- fires at 02:00 every night")
+    app_log.info("Tenant billing dunning check started -- fires at 03:00 every night")
 except ImportError:
     app_log.warning("APScheduler not installed -- daily email reports disabled. Run: pip install apscheduler")
 except Exception as _sch_err:

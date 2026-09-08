@@ -107,12 +107,15 @@ async def _handle_connection(reader: asyncio.StreamReader, writer: asyncio.Strea
     try:
         captured = await asyncio.wait_for(reader.read(_MAX_CAPTURE_BYTES), timeout=_READ_TIMEOUT_SECONDS)
     except (asyncio.TimeoutError, ConnectionError):
+        # Expected, not an error: most portscan connections send nothing
+        # before timing out or disconnecting -- the connection itself is
+        # still logged unconditionally via _record_hit() below regardless.
         pass
     finally:
         try:
             writer.close()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("honeypot writer.close() failed for %s: %s", peer_ip, exc)
 
     _record_hit(port, protocol, peer_ip, captured)
     try:

@@ -17,6 +17,7 @@ import { fetchEmployeeAttendance, employeeCheckin } from "../../api/client";
 import { queuePunch } from "../../utils/offlineQueue";
 
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 
 import LoadingSkeleton from "../../components/ui/LoadingSkeleton";
 import AttendanceScannerModal from "../AttendanceScannerModal";
@@ -34,6 +35,8 @@ import ProfileHeader from "../../components/profile/ProfileHeader";
 export default function AttendanceScreen() {
   const navigation = useNavigation();
   const { signOut } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
 
   const today = new Date();
 
@@ -197,7 +200,7 @@ export default function AttendanceScreen() {
   if (loading) {
     return (
       <LinearGradient
-        colors={["#F8FAFC", "#F2F7FD", "#EDF4FF"]}
+        colors={colors.screenGradient}
         style={{ flex: 1 }}
       >
         <LoadingSkeleton />
@@ -207,7 +210,7 @@ export default function AttendanceScreen() {
 
   return (
     <LinearGradient
-      colors={["#F8FAFC", "#F3F7FD", "#EDF4FF"]}
+      colors={colors.screenGradient}
       style={styles.container}
     >
       <AttendanceScannerModal
@@ -277,7 +280,7 @@ export default function AttendanceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
   },
@@ -297,7 +300,7 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 14,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     justifyContent: "center",
     alignItems: "center",
@@ -318,7 +321,7 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 14,
 
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
 
     justifyContent: "center",
     alignItems: "center",
@@ -336,7 +339,7 @@ const styles = StyleSheet.create({
 
   smallTitle: {
     fontSize: 13,
-    color: "#64748B",
+    color: colors.textSecondary,
     textAlign: "center",
     fontWeight: "600",
   },
@@ -344,7 +347,7 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 3,
     fontSize: 28,
-    color: "#0F172A",
+    color: colors.text,
     fontWeight: "800",
     textAlign: "center",
   },

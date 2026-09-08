@@ -19,6 +19,10 @@ path segment a real top-level route, or a company slug" -- both this
 middleware and blueprints/org.py's subdomain-format validation import it
 from here, so a new top-level route only needs to be added to one place.
 """
+import logging
+
+_log = logging.getLogger("attendance")
+
 RESERVED_PATH_SEGMENTS = frozenset({
     # infra / static
     "static", "healthz", "favicon.ico", "csp-report", "api",
@@ -66,6 +70,7 @@ class TenantPrefixMiddleware:
                 self._pop_path_info(environ)
                 environ["hrz.tenant_slug"] = seg.lower()
                 environ["hrz.tenant_db"] = row[0]
+                environ["hrz.billing_locked"] = (row[1] == "locked")
 
         return self.wsgi_app(environ, start_response)
 
@@ -95,7 +100,7 @@ class TenantPrefixMiddleware:
             conn = get_master_db()
             cur = conn.cursor(buffered=True)
             cur.execute(
-                "SELECT db_name FROM tenants WHERE subdomain=%s AND status='active'",
+                "SELECT db_name, billing_state FROM tenants WHERE subdomain=%s AND status='active'",
                 (slug,)
             )
             row = cur.fetchone()
@@ -103,4 +108,10 @@ class TenantPrefixMiddleware:
             conn.close()
             return row
         except Exception:
+            # Fail open by design (see docstring) -- but that previously
+            # meant a master-DB outage degraded every tenant-prefixed
+            # request with zero signal. Log so it's visible to monitoring
+            # instead of only showing up as "tenant slugs mysteriously stop
+            # resolving."
+            _log.warning("tenant_routing.lookup_failed: slug=%s", slug, exc_info=True)
             return None

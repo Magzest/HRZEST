@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 import sys
+# Runs before app_log is importable -- harmless either way (fails only on a
+# stream that doesn't support .reconfigure(), e.g. Python <3.7 or a fully
+# redirected/piped stdout that's already fixed-encoding). See wsgi.py's
+# identical guard for the same rationale.
 try:
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
@@ -78,7 +82,7 @@ from utils.email_utils import (
 from utils.auth import generate_password_hash, check_password_hash
 from utils.helpers import (
     _error_page, invalidate_settings_cache, get_company_settings,
-    get_companies_list, get_overdue_onboarding_count,
+    get_companies_list, get_overdue_onboarding_count, coerce_datetime,
 )
 # Shift timings / deduction rates / office geo-fence -- app.py used to carry
 # its own separate SHIFT_START / LATE_DEDUCTION_RATE / OFFICE_LAT etc.
@@ -182,8 +186,9 @@ def _csrf_token():
 app.jinja_env.globals["csrf_token"] = _csrf_token
 app.jinja_env.globals["timedelta"] = datetime.timedelta
 
-from utils.helpers import tpath as _tpath
+from utils.helpers import tpath as _tpath, static_url as _static_url
 app.jinja_env.globals["tpath"] = _tpath
+app.jinja_env.globals["static_url"] = _static_url
 
 
 @app.context_processor
@@ -221,6 +226,35 @@ def inject_overdue_onboardings():
         return {"overdue_onboardings": 0}
 
 
+@app.context_processor
+def inject_billing_lock_status():
+    """Lets templates/admin_base.html show a proactive grace/locked banner
+    without every route handler having to fetch it -- _enforce_billing_lock()
+    only warns reactively (on the first blocked write attempt), this is what
+    lets an admin see the deadline *before* they hit that block. Cheap
+    single-row lookup, same posture as inject_overdue_onboardings above
+    (only runs for a logged-in admin session, fails soft to "nothing to
+    show" rather than ever breaking a page render)."""
+    if not session.get("admin_logged_in"):
+        return {}
+    try:
+        from flask import g as _g
+        db = get_master_db()
+        cur = db.cursor(buffered=True)
+        cur.execute(
+            "SELECT billing_state, grace_period_ends_at FROM tenants WHERE db_name=%s",
+            (_g.tenant_db,)
+        )
+        row = cur.fetchone()
+        cur.close()
+        db.close()
+        if not row or row[0] == "current":
+            return {"billing_lock_status": None}
+        return {"billing_lock_status": {"state": row[0], "grace_period_ends_at": coerce_datetime(row[1])}}
+    except Exception:
+        return {"billing_lock_status": None}
+
+
 _SESSION_MAX_AGE = 8 * 3600  # 8 hours absolute -- stolen cookie cannot be used indefinitely
 # How often _resolve_tenant() re-checks tenants.status for an
 # already-session-cached tenant. Bounds how long a platform-admin
@@ -231,10 +265,27 @@ _TENANT_STATUS_RECHECK_SEC = 5 * 60
 
 
 @app.before_request
-def _perf_start_timer():
-    """Stash a start time for _perf_record below (registered first so it
-    wraps every other before_request hook's cost too)."""
-    _g._perf_start = time.perf_counter()
+def _normalize_loopback_host():
+    """WebAuthn (utils/webauthn_utils.py) refuses "127.0.0.1"/"::1" as an RP
+    ID -- only a real hostname, or the spec's special-cased "localhost",
+    works -- so local dev needs every page served from "localhost", not the
+    IP literal. This used to be a client-side redirect placed on the
+    post-login templates only (admin_base.html/employee_portal.html/
+    index.html): it fired *after* login had already set a session cookie
+    scoped to host "127.0.0.1", then navigated to "localhost", a different
+    host as far as the browser's cookie jar is concerned -- so the
+    just-issued cookie never came along, the very next request looked
+    unauthenticated, and the user was bounced back to login for a second
+    full login+OTP cycle. Redirecting here instead, before any session
+    handling runs (registered first, ahead of tenant/session/CSRF hooks),
+    means every page -- including the login and MFA-verify pages -- is
+    already on "localhost" before any cookie is ever set, so no session
+    is ever bound to the host that's about to be abandoned.
+    """
+    host = request.host.partition(":")[0]
+    if host in ("127.0.0.1", "::1"):
+        new_host = request.host.replace(host, "localhost", 1)
+        return redirect(request.url.replace(request.host, new_host, 1), code=302)
 
 
 @app.before_request
@@ -301,19 +352,28 @@ def _resolve_tenant():
         last_checked = session.get("_tenant_status_checked_at", 0)
         if (time.time() - last_checked) < _TENANT_STATUS_RECHECK_SEC:
             _g.tenant_db = session["tenant_db"]
+            _g.billing_locked = session.get("_billing_locked", False)
             return
         try:
             conn = get_master_db()
             cur = conn.cursor()
-            cur.execute("SELECT status FROM tenants WHERE db_name=%s", (session["tenant_db"],))
+            cur.execute("SELECT status, billing_state FROM tenants WHERE db_name=%s", (session["tenant_db"],))
             row = cur.fetchone()
             cur.close()
             conn.close()
         except Exception:
             row = None  # master DB unreachable -- don't punish the session for it, just skip the recheck this time
+            app_log.warning(
+                "tenant.status_recheck_failed: tenant_db=%s", session.get("tenant_db"), exc_info=True
+            )
         if row is None or row[0] == "active":
             session["_tenant_status_checked_at"] = time.time()
+            # billing_state='locked' does NOT block resolution/login here --
+            # only _enforce_billing_lock() (below) blocks state-changing
+            # requests, per this feature's "can log in, can't act" design.
+            session["_billing_locked"] = bool(row) and row[1] == "locked"
             _g.tenant_db = session["tenant_db"]
+            _g.billing_locked = session["_billing_locked"]
             return
         session.clear()
         return jsonify({"ok": False, "msg": "This organisation's access has been suspended. Contact support."}), 403
@@ -323,15 +383,18 @@ def _resolve_tenant():
     # reuse its lookup instead of querying the master DB a second time.
     if url_slug and url_tenant_db:
         _g.tenant_db = url_tenant_db
+        _g.billing_locked = bool(request.environ.get("hrz.billing_locked"))
         session["tenant_db"] = url_tenant_db
         session["tenant_slug"] = url_slug
         session["_tenant_status_checked_at"] = time.time()
+        session["_billing_locked"] = _g.billing_locked
         return
 
     # 3. Default single-tenant fallback (local dev/test, or any request
     # that never carried a company slug: marketing pages, token-based
     # API/mobile-app calls, the platform-admin console).
     _g.tenant_db = os.environ.get("DB_NAME", "employee_attendance")
+    _g.billing_locked = False
 
 
 @app.after_request
@@ -359,7 +422,44 @@ def _restamp_tenant_session(response):
         session["tenant_db"] = tenant_db
         session["tenant_slug"] = url_slug
         session["_tenant_status_checked_at"] = time.time()
+        session["_billing_locked"] = getattr(_g, "billing_locked", False)
     return response
+
+
+# Exempt from the billing-lock write-block below: the pages/actions a
+# locked tenant must still be able to reach to pay their way back out
+# (blueprints/billing_dunning.py), plus the universal login/logout/static
+# exemptions every other gate in this file also carries.
+_BILLING_LOCK_EXEMPT_PATHS = {
+    "/logout", "/login", "/admin_login", "/employee_login",
+    "/pay_overdue_bill", "/api/billing/overdue/create_order", "/api/billing/overdue/verify",
+}
+
+
+@app.before_request
+def _enforce_billing_lock():
+    """A tenant past its 5-day payment grace period (billing_state='locked',
+    set by blueprints/billing_dunning.py's daily check) can still log in and
+    browse -- _resolve_tenant() above deliberately doesn't block resolution
+    on this -- but every state-changing request is refused here until a
+    payment clears it, automatically, via that module's Razorpay webhook.
+    No admin action is needed on either side of that transition.
+
+    GET/HEAD/OPTIONS always pass (read-only viewing, including payroll
+    pages themselves -- the user's requirement is "can't make changes",
+    not "can't see the page"); only mutating methods on non-exempt paths
+    are refused."""
+    if not getattr(_g, "billing_locked", False):
+        return
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    if request.path.startswith("/static/") or request.path == "/healthz" or request.path in _BILLING_LOCK_EXEMPT_PATHS:
+        return
+    msg = "Your account is locked because of an overdue payment. Pay your outstanding bill to unlock it."
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "msg": msg, "billing_locked": True}), 402
+    flash(msg, "error")
+    return redirect(_tpath("/pay_overdue_bill"))
 
 
 @app.before_request
@@ -450,7 +550,7 @@ def _enforce_idle_timeout():
     absolute max-age check above, which only catches a session once it's
     lived 8 hours regardless of how recently it was used. The threshold
     itself (company_settings.session_timeout, admin-configurable 5-1440 min
-    via the SOC dashboard's /api/secops/session-timeout)
+    via Settings)
     used to be stored and displayed in the UI but was never actually
     enforced anywhere -- this closes that gap. Reads through
     get_company_settings()'s existing 60s cache rather than querying the DB
@@ -475,7 +575,7 @@ def _enforce_idle_timeout():
 
 # Roles that count as "administrative/HR" for the mandatory-MFA requirement
 # below -- every role that can reach admin-side data or actions.
-_MANDATORY_MFA_ROLES = {"admin", "manager", "soc_analyst", "hr"}
+_MANDATORY_MFA_ROLES = {"admin", "manager", "hr"}
 
 # Routes reachable by an admin/manager/soc_analyst/hr session that has NOT
 # yet enrolled TOTP -- must stay small and deliberate. Anything not on this
@@ -486,13 +586,14 @@ _MANDATORY_MFA_EXEMPT_PATHS = {
     "/logout", "/admin_login", "/hr_login"
 }
 
-app.config.setdefault("MANDATORY_ADMIN_MFA", False)
+# All three MFA/2FA gates below default OFF at the user's request -- set any
+# of them to "true" in .env to turn that layer back on.
+app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
 app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
-# Platform admin's emailed-OTP step (blueprints/platform_admin.py) --
-# defaults on (secure by default) unlike the two flags above, since this is
-# the highest-privilege identity in the system; only skip it by explicitly
-# setting this in .env for local dev without SMTP configured.
-app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
+app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
+# Email Settings step-up gate (utils/auth.py's require_email_2fa) -- same
+# off-by-default posture as the three flags above.
+app.config["REQUIRE_EMAIL_2FA"] = os.environ.get("REQUIRE_EMAIL_2FA", "False").lower() in ("true", "1", "yes")
 
 
 @app.before_request
@@ -554,7 +655,7 @@ def _enforce_csrf():
         # device pushing attendance logs has no browser session/CSRF token
         # to carry, same posture as /webhooks/ above.
         return
-    if request.path in ("/login", "/admin_login", "/hr_login", "/sp_admin/login", "/mfa_login_verify"):
+    if request.path in ("/login", "/admin_login", "/hr_login"):
         return  # Login routes handle credential verification & rate-limiting
     # NOTE: We intentionally do NOT skip JSON requests here. The auto-inject
     # script (_inject_csrf_meta) adds X-CSRF-Token to every fetch() call, so
@@ -566,8 +667,25 @@ def _enforce_csrf():
                  or request.headers.get("X-CSRF-Token")
                  or request.headers.get("X-CSRFToken"))
     if not token or not submitted or not secrets.compare_digest(str(token), str(submitted)):
-        # Browser form submissions: redirect to login so the user gets a fresh session+token
-        if request.accept_mimetypes.accept_html and not request.headers.get("X-Requested-With"):
+        # Browser form submissions: redirect to login so the user gets a fresh
+        # session+token. Gated on the request's actual Content-Type, not
+        # Accept/X-Requested-With -- those are unreliable signals for
+        # "this is a real full-page form submission, not a background
+        # fetch() call": a bare fetch() with no explicit headers sends
+        # Accept: */* (which accept_mimetypes.accept_html treats as
+        # accepting HTML too) and never sets X-Requested-With on its own,
+        # so a JSON-posting fetch() call whose CSRF token expired was
+        # taking this branch by mistake. Its JS never follows the redirect
+        # or renders the flash, but flash() still queued the message into
+        # the session -- silently, repeatedly, once per failed background
+        # call -- until the user's next *real* page load (one that calls
+        # get_flashed_messages()) dumped every accumulated copy at once.
+        # A genuine <form method="post"> is the only thing that can ever
+        # carry these two Content-Types; every legitimate fetch() POST in
+        # this app sends JSON instead (see the comment above on why JSON
+        # isn't exempted from the CSRF check itself).
+        if (request.mimetype in ("application/x-www-form-urlencoded", "multipart/form-data")
+                and request.accept_mimetypes.accept_html):
             flash("Your session expired. Please log in again.", "warning")
             # There is no standalone "employee_login" endpoint -- employee and
             # admin credentials are both checked by the one unified /login
@@ -794,22 +912,13 @@ def _inject_csrf_meta(response):
             data = _SCRIPT_TAG_RE.sub(b'<script nonce="' + nb + b'"', data)
             data = _STYLE_TAG_RE.sub(b'<style nonce="' + nb + b'"', data)
         response.set_data(data)
-    except Exception:
-        pass
+    except Exception as exc:
+        # Silent failure here means CSRF-token/killswitch injection and CSP
+        # nonce rewriting both silently no-op on this response -- worth
+        # knowing about even though the response still goes out.
+        app_log.warning("Response HTML injection (CSRF token/CSP nonce) failed: %s", exc, exc_info=True)
     return response
 
-
-@app.after_request
-def _perf_record(response):
-    """Record real request timing/error-rate for the Security hub's
-    Performance & Quality panel. Skips static assets -- they're served
-    differently (cached, no app logic) and would skew the average down."""
-    from flask import g
-    start = getattr(g, "_perf_start", None)
-    if start is not None and not request.path.startswith("/static/"):
-        from utils.perf_metrics import record as _record_perf
-        _record_perf((time.perf_counter() - start) * 1000, response.status_code)
-    return response
 
 # ---------------- AUDIT LOGGING ----------------
 # (Consolidated onto utils/helpers.py -- see import block above.)
@@ -859,8 +968,12 @@ with app.app_context():
     try:
         cfg.load_default_shift()
         cfg.load_salary_rules()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Falls back to cfg's hardcoded defaults, silently -- worth logging
+        # since a DB that isn't reachable yet at this exact import-time
+        # point means shift/salary config stays wrong until the next
+        # successful load, not just this one startup.
+        app_log.warning("Startup load of default shift/salary config failed: %s", exc, exc_info=True)
 
 # ── PII Encryption ────────────────────────────────────────────────
 # Consolidated onto utils/helpers.py (see import block near the top of this
@@ -1315,6 +1428,24 @@ def _init_core_tables(cursor, db):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_actor ON audit_logs (actor)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_action ON audit_logs (action)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_created ON audit_logs (created_at)")
+    # blueprints/email_blast.py's INSERT INTO broadcast_emails had no
+    # matching CREATE TABLE anywhere in the schema -- every admin email-blast
+    # request (broadcast to all/department/individual employees) failed at
+    # the enqueue step with UndefinedTable, silently returning a 500 despite
+    # otherwise looking fully built. Audit record of one broadcast dispatch,
+    # separate from the per-recipient rows it fans out into email_queue.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS broadcast_emails (
+            id SERIAL PRIMARY KEY,
+            sender_username VARCHAR(150) NOT NULL,
+            target_type VARCHAR(20) NOT NULL,
+            target_value VARCHAR(150),
+            subject VARCHAR(500) NOT NULL,
+            body_snippet VARCHAR(200),
+            recipient_count INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS login_attempts (
             id SERIAL PRIMARY KEY,
@@ -1377,34 +1508,6 @@ def _init_core_tables(cursor, db):
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events (created_at DESC)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_security_events_type ON security_events (event_type)")
-
-    # Self-service device management (employee/admin/hr dashboards -- see
-    # utils/device_utils.py). One shared table for all three owner kinds
-    # within this schema; platform_admin's own rows live in the identically-
-    # shaped copy of this table inside att_master (see init_master_db below),
-    # since platform admin identities aren't rows in any tenant's admin_users.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_devices (
-            id SERIAL PRIMARY KEY,
-            owner_kind VARCHAR(20) NOT NULL,
-            owner_id VARCHAR(50) NOT NULL,
-            device_token VARCHAR(64) NOT NULL,
-            kind VARCHAR(20) NOT NULL DEFAULT 'login',
-            device_name VARCHAR(150) DEFAULT NULL,
-            device_type VARCHAR(20) DEFAULT NULL,
-            browser VARCHAR(100) DEFAULT NULL,
-            os VARCHAR(100) DEFAULT NULL,
-            ip_address VARCHAR(45) DEFAULT NULL,
-            asset_model VARCHAR(150) DEFAULT NULL,
-            asset_serial VARCHAR(150) DEFAULT NULL,
-            last_sid VARCHAR(64) DEFAULT NULL,
-            is_revoked SMALLINT NOT NULL DEFAULT 0,
-            first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE (owner_kind, owner_id, device_token)
-        )
-    """)
-    cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_devices_owner ON user_devices (owner_kind, owner_id)")
 
     # Immutable audit trail: audit_logs (data/config changes) and
     # security_events (auth/access events) must be append-only -- a plain
@@ -1647,24 +1750,6 @@ def _init_core_tables(cursor, db):
         )
     """)
     db.commit()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS shift_swap_requests (
-            id SERIAL PRIMARY KEY,
-            requester_id VARCHAR(50) NOT NULL,
-            target_id VARCHAR(50) NOT NULL,
-            requester_shift_id INT NOT NULL,
-            target_shift_id INT NOT NULL,
-            reason TEXT,
-            status VARCHAR(20) DEFAULT 'Pending_Target' CHECK (status IN ('Pending_Target','Pending_Admin','Approved','Rejected','Rejected_Admin')),
-            target_response TEXT,
-            admin_response TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    _attach_updated_at_trigger(cursor, "shift_swap_requests")
-    db.commit()
-    db.commit()
 
     # Create company_settings table (must precede the migration loop below,
     # which ALTERs this table -- on a fresh install with nothing to migrate
@@ -1687,10 +1772,10 @@ def _init_core_tables(cursor, db):
     # Add default shift columns if not present
     for col, default in [("shift_start", "09:00:00"), ("shift_half", "13:00:00"), ("shift_end", "18:00:00")]:
         try:
-            cursor.execute(f"ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS {col} TIME DEFAULT '{default}'")
+            cursor.execute(f"ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS {col} TIME DEFAULT '{default}'")  # nosec B608 -- col/default come from the fixed literal list above, never user input
             db.commit()
-        except Exception:
-            pass
+        except Exception as exc:
+            app_log.warning("Migration: ALTER company_settings ADD COLUMN %s failed: %s", col, exc, exc_info=True)
 
 
 def _run_schema_migrations(cursor, db):
@@ -1701,6 +1786,7 @@ def _run_schema_migrations(cursor, db):
     those columns exist (indexes, PII widening, FK backstops)."""
     _run_column_migrations(cursor, db)
     _run_password_migrations(cursor, db)
+    _run_qr_signing_migration(cursor, db)
     _run_index_migrations(cursor, db)
     _run_data_integrity_migrations(cursor, db)
 
@@ -1755,6 +1841,7 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS designation VARCHAR(150) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_active SMALLINT DEFAULT 1",
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS email_alerts_enabled SMALLINT DEFAULT 1",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS leave_type_id INT DEFAULT NULL",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS is_half_day SMALLINT DEFAULT 0",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS half_day_session VARCHAR(10) DEFAULT NULL",
@@ -1831,11 +1918,12 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE break_config ADD COLUMN IF NOT EXISTS company_id INT DEFAULT NULL",
         "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'public' CHECK (visibility IN ('public','private'))",
         "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_employee_id VARCHAR(50) DEFAULT NULL",
+        "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS attachment_original_name VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS attachment_stored_ref VARCHAR(500) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS reset_token VARCHAR(80) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_enabled SMALLINT NOT NULL DEFAULT 0",
-        "ALTER TABLE performance_reviews ADD COLUMN IF NOT EXISTS potential_rating DECIMAL(3,1) DEFAULT 0",
         # Lets an admin terminate/reactivate an HR account (or any admin_users
         # row) without deleting it -- login history and the row itself stay
         # intact. Existing accounts default active (1), so this is a no-op
@@ -1878,8 +1966,8 @@ def _run_password_migrations(cursor, db):
             cursor.execute("UPDATE employees SET password=%s", (generate_password_hash('1234'),))
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('default_pin_1234')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'default_pin_1234' failed: %s", exc, exc_info=True)
 
     # Migration: add force_pin_change column and flag employees on default PIN
     try:
@@ -1896,8 +1984,42 @@ def _run_password_migrations(cursor, db):
                     cursor.execute("UPDATE employees SET force_pin_change=1 WHERE employee_id=%s", (eid,))
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('force_pin_change_flag')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'force_pin_change_flag' failed: %s", exc, exc_info=True)
+
+
+def _run_qr_signing_migration(cursor, db):
+    """One-time: regenerate every existing employee's QR code image so it
+    encodes an HMAC-signed value (qr_generator.py's generate_qr/
+    verify_qr_value) instead of the raw employee_id. Employee IDs are
+    often sequential/guessable (EMP001, EMP002, ...), so a QR that just
+    encoded the ID let anyone who knew or guessed a coworker's ID spoof
+    their attendance via the QR-only check-in path with no further
+    verification -- this closes that hole for every employee already in
+    the system, not just ones created after the fix. Existing physical
+    badges/printouts (which still show the old, now-invalid QR) will stop
+    working at check-in and need reprinting from the regenerated image.
+    Runs once per tenant schema (called from init_db(), which
+    init_tenant_db() also calls) via the _applied_migrations guard; a
+    SECRET_KEY rotation invalidates the signature again afterward, at
+    which point blueprints/employees.py's regenerate_qr() refreshes a
+    single employee's badge on demand."""
+    try:
+        cursor.execute("SELECT 1 FROM _applied_migrations WHERE name='qr_code_signing'")
+        if cursor.fetchone():
+            return
+        from qr_generator import generate_qr
+        cursor.execute("SELECT employee_id FROM employees WHERE qr_code IS NOT NULL")
+        for (eid,) in cursor.fetchall():
+            try:
+                new_path = generate_qr(eid)
+                cursor.execute("UPDATE employees SET qr_code=%s WHERE employee_id=%s", (new_path, eid))
+            except Exception as exc:
+                app_log.warning("QR regeneration failed for '%s' during 'qr_code_signing' migration: %s", eid, exc)
+        cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('qr_code_signing')")
+        db.commit()
+    except Exception as exc:
+        app_log.warning("Migration 'qr_code_signing' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations(cursor, db):
@@ -1934,8 +2056,8 @@ def _run_index_migrations_v1(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('perf_indexes_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'perf_indexes_v1' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations_v2(cursor, db):
@@ -1958,8 +2080,8 @@ def _run_index_migrations_v2(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('perf_indexes_v2')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'perf_indexes_v2' failed: %s", exc, exc_info=True)
 
 
 def _run_index_migrations_v3(cursor, db):
@@ -1988,7 +2110,6 @@ def _run_index_migrations_v3(cursor, db):
                 "CREATE INDEX IF NOT EXISTS idx_emp_docs_emp ON employee_documents(employee_id)",
                 "CREATE INDEX IF NOT EXISTS idx_incentives_emp ON employee_incentives(employee_id)",
                 "CREATE INDEX IF NOT EXISTS idx_overtime_emp ON overtime_records(employee_id)",
-                "CREATE INDEX IF NOT EXISTS idx_swap_requester_target ON shift_swap_requests(requester_id, target_id)",
             ]
             for stmt in _idx_stmts_v3:
                 try:
@@ -1998,8 +2119,8 @@ def _run_index_migrations_v3(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('perf_indexes_v3')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'perf_indexes_v3' failed: %s", exc, exc_info=True)
 
 
 def _run_data_integrity_migrations(cursor, db):
@@ -2036,8 +2157,8 @@ def _run_incentives_unique_constraint_migration(cursor, db):
                 db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('incentives_unique_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'incentives_unique_v1' failed: %s", exc, exc_info=True)
 
 
 def _run_pii_widen_migration_v1(cursor, db):
@@ -2074,8 +2195,8 @@ def _run_pii_widen_migration_v1(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('employee_pii_columns_to_text_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'employee_pii_columns_to_text_v1' failed: %s", exc, exc_info=True)
 
 
 def _run_pii_widen_migration_v2(cursor, db):
@@ -2114,8 +2235,8 @@ def _run_pii_widen_migration_v2(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('employee_pii_columns_to_text_v2')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'employee_pii_columns_to_text_v2' failed: %s", exc, exc_info=True)
 
 
 def _run_fk_backstop_migration(cursor, db):
@@ -2171,8 +2292,8 @@ def _run_fk_backstop_migration(cursor, db):
                     db.rollback()
             cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('fk_constraints_v1')")
             db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        app_log.warning("Migration 'fk_constraints_v1' failed: %s", exc, exc_info=True)
 
 
 def _seed_defaults_and_admin(cursor, db, seed_admin=True):
@@ -2202,15 +2323,26 @@ def _seed_defaults_and_admin(cursor, db, seed_admin=True):
     # Seed admin from env -- only if no admin exists yet
     _admin_user = os.environ.get("ADMIN_USERNAME", "admin").strip()
     _admin_pass = os.environ.get("ADMIN_PASSWORD", "").strip()
+    # role='admin' accounts authenticate via emailed one-time code only (see
+    # blueprints/auth.py's admin_login()) -- without an email on file here,
+    # a freshly seeded admin could never complete that first login.
+    _admin_email = os.environ.get("ADMIN_EMAIL", "").strip() or None
     cursor.execute("SELECT COUNT(*) FROM admin_users")
     admin_count = cursor.fetchone()[0]
     if admin_count == 0 and _admin_pass:
         cursor.execute(
-            "INSERT INTO admin_users (username, password) VALUES (%s, %s)",
-            (_admin_user, generate_password_hash(_admin_pass))
+            "INSERT INTO admin_users (username, password, email) VALUES (%s, %s, %s)",
+            (_admin_user, generate_password_hash(_admin_pass), _admin_email)
         )
         db.commit()
-        app_log.info("Admin created: username=%s", _admin_user)
+        if not _admin_email:
+            app_log.warning(
+                "Admin created: username=%s but ADMIN_EMAIL isn't set -- this account can't "
+                "log in until an email is added (Settings, or 'UPDATE admin_users SET email=...').",
+                _admin_user,
+            )
+        else:
+            app_log.info("Admin created: username=%s email=%s", _admin_user, _admin_email)
         admin_count = 1
     elif admin_count == 0 and not _admin_pass:
         app_log.warning("ADMIN_PASSWORD not set in .env -- complete setup via /setup")
@@ -2261,6 +2393,18 @@ def init_master_db():
         # Pre-existing masters created before payment_option existed --
         # CREATE TABLE IF NOT EXISTS above is a no-op against them.
         cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS payment_option VARCHAR(20) DEFAULT 'online'")
+        # Payment-dunning state, separate from `status` (which stays purely
+        # admin-initiated active/suspended). 'current' = paid up; 'grace' =
+        # unpaid past the due date but still inside the 5-day deadline
+        # (fully functional, just warned); 'locked' = grace period expired
+        # with no payment -- login still works (_resolve_tenant() below
+        # doesn't gate on this) but _enforce_billing_lock() blocks every
+        # state-changing request until a payment clears it automatically
+        # (blueprints/billing_dunning.py's Razorpay webhook), no admin
+        # action required either way.
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_state VARCHAR(20) NOT NULL DEFAULT 'current'")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS grace_period_ends_at TIMESTAMP DEFAULT NULL")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP DEFAULT NULL")
         # Platform-operator identity (blueprints/platform_admin.py) --
         # lives in att_master, not any tenant schema, since tenant
         # admin_users rows only exist inside their own schema and this
@@ -2279,31 +2423,6 @@ def init_master_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Identically-shaped copy of each tenant schema's user_devices table
-        # (see init_db above) for the platform_admin owner_kind, which has no
-        # tenant schema of its own to live in.
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_devices (
-                id SERIAL PRIMARY KEY,
-                owner_kind VARCHAR(20) NOT NULL,
-                owner_id VARCHAR(50) NOT NULL,
-                device_token VARCHAR(64) NOT NULL,
-                kind VARCHAR(20) NOT NULL DEFAULT 'login',
-                device_name VARCHAR(150) DEFAULT NULL,
-                device_type VARCHAR(20) DEFAULT NULL,
-                browser VARCHAR(100) DEFAULT NULL,
-                os VARCHAR(100) DEFAULT NULL,
-                ip_address VARCHAR(45) DEFAULT NULL,
-                asset_model VARCHAR(150) DEFAULT NULL,
-                asset_serial VARCHAR(150) DEFAULT NULL,
-                last_sid VARCHAR(64) DEFAULT NULL,
-                is_revoked SMALLINT NOT NULL DEFAULT 0,
-                first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE (owner_kind, owner_id, device_token)
-            )
-        """)
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_devices_owner ON user_devices (owner_kind, owner_id)")
         # Internal messaging between the platform operator and a company's
         # own admin/HR staff (blueprints/platform_admin.py's per-tenant chat
         # panel, and admin_base.html's company-side widget). Lives here, not
@@ -2364,6 +2483,93 @@ def init_master_db():
         # exists) -- verify_payment() reads it back and hands it to
         # provision_tenant() once the tenant schema is actually created.
         cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS logo_path VARCHAR(255) DEFAULT NULL")
+        # Links a payment_orders row back to the tenant_applications row it
+        # was raised from, once payment moves to after admin approval (see
+        # tenant_applications below) -- nullable since platform-admin-created
+        # tenants (platform_admin.py) and the free/manual signup path never
+        # go through payment_orders at all.
+        cur.execute("ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS application_id INT DEFAULT NULL")
+        # Gated company signup: a prospective tenant now goes through this
+        # pending-application state machine (email OTP -> KYC document
+        # upload -> manual platform-admin review) before provision_tenant()
+        # is ever called, instead of being provisioned instantly from the
+        # signup form. status: started -> otp_verified -> pending_review ->
+        # approved | approved_pending_payment -> provisioned, or terminal
+        # rejected / expired. admin_password_hash is the ONLY form the
+        # password is ever stored in during the (possibly multi-day) pending
+        # window -- provision_tenant() was changed to accept a pre-hashed
+        # password precisely so plaintext never sits here waiting on review.
+        # access_token_hash: a random opaque token (secrets.token_urlsafe)
+        # is generated once at application-start and returned to the caller
+        # (web: stashed in session; mobile: held by the app for the rest of
+        # the signup flow) -- every later step (verify OTP, upload
+        # documents, check status) must present it, hashed the same way
+        # api_tokens are (utils/auth.py's _hash_token). This is what stops
+        # someone from guessing a sequential application id and hijacking
+        # or peeking at someone else's in-progress signup, on either
+        # platform, without needing a session cookie mobile doesn't have.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_applications (
+                id SERIAL PRIMARY KEY,
+                company_name VARCHAR(200) NOT NULL,
+                subdomain VARCHAR(100) NOT NULL,
+                admin_username VARCHAR(100) NOT NULL,
+                admin_email VARCHAR(200) NOT NULL,
+                admin_password_hash VARCHAR(255) NOT NULL,
+                email_domain VARCHAR(255) DEFAULT NULL,
+                employee_count INT DEFAULT NULL,
+                payment_option VARCHAR(20) NOT NULL DEFAULT 'manual',
+                logo_path VARCHAR(255) DEFAULT NULL,
+
+                access_token_hash VARCHAR(64) NOT NULL,
+                otp_code_hash VARCHAR(64) DEFAULT NULL,
+                otp_expires_at TIMESTAMP DEFAULT NULL,
+                otp_attempts SMALLINT NOT NULL DEFAULT 0,
+                email_verified_at TIMESTAMP DEFAULT NULL,
+
+                doc_registration_cert VARCHAR(500) DEFAULT NULL,
+                doc_address_proof VARCHAR(500) DEFAULT NULL,
+                doc_visiting_card VARCHAR(500) DEFAULT NULL,
+                doc_name_board_photo VARCHAR(500) DEFAULT NULL,
+                documents_submitted_at TIMESTAMP DEFAULT NULL,
+
+                status VARCHAR(30) NOT NULL DEFAULT 'started',
+                reviewed_by VARCHAR(100) DEFAULT NULL,
+                reviewed_at TIMESTAMP DEFAULT NULL,
+                rejection_reason VARCHAR(1000) DEFAULT NULL,
+                tenant_id INT DEFAULT NULL,
+
+                source_ip VARCHAR(45) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_applications_status ON tenant_applications (status, created_at)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_applications_email ON tenant_applications (admin_email)")
+        # Internal-only record of a signup blocked because its company_name
+        # matched an existing tenant. Deliberately a SEPARATE table from
+        # tenant_applications (rather than a flag/column on it) so the real
+        # conflicting tenant's identity can never be joined into any
+        # registrant-facing view -- it is only ever read by the platform-admin
+        # duplicate-alerts screen (blueprints/platform_admin.py).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_duplicate_alerts (
+                id SERIAL PRIMARY KEY,
+                application_id INT DEFAULT NULL,
+                attempted_company_name VARCHAR(200) NOT NULL,
+                attempted_admin_email VARCHAR(200) NOT NULL,
+                conflicting_tenant_id INT NOT NULL,
+                conflicting_company_name VARCHAR(200) NOT NULL,
+                conflicting_admin_email VARCHAR(200) DEFAULT NULL,
+                match_type VARCHAR(20) NOT NULL DEFAULT 'exact',
+                acknowledged SMALLINT NOT NULL DEFAULT 0,
+                acknowledged_by VARCHAR(100) DEFAULT NULL,
+                acknowledged_at TIMESTAMP DEFAULT NULL,
+                source_ip VARCHAR(45) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_duplicate_alerts_ack ON tenant_duplicate_alerts (acknowledged, created_at)")
         # Razorpay orders for an EXISTING tenant buying more employee seats
         # after signup (blueprints/seats.py) -- separate from payment_orders
         # above (that table stages a brand-new tenant that doesn't exist yet;
@@ -2426,6 +2632,17 @@ def init_master_db():
                 cancelled_at TIMESTAMP DEFAULT NULL
             )
         """)
+        # Set TRUE on every currently-active mandate when the platform admin
+        # changes the per-employee rate (blueprints/platform_admin.py's
+        # platform_admin_set_rate()) -- Razorpay Plans are immutable, so an
+        # existing subscription keeps charging its original rate forever
+        # otherwise. Checked by the subscription.charged webhook handler
+        # (blueprints/auto_debit.py's _handle_subscription_charged()): once
+        # a flagged mandate's current cycle is paid, that subscription is
+        # cancelled and the tenant is emailed to re-authorize a fresh one on
+        # the new rate -- migration happens at the subscriber's own next
+        # renewal, never mid-cycle.
+        cur.execute("ALTER TABLE auto_debit_mandates ADD COLUMN IF NOT EXISTS needs_rate_migration BOOLEAN NOT NULL DEFAULT FALSE")
         # One row per successfully (or unsuccessfully) collected monthly
         # auto-debit charge -- written by the Razorpay webhook
         # (subscription.charged / payment.failed) in real mode, or by the
@@ -2448,6 +2665,12 @@ def init_master_db():
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_monthly_invoices_tenant ON monthly_invoices (tenant_schema, billing_period)")
+        # Lets blueprints/billing_dunning.py's payment.captured webhook find
+        # the pending row it staged at order-creation time before a
+        # razorpay_payment_id even exists yet -- the recurring auto-debit
+        # path above never needed this column since its webhook arrives
+        # already carrying a subscription_id to look up by instead.
+        cur.execute("ALTER TABLE monthly_invoices ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100) DEFAULT NULL")
         # Which tenant a physical biometric terminal (fingerprint/face
         # attendance device) belongs to -- looked up by device_serial, the
         # only identifier the device itself sends. Lives in the master
@@ -2515,6 +2738,68 @@ def init_master_db():
             )
         """)
         cur.execute("INSERT INTO platform_costs (id) VALUES (1) ON CONFLICT (id) DO NOTHING")
+        # Same singleton row now also carries the flat per-employee billing
+        # rate -- was a hardcoded Python constant (utils/plan_limits.py's
+        # PER_EMPLOYEE_PAISE, kept as the DEFAULT/seed value and as a
+        # fail-safe fallback), moved here so the platform admin can change
+        # it at runtime and have every price calculation pick it up on the
+        # next read (utils/plan_limits.py's get_per_employee_paise(), 30s
+        # cache) -- no redeploy needed.
+        cur.execute("ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS per_employee_paise INT NOT NULL DEFAULT 9900")
+        # ── Mini-CRM: per-company internal notes + a support-ticket queue ──
+        # (blueprints/platform_admin.py's company profile / tickets pages).
+        # Both key off tenants.id, not tenant_schema, so a note/ticket
+        # survives even if the tenant itself is later deleted (platform_
+        # admin_delete_tenant()) -- same "billing history outlives the
+        # tenant row" posture payment_orders etc. already have, useful for
+        # "why did we delete this account" context later.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_notes (
+                id SERIAL PRIMARY KEY,
+                tenant_id INT NOT NULL,
+                author VARCHAR(100) NOT NULL,
+                note VARCHAR(4000) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_notes_tenant ON tenant_notes (tenant_id, created_at DESC)")
+        # Trackable support requests, distinct from the existing real-time
+        # chat_messages panel (that's for back-and-forth conversation; this
+        # is for something with a lifecycle -- status, priority, and a
+        # resolution timestamp -- that the platform admin can report on
+        # across every company, not just read in the moment).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_support_tickets (
+                id SERIAL PRIMARY KEY,
+                tenant_id INT NOT NULL,
+                subject VARCHAR(200) NOT NULL,
+                description VARCHAR(4000) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'open',
+                priority VARCHAR(10) NOT NULL DEFAULT 'normal',
+                created_by VARCHAR(100) DEFAULT NULL,
+                resolved_at TIMESTAMP DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_tickets_tenant ON tenant_support_tickets (tenant_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_tickets_status ON tenant_support_tickets (status, created_at DESC)")
+        # _set_updated_at() is normally only created per-tenant-schema (init_db()
+        # above) -- att_master needs its own copy before a trigger here can
+        # reference it, since Postgres resolves the function name via
+        # att_master's own search_path, not a tenant schema's.
+        cur.execute(_UPDATED_AT_TRIGGER_FN)
+        _attach_updated_at_trigger(cur, "tenant_support_tickets")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tenant_ticket_comments (
+                id SERIAL PRIMARY KEY,
+                ticket_id INT NOT NULL,
+                author VARCHAR(100) NOT NULL,
+                comment VARCHAR(2000) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ticket_comments_ticket ON tenant_ticket_comments (ticket_id, created_at)")
         db.commit()
         cur.close()
         db.close()
@@ -2809,7 +3094,6 @@ def unhandled_exception(e):
 
 
 # ---------------- LEAVE TYPES ADMIN ----------------
-# admin_leave_types migrated to blueprints/leave.py
 
 
 # change_admin_password migrated to blueprints/auth.py
@@ -2830,7 +3114,6 @@ def unhandled_exception(e):
 # employee_reset_password migrated to blueprints/auth.py
 
 
-# view_qrcodes migrated to blueprints/employees.py
 
 
 # serve_dataset migrated to blueprints/employees.py
@@ -2839,10 +3122,8 @@ def unhandled_exception(e):
 # my_photo migrated to blueprints/employees.py
 
 
-# view_photos migrated to blueprints/employees.py
 
 
-# update_photo migrated to blueprints/employees.py
 
 # ---------------- SHIFTS (redirect to settings) ----------------
 # shifts migrated to blueprints/attendance.py
@@ -2864,16 +3145,12 @@ def unhandled_exception(e):
 
 # ──────────────────────── SHIFT SWAP REQUESTS ────────────────────────
 
-# submit_shift_swap migrated to blueprints/attendance.py
 
 
-# respond_shift_swap migrated to blueprints/attendance.py
 
 
-# admin_shift_swap migrated to blueprints/attendance.py
 
 
-# admin_shift_swaps migrated to blueprints/attendance.py
 
 
 # import_indian_holidays migrated to blueprints/leave.py
@@ -3056,7 +3333,6 @@ def unhandled_exception(e):
 # request_resignation migrated to blueprints/leave.py
 
 
-# resignation_requests_view migrated to blueprints/leave.py
 
 
 # resignation_action migrated to blueprints/leave.py
@@ -3484,14 +3760,15 @@ if "core.home" not in app.view_functions:
     from blueprints.webhooks import webhooks_bp
     from blueprints.seats import seats_bp
     from blueprints.auto_debit import auto_debit_bp
+    from blueprints.billing_dunning import billing_dunning_bp
     from blueprints.platform_admin import platform_admin_bp
-    from blueprints.secops import secops_bp
+    from blueprints.honeypot_routes import honeypot_bp
     from blueprints.biometric import biometric_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                platform_admin_bp, secops_bp, biometric_bp):
+                billing_dunning_bp, platform_admin_bp, honeypot_bp, biometric_bp):
         app.register_blueprint(_bp)
 
 
@@ -3500,12 +3777,12 @@ if "core.home" not in app.view_functions:
 def inject_billing_context():
     try:
         from flask import g as _g
-        from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, PER_EMPLOYEE_PAISE
+        from utils.plan_limits import get_tenant_employee_count, calculate_price, format_price_inr, get_per_employee_paise
         employee_count = get_tenant_employee_count(_g.tenant_db)
         monthly_bill_paise = calculate_price(employee_count)
         return dict(
             employee_count=employee_count,
-            per_employee_paise=PER_EMPLOYEE_PAISE,
+            per_employee_paise=get_per_employee_paise(),
             monthly_bill_display=format_price_inr(monthly_bill_paise),
         )
     except Exception:
@@ -3521,6 +3798,15 @@ if __name__ == "__main__":
     init_db()
     cfg.load_default_shift()
     cfg.load_salary_rules()
+    # wsgi.py wraps app.wsgi_app with this at import time -- running app.py
+    # directly (`python app.py`) never goes through wsgi.py, so without this
+    # every path-based tenant link (/<company-slug>/...) 404s: nothing ever
+    # strips the slug into SCRIPT_NAME for Flask's router to see the bare
+    # route underneath. Guarded so re-running this block (shouldn't happen,
+    # but __main__ only executes once anyway) can't double-wrap.
+    from utils.tenant_routing import TenantPrefixMiddleware
+    if not isinstance(app.wsgi_app, TenantPrefixMiddleware):
+        app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
     # Only started here -- when app.py is run directly (`python app.py`,
     # local dev). wsgi.py (the real production entrypoint) already starts
     # this exact worker itself before importing app.py; starting it again
@@ -3551,9 +3837,48 @@ if __name__ == "__main__":
     # threaded by default -- without this, one open stream blocks every
     # other request until it closes.
     if _os.path.exists(_cert) and _os.path.exists(_key):
+        # app.run(..., ssl_context=(...)) wraps the *listening* socket
+        # (Werkzeug's serving.py), so every TLS handshake runs synchronously
+        # inside the single accept() loop, before threaded=True's per-
+        # connection threading ever kicks in. A client that completes the
+        # TCP connect but stalls or never sends its ClientHello (a browser's
+        # abandoned speculative/prefetch connection is enough) leaves that
+        # accept() call blocked forever -- wedging the loop and freezing the
+        # *entire* server for every subsequent request, not just that one
+        # connection: process stays alive and CPU-idle, but even /healthz
+        # times out. run_dev.py hit and fixed this exact freeze; ported here
+        # so `python app.py` doesn't carry the same live bug -- the TLS wrap
+        # is deferred into finish_request(), which always runs inside the
+        # freshly spawned per-connection worker thread, so a stalled
+        # handshake only ever ties up its own disposable thread.
+        import ssl as _ssl
+        from werkzeug.serving import ThreadedWSGIServer, load_ssl_context
+
         print("🔒  SSL cert found -- starting on https://0.0.0.0:5000")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
-                ssl_context=(_cert, _key), request_handler=_QuietRequestHandler)
+        _tls_ctx = load_ssl_context(_cert, _key)
+
+        class _DeferredHandshakeServer(ThreadedWSGIServer):
+            def finish_request(self, request, client_address):
+                request.settimeout(30)
+                try:
+                    request = _tls_ctx.wrap_socket(request, server_side=True)
+                except (_ssl.SSLError, OSError):
+                    request.close()
+                    return
+                super().finish_request(request, client_address)
+
+        _srv = _DeferredHandshakeServer("0.0.0.0", 5000, app, handler=_QuietRequestHandler,
+                                         ssl_context=None)
+        # Socket itself stays unwrapped (see finish_request above); this
+        # attribute only drives wsgi.url_scheme detection and SSL-error-log
+        # suppression elsewhere in werkzeug/serving.py, both of which still
+        # need to know this is actually an HTTPS server.
+        _srv.ssl_context = _tls_ctx
+        _srv.log_startup()
+        try:
+            _srv.serve_forever()
+        except KeyboardInterrupt:
+            pass
     else:
         print("⚠   No cert.pem / key.pem -- starting on http://0.0.0.0:5000")
         print("    Fingerprint / WebAuthn requires HTTPS. Run: python generate_cert.py")

@@ -2,6 +2,7 @@
 """Employees blueprint -- CRUD, photos, QR codes, ID cards."""
 import os
 import json
+import hashlib
 import datetime
 import secrets
 import psycopg2
@@ -15,8 +16,8 @@ from qr_generator import generate_qr
 from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
 from utils.helpers import (
     tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
-    validate_employee_email_domain, get_company_settings, employee_login_url, get_pending_counts,
-    add_employee_seat_cap_check,
+    validate_employee_email_domain, get_company_settings, get_pending_counts,
+    add_employee_seat_cap_check, _safe_app_url,
 )
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
@@ -28,6 +29,46 @@ from utils.webauthn_utils import _enroll_fingerprint_from_form
 employees_bp = Blueprint("employees", __name__)
 
 UPLOAD_FOLDER = app.config["UPLOAD_FOLDER"]
+
+
+def _send_welcome_credentials_email(emp_id, name, email):
+    """Emails a one-time 'set your password' link instead of the actual
+    auto-generated password. A welcome email containing a raw password
+    plus a login link is exactly the content shape Gmail's spam/phishing
+    classifier hard-blocks (550 5.7.1 'likely unsolicited mail'), and
+    plaintext passwords shouldn't be emailed regardless of deliverability.
+
+    Reuses the same reset_token mechanism as auth.py's
+    employee_forgot_password/employee_reset_password flow -- 24h expiry
+    here rather than that flow's 1h, since a first-time welcome link may
+    sit unread longer than an active forgot-password request.
+
+    Returns True if the email was sent, False if no SMTP is configured
+    (matches the pre-existing silent-skip behavior of the callers below).
+    """
+    _ecfg = get_email_config()
+    if not _ecfg:
+        return False
+    token = secrets.token_hex(32)
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("UPDATE employees SET reset_token=%s, reset_token_expiry=%s WHERE employee_id=%s",
+                   (token_hash, expiry, emp_id))
+    db.commit()
+    cursor.close()
+    db.close()
+    set_url = f"{_safe_app_url()}/employee_reset_password/{token}"
+    html_body = (
+        f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
+        f"<p>Employee ID: <strong>{emp_id}</strong></p>"
+        f"<p><a href=\"{set_url}\">Set your password</a> to finish setting up your account "
+        f"(link expires in 24 hours).</p>"
+        f"<p>Or copy this link: {set_url}</p>"
+    )
+    send_email_smtp(email, f"Welcome {name} -- Set Your Password", html_body, _ecfg)
+    return True
 
 
 @employees_bp.route("/admin_action", methods=["POST"])
@@ -109,6 +150,8 @@ def admin_action():
 
     cursor.close()
     db.close()
+    if request.form.get("next") == "settings":
+        return redirect(tpath("/settings?tab=email"))
     return redirect(tpath("/admin"))
 
 
@@ -448,7 +491,18 @@ def view_employees():
             emp_status = "On Leave"
         else:
             emp_status = "Active"
-        row = row[:14] + (decrypt_pii(row[14]),) + row[15:]  # [14]=gender
+        # Postgres returns date_of_joining (index 4) as a real date object;
+        # the SQLite dev fallback has no DATE type and hands back the raw
+        # "YYYY-MM-DD" string instead, which templates/employees.html's
+        # doj.strftime(...) can't call -- normalize here so both backends
+        # reach the template as the same type.
+        _doj = row[4]
+        if isinstance(_doj, str):
+            try:
+                _doj = datetime.datetime.strptime(_doj[:10], "%Y-%m-%d").date()
+            except ValueError:
+                _doj = None
+        row = row[:4] + (_doj,) + row[5:14] + (decrypt_pii(row[14]),) + row[15:]  # [14]=gender
         employees.append(row + (emp_status,))
 
     total = len(employees)
@@ -826,8 +880,11 @@ def add_employee_page():
             try:
                 os.rename(original_filepath, new_filepath)
                 original_filepath = new_filepath
-            except OSError:
-                pass
+            except OSError as exc:
+                # Photo stays under the pre-retry emp_id filename -- not
+                # fatal to registration, but worth knowing since it means
+                # the employee's photo path may not match their final ID.
+                app_log.warning("Could not rename employee photo %s -> %s: %s", original_filepath, new_filepath, exc)
         filepath = new_filepath
         qr_path = generate_qr(emp_id)
         try:
@@ -919,18 +976,11 @@ def add_employee_page():
                     db.commit()
                     flash("Onboarding checklist auto-assigned.", "success")
         if email:
-            _ecfg = get_email_config()
-            if _ecfg:
-                _login_url = employee_login_url()
-                _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
-                         f"<p>Employee ID: <strong>{emp_id}</strong><br>"
-                         f"Password: <strong>{auto_pass}</strong></p>"
-                         f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
-                try:
-                    send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
+            try:
+                if _send_welcome_credentials_email(emp_id, name, email):
                     flash(f"Credentials email sent to {email}", "success")
-                except Exception:
-                    pass
+            except Exception as exc:
+                app_log.warning("Welcome-credentials email failed for %s (%s): %s", emp_id, email, exc, exc_info=True)
     else:
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -1006,12 +1056,6 @@ def regenerate_qr(emp_id):
     return redirect(tpath("/employees"))
 
 
-@employees_bp.route("/view_qrcodes")
-@admin_required
-def view_qrcodes():
-    return redirect(tpath("/view_photos"))
-
-
 @employees_bp.route("/dataset/<path:filename>")
 @admin_required
 def serve_dataset(filename):
@@ -1029,36 +1073,6 @@ def my_photo():
     if not os.path.exists(photo_path):
         return "", 404
     return send_from_directory(UPLOAD_FOLDER, emp_id + ".jpg")
-
-
-@employees_bp.route("/view_photos")
-@admin_required
-def view_photos():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT employee_id, name, role, email, face_image, qr_code FROM employees ORDER BY name")
-    employees = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("employee_photos.html", employees=employees, active_nav="employees")
-
-
-@employees_bp.route("/update_photo/<emp_id>", methods=["POST"])
-@admin_required
-def update_photo(emp_id):
-    file = request.files.get("photo")
-    ok, err = _validate_image_file(file)
-    if not ok:
-        return jsonify({"ok": False, "msg": err}), 400
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
-    file.save(save_path)
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (emp_id + ".jpg", emp_id))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"ok": True})
 
 
 @employees_bp.route("/api/generate_emp_id")
@@ -1133,8 +1147,28 @@ def _idc_blood_drop(draw, x, y, w, h, color):
 
 
 def _idc_font(size, bold=False):
+    """Resolves a TrueType font for ID-card rendering. The bundled
+    static/fonts/DejaVuSans[-Bold].ttf (freely-licensed, see
+    static/fonts/LICENSE_DEJAVU.txt) is tried FIRST and is the only path
+    guaranteed to exist regardless of host OS -- the old version of this
+    function only ever looked at OS-installed font locations
+    (C:/Windows/Fonts/... on Windows, nothing bundled), which works by
+    accident on a dev machine with Windows/Office installed but silently
+    degrades to PIL's tiny built-in bitmap font on a minimal Linux
+    container that has no fontconfig/dejavu packages -- ID cards would
+    render with visibly different, worse typography in production than
+    whatever was tested locally. The OS-path candidates are kept below
+    only as a secondary preference for a nicer-looking installed font
+    when one happens to be present; they are never required."""
     from PIL import ImageFont
-    candidates = (
+    # app (the real Flask object, imported at module level above), not
+    # current_app -- this is called from tests/test_id_card_templates.py's
+    # rendering tests with no active request/app context, where
+    # current_app's LocalProxy would raise "Working outside of
+    # application context" on first attribute access.
+    bundled = os.path.join(app.root_path, "static", "fonts",
+                            "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
+    os_candidates = (
         ["C:/Windows/Fonts/segoeuib.ttf",
          "C:/Windows/Fonts/arialbd.ttf",
          "C:/Windows/Fonts/calibrib.ttf",
@@ -1147,11 +1181,17 @@ def _idc_font(size, bold=False):
          "/System/Library/Fonts/Supplemental/Arial.ttf",
          "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"]
     )
-    for p in candidates:
+    for p in [bundled] + os_candidates:
         try:
             return ImageFont.truetype(p, size)
         except OSError:
-            pass
+            continue
+    # Reaching here means even the bundled static/fonts/DejaVuSans*.ttf
+    # couldn't be loaded (missing/corrupted install) -- ID cards will
+    # render with PIL's tiny built-in bitmap font, a real visual
+    # regression worth flagging rather than discovering from a support
+    # ticket about ugly ID cards.
+    app_log.warning("_idc_font: no TrueType font resolved (bundled path=%s) -- falling back to PIL's bitmap default", bundled)
     return ImageFont.load_default()
 
 
@@ -1484,8 +1524,11 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
         fd.rounded_rectangle([(qr_x - 6, qr_y - 6), (qr_x + QS_SMALL + 6, qr_y + QS_SMALL + 6)], radius=6, fill=_IDC_WHITE)
         qr_img = Image.open(qr_path).convert("RGB").resize((QS_SMALL, QS_SMALL), Image.LANCZOS)
         front.paste(qr_img, (qr_x, qr_y))
-    except Exception:
-        pass
+    except Exception as exc:
+        # Card still renders without the small front-face QR (the
+        # full-size one on the back is unaffected) -- not fatal, but a
+        # visibly missing QR is worth a trace when someone reports it.
+        app_log.warning("ID card front-QR paste failed for %s: %s", emp_id, exc, exc_info=True)
 
     fd.rectangle([(0, CH - 60), (CW, CH)], fill=_IDC_BLUE)
     fd.rectangle([(0, CH - 62), (CW, CH - 60)], fill=_IDC_GOLD)
@@ -1659,8 +1702,8 @@ def _render_custom_side(image_path, fields, side, emp_id, row, logo_path, compan
                     else:
                         draw.rectangle([(x, y), (x + w, y + h)], fill=bg)
                         img.paste(fitted, (x + off_x, y + off_y), fitted)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    app_log.warning("ID card custom-template logo paste failed for %s: %s", emp_id, exc, exc_info=True)
         elif key == "qr":
             qr_path = os.path.join("static", "qrcodes", emp_id + ".png")
             if not os.path.exists(qr_path):
@@ -1668,8 +1711,8 @@ def _render_custom_side(image_path, fields, side, emp_id, row, logo_path, compan
             try:
                 qr_img = Image.open(qr_path).convert("RGB").resize((w, h), Image.LANCZOS)
                 img.paste(qr_img, (x, y))
-            except Exception:
-                pass
+            except Exception as exc:
+                app_log.warning("ID card custom-template QR paste failed for %s: %s", emp_id, exc, exc_info=True)
         elif key in _ID_CARD_TEXT_FIELDS:
             font_size = box.get("font_size", 14)
             bg = _idc_parse_color(box.get("bg_color"), None) or _idc_box_bg_color(original, (x, y, w, h))
@@ -1875,17 +1918,10 @@ def api_register_employee():
     cursor.close()
     db.close()
     if email:
-        _ecfg = get_email_config()
-        if _ecfg:
-            _login_url = employee_login_url()
-            _html = (f"<p>Hi <strong>{name}</strong>, your account is ready.</p>"
-                     f"<p>Employee ID: <strong>{emp_id}</strong><br>"
-                     f"Password: <strong>{init_pass}</strong></p>"
-                     f"<p><a href=\"{_login_url}\">{_login_url}</a></p>")
-            try:
-                send_email_smtp(email, f"Welcome {name} -- Your Login Credentials", _html, _ecfg)
-            except Exception:
-                app_log.error("api_register_employee: welcome email failed", exc_info=True)
+        try:
+            _send_welcome_credentials_email(emp_id, name, email)
+        except Exception:
+            app_log.error("api_register_employee: welcome email failed", exc_info=True)
     return jsonify({"ok": True, "msg": f"Employee {name} registered."})
 
 

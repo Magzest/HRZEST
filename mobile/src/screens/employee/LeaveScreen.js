@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ProfileHeader from "../../components/profile/ProfileHeader";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../store/AuthContext";
+import { useTheme } from "../../store/ThemeContext";
 import { submitLeaveRequest, fetchEmployeeLeaves, cancelLeaveRequest } from "../../api/client";
 
 const LEAVE_TYPES = [
@@ -62,6 +63,8 @@ function fmtDate(iso) {
 
 export default function LeaveScreen() {
   const { signOut } = useAuth();
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => makeStyles(colors), [colors]);
   const [tab, setTab] = useState("request");
   const [leaveType, setLeaveType] = useState("Casual Leave");
   const [leaveSlot, setLeaveSlot] = useState("Full Day");
@@ -185,7 +188,7 @@ export default function LeaveScreen() {
   });
 
   return (
-    <LinearGradient colors={["#F8FAFC", "#F1F5F9", "#E2E8F0"]} style={styles.bg}>
+    <LinearGradient colors={colors.screenGradient} style={styles.bg}>
       <ProfileHeader title="Leave Portal" showBack={false} />
 
       {/* Tab Switcher */}
@@ -261,7 +264,7 @@ export default function LeaveScreen() {
                   style={[styles.typeChip, leaveType === t.value && styles.typeChipActive]}
                   onPress={() => setLeaveType(t.value)}
                 >
-                  <Ionicons name={t.icon} size={16} color={leaveType === t.value ? "#FFFFFF" : "#173B8C"} />
+                  <Ionicons name={t.icon} size={16} color={leaveType === t.value ? "#FFFFFF" : colors.primary} />
                   <Text style={[styles.typeChipText, leaveType === t.value && styles.typeChipTextActive]}>
                     {t.label}
                   </Text>
@@ -280,7 +283,7 @@ export default function LeaveScreen() {
                   style={[styles.slotChip, leaveSlot === s.value && styles.slotChipActive]}
                   onPress={() => setLeaveSlot(s.value)}
                 >
-                  <Ionicons name={s.icon} size={15} color={leaveSlot === s.value ? "#FFFFFF" : "#475569"} />
+                  <Ionicons name={s.icon} size={15} color={leaveSlot === s.value ? "#FFFFFF" : colors.textSecondary} />
                   <Text style={[styles.slotChipText, leaveSlot === s.value && styles.slotChipTextActive]}>
                     {s.label}
                   </Text>
@@ -307,7 +310,7 @@ export default function LeaveScreen() {
             </ScrollView>
 
             <View style={styles.selectedDateBadge}>
-              <Ionicons name="calendar-sharp" size={14} color="#173B8C" />
+              <Ionicons name="calendar-sharp" size={14} color={colors.primary} />
               <Text style={styles.selectedDateText}>Selected: {fmtDate(leaveDate)}</Text>
             </View>
           </View>
@@ -325,7 +328,7 @@ export default function LeaveScreen() {
                     setCustom("");
                   }}
                 >
-                  <Ionicons name={r.icon} size={14} color={reason === r.value ? "#FFFFFF" : "#64748B"} />
+                  <Ionicons name={r.icon} size={14} color={reason === r.value ? "#FFFFFF" : colors.textSecondary} />
                   <Text style={[styles.chipTxt, reason === r.value && styles.chipTxtActive]}>{r.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -335,7 +338,7 @@ export default function LeaveScreen() {
               <TextInput
                 style={styles.textarea}
                 placeholder="Describe your leave reason..."
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textLight}
                 multiline
                 numberOfLines={3}
                 value={custom}
@@ -386,11 +389,11 @@ export default function LeaveScreen() {
 
           {histLoading ? (
             <View style={styles.center}>
-              <ActivityIndicator size="large" color="#173B8C" />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : filteredLeaves.length === 0 ? (
             <View style={styles.empty}>
-              <Ionicons name="document-text-outline" size={48} color="#CBD5E1" />
+              <Ionicons name="document-text-outline" size={48} color={colors.border} />
               <Text style={styles.emptyTxt}>No leave requests found ({statusFilter})</Text>
             </View>
           ) : (
@@ -440,14 +443,14 @@ export default function LeaveScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors) => StyleSheet.create({
   bg: { flex: 1 },
   tabBar: {
     flexDirection: "row",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
   tabBtn: {
     flex: 1,
@@ -456,11 +459,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
   },
-  tabBtnActive: { borderBottomWidth: 2, borderColor: "#173B8C" },
-  tabTxt: { fontSize: 13, fontWeight: "600", color: "#94A3B8" },
-  tabTxtActive: { color: "#173B8C" },
+  tabBtnActive: { borderBottomWidth: 2, borderColor: colors.primary },
+  tabTxt: { fontSize: 13, fontWeight: "600", color: colors.textLight },
+  tabTxtActive: { color: colors.primary },
   badge: {
-    backgroundColor: "#EF4444",
+    backgroundColor: colors.danger,
     borderRadius: 10,
     minWidth: 18,
     height: 18,
@@ -483,7 +486,7 @@ const styles = StyleSheet.create({
     borderColor: "#BBF7D0",
   },
   successTxt: { color: "#166534", fontWeight: "700", marginLeft: 8, fontSize: 13 },
-  sectionLabel: { fontSize: 11, fontWeight: "800", color: "#64748B", marginBottom: 8, letterSpacing: 0.5 },
+  sectionLabel: { fontSize: 11, fontWeight: "800", color: colors.textSecondary, marginBottom: 8, letterSpacing: 0.5 },
   balanceRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
   balCard: {
     flex: 1,
@@ -496,19 +499,19 @@ const styles = StyleSheet.create({
   balNum: { fontSize: 15, fontWeight: "800", marginTop: 4 },
   balLabel: { fontSize: 10, fontWeight: "700", marginTop: 2 },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     shadowColor: "#0F172A",
     shadowOpacity: 0.03,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cardTitle: { fontSize: 11, fontWeight: "800", color: "#64748B", marginBottom: 12, letterSpacing: 0.5 },
+  cardTitle: { fontSize: 11, fontWeight: "800", color: colors.textSecondary, marginBottom: 12, letterSpacing: 0.5 },
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   typeChip: {
     flexDirection: "row",
@@ -516,13 +519,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     borderWidth: 1,
     borderColor: "#DBEAFE",
     gap: 6,
   },
-  typeChipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
-  typeChipText: { fontSize: 12, fontWeight: "700", color: "#173B8C" },
+  typeChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  typeChipText: { fontSize: 12, fontWeight: "700", color: colors.primary },
   typeChipTextActive: { color: "#FFFFFF" },
   slotChip: {
     flexDirection: "row",
@@ -530,13 +533,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     gap: 6,
   },
-  slotChipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
-  slotChipText: { fontSize: 12, fontWeight: "600", color: "#475569" },
+  slotChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  slotChipText: { fontSize: 12, fontWeight: "600", color: colors.textSecondary },
   slotChipTextActive: { color: "#FFFFFF" },
   dateChip: {
     width: 58,
@@ -544,28 +547,28 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 14,
     marginRight: 8,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
-  dateChipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
-  dateDay: { fontSize: 10, color: "#64748B", fontWeight: "600", marginBottom: 2 },
+  dateChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  dateDay: { fontSize: 10, color: colors.textSecondary, fontWeight: "600", marginBottom: 2 },
   dateDayActive: { color: "rgba(255,255,255,0.8)" },
-  dateNum: { fontSize: 15, fontWeight: "800", color: "#0F172A" },
+  dateNum: { fontSize: 15, fontWeight: "800", color: colors.text },
   dateNumActive: { color: "#FFFFFF" },
-  dateMon: { fontSize: 10, color: "#64748B", marginTop: 2 },
+  dateMon: { fontSize: 10, color: colors.textSecondary, marginTop: 2 },
   dateMonActive: { color: "rgba(255,255,255,0.8)" },
   selectedDateBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
     marginTop: 10,
     alignSelf: "flex-start",
   },
-  selectedDateText: { fontSize: 12, fontWeight: "700", color: "#173B8C", marginLeft: 6 },
+  selectedDateText: { fontSize: 12, fontWeight: "700", color: colors.primary, marginLeft: 6 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     flexDirection: "row",
@@ -573,28 +576,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
     borderWidth: 1.5,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     gap: 6,
   },
-  chipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
-  chipTxt: { color: "#64748B", fontSize: 12, fontWeight: "600" },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipTxt: { color: colors.textSecondary, fontSize: 12, fontWeight: "600" },
   chipTxtActive: { color: "#FFFFFF" },
   textarea: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 12,
     fontSize: 13,
-    color: "#0F172A",
+    color: colors.text,
     minHeight: 80,
     textAlignVertical: "top",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: colors.background,
   },
   submitBtn: {
-    backgroundColor: "#173B8C",
+    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 16,
     alignItems: "center",
@@ -609,50 +612,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
   },
-  filterChipActive: { backgroundColor: "#173B8C", borderColor: "#173B8C" },
-  filterChipText: { fontSize: 12, fontWeight: "700", color: "#64748B" },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterChipText: { fontSize: 12, fontWeight: "700", color: colors.textSecondary },
   filterChipTextActive: { color: "#FFFFFF" },
   empty: { alignItems: "center", paddingVertical: 50 },
-  emptyTxt: { color: "#94A3B8", fontSize: 13, marginTop: 12 },
+  emptyTxt: { color: colors.textLight, fontSize: 13, marginTop: 12 },
   leaveRow: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: colors.border,
     elevation: 1,
   },
   leaveDateBox: {
     width: 48,
     height: 52,
     borderRadius: 14,
-    backgroundColor: "#EEF4FF",
+    backgroundColor: colors.primaryLight,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 14,
   },
-  leaveDateNum: { fontSize: 15, fontWeight: "800", color: "#173B8C" },
-  leaveDateMon: { fontSize: 10, fontWeight: "600", color: "#173B8C" },
+  leaveDateNum: { fontSize: 15, fontWeight: "800", color: colors.primary },
+  leaveDateMon: { fontSize: 10, fontWeight: "600", color: colors.primary },
   leaveInfo: { flex: 1 },
-  leaveReason: { fontSize: 13, fontWeight: "700", color: "#0F172A" },
-  leaveSubmitted: { fontSize: 12, color: "#94A3B8", marginTop: 2 },
+  leaveReason: { fontSize: 13, fontWeight: "700", color: colors.text },
+  leaveSubmitted: { fontSize: 12, color: colors.textLight, marginTop: 2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   statusTxt: { fontSize: 11, fontWeight: "700" },
   cancelBtn: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 20,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: colors.redBg,
     borderWidth: 1,
     borderColor: "#FECACA",
   },
-  cancelBtnTxt: { fontSize: 11, fontWeight: "700", color: "#DC2626" },
+  cancelBtnTxt: { fontSize: 11, fontWeight: "700", color: colors.danger },
 });
 
