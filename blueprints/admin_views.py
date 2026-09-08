@@ -633,9 +633,28 @@ def settings_page():
     _co_shift_half = _td_str(fr.get("shift_half")) or cfg.SHIFT_HALF.strftime("%H:%M")
     _co_shift_end = _td_str(fr.get("shift_end")) or cfg.SHIFT_END.strftime("%H:%M")
 
+    cursor.execute(
+        "SELECT r.id, r.year, r.month, r.status, r.total_amount, r.employee_count, "
+        "r.prepared_at, r.approved_by, r.approved_at, "
+        "COALESCE(SUM(CASE WHEN i.status='missing_bank_details' THEN 1 ELSE 0 END), 0) AS missing_count "
+        "FROM salary_disbursement_runs r "
+        "LEFT JOIN salary_disbursement_items i ON i.run_id = r.id "
+        "GROUP BY r.id, r.year, r.month, r.status, r.total_amount, r.employee_count, "
+        "r.prepared_at, r.approved_by, r.approved_at "
+        "ORDER BY r.prepared_at DESC LIMIT 24"
+    )
+    disbursement_runs = cursor.fetchall()
+    cursor.execute("SELECT 1 FROM payout_bank_config LIMIT 1")
+    payout_configured = cursor.fetchone() is not None
+    from utils.payout_utils import payout_provider_configured as _ppc
+    payout_provider_ready = _ppc()
+
     cursor.close()
     db.close()
     return render_template("settings.html",
+                           disbursement_runs=disbursement_runs,
+                           payout_configured=payout_configured,
+                           payout_provider_ready=payout_provider_ready,
                            tab=tab,
                            admin_recovery_email=admin_recovery_email,
                            company_code=company_code,

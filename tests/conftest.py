@@ -58,6 +58,7 @@ from blueprints.billing_dunning import billing_dunning_bp
 from blueprints.platform_admin import platform_admin_bp
 from blueprints.honeypot_routes import honeypot_bp
 from blueprints.biometric import biometric_bp
+from blueprints.disbursement import disbursement_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -84,6 +85,7 @@ flask_app.register_blueprint(billing_dunning_bp)
 flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(honeypot_bp)
 flask_app.register_blueprint(biometric_bp)
+flask_app.register_blueprint(disbursement_bp)
 
 # Mirror wsgi.py's WSGI-level tenant-prefix stripping so tests exercise the
 # real path-based tenant resolution (www.hrzest.com/<slug>/...), not just

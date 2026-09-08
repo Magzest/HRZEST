@@ -1586,6 +1586,62 @@ def _init_core_tables(cursor, db):
             UNIQUE (year, month)
         )
     """)
+    # ── Salary disbursement ───────────────────────────────────────────────
+    # payout_bank_config: singleton per tenant, same shape/upsert convention
+    # as email_config above (DELETE+INSERT, one encrypted-credentials row) --
+    # this is the company's OWN source bank account salary is paid FROM, not
+    # an employee's. account_number is encrypted at rest via encrypt_pii,
+    # same as employees.bank_account. Also carries the recurring-schedule
+    # settings (day of month, lead time, enabled) since those are equally
+    # tenant-wide singleton config -- no reason to split into a second table.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS payout_bank_config (
+            id SERIAL PRIMARY KEY,
+            account_holder_name VARCHAR(150) NOT NULL,
+            bank_name VARCHAR(150) NOT NULL,
+            account_number VARCHAR(255) NOT NULL,
+            ifsc_code VARCHAR(20) NOT NULL,
+            disbursement_day_of_month INT DEFAULT 1 CHECK (disbursement_day_of_month BETWEEN 1 AND 28),
+            approval_lead_days INT DEFAULT 2,
+            enabled SMALLINT DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    _attach_updated_at_trigger(cursor, "payout_bank_config")
+    # salary_disbursement_runs / _items: the real per-employee batch ledger
+    # payroll_runs never had (payroll_runs is just a year/month lock marker
+    # with an aggregate count, no line items) -- see prepare_pending_disbursements()
+    # in blueprints/disbursement.py for the state machine this backs.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS salary_disbursement_runs (
+            id SERIAL PRIMARY KEY,
+            year INT NOT NULL,
+            month INT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending_approval'
+                CHECK (status IN ('pending_approval','approved','processing','completed','failed','cancelled')),
+            total_amount DECIMAL(14,2) DEFAULT 0,
+            employee_count INT DEFAULT 0,
+            prepared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            approved_by VARCHAR(100),
+            approved_at TIMESTAMP,
+            UNIQUE (year, month)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS salary_disbursement_items (
+            id SERIAL PRIMARY KEY,
+            run_id INT NOT NULL REFERENCES salary_disbursement_runs(id) ON DELETE CASCADE,
+            employee_id VARCHAR(50) NOT NULL,
+            amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+            bank_last4 VARCHAR(4),
+            status VARCHAR(30) NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','sent','failed','stub_not_configured','missing_bank_details')),
+            payout_reference VARCHAR(255),
+            email_sent SMALLINT DEFAULT 0,
+            error_message VARCHAR(500)
+        )
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sdi_run ON salary_disbursement_items (run_id)")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS compoff_balance (
             id SERIAL PRIMARY KEY,
@@ -3764,11 +3820,12 @@ if "core.home" not in app.view_functions:
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.honeypot_routes import honeypot_bp
     from blueprints.biometric import biometric_bp
+    from blueprints.disbursement import disbursement_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                billing_dunning_bp, platform_admin_bp, honeypot_bp, biometric_bp):
+                billing_dunning_bp, platform_admin_bp, honeypot_bp, biometric_bp, disbursement_bp):
         app.register_blueprint(_bp)
 
 

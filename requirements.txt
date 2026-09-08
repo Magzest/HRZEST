@@ -44,6 +44,13 @@ redis>=5.0.0
 # is set; a no-op dependency otherwise (sync fallback needs no import at all)
 rq>=1.16.0
 
+# ── Scheduled cron jobs (wsgi.py: daily attendance report, auto-debit sync,
+# billing dunning, salary disbursement prep) -- wsgi.py already imported this
+# behind a try/except ImportError, but it was never actually declared here,
+# meaning those four jobs may have been silently no-op-ing in any environment
+# where this wasn't separately installed by hand.
+apscheduler>=3.10.4
+
 # ── Malware scanning ──────────────────────────────────────────────────────────
 clamd>=1.0.2
 

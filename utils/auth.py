@@ -557,6 +557,50 @@ def email_settings_step_up_clear():
     session.pop("email_2fa_verified_at", None)
 
 
+# ── Payout Settings step-up gate ──────────────────────────────────────────────
+# Deliberately a SEPARATE gate/session key from Email Settings above, not a
+# reuse of it -- bank details are the company's own source-of-funds account
+# and the approval step actually authorizes money movement, so completing
+# step-up for one sensitive area must not silently unlock the other. Same
+# time.time()-in-session window pattern otherwise.
+PAYOUT_2FA_WINDOW_SEC = 15 * 60
+
+
+def payout_settings_step_up_valid() -> bool:
+    ts = session.get("payout_2fa_verified_at", 0)
+    return bool(ts) and (time.time() - ts) <= PAYOUT_2FA_WINDOW_SEC
+
+
+def payout_settings_step_up_refresh():
+    session["payout_2fa_verified_at"] = time.time()
+
+
+def payout_settings_step_up_clear():
+    session.pop("payout_2fa_verified_at", None)
+
+
+def require_payout_2fa(f):
+    """Gate for Payout Settings routes (company bank details, and approving
+    a disbursement run -- i.e. authorizing real money movement) behind a
+    recent TOTP step-up. Off by default like require_email_2fa -- set
+    REQUIRE_PAYOUT_2FA=true in .env to turn this back on. Kept consistent
+    with the rest of the codebase's opt-in-security-flag convention rather
+    than defaulting differently, even though this gates a higher-stakes
+    action -- see require_email_2fa's own docstring for the same reasoning."""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not current_app.config.get("REQUIRE_PAYOUT_2FA", False):
+            return f(*args, **kwargs)
+        if not payout_settings_step_up_valid():
+            log_security_event(
+                "access.denied", "Payout Settings accessed without a valid 2FA step-up",
+                level="WARNING", identifier=session.get("admin_username"),
+            )
+            return jsonify({"ok": False, "msg": "2FA verification required"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
 # HR accounts (created/managed via blueprints/admin_views.py's /hr_accounts
 # page) log in through the same general /login as admin -- but
 # role_required("admin") elsewhere still scopes them to employees/

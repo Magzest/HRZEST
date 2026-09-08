@@ -13,8 +13,8 @@
   .page-header .sub { font-size: 13px; color: #64748b; margin-top: 3px; }
   .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .hbtn {
-    padding: 9px 18px; border: none; border-radius: 9px;
-    font-size: 13px; font-weight: 700; cursor: pointer;
+    padding: 7px 14px; border: none; border-radius: 8px;
+    font-size: 12px; font-weight: 700; cursor: pointer;
     text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
     transition: 0.2s;
   }
@@ -72,9 +72,9 @@
   }
   .stat-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(30,58,138,0.1); transform: translateY(-2px); }
   .stat-icon {
-    width: 52px; height: 52px; border-radius: 14px;
+    width: 26px; height: 26px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 24px; flex-shrink: 0;
+    font-size: 13px; flex-shrink: 0;
   }
   .si-blue   { background: #dbeafe; }
   .si-green  { background: #dcfce7; }
@@ -137,9 +137,9 @@
   }
   .action-card:hover { border-color: #bfdbfe; box-shadow: 0 2px 10px rgba(30,58,138,0.07); }
   .ac-icon {
-    width: 40px; height: 40px; border-radius: 10px;
+    width: 26px; height: 26px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px; margin-bottom: 10px; flex-shrink: 0;
+    font-size: 13px; margin-bottom: 10px; flex-shrink: 0;
   }
   .action-card h4   { font-size: 13px; font-weight: 700; margin-bottom: 2px; color: #0f172a; }
   .action-card .sub { font-size: 11px; color: #94a3b8; margin-bottom: 12px; }
@@ -172,7 +172,7 @@
   .field textarea { resize: vertical; min-height: 70px; }
 
   /* ── BUTTONS ── */
-  .btn { width: 100%; padding: 11px; border: none; border-radius: 9px; cursor: pointer; font-weight: 700; font-size: 14px; transition: 0.2s; }
+  .btn { width: 100%; padding: 8px; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 12.5px; transition: 0.2s; }
   .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
   .btn-green  { background: #16a34a; color: white; }
   .btn-indigo { background: #6366f1; color: white; }
@@ -339,7 +339,7 @@
 
       <a class="u-tdec-none" href="{{ tpath('/employees') }}">
         <div class="u-bg-eff6ff u-bd-1d5-solid-bfdbfe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(30,58,138,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-dbeafe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-users" style="color:#1e40af"></i></div>
+          <div class="u-w-26 u-h-26 u-bg-dbeafe u-br-8 u-d-flex u-ai-center u-jc-center u-fs-13 u-fxs-0"><i class="ti ti-users" style="color:#1e40af"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-1e40af">Employee Management</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Add · Edit · Delete · Photos · QR</div>
@@ -349,7 +349,7 @@
 
       <a class="u-tdec-none" href="{{ tpath('/monthly_report') }}">
         <div class="u-bg-f0fdf4 u-bd-1d5-solid-86efac u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(21,128,61,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-dcfce7 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-chart-bar" style="color:#15803d"></i></div>
+          <div class="u-w-26 u-h-26 u-bg-dcfce7 u-br-8 u-d-flex u-ai-center u-jc-center u-fs-13 u-fxs-0"><i class="ti ti-chart-bar" style="color:#15803d"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-15803d">Attendance Tracking</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">QR Scan · GPS · Face Recognition</div>
@@ -359,7 +359,7 @@
 
       <a class="u-tdec-none" href="{{ tpath('/employees?tab=schedule') }}">
         <div class="u-bg-faf5ff u-bd-1d5-solid-d8b4fe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(124,58,237,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-ede9fe u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-clock-hour-4" style="color:#7c3aed"></i></div>
+          <div class="u-w-26 u-h-26 u-bg-ede9fe u-br-8 u-d-flex u-ai-center u-jc-center u-fs-13 u-fxs-0"><i class="ti ti-clock-hour-4" style="color:#7c3aed"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-7c3aed">Shifts &amp; Breaks</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Create Shifts · Assign · Break Config</div>
@@ -369,7 +369,7 @@
 
       <a class="u-tdec-none" href="{{ tpath('/salary_report') }}">
         <div class="u-bg-fefce8 u-bd-1d5-solid-fde047 u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(133,77,14,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-fef9c3 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-coin" style="color:#854d0e"></i></div>
+          <div class="u-w-26 u-h-26 u-bg-fef9c3 u-br-8 u-d-flex u-ai-center u-jc-center u-fs-13 u-fxs-0"><i class="ti ti-coin" style="color:#854d0e"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-854d0e">Salary &amp; Payslips</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Monthly Report · Excel Export · Email</div>
@@ -379,7 +379,7 @@
 
       <a class="u-tdec-none" href="{{ tpath('/leave_holidays?tab=leaves') }}">
         <div class="u-bg-fff7ed u-bd-1d5-solid-fed7aa u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(194,65,12,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-ffedd5 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-clipboard-list" style="color:#c2410c"></i></div>
+          <div class="u-w-26 u-h-26 u-bg-ffedd5 u-br-8 u-d-flex u-ai-center u-jc-center u-fs-13 u-fxs-0"><i class="ti ti-clipboard-list" style="color:#c2410c"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-c2410c">Tickets · Leaves · Resign.</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Approve / Reject Workflows</div>
@@ -393,7 +393,7 @@
 
       <a class="u-tdec-none" href="{{ tpath('/leave_holidays?tab=announcements') }}">
         <div class="u-bg-fff1f2 u-bd-1d5-solid-fda4af u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-14 u-trs-0d2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(190,18,60,0.12)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-          <div class="u-w-46 u-h-46 u-bg-ffe4e6 u-br-12 u-d-flex u-ai-center u-jc-center u-fs-22 u-fxs-0"><i class="ti ti-speakerphone" style="color:#be123c"></i></div>
+          <div class="u-w-26 u-h-26 u-bg-ffe4e6 u-br-8 u-d-flex u-ai-center u-jc-center u-fs-13 u-fxs-0"><i class="ti ti-speakerphone" style="color:#be123c"></i></div>
           <div>
             <div class="u-fs-13 u-fw-800 u-c-be123c">Announcements</div>
             <div class="u-fs-11 u-c-64748b u-mt-2">Post company-wide notices</div>

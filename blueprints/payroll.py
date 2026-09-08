@@ -94,17 +94,16 @@ def update_salary():
 # ---------------- MONTHLY ATTENDANCE REPORT ----------------
 
 
-@payroll_bp.route("/salary_report")
-@role_required("admin")
-@limiter.limit("10 per minute")
-def salary_report():
-    year = int(request.args.get("year", datetime.date.today().year))
-    month = int(request.args.get("month", datetime.date.today().month))
-
+def compute_salary_data_for_month(year, month, active_cid=None):
+    """Assemble the full per-employee salary_data list for one month --
+    shared by salary_report() below and blueprints/disbursement.py's
+    payout preparation, so disbursement amounts are guaranteed identical
+    to what the salary report shows rather than a second, potentially
+    drifting reimplementation. Returns a list of compute_salary_entry()
+    dicts, each additionally carrying 'email'/'role'/'phone'."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
-    active_cid = session.get("active_company_id")
     if active_cid:
         cursor.execute("""
             SELECT e.employee_id, e.name, e.email, COALESCE(s.salary_per_day, 0),
@@ -143,14 +142,6 @@ def salary_report():
     for eid, ld in cursor.fetchall():
         leave_map.setdefault(eid, set()).add(ld)
 
-    cursor.execute(
-        "SELECT processed_at, processed_by, email_count FROM payroll_runs WHERE year=%s AND month=%s",
-        (year, month)
-    )
-    lock_row = cursor.fetchone()
-    is_locked = lock_row is not None
-    lock_info = {"at": coerce_datetime(lock_row[0]), "by": lock_row[1], "count": lock_row[2]} if lock_row else None
-
     cursor.close()
     db.close()
 
@@ -183,6 +174,30 @@ def salary_report():
         entry["role"] = role
         entry["phone"] = phone
         salary_data.append(entry)
+    return salary_data
+
+
+@payroll_bp.route("/salary_report")
+@role_required("admin")
+@limiter.limit("10 per minute")
+def salary_report():
+    year = int(request.args.get("year", datetime.date.today().year))
+    month = int(request.args.get("month", datetime.date.today().month))
+
+    active_cid = session.get("active_company_id")
+    salary_data = compute_salary_data_for_month(year, month, active_cid)
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(
+        "SELECT processed_at, processed_by, email_count FROM payroll_runs WHERE year=%s AND month=%s",
+        (year, month)
+    )
+    lock_row = cursor.fetchone()
+    is_locked = lock_row is not None
+    lock_info = {"at": coerce_datetime(lock_row[0]), "by": lock_row[1], "count": lock_row[2]} if lock_row else None
+    cursor.close()
+    db.close()
 
     months = [(i, datetime.date(year, i, 1).strftime("%B")) for i in range(1, 13)]
     years = list(range(datetime.date.today().year - 2, datetime.date.today().year + 1))
