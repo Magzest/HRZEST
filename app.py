@@ -3889,6 +3889,12 @@ if __name__ == "__main__":
 
     _cert = _os.environ.get("SSL_CERT_PATH") or _os.path.join(_os.path.dirname(__file__), "cert.pem")
     _key = _os.environ.get("SSL_KEY_PATH") or _os.path.join(_os.path.dirname(__file__), "key.pem")
+    # Was hardcoded to 5000 in both branches below -- gunicorn.conf.py (the
+    # real production path, via wsgi.py) already reads PORT from the
+    # environment, but this `python app.py` dev-server path never did,
+    # making a local port collision with anything else already bound to
+    # 5000 unfixable without editing source. Same env var, same default.
+    _port = int(_os.environ.get("PORT", "5000"))
     # threaded=True: /api/session/risk-stream (blueprints/core.py) holds an
     # SSE connection open for ~20s, and Werkzeug's dev server is single-
     # threaded by default -- without this, one open stream blocks every
@@ -3911,7 +3917,7 @@ if __name__ == "__main__":
         import ssl as _ssl
         from werkzeug.serving import ThreadedWSGIServer, load_ssl_context
 
-        print("🔒  SSL cert found -- starting on https://0.0.0.0:5000")
+        print(f"🔒  SSL cert found -- starting on https://0.0.0.0:{_port}")
         _tls_ctx = load_ssl_context(_cert, _key)
 
         class _DeferredHandshakeServer(ThreadedWSGIServer):
@@ -3924,7 +3930,7 @@ if __name__ == "__main__":
                     return
                 super().finish_request(request, client_address)
 
-        _srv = _DeferredHandshakeServer("0.0.0.0", 5000, app, handler=_QuietRequestHandler,
+        _srv = _DeferredHandshakeServer("0.0.0.0", _port, app, handler=_QuietRequestHandler,
                                          ssl_context=None)
         # Socket itself stays unwrapped (see finish_request above); this
         # attribute only drives wsgi.url_scheme detection and SSL-error-log
@@ -3937,7 +3943,7 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             pass
     else:
-        print("⚠   No cert.pem / key.pem -- starting on http://0.0.0.0:5000")
+        print(f"⚠   No cert.pem / key.pem -- starting on http://0.0.0.0:{_port}")
         print("    Fingerprint / WebAuthn requires HTTPS. Run: python generate_cert.py")
-        app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False, threaded=True,  # nosec B104
+        app.run(host='0.0.0.0', port=_port, debug=False, use_reloader=False, threaded=True,  # nosec B104
                 request_handler=_QuietRequestHandler)

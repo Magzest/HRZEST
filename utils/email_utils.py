@@ -14,8 +14,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from email.utils import formatdate, make_msgid
-from database import get_db_connection
-from extensions import app_log
+from database import get_db_connection, get_master_db
+from extensions import app, app_log
 from utils.helpers import decrypt_pii
 
 
@@ -165,50 +165,94 @@ def send_email_async(to_email, subject, html_body, config,
 
 
 def _email_queue_worker():
-    """Background thread: dequeues and sends emails; retries up to 3 times."""
+    """Background thread: dequeues and sends emails; retries up to 3 times.
+
+    Multi-tenant aware -- this app is schema-per-tenant, and email_queue is
+    a per-schema table (each tenant has its own). This thread has no Flask
+    request of its own, so get_db_connection() has nothing to read
+    g.tenant_db from and previously always fell through to the "public"
+    schema only -- meaning every REAL tenant's queued mail (login OTPs,
+    payslips, signup verification, everything) sat at status='pending'
+    forever, with the worker never even looking at it. Now drains "public"
+    (legacy/single-tenant local-dev deployments) plus every active tenant
+    schema each cycle, same app.app_context() + g.tenant_db-per-iteration
+    pattern already used by blueprints/billing_dunning.py's
+    check_tenant_billing() and blueprints/disbursement.py's
+    prepare_pending_disbursements()."""
     while True:
         try:
-            cfg = get_email_config()
-            if not cfg:
-                _time.sleep(30)
-                continue
-            db = get_db_connection()
-            cur = db.cursor(buffered=True)
-            cur.execute(
-                "SELECT id, to_email, subject, html_body, attachment_b64, attachment_filename "
-                "FROM email_queue WHERE status='pending' AND attempts < 3 "
-                "ORDER BY created_at LIMIT 10"
-            )
-            rows = cur.fetchall()
-            for row in rows:
-                eid, to_email, subject, html_body, att_b64, att_name = row
-                cur.execute(
-                    "UPDATE email_queue SET status='sending', attempts=attempts+1 WHERE id=%s", (eid,)
-                )
-                db.commit()
-                try:
-                    att_bytes = base64.b64decode(att_b64) if att_b64 else None
-                    send_email_smtp(to_email, subject, html_body, cfg,
-                                    attachment_bytes=att_bytes, attachment_filename=att_name)
-                    cur.execute(
-                        "UPDATE email_queue SET status='done', sent_at=NOW() WHERE id=%s", (eid,)
-                    )
-                except Exception as exc:
-                    app_log.error("Email queue send failed to %s: %s", to_email, exc)
-                    cur.execute(
-                        "UPDATE email_queue SET status='pending', last_error=%s WHERE id=%s",
-                        (str(exc)[:500], eid)
-                    )
-                db.commit()
-            cur.execute(
-                "UPDATE email_queue SET status='failed' WHERE status='pending' AND attempts >= 3"
-            )
-            db.commit()
-            cur.close()
-            db.close()
+            with app.app_context():
+                _drain_queue_for_schema("public")
+                for schema in _active_tenant_schemas():
+                    _drain_queue_for_schema(schema)
         except Exception as _we:
             app_log.error("Email queue worker error: %s", _we)
         _time.sleep(15)
+
+
+def _active_tenant_schemas():
+    try:
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute("SELECT db_name FROM tenants WHERE status='active'")
+        schemas = [r[0] for r in cur.fetchall()]
+        cur.close()
+        conn.close()
+        return schemas
+    except Exception as exc:
+        app_log.error("Email queue worker: failed to list active tenants: %s", exc)
+        return []
+
+
+def _drain_queue_for_schema(schema_name):
+    from flask import g as _g
+    prev_tenant_db = getattr(_g, "tenant_db", None)
+    try:
+        _g.tenant_db = schema_name
+        cfg = get_email_config()
+        if not cfg:
+            return
+        db = get_db_connection()
+        cur = db.cursor(buffered=True)
+        cur.execute(
+            "SELECT id, to_email, subject, html_body, attachment_b64, attachment_filename "
+            "FROM email_queue WHERE status='pending' AND attempts < 3 "
+            "ORDER BY created_at LIMIT 10"
+        )
+        rows = cur.fetchall()
+        for row in rows:
+            eid, to_email, subject, html_body, att_b64, att_name = row
+            cur.execute(
+                "UPDATE email_queue SET status='sending', attempts=attempts+1 WHERE id=%s", (eid,)
+            )
+            db.commit()
+            try:
+                att_bytes = base64.b64decode(att_b64) if att_b64 else None
+                send_email_smtp(to_email, subject, html_body, cfg,
+                                attachment_bytes=att_bytes, attachment_filename=att_name)
+                cur.execute(
+                    "UPDATE email_queue SET status='done', sent_at=NOW() WHERE id=%s", (eid,)
+                )
+            except Exception as exc:
+                app_log.error("Email queue send failed to %s (schema=%s): %s", to_email, schema_name, exc)
+                cur.execute(
+                    "UPDATE email_queue SET status='pending', last_error=%s WHERE id=%s",
+                    (str(exc)[:500], eid)
+                )
+            db.commit()
+        cur.execute(
+            "UPDATE email_queue SET status='failed' WHERE status='pending' AND attempts >= 3"
+        )
+        db.commit()
+        cur.close()
+        db.close()
+    except Exception as exc:
+        # Table may simply not exist yet for this schema (e.g. a brand-new
+        # tenant mid-provisioning) -- log and move on to the next schema
+        # rather than letting one tenant's hiccup stop the whole cycle.
+        app_log.error("Email queue worker: drain failed for schema=%s: %s", schema_name, exc)
+    finally:
+        _g.tenant_db = prev_tenant_db
 
 
 def build_new_ip_login_email(display_name, identifier, ip_address, login_time_str):
