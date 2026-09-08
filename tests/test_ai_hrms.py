@@ -56,19 +56,6 @@ def test_ai_hrms_api_endpoints(client, seed_admin):
         sess["admin_username"] = seed_admin["username"]
         sess["admin_role"] = "admin"
 
-    # Test /api/ai/parse-resume
-    res = client.post("/api/ai/parse-resume", data={"resume_text": "Alex Dev\nEmail: alex@dev.io\nSkills: Python, React"})
-    assert res.status_code == 200
-    assert res.get_json()["ok"] is True
-
-    # Test /api/ai/screen-candidate
-    res = client.post("/api/ai/screen-candidate", json={
-        "resume_text": "Alex Dev\nEmail: alex@dev.io\nSkills: Python, React",
-        "job_description": "Python Developer needed"
-    })
-    assert res.status_code == 200
-    assert res.get_json()["match_result"]["match_score"] > 50
-
     # Test /api/ai/hr-helpdesk
     res = client.post("/api/ai/hr-helpdesk", json={"query": "How many sick days do I get?"})
     assert res.status_code == 200
@@ -128,20 +115,11 @@ def _admin_bearer_token(client, seed_admin):
 
 
 def test_recruitment_routes_accept_admin_bearer_token(client, seed_admin):
-    """parse-resume/screen-candidate/evaluate-interview/attrition-analytics
-    were admin_required (session-only, redirects on failure) -- mobile's
-    Recruitment screen needs these reachable with a Bearer token instead."""
+    """evaluate-interview/attrition-analytics were admin_required
+    (session-only, redirects on failure) -- mobile needs these reachable
+    with a Bearer token instead."""
     token = _admin_bearer_token(client, seed_admin)
     auth = {"Authorization": f"Bearer {token}"}
-
-    res = client.post("/api/ai/parse-resume", data={"resume_text": "Alex Dev\nEmail: alex@dev.io\nSkills: Python"},
-                       headers=auth)
-    assert res.status_code == 200 and res.get_json()["ok"] is True
-
-    res = client.post("/api/ai/screen-candidate", json={
-        "resume_text": "Alex Dev\nSkills: Python, React", "job_description": "Python developer",
-    }, headers=auth)
-    assert res.status_code == 200 and res.get_json()["ok"] is True
 
     res = client.post("/api/ai/evaluate-interview", json={
         "candidate_name": "Alex Dev", "position": "Engineer", "notes": "Strong technical performance.",
@@ -153,8 +131,6 @@ def test_recruitment_routes_accept_admin_bearer_token(client, seed_admin):
 
 
 def test_recruitment_routes_reject_missing_auth(client):
-    assert client.post("/api/ai/parse-resume", data={"resume_text": "x"}).status_code == 401
-    assert client.post("/api/ai/screen-candidate", json={"resume_text": "x"}).status_code == 401
     assert client.post("/api/ai/evaluate-interview", json={"notes": "x"}).status_code == 401
     assert client.get("/api/ai/attrition-analytics").status_code == 401
 

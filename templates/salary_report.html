@@ -37,70 +37,114 @@
       .sidebar-footer { margin-top: auto; font-size: 11px; color: rgba(255,255,255,0.4); padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 7px; }
 
       .main { flex: 1; padding: 28px; color: #1e293b; }
-      .page-header { margin-bottom: 22px; }
-      .page-header h1 { font-size: 24px; color: #1e293b; }
-      .page-header p { font-size: 13px; color: #64748b; margin-top: 4px; }
+      .page-header { margin-bottom: 24px; }
+      .page-header h1 { font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; display: flex; align-items: center; gap: 12px; }
+      .page-header h1 .month-tag { font-weight: 600; color: #1E3A5F; }
+      .page-icon {
+        width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+        background: linear-gradient(135deg, #16a34a, #0f766e);
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 20px; box-shadow: 0 6px 16px rgba(22,163,74,0.28);
+      }
+      .page-header p { font-size: 13px; color: #64748b; margin-top: 6px; margin-left: 54px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+      .page-header .rule-chip { background: #f1f5f9; border-radius: 20px; padding: 2px 10px; font-weight: 600; color: #475569; }
 
-      .filter-bar { background: #ffffff; border: 1px solid #E7ECF1; border-radius: 14px; padding: 18px 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
-      .filter-bar label { font-size: 14px; color: #475569; }
-      .filter-bar select { padding: 8px 12px; border-radius: 8px; border: 1px solid #E7ECF1; background: #f8fafc; color: #1e293b; font-size: 14px; cursor: pointer; outline: none; }
-      .filter-bar select:focus { border-color: #B7C7D6; }
-      .filter-bar button { padding: 9px 22px; border: none; border-radius: 8px; background: #22c55e; color: white; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-      .filter-bar button:hover { background: #16a34a; }
-      .btn-action { padding: 9px 18px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; transition: 0.2s; font-weight: 600; }
-      .btn-print { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
-      .btn-print:hover { background: #e2e8f0; }
-      .btn-export { background: #16a34a; color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
-      .btn-export:hover { background: #15803d; }
-      .btn-email-all { background: #1E3A5F; color: white; }
-      .btn-email-all:hover { background: #1E3A5F; }
-      .btn-email-all:disabled { opacity: 0.45; cursor: not-allowed; }
-      .btn-setup-email { background: #f59e0b; color: white; text-decoration: none; padding: 9px 18px; border-radius: 8px; font-size: 14px; }
+      .filter-bar {
+        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;
+        padding: 16px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 22px;
+        box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+      }
+      .filter-group { display: flex; align-items: center; gap: 8px; padding-right: 14px; margin-right: 4px; border-right: 1px solid #eef2f7; }
+      .filter-bar label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+      .filter-bar select {
+        padding: 8px 12px; border-radius: 9px; border: 1.5px solid #e2e8f0; background: #f8fafc;
+        color: #1e293b; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: 0.15s;
+      }
+      .filter-bar select:hover, .filter-bar select:focus { border-color: #B7C7D6; background: #FAFAFA; }
+      .filter-bar button[type="submit"] {
+        padding: 9px 20px; border: none; border-radius: 9px;
+        background: linear-gradient(135deg, #22c55e, #16a34a); color: white;
+        font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.18s;
+        box-shadow: 0 3px 10px rgba(22,163,74,0.28);
+      }
+      .filter-bar button[type="submit"]:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 5px 14px rgba(22,163,74,0.34); }
+      .filter-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+      .btn-action {
+        padding: 9px 16px; border: 1.5px solid transparent; border-radius: 9px; font-size: 13px;
+        cursor: pointer; transition: 0.18s; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;
+      }
+      .btn-print { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+      .btn-print:hover { background: #eef2f7; border-color: #cbd5e1; }
+      .btn-export { background: #ecfdf5; color: #0f766e; border-color: #a7f3d0; text-decoration: none; }
+      .btn-export:hover { background: #d1fae5; border-color: #6ee7b7; }
+      .btn-email-all { background: linear-gradient(135deg, #1E3A5F, #1E3A5F); color: white; box-shadow: 0 3px 10px rgba(30, 58, 95,0.28); }
+      .btn-email-all:hover { filter: brightness(1.06); transform: translateY(-1px); }
+      .btn-email-all:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+      .btn-setup-email { background: #fffbeb; color: #b45309; border: 1.5px solid #fde68a; text-decoration: none; padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+      .btn-lock { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+      .btn-lock:hover { background: #fee2e2; }
+      .btn-unlock { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+      .btn-unlock:hover { background: #dcfce7; }
 
-      .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 22px; }
-      .sum-card { background: #ffffff; border: 1px solid #E7ECF1; border-radius: 14px; padding: 18px; text-align: center; }
-      .sum-card .num { font-size: 26px; font-weight: 700; }
-      .sum-card .lbl { font-size: 12px; color: #64748b; margin-top: 5px; }
-      .c-green .num { color: #16a34a; } .c-red .num { color: #dc2626; }
-      .c-yellow .num { color: #d97706; } .c-blue .num { color: #1E3A5F; }
+      .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; }
+      .sum-card {
+        background: #ffffff; border: 1px solid #eef2f7; border-left: 4px solid var(--accent, #1E3A5F);
+        border-radius: 14px; padding: 16px 18px; display: flex; align-items: center; gap: 14px;
+        box-shadow: 0 1px 3px rgba(15,23,42,0.05); transition: transform 0.16s, box-shadow 0.16s;
+      }
+      .sum-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(15,23,42,0.08); }
+      .sum-icon {
+        width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center; font-size: 19px;
+        background: var(--accent-bg, #FAFAFA); color: var(--accent, #1E3A5F);
+      }
+      .sum-card .num { font-size: 22px; font-weight: 800; color: #0f172a; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; line-height: 1.2; }
+      .sum-card .lbl { font-size: 11.5px; color: #64748b; margin-top: 2px; font-weight: 600; }
+      .c-blue   { --accent: #1E3A5F; --accent-bg: #FAFAFA; }
+      .c-green  { --accent: #16a34a; --accent-bg: #f0fdf4; }
+      .c-red    { --accent: #dc2626; --accent-bg: #fef2f2; }
+      .c-yellow { --accent: #d97706; --accent-bg: #fffbeb; }
 
-      .section { background: #ffffff; border: 1px solid #E7ECF1; border-radius: 16px; padding: 22px; margin-bottom: 22px; }
-      .section h3 { font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; color: #1e293b; }
-      .table-wrap { overflow-x: auto; border-radius: 10px; }
+      .section { background: #ffffff; border: 1px solid #eef2f7; border-radius: 16px; padding: 22px; margin-bottom: 22px; box-shadow: 0 1px 2px rgba(15,23,42,0.04); }
+      .section h3 { font-size: 15px; font-weight: 800; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; color: #0f172a; }
+      .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #eef2f7; }
       table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 960px; }
-      th { position: sticky; top: 0; z-index: 1; background: #FAFAFA; color: #52525B; padding: 8px 14px; font-weight: 700; white-space: nowrap; text-align: right; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #D4D4D8; font-variant-numeric: normal; }
-      td { font-variant-numeric: tabular-nums; }
+      thead { position: sticky; top: 0; z-index: 1; }
+      th { background: #f8fafc; color: #1E3A5F; padding: 11px 14px; font-weight: 700; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; text-align: right; border-bottom: 1px solid #eef2f7; }
       th:first-child, th:nth-child(2) { text-align: left; }
-      th.group-head { text-align: center; font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: #1E3A5F; border-bottom: 2px solid #E7ECF1; }
-      td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; text-align: right; white-space: nowrap; color: #1e293b; }
+      th.group-head { text-align: center; font-size: 10.5px; letter-spacing: 0.6px; text-transform: uppercase; color: #64748b; background: #f1f5f9; border-bottom: 1px solid #eef2f7; }
+      td { padding: 11px 14px; border-bottom: 1px solid #f1f5f9; text-align: right; white-space: nowrap; color: #1e293b; }
       td:first-child, td:nth-child(2) { text-align: left; }
       tr:last-child td { border-bottom: none; }
-      tr:hover td { background: #FAFAFA; }
-      .total-row td { background: #E7ECF1; font-weight: 700; border-top: 2px solid #B7C7D6; color: #1E3A5F; }
+      tbody tr:nth-child(even) td { background: #fafbfe; }
+      tr:hover td { background: #FAFAFA !important; }
+      .total-row td { background: linear-gradient(90deg, #FAFAFA, #E7ECF1) !important; font-weight: 800; border-top: 2px solid #B7C7D6; color: #1E3A5F; }
 
-      .empty-cell { text-align: center; padding: 30px; color: #94a3b8; }
-      .amt-gross { color: #1E3A5F; } .amt-ded { color: #dc2626; }
-      .amt-net { color: #16a34a; font-weight: 700; } .amt-ded-zero { color: #94a3b8; }
-      .amt-late { color: #d97706; } .amt-late-total { color: #d97706; font-weight: 700; }
-      .emp-id { font-size: 11px; color: #94a3b8; }
+      .empty-cell { text-align: center; padding: 48px 20px; color: #94a3b8; }
+      .empty-cell .ec-icon { font-size: 34px; opacity: 0.4; margin-bottom: 10px; display: block; }
+      .amt-gross { color: #1E3A5F; font-weight: 600; } .amt-ded { color: #dc2626; }
+      .amt-net { color: #16a34a; font-weight: 800; } .amt-ded-zero { color: #94a3b8; }
+      .amt-late { color: #d97706; font-weight: 600; } .amt-late-total { color: #d97706; font-weight: 800; }
+      .emp-id { font-size: 11px; color: #94a3b8; font-weight: 600; }
       .emp-email { font-size: 11px; color: #1E3A5F; }
 
-      .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; }
       .b-green { background: #dcfce7; color: #15803d; }
       .b-yellow { background: #fef9c3; color: #92400e; }
       .b-red { background: #fee2e2; color: #dc2626; }
 
-      .rules-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; font-size: 12px; line-height: 2; color: #64748b; margin-top: 6px; }
+      .rules-box { background: #f8fafc; border: 1px solid #eef2f7; border-radius: 14px; padding: 18px 22px; font-size: 12.5px; line-height: 2; color: #475569; margin-top: 6px; }
+      .rules-box .rb-title { font-size: 13px; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
 
       /* Action buttons */
       .action-col { display: flex; align-items: center; }
       .btn-group {
-        display: inline-flex; border-radius: 8px; overflow: hidden;
-        border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+        display: inline-flex; border-radius: 9px; overflow: hidden;
+        border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,.05);
       }
       .btn-group a, .btn-group button {
         display: inline-flex; align-items: center; justify-content: center;
-        width: 32px; height: 30px; border: none; border-right: 1px solid #e2e8f0;
+        width: 32px; height: 30px; border: none; border-right: 1px solid #eef2f7;
         background: #fff; cursor: pointer; text-decoration: none;
         transition: background 0.14s, color 0.14s;
       }
@@ -127,20 +171,34 @@
       /* ── Dark mode ── */
       body.dark-mode { background: #0d1117 !important; }
       body.dark-mode .main { background: #0d1117 !important; color: #cdd9e5 !important; }
-      body.dark-mode .page-header h1, body.dark-mode .page-header p { color: #cdd9e5 !important; }
+      body.dark-mode .page-header h1 { color: #cdd9e5 !important; }
       body.dark-mode .page-header p { color: #768390 !important; }
+      body.dark-mode .page-header .rule-chip { background: #1c2128 !important; color: #94a3b8 !important; }
       body.dark-mode .filter-bar { background: #161b22 !important; border-color: #30363d !important; }
+      body.dark-mode .filter-group { border-color: #21262d !important; }
       body.dark-mode .filter-bar label { color: #768390 !important; }
       body.dark-mode .filter-bar select { background: #0d1117 !important; border-color: #30363d !important; color: #cdd9e5 !important; }
       body.dark-mode .btn-print { background: #1c2128 !important; border-color: #30363d !important; color: #94a3b8 !important; }
-      body.dark-mode .summary .sum-card { background: #161b22 !important; border-color: #30363d !important; }
+      body.dark-mode .btn-export { background: #0d2a20 !important; border-color: #1a4731 !important; color: #4ade80 !important; }
+      body.dark-mode .btn-lock { background: #2a1215 !important; border-color: #4a1e23 !important; color: #f87171 !important; }
+      body.dark-mode .btn-unlock { background: #0d2a20 !important; border-color: #1a4731 !important; color: #4ade80 !important; }
+      body.dark-mode .summary .sum-card { background: #161b22 !important; border-color: #21262d !important; }
+      body.dark-mode .sum-card .num { color: #f0f6fc !important; }
       body.dark-mode .sum-card .lbl { color: #768390 !important; }
-      body.dark-mode .section { background: #161b22 !important; border-color: #30363d !important; }
+      body.dark-mode .section { background: #161b22 !important; border-color: #21262d !important; }
       body.dark-mode .section h3 { color: #cdd9e5 !important; }
-      body.dark-mode .table-wrap { background: #161b22 !important; }
+      body.dark-mode .table-wrap { background: #161b22 !important; border-color: #21262d !important; }
+      body.dark-mode th { background: #1c2128 !important; color: #B7C7D6 !important; border-color: #21262d !important; }
+      body.dark-mode th.group-head { background: #161b22 !important; color: #768390 !important; }
+      body.dark-mode td { border-color: #21262d !important; color: #cdd9e5 !important; }
+      body.dark-mode tbody tr:nth-child(even) td { background: #14181f !important; }
+      body.dark-mode tr:hover td { background: #1c2530 !important; }
       body.dark-mode .total-row td { background: #1E3A5F !important; color: #B7C7D6 !important; border-color: #30363d !important; }
       body.dark-mode .rules-box { background: #1c2128 !important; border-color: #30363d !important; color: #768390 !important; }
-      body.dark-mode .emp-email { color: #818cf8 !important; }
+      body.dark-mode .rules-box .rb-title { color: #cdd9e5 !important; }
+      body.dark-mode .emp-email { color: #1E3A5F !important; }
+      body.dark-mode .btn-group { border-color: #21262d !important; }
+      body.dark-mode .btn-group a, body.dark-mode .btn-group button { background: #161b22 !important; border-color: #21262d !important; }
       body.dark-mode div[style*="background:#FAFAFA"][style*="border:1px solid #DCE4EB"] { background: #0f1f3d !important; border-color: #1E3A5F !important; color: #B7C7D6 !important; }
       body.dark-mode a[href*="payroll_settings"] { background: #162012 !important; border-color: #1a4731 !important; color: #4ade80 !important; }
     </style>
@@ -149,8 +207,12 @@
 {% block main %}
       <div class="page-header u-d-flex u-ai-flex-end u-jc-space-between u-fxw-wrap u-gap-12">
         <div>
-          <h1>💰 Salary Report — {{ month_name }}</h1>
-          <p>Deductions: Late Login = {{ late_rate }}% &nbsp;|&nbsp; Half Day = {{ half_rate }}% &nbsp;|&nbsp; Absent = 100%</p>
+          <h1><span class="page-icon"><i class="ti ti-currency-rupee"></i></span>Salary Report <span class="month-tag">— {{ month_name }}</span></h1>
+          <p>
+            <span class="rule-chip">⏱ Late Login {{ late_rate }}%</span>
+            <span class="rule-chip">🌓 Half Day {{ half_rate }}%</span>
+            <span class="rule-chip">🚫 Absent 100%</span>
+          </p>
         </div>
         <div class="u-d-flex u-ai-center u-gap-10 u-mt-32 u-fxw-wrap">
           <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-f0fdf4 u-c-15803d u-bd-1d5-solid-bbf7d0 u-br-9 u-tdec-none u-fs-13 u-fw-700" href="{{ tpath('/payroll_settings') }}">
@@ -166,39 +228,43 @@
 
       <!-- FILTER -->
       <form class="filter-bar" method="GET" action="{{ tpath('/salary_report') }}">
-        <label>Month</label>
-        <select name="month" title="Select month">
-          {% for m_num, m_name in months %}
-          <option value="{{ m_num }}" {% if m_num == month %}selected{% endif %}>{{ m_name }}</option>
-          {% endfor %}
-        </select>
-        <label>Year</label>
-        <select name="year" title="Select year">
-          {% for y in years %}
-          <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
-          {% endfor %}
-        </select>
-        <button type="submit">Generate Report</button>
-        <button type="button" class="btn-action btn-print" onclick="window.print()">🖨️ Print</button>
-        <a href="/salary_report_export?year={{ year }}&month={{ month }}" class="btn-action btn-export">
-          📥 Export Excel
-        </a>
-        {% if email_configured %}
-        <button type="button" class="btn-action btn-email-all" id="sendAllBtn" onclick="sendAllEmails()">
-          📧 Send All Salary Slips
-        </button>
-        {% else %}
-        <a href="{{ tpath('/email_config') }}" class="btn-action btn-setup-email">⚠️ Setup Email First</a>
-        {% endif %}
-        {% if is_locked %}
-        <button class="u-p-8-14 u-bd-1-solid-fca5a5 u-br-9 u-bg-fee2e2 u-c-dc2626 u-fs-12 u-fw-700 u-cur-pointer" type="button" onclick="unlockPayroll()">
-          🔓 Unlock Payroll
-        </button>
-        {% else %}
-        <button class="u-p-8-14 u-bd-1-solid-bbf7d0 u-br-9 u-bg-dcfce7 u-c-15803d u-fs-12 u-fw-700 u-cur-pointer" type="button" onclick="lockPayroll()">
-          🔒 Lock Payroll
-        </button>
-        {% endif %}
+        <div class="filter-group">
+          <label>Month</label>
+          <select name="month" title="Select month">
+            {% for m_num, m_name in months %}
+            <option value="{{ m_num }}" {% if m_num == month %}selected{% endif %}>{{ m_name }}</option>
+            {% endfor %}
+          </select>
+          <label>Year</label>
+          <select name="year" title="Select year">
+            {% for y in years %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit"><i class="ti ti-report-analytics"></i> Generate</button>
+        </div>
+        <div class="filter-actions">
+          <button type="button" class="btn-action btn-print" onclick="window.print()"><i class="ti ti-printer"></i> Print</button>
+          <a href="/salary_report_export?year={{ year }}&month={{ month }}" class="btn-action btn-export">
+            <i class="ti ti-file-spreadsheet"></i> Export Excel
+          </a>
+          {% if email_configured %}
+          <button type="button" class="btn-action btn-email-all" id="sendAllBtn" onclick="sendAllEmails()">
+            <i class="ti ti-send"></i> Send All Salary Slips
+          </button>
+          {% else %}
+          <a href="{{ tpath('/email_config') }}" class="btn-action btn-setup-email"><i class="ti ti-alert-triangle"></i> Setup Email First</a>
+          {% endif %}
+          {% if is_locked %}
+          <button class="btn-action btn-lock" type="button" onclick="unlockPayroll()">
+            <i class="ti ti-lock-open"></i> Unlock Payroll
+          </button>
+          {% else %}
+          <button class="btn-action btn-unlock" type="button" onclick="lockPayroll()">
+            <i class="ti ti-lock"></i> Lock Payroll
+          </button>
+          {% endif %}
+        </div>
       </form>
 
       {% if is_locked %}
@@ -218,33 +284,48 @@
 
       <div class="summary">
         <div class="sum-card c-blue">
-          <div class="num">{{ salary_data | length }}</div>
-          <div class="lbl">👥 Employees</div>
+          <div class="sum-icon"><i class="ti ti-users"></i></div>
+          <div>
+            <div class="num">{{ salary_data | length }}</div>
+            <div class="lbl">Employees</div>
+          </div>
         </div>
         <div class="sum-card c-green">
-          <div class="num">₹{{ "%.0f" | format(total_gross) }}</div>
-          <div class="lbl">📦 Total Gross</div>
+          <div class="sum-icon"><i class="ti ti-package"></i></div>
+          <div>
+            <div class="num">₹{{ "%.0f" | format(total_gross) }}</div>
+            <div class="lbl">Total Gross</div>
+          </div>
         </div>
         <div class="sum-card c-red">
-          <div class="num">₹{{ "%.0f" | format(total_ded) }}</div>
-          <div class="lbl">📉 Total Deductions</div>
+          <div class="sum-icon"><i class="ti ti-trending-down"></i></div>
+          <div>
+            <div class="num">₹{{ "%.0f" | format(total_ded) }}</div>
+            <div class="lbl">Total Deductions</div>
+          </div>
         </div>
         {% if total_incentive > 0 %}
-        <div class="sum-card c-green">
-          <div class="num">₹{{ "%.0f" | format(total_incentive) }}</div>
-          <div class="lbl">🏆 Total Incentives</div>
+        <div class="sum-card c-yellow">
+          <div class="sum-icon"><i class="ti ti-trophy"></i></div>
+          <div>
+            <div class="num">₹{{ "%.0f" | format(total_incentive) }}</div>
+            <div class="lbl">Total Incentives</div>
+          </div>
         </div>
         {% endif %}
         <div class="sum-card c-green">
-          <div class="num">₹{{ "%.0f" | format(total_net) }}</div>
-          <div class="lbl">✅ Total Net Payable</div>
+          <div class="sum-icon"><i class="ti ti-circle-check"></i></div>
+          <div>
+            <div class="num">₹{{ "%.0f" | format(total_net) }}</div>
+            <div class="lbl">Total Net Payable</div>
+          </div>
         </div>
       </div>
 
       <!-- SALARY TABLE -->
       <div class="section">
         <h3>
-          <span>Employee Salary Breakdown — {{ month_name }}</span>
+          <span class="u-d-flex u-ai-center u-gap-8"><i class="ti ti-table u-c-2563eb"></i> Employee Salary Breakdown — {{ month_name }}</span>
         </h3>
         <div class="table-wrap">
           <table>
@@ -344,6 +425,7 @@
               {% else %}
               <tr>
                 <td colspan="12" class="empty-cell">
+                  <i class="ti ti-mood-empty ec-icon"></i>
                   No employees found. Please set daily salary for employees.
                 </td>
               </tr>
@@ -372,7 +454,7 @@
 
       <!-- DEDUCTION RULES -->
       <div class="rules-box">
-        <strong>Salary Rules for {{ month_name }}:</strong><br>
+        <div class="rb-title"><i class="ti ti-info-circle"></i> Salary Rules for {{ month_name }}</div>
         ✅ <strong>Full Day</strong> — Login ≤ 9:00 AM + Logout ≥ 6:00 PM → No deduction (100% pay)<br>
         ⚠️ <strong>Late – Full Day</strong> — Login 9:00 AM–1:00 PM + Logout ≥ 6:00 PM → {{ late_rate }}% deduction<br>
         ⚠️ <strong>Half Day</strong> — Login after 1:00 PM OR Logout before 1:00 PM OR Logout 1:00–6:00 PM → {{ half_rate }}% deduction<br>

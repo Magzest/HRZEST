@@ -491,7 +491,18 @@ def view_employees():
             emp_status = "On Leave"
         else:
             emp_status = "Active"
-        row = row[:14] + (decrypt_pii(row[14]),) + row[15:]  # [14]=gender
+        # Postgres returns date_of_joining (index 4) as a real date object;
+        # the SQLite dev fallback has no DATE type and hands back the raw
+        # "YYYY-MM-DD" string instead, which templates/employees.html's
+        # doj.strftime(...) can't call -- normalize here so both backends
+        # reach the template as the same type.
+        _doj = row[4]
+        if isinstance(_doj, str):
+            try:
+                _doj = datetime.datetime.strptime(_doj[:10], "%Y-%m-%d").date()
+            except ValueError:
+                _doj = None
+        row = row[:4] + (_doj,) + row[5:14] + (decrypt_pii(row[14]),) + row[15:]  # [14]=gender
         employees.append(row + (emp_status,))
 
     total = len(employees)
@@ -1045,12 +1056,6 @@ def regenerate_qr(emp_id):
     return redirect(tpath("/employees"))
 
 
-@employees_bp.route("/view_qrcodes")
-@admin_required
-def view_qrcodes():
-    return redirect(tpath("/view_photos"))
-
-
 @employees_bp.route("/dataset/<path:filename>")
 @admin_required
 def serve_dataset(filename):
@@ -1068,36 +1073,6 @@ def my_photo():
     if not os.path.exists(photo_path):
         return "", 404
     return send_from_directory(UPLOAD_FOLDER, emp_id + ".jpg")
-
-
-@employees_bp.route("/view_photos")
-@admin_required
-def view_photos():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT employee_id, name, role, email, face_image, qr_code FROM employees ORDER BY name")
-    employees = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("employee_photos.html", employees=employees, active_nav="photos")
-
-
-@employees_bp.route("/update_photo/<emp_id>", methods=["POST"])
-@admin_required
-def update_photo(emp_id):
-    file = request.files.get("photo")
-    ok, err = _validate_image_file(file)
-    if not ok:
-        return jsonify({"ok": False, "msg": err}), 400
-    save_path = os.path.join(app.config["UPLOAD_FOLDER"], emp_id + ".jpg")
-    file.save(save_path)
-    db = get_db_connection()
-    cursor = db.cursor()
-    cursor.execute("UPDATE employees SET face_image=%s WHERE employee_id=%s", (save_path, emp_id))
-    db.commit()
-    cursor.close()
-    db.close()
-    return jsonify({"ok": True})
 
 
 @employees_bp.route("/api/generate_emp_id")

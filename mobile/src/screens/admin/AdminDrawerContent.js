@@ -86,16 +86,6 @@ export default function AdminDrawerContent(props) {
       section: "HR OPERATIONS",
     },
     {
-      title: "AI Recruitment",
-      icon: "sparkles-outline",
-      iconFocused: "sparkles",
-      route: "Recruitment",
-      section: "HR OPERATIONS",
-      badge: "AI",
-      badgeBg: "#F5F3FF",
-      badgeColor: "#7C3AED",
-    },
-    {
       title: "Departments & Units",
       icon: "business-outline",
       iconFocused: "business",

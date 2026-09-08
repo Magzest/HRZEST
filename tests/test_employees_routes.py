@@ -345,14 +345,6 @@ class TestRegenerateQr:
         assert b"regenerated" in resp.data
 
 
-class TestViewQrcodesRedirect:
-    def test_redirects_to_view_photos(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/view_qrcodes", follow_redirects=False)
-        assert resp.status_code == 302
-        assert "/view_photos" in resp.headers["Location"]
-
-
 class TestServeDataset:
     def test_missing_file_404(self, client, seed_admin):
         _admin_session(client, seed_admin["username"])
@@ -370,29 +362,6 @@ class TestMyPhoto:
             sess["employee_id"] = seed_employee["employee_id"]
         resp = client.get("/my_photo")
         assert resp.status_code == 404
-
-
-class TestViewPhotos:
-    def test_renders(self, client, seed_admin, seed_employee):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/view_photos")
-        assert resp.status_code == 200
-
-
-class TestUpdatePhoto:
-    def test_invalid_file_returns_400(self, client, seed_admin, seed_employee):
-        _admin_session(client, seed_admin["username"])
-        resp = client.post(f"/update_photo/{seed_employee['employee_id']}", data={
-            "photo": (io.BytesIO(b"not-an-image"), "f.txt")})
-        assert resp.status_code == 400
-
-    def test_success(self, client, seed_admin, seed_employee, cleanup_emp_files):
-        cleanup_emp_files.append(seed_employee["employee_id"])
-        _admin_session(client, seed_admin["username"])
-        resp = client.post(f"/update_photo/{seed_employee['employee_id']}", data={
-            "photo": (io.BytesIO(_jpeg_bytes()), "f.jpg")})
-        assert resp.status_code == 200
-        assert resp.get_json()["ok"] is True
 
 
 class TestGenerateEmpId:

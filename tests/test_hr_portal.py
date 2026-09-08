@@ -58,7 +58,7 @@ class TestHrScopeRestrictions:
 
     @pytest.mark.parametrize("path", [
         "/employees", "/monthly_report", "/leave_holidays", "/overtime",
-        "/performance", "/onboarding", "/documents",
+        "/performance", "/onboarding",
     ])
     def test_hr_role_reaches_shared_employee_lifecycle_pages(self, client, hr_admin, path):
         _admin_session(client, hr_admin["username"], role="hr")

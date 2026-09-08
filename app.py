@@ -339,6 +339,9 @@ def _resolve_tenant():
             conn.close()
         except Exception:
             row = None  # master DB unreachable -- don't punish the session for it, just skip the recheck this time
+            app_log.warning(
+                "tenant.status_recheck_failed: tenant_db=%s", session.get("tenant_db"), exc_info=True
+            )
         if row is None or row[0] == "active":
             session["_tenant_status_checked_at"] = time.time()
             # billing_state='locked' does NOT block resolution/login here --
@@ -559,13 +562,14 @@ _MANDATORY_MFA_EXEMPT_PATHS = {
     "/logout", "/admin_login", "/hr_login"
 }
 
-app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
+# All three MFA/2FA gates below default OFF at the user's request -- set any
+# of them to "true" in .env to turn that layer back on.
+app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
 app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
-# Platform admin's emailed-OTP step (blueprints/platform_admin.py) --
-# defaults on (secure by default) unlike the two flags above, since this is
-# the highest-privilege identity in the system; only skip it by explicitly
-# setting this in .env for local dev without SMTP configured.
-app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
+app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
+# Email Settings step-up gate (utils/auth.py's require_email_2fa) -- same
+# off-by-default posture as the three flags above.
+app.config["REQUIRE_EMAIL_2FA"] = os.environ.get("REQUIRE_EMAIL_2FA", "False").lower() in ("true", "1", "yes")
 
 
 @app.before_request
@@ -1722,24 +1726,6 @@ def _init_core_tables(cursor, db):
         )
     """)
     db.commit()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS shift_swap_requests (
-            id SERIAL PRIMARY KEY,
-            requester_id VARCHAR(50) NOT NULL,
-            target_id VARCHAR(50) NOT NULL,
-            requester_shift_id INT NOT NULL,
-            target_shift_id INT NOT NULL,
-            reason TEXT,
-            status VARCHAR(20) DEFAULT 'Pending_Target' CHECK (status IN ('Pending_Target','Pending_Admin','Approved','Rejected','Rejected_Admin')),
-            target_response TEXT,
-            admin_response TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    _attach_updated_at_trigger(cursor, "shift_swap_requests")
-    db.commit()
-    db.commit()
 
     # Create company_settings table (must precede the migration loop below,
     # which ALTERs this table -- on a fresh install with nothing to migrate
@@ -1908,11 +1894,12 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE break_config ADD COLUMN IF NOT EXISTS company_id INT DEFAULT NULL",
         "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) DEFAULT 'public' CHECK (visibility IN ('public','private'))",
         "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS target_employee_id VARCHAR(50) DEFAULT NULL",
+        "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS attachment_original_name VARCHAR(255) DEFAULT NULL",
+        "ALTER TABLE announcements ADD COLUMN IF NOT EXISTS attachment_stored_ref VARCHAR(500) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS reset_token VARCHAR(80) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(255) DEFAULT NULL",
         "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS totp_enabled SMALLINT NOT NULL DEFAULT 0",
-        "ALTER TABLE performance_reviews ADD COLUMN IF NOT EXISTS potential_rating DECIMAL(3,1) DEFAULT 0",
         # Lets an admin terminate/reactivate an HR account (or any admin_users
         # row) without deleting it -- login history and the row itself stay
         # intact. Existing accounts default active (1), so this is a no-op
@@ -2099,7 +2086,6 @@ def _run_index_migrations_v3(cursor, db):
                 "CREATE INDEX IF NOT EXISTS idx_emp_docs_emp ON employee_documents(employee_id)",
                 "CREATE INDEX IF NOT EXISTS idx_incentives_emp ON employee_incentives(employee_id)",
                 "CREATE INDEX IF NOT EXISTS idx_overtime_emp ON overtime_records(employee_id)",
-                "CREATE INDEX IF NOT EXISTS idx_swap_requester_target ON shift_swap_requests(requester_id, target_id)",
             ]
             for stmt in _idx_stmts_v3:
                 try:
@@ -2313,15 +2299,26 @@ def _seed_defaults_and_admin(cursor, db, seed_admin=True):
     # Seed admin from env -- only if no admin exists yet
     _admin_user = os.environ.get("ADMIN_USERNAME", "admin").strip()
     _admin_pass = os.environ.get("ADMIN_PASSWORD", "").strip()
+    # role='admin' accounts authenticate via emailed one-time code only (see
+    # blueprints/auth.py's admin_login()) -- without an email on file here,
+    # a freshly seeded admin could never complete that first login.
+    _admin_email = os.environ.get("ADMIN_EMAIL", "").strip() or None
     cursor.execute("SELECT COUNT(*) FROM admin_users")
     admin_count = cursor.fetchone()[0]
     if admin_count == 0 and _admin_pass:
         cursor.execute(
-            "INSERT INTO admin_users (username, password) VALUES (%s, %s)",
-            (_admin_user, generate_password_hash(_admin_pass))
+            "INSERT INTO admin_users (username, password, email) VALUES (%s, %s, %s)",
+            (_admin_user, generate_password_hash(_admin_pass), _admin_email)
         )
         db.commit()
-        app_log.info("Admin created: username=%s", _admin_user)
+        if not _admin_email:
+            app_log.warning(
+                "Admin created: username=%s but ADMIN_EMAIL isn't set -- this account can't "
+                "log in until an email is added (Settings, or 'UPDATE admin_users SET email=...').",
+                _admin_user,
+            )
+        else:
+            app_log.info("Admin created: username=%s email=%s", _admin_user, _admin_email)
         admin_count = 1
     elif admin_count == 0 and not _admin_pass:
         app_log.warning("ADMIN_PASSWORD not set in .env -- complete setup via /setup")
@@ -3073,7 +3070,6 @@ def unhandled_exception(e):
 
 
 # ---------------- LEAVE TYPES ADMIN ----------------
-# admin_leave_types migrated to blueprints/leave.py
 
 
 # change_admin_password migrated to blueprints/auth.py
@@ -3094,7 +3090,6 @@ def unhandled_exception(e):
 # employee_reset_password migrated to blueprints/auth.py
 
 
-# view_qrcodes migrated to blueprints/employees.py
 
 
 # serve_dataset migrated to blueprints/employees.py
@@ -3103,10 +3098,8 @@ def unhandled_exception(e):
 # my_photo migrated to blueprints/employees.py
 
 
-# view_photos migrated to blueprints/employees.py
 
 
-# update_photo migrated to blueprints/employees.py
 
 # ---------------- SHIFTS (redirect to settings) ----------------
 # shifts migrated to blueprints/attendance.py
@@ -3128,16 +3121,12 @@ def unhandled_exception(e):
 
 # ──────────────────────── SHIFT SWAP REQUESTS ────────────────────────
 
-# submit_shift_swap migrated to blueprints/attendance.py
 
 
-# respond_shift_swap migrated to blueprints/attendance.py
 
 
-# admin_shift_swap migrated to blueprints/attendance.py
 
 
-# admin_shift_swaps migrated to blueprints/attendance.py
 
 
 # import_indian_holidays migrated to blueprints/leave.py
@@ -3320,7 +3309,6 @@ def unhandled_exception(e):
 # request_resignation migrated to blueprints/leave.py
 
 
-# resignation_requests_view migrated to blueprints/leave.py
 
 
 # resignation_action migrated to blueprints/leave.py

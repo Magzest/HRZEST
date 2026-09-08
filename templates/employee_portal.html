@@ -45,125 +45,6 @@
       /* ── APP CONTENT ── */
       .app-content { flex: 1; overflow-y: auto; padding: 24px; }
 
-      /* ── SHIFT SWAP REDESIGN ── */
-      .swap-my-shift {
-        display: flex; align-items: center; justify-content: space-between;
-        background: linear-gradient(135deg,#16293F 0%,#1E3A5F 100%);
-        border-radius: 14px; padding: 18px 22px; color: #fff; margin-bottom: 20px;
-      }
-      .swap-my-shift .sms-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; opacity: 0.65; margin-bottom: 4px; }
-      .swap-my-shift .sms-name  { font-size: 20px; font-weight: 800; }
-      .swap-my-shift .sms-time  { font-size: 13px; opacity: 0.75; margin-top: 3px; }
-      .swap-no-shift {
-        display: flex; align-items: center; gap: 14px;
-        background: #fff7ed; border: 1.5px solid #fed7aa; border-radius: 14px;
-        padding: 18px 20px; color: #92400e; margin-bottom: 20px;
-      }
-      .swap-no-shift .sns-icon  { font-size: 30px; flex-shrink: 0; }
-      .swap-no-shift .sns-title { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
-      .swap-no-shift .sns-sub   { font-size: 13px; opacity: 0.8; }
-      .swap-section-heading {
-        font-size: 13px; font-weight: 700; color: #1e293b; margin: 18px 0 12px;
-        display: flex; align-items: center; gap: 8px;
-        border-left: 3px solid #1E3A5F; padding-left: 10px;
-      }
-      .swap-section-heading.inc { border-left-color: #f59e0b; }
-      .swap-incoming {
-        border: 1px solid #fcd34d; border-radius: 12px; background: #fffbeb;
-        padding: 16px; margin-bottom: 12px;
-      }
-      .swap-incoming .si-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; flex-wrap: wrap; gap: 6px; }
-      .swap-incoming .si-name   { font-weight: 700; color: #1e293b; font-size: 14px; }
-      .swap-incoming .si-id     { font-size: 12px; color: #94a3b8; }
-      .swap-incoming .si-pill   { display: inline-block; background: #E7ECF1; color: #16293F; border-radius:6px; font-size: 11px; font-weight: 700; padding: 2px 10px; margin-left: 6px; }
-      .swap-incoming .si-date   { font-size: 11px; color: #94a3b8; }
-      .swap-incoming .si-reason { font-size: 13px; color: #64748b; margin: 8px 0 12px; font-style: italic; }
-      .swap-inc-actions  { display: flex; gap: 8px; flex-wrap: wrap; }
-      .swap-inc-note { flex: 1; min-width: 160px; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: #fff; font-family: inherit; }
-      .swap-btn-ok  { padding: 8px 18px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition:.15s; }
-      .swap-btn-ok:hover  { background: #15803d; }
-      .swap-btn-no  { padding: 8px 18px; background: #dc2626; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; transition:.15s; }
-      .swap-btn-no:hover  { background: #b91c1c; }
-      .swap-form-card {
-        background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-bottom: 20px;
-      }
-      .swap-form-card label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
-      .swap-form-card select, .swap-form-card textarea {
-        width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
-        font-size: 14px; background: #fff; color: #1e293b; font-family: inherit; box-sizing: border-box;
-      }
-      .swap-form-card textarea { resize: vertical; }
-      .swap-form-row { margin-bottom: 14px; }
-      .swap-submit-btn {
-        padding: 11px 28px; background: #1E3A5F; color: #fff; border: none; border-radius: 9px;
-        font-weight: 700; font-size: 14px; cursor: pointer; transition:.18s;
-      }
-      .swap-submit-btn:hover { background: #16293F; }
-      .swap-req-card {
-        border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc;
-        padding: 16px; margin-bottom: 12px; display: flex; gap: 14px; align-items: flex-start;
-      }
-      .swap-req-avatar {
-        width: 40px; height: 40px; border-radius: 50%; background: #E7ECF1; color: #16293F;
-        display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; flex-shrink: 0;
-      }
-      .swap-req-body  { flex: 1; min-width: 0; }
-      .swap-req-name  { font-weight: 700; font-size: 14px; color: #1e293b; }
-      .swap-req-shift { font-size: 12px; color: #64748b; margin-top: 2px; }
-      .swap-req-reason { font-size: 12px; color: #94a3b8; margin-top: 3px; font-style: italic; }
-      .swap-req-date  { font-size: 11px; color: #94a3b8; margin-top: 8px; }
-      .swap-req-side  { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-      .sbadge { display: inline-block; padding: 4px 12px; border-radius:6px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-      .sbadge-pending  { background: #fef9c3; color: #854d0e; }
-      .sbadge-admin    { background: #E7ECF1; color: #16293F; }
-      .sbadge-approved { background: #dcfce7; color: #166534; }
-      .sbadge-rejected { background: #fee2e2; color: #991b1b; }
-      .sbadge-gray     { background: #f1f5f9; color: #64748b; }
-      .swap-timeline { display: flex; margin-top: 10px; }
-      .stl-step { flex: 1; text-align: center; position: relative; }
-      .stl-step::before {
-        content: ''; position: absolute; top: 8px; left: 50%; right: -50%;
-        height: 2px; background: #e2e8f0; z-index: 0;
-      }
-      .stl-step:last-child::before { display: none; }
-      .stl-dot {
-        width: 18px; height: 18px; border-radius: 50%; border: 2px solid #e2e8f0;
-        background: #fff; margin: 0 auto 4px; position: relative; z-index: 1;
-      }
-      .stl-dot.done   { background: #16a34a; border-color: #16a34a; }
-      .stl-dot.active { background: #1E3A5F; border-color: #1E3A5F; }
-      .stl-dot.fail   { background: #dc2626; border-color: #dc2626; }
-      .stl-lbl { font-size: 10px; color: #94a3b8; line-height: 1.3; }
-      .stl-lbl.done   { color: #16a34a; font-weight: 700; }
-      .stl-lbl.active { color: #1E3A5F; font-weight: 700; }
-      .stl-lbl.fail   { color: #dc2626; font-weight: 700; }
-      .swap-empty { text-align: center; padding: 36px 20px; }
-      .swap-empty .se-icon { font-size: 38px; opacity: 0.35; margin-bottom: 10px; }
-      .swap-empty .se-text { font-size: 14px; color: #94a3b8; }
-      /* dark mode overrides */
-      body.dark-mode .swap-my-shift  { background: linear-gradient(135deg,#1E3A5F 0%,#16293F 100%); }
-      body.dark-mode .swap-no-shift  { background: #3a1f00; border-color: #854d0e; color: #fde68a; }
-      body.dark-mode .swap-incoming  { background: #2a1e00; border-color: #854d0e; }
-      body.dark-mode .swap-incoming .si-name { color: #f1f5f9; }
-      body.dark-mode .swap-incoming .si-reason { color: #94a3b8; }
-      body.dark-mode .swap-incoming .si-pill  { background: #1E3A5F; color: #B7C7D6; }
-      body.dark-mode .swap-inc-note { background: #111; border-color: #333; color: #f1f5f9; }
-      body.dark-mode .swap-req-card { background: #111; border-color: #222; }
-      body.dark-mode .swap-req-name { color: #f1f5f9; }
-      body.dark-mode .swap-req-shift, body.dark-mode .swap-req-reason { color: #64748b; }
-      body.dark-mode .swap-form-card { background: #111; border-color: #222; }
-      body.dark-mode .swap-form-card label { color: #94a3b8; }
-      body.dark-mode .swap-form-card select, body.dark-mode .swap-form-card textarea { background: #1a1a1a; border-color: #333; color: #f1f5f9; }
-      body.dark-mode .swap-section-heading { color: #f1f5f9; }
-      body.dark-mode .sbadge-pending  { background: #3a2200; color: #fde68a; }
-      body.dark-mode .sbadge-admin    { background: #1E3A5F; color: #B7C7D6; }
-      body.dark-mode .sbadge-approved { background: #14532d; color: #86efac; }
-      body.dark-mode .sbadge-rejected { background: #7f1d1d; color: #fca5a5; }
-      body.dark-mode .sbadge-gray     { background: #1a1a1a; color: #64748b; }
-      body.dark-mode .stl-dot  { background: #111; }
-      body.dark-mode .stl-step::before { background: #333; }
-      body.dark-mode .stl-lbl  { color: #475569; }
-
       /* ── RESPONSIVE ── */
       @media (max-width: 768px) {
         .app-content { padding: 16px; }
@@ -561,7 +442,6 @@
     {% set sb_id = emp[0] %}
     {% set sb_has_photo = emp[4] %}
     {% set sb_photo_url = '/my_photo?v=' ~ photo_v %}
-    {% set sb_incoming_swap_count = incoming_swap_requests|length if incoming_swap_requests else 0 %}
     {% include "_employee_sidebar.html" %}
 
     <!-- ══ MAIN AREA ══ -->
@@ -888,7 +768,7 @@
       {% if announcements %}
       <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-20 u-mb-20">
         <div class="u-fs-14 u-fw-700 u-c-1e293b u-mb-14 u-d-flex u-ai-center u-gap-8">📢 Announcements</div>
-        {% for ann_id, ann_title, ann_content, ann_pri, ann_date in announcements %}
+        {% for ann_id, ann_title, ann_content, ann_pri, ann_date, ann_att in announcements %}
         <div style="border-radius:10px;padding:14px 16px;margin-bottom:10px;border-left:4px solid
           {% if ann_pri=='Urgent' %}#ef4444{% elif ann_pri=='Important' %}#f59e0b{% else %}#1E3A5F{% endif %};
           background:{% if ann_pri=='Urgent' %}#fff5f5{% elif ann_pri=='Important' %}#fffbeb{% else %}#f0f7ff{% endif %};">
@@ -899,6 +779,11 @@
               background:{% if ann_pri=='Urgent' %}#fee2e2;color:#dc2626{% elif ann_pri=='Important' %}#fef9c3;color:#92400e{% else %}#E7ECF1;color:#16293F{% endif %};">{{ ann_pri }}</span>
           </div>
           <div class="u-fs-12 u-c-475569 u-lh-1d6">{{ ann_content }}</div>
+          {% if ann_att %}
+          <a class="u-fs-12 u-c-2563eb u-d-inline-flex u-ai-center u-gap-4 u-mt-6" href="{{ tpath('/download_announcement/' ~ ann_id) }}">
+            <i class="ti ti-paperclip"></i> {{ ann_att }}
+          </a>
+          {% endif %}
           <div class="u-fs-11 u-c-94a3b8 u-mt-6">{{ ann_date.strftime('%d %b %Y') if ann_date else '' }}</div>
         </div>
         {% endfor %}
@@ -1186,213 +1071,6 @@
         </div>
       </div>
       </div><!-- /view-apply-leave -->
-
-      <!-- ═══ VIEW: TICKETS ═══ -->
-      <!-- ═══ VIEW: SHIFT SWAP ═══ -->
-      <div id="view-shift-swap" class="view">
-      <div class="mod-title">🔄 Shift Swap <span>Request to swap your shift with a colleague</span></div>
-      <div class="section">
-
-        {% if swap_sent %}
-        <div class="flash-banner flash-banner-green">✅ Swap request sent! Waiting for your colleague to respond.</div>
-        {% endif %}
-        {% if swap_responded %}
-        <div class="flash-banner flash-banner-green">✅ Response submitted successfully.</div>
-        {% endif %}
-        {% if swap_error == 'invalid_target' %}
-        <div class="flash-banner flash-banner-red">❌ Invalid target employee selected.</div>
-        {% elif swap_error == 'no_shift' %}
-        <div class="flash-banner flash-banner-red">❌ You or the selected employee doesn't have a shift assigned.</div>
-        {% elif swap_error == 'same_shift' %}
-        <div class="flash-banner flash-banner-red">❌ You're already on the same shift — no swap needed.</div>
-        {% elif swap_error == 'duplicate' %}
-        <div class="flash-banner flash-banner-red">❌ You already have a pending swap request with this employee.</div>
-        {% endif %}
-
-        <!-- Current shift card -->
-        {% if emp[7] %}
-        <div class="swap-my-shift">
-          <div>
-            <div class="sms-label">Your Current Shift</div>
-            <div class="sms-name">{{ emp[7] }}</div>
-            <div class="sms-time">{{ emp[8]|fmt_time if emp[8] else '--' }} – {{ emp[9]|fmt_time if emp[9] else '--' }}</div>
-          </div>
-          <div class="u-fs-40 u-op-0d25">🕐</div>
-        </div>
-        {% else %}
-        <div class="swap-no-shift">
-          <div class="sns-icon">⚠️</div>
-          <div>
-            <div class="sns-title">No Shift Assigned</div>
-            <div class="sns-sub">Contact your admin to get a shift assigned before you can request a swap.</div>
-          </div>
-        </div>
-        {% endif %}
-
-        <!-- Incoming swap requests -->
-        {% if incoming_swap_requests %}
-        <div class="swap-section-heading inc">⚡ Incoming Requests
-          <span class="u-bg-f59e0b u-c-fff u-br-20 u-p-1-9 u-fs-11 u-ml-4">{{ incoming_swap_requests|length }}</span>
-        </div>
-        {% for sw in incoming_swap_requests %}
-        {% set sw_id, sw_req_id, sw_req_name, sw_req_shift, sw_reason, sw_status, sw_date = sw %}
-        <div class="swap-incoming">
-          <div class="si-header">
-            <div>
-              <span class="si-name">{{ sw_req_name }}</span>
-              <span class="si-id"> ({{ sw_req_id }})</span>
-              <span class="si-pill">{{ sw_req_shift }}</span>
-            </div>
-            <div class="si-date">{{ sw_date.strftime('%d %b %Y') if sw_date else '' }}</div>
-          </div>
-          {% if sw_reason %}<div class="si-reason">"{{ sw_reason }}"</div>{% endif %}
-          <div class="u-fs-13 u-c-64748b u-mb-12">
-            Wants to swap their <strong>{{ sw_req_shift }}</strong> shift
-            with your{% if emp[7] %} <strong>{{ emp[7] }}</strong>{% endif %} shift.
-          </div>
-          <form method="POST" action="/respond_shift_swap/{{ sw_id }}">
-            <input type="hidden" name="action" value="accept">
-            <div class="swap-inc-actions">
-              <input type="text" name="response" class="swap-inc-note" placeholder="Optional note (e.g. Happy to swap)" maxlength="200">
-              <button type="submit" class="swap-btn-ok">✅ Accept</button>
-            </div>
-          </form>
-          <form class="u-mt-8" method="POST" action="/respond_shift_swap/{{ sw_id }}">
-            <input type="hidden" name="action" value="reject">
-            <div class="swap-inc-actions">
-              <input type="text" name="response" class="swap-inc-note" placeholder="Reason for declining (optional)" maxlength="200">
-              <button type="submit" class="swap-btn-no">✗ Decline</button>
-            </div>
-          </form>
-        </div>
-        {% endfor %}
-        {% endif %}
-
-        <!-- Request form -->
-        {% if emp[7] %}
-        <div class="swap-section-heading">🔄 Request a Swap</div>
-        <div class="swap-form-card">
-          <form method="POST" action="{{ tpath('/submit_shift_swap') }}" id="swapForm">
-            <input type="hidden" name="target_id" id="swapTargetId">
-
-            <!-- Search bar -->
-            <div class="u-d-grid u-gtc-1fr-1fr-1fr u-gap-10 u-mb-14">
-              <div>
-                <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d5 u-d-block u-mb-4">Search by Name</label>
-                <input class="u-w-100pct u-p-8-10 u-bd-1d5-solid-e2e8f0 u-br-8 u-fs-13 u-bxs-border-box" type="text" id="ssName" placeholder="e.g. Ravi" oninput="filterSwapCards()">
-              </div>
-              <div>
-                <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d5 u-d-block u-mb-4">Search by Emp ID</label>
-                <input class="u-w-100pct u-p-8-10 u-bd-1d5-solid-e2e8f0 u-br-8 u-fs-13 u-bxs-border-box" type="text" id="ssEmpId" placeholder="e.g. EMP001" oninput="filterSwapCards()">
-              </div>
-              <div>
-                <label class="u-fs-11 u-fw-700 u-c-64748b u-ttr-uppercase u-ls-d5 u-d-block u-mb-4">Filter by Shift</label>
-                <select class="u-w-100pct u-p-8-10 u-bd-1d5-solid-e2e8f0 u-br-8 u-fs-13 u-bg-fff u-bxs-border-box" id="ssShift" onchange="filterSwapCards()">
-                  <option value="">All Shifts</option>
-                  {% set seen_shifts = namespace(v=[]) %}
-                  {% for eid, ename, shift, st, et, dept, desig in swap_eligible_employees %}
-                    {% if shift and shift not in seen_shifts.v %}
-                      {% set seen_shifts.v = seen_shifts.v + [shift] %}
-                      <option value="{{ shift }}">{{ shift }}</option>
-                    {% endif %}
-                  {% endfor %}
-                </select>
-              </div>
-            </div>
-
-            <!-- Employee cards grid -->
-            <div class="u-d-grid u-gtc-repeatauto-fil8151f9 u-gap-10 u-maxh-340 u-ovy-auto u-p-2-0-10 u-mb-14" id="swapCardGrid">
-              {% for eid, ename, shift, st, et, dept, desig in swap_eligible_employees %}
-              <div class="swap-emp-card u-bd-2-solid-e2e8f0 u-br-12 u-p-12-14 u-cur-pointer u-trs-d15s u-bg-fff" data-id="{{ eid }}" data-name="{{ ename|lower }}" data-shift="{{ shift|lower }}" data-dept="{{ dept|lower }}"
-                   onclick="selectSwapCard(this,'{{ eid }}','{{ ename }}','{{ shift }}','{{ st }}','{{ et }}','{{ dept }}','{{ desig }}')">
-                <div class="u-d-flex u-ai-center u-gap-10 u-mb-8">
-                  <div class="u-w-38 u-h-38 u-br-50pct u-bg-linear-gradienc5d734 u-c-fff u-fs-16 u-fw-700 u-d-flex u-ai-center u-jc-center u-fxs-0">{{ ename[0]|upper }}</div>
-                  <div class="u-minw-0">
-                    <div class="u-fs-13 u-fw-700 u-c-1e293b u-ws-nowrap u-ov-hidden u-tov-ellipsis">{{ ename }}</div>
-                    <div class="u-fs-11 u-c-94a3b8">{{ eid }}</div>
-                  </div>
-                </div>
-                <div style="font-size:11px;background:{% if shift %}#FAFAFA{% else %}#f1f5f9{% endif %};color:{% if shift %}#16293F{% else %}#94a3b8{% endif %};border-radius:6px;padding:4px 8px;font-weight:600;margin-bottom:4px;">🕐 {% if shift %}{{ shift }}{% if st %} &nbsp;{{ st }}–{{ et }}{% endif %}{% else %}No shift assigned{% endif %}</div>
-                {% if dept %}<div class="u-fs-11 u-c-64748b">{{ dept }}{% if desig %} · {{ desig }}{% endif %}</div>{% endif %}
-              </div>
-              {% else %}
-              <div class="u-gc-1_-1 u-ta-center u-p-30 u-c-94a3b8 u-fs-13">No eligible colleagues found.</div>
-              {% endfor %}
-            </div>
-            <div class="u-d-none u-ta-center u-p-24 u-c-94a3b8 u-fs-13 u-bg-f8fafc u-br-10 u-mb-14" id="swapNoResults">No employees match your search.</div>
-
-            <!-- Selected employee preview -->
-            <div class="u-d-none u-bg-eff6ff u-bd-1d5-solid-bfdbfe u-br-12 u-p-14-16 u-mb-14" id="swapSelectedPreview">
-              <div class="u-fs-11 u-fw-700 u-c-3b82f6 u-ttr-uppercase u-ls-d5 u-mb-8">Selected Colleague</div>
-              <div class="u-d-flex u-ai-center u-gap-12">
-                <div class="u-w-42 u-h-42 u-br-50pct u-bg-linear-gradienc5d734 u-c-fff u-fs-18 u-fw-700 u-d-flex u-ai-center u-jc-center u-fxs-0" id="spAvatar"></div>
-                <div>
-                  <div class="u-fs-14 u-fw-700 u-c-1e293b" id="spName"></div>
-                  <div class="u-fs-12 u-c-64748b" id="spId"></div>
-                  <div class="u-fs-12 u-fw-600 u-c-1e40af u-mt-2" id="spShift"></div>
-                  <div class="u-fs-11 u-c-64748b" id="spDept"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="swap-form-row">
-              <label>Reason <span class="u-fw-400 u-c-94a3b8">(optional)</span></label>
-              <textarea name="reason" rows="2" maxlength="500" placeholder="Why do you want to swap shifts?"></textarea>
-            </div>
-            <button type="submit" class="swap-submit-btn u-op-d5 u-cur-not-allowed" id="swapSubmitBtn" disabled>🔄 Send Swap Request</button>
-          </form>
-        </div>
-        {% endif %}
-
-        <!-- My outgoing requests -->
-        <div class="swap-section-heading">📋 My Swap Requests</div>
-        {% if my_swap_requests %}
-        {% for sw in my_swap_requests %}
-        {% set sw_id, sw_tgt_id, sw_tgt_name, sw_tgt_shift, sw_reason, sw_status, sw_date = sw %}
-        {%- set s1 = 'done' -%}
-        {%- set s2 = 'done' if sw_status in ('Pending_Admin','Approved','Rejected_Admin') else ('fail' if sw_status == 'Rejected' else 'active') -%}
-        {%- set s3 = 'done' if sw_status == 'Approved' else ('fail' if sw_status == 'Rejected_Admin' else ('active' if sw_status == 'Pending_Admin' else '')) -%}
-        {%- set s4 = 'done' if sw_status == 'Approved' else ('fail' if sw_status in ('Rejected','Rejected_Admin') else '') -%}
-        <div class="swap-req-card">
-          <div class="swap-req-avatar">{{ sw_tgt_name[0]|upper }}</div>
-          <div class="swap-req-body">
-            <div class="swap-req-name">{{ sw_tgt_name }} <span class="u-fw-400 u-fs-12 u-c-94a3b8">({{ sw_tgt_id }})</span></div>
-            <div class="swap-req-shift">🕐 Their shift: {{ sw_tgt_shift }}</div>
-            {% if sw_reason %}<div class="swap-req-reason">"{{ sw_reason }}"</div>{% endif %}
-            <div class="swap-timeline">
-              <div class="stl-step"><div class="stl-dot {{ s1 }}"></div><div class="stl-lbl {{ s1 }}">Sent</div></div>
-              <div class="stl-step"><div class="stl-dot {{ s2 }}"></div><div class="stl-lbl {{ s2 }}">Colleague</div></div>
-              <div class="stl-step"><div class="stl-dot {{ s3 }}"></div><div class="stl-lbl {{ s3 }}">Admin</div></div>
-              <div class="stl-step"><div class="stl-dot {{ s4 }}"></div><div class="stl-lbl {{ s4 }}">{{ 'Done' if sw_status == 'Approved' else ('Declined' if sw_status in ('Rejected','Rejected_Admin') else 'Done') }}</div></div>
-            </div>
-            <div class="swap-req-date">{{ sw_date.strftime('%d %b %Y %H:%M') if sw_date else '—' }}</div>
-          </div>
-          <div class="swap-req-side">
-            {% if sw_status == 'Pending_Target' %}
-              <span class="sbadge sbadge-pending">Awaiting Colleague</span>
-            {% elif sw_status == 'Pending_Admin' %}
-              <span class="sbadge sbadge-admin">Awaiting Admin</span>
-            {% elif sw_status == 'Approved' %}
-              <span class="sbadge sbadge-approved">✅ Approved</span>
-            {% elif sw_status == 'Rejected' %}
-              <span class="sbadge sbadge-rejected">✗ Colleague Declined</span>
-            {% elif sw_status == 'Rejected_Admin' %}
-              <span class="sbadge sbadge-rejected">✗ Admin Rejected</span>
-            {% else %}
-              <span class="sbadge sbadge-gray">{{ sw_status }}</span>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <div class="swap-empty">
-          <div class="se-icon">🔄</div>
-          <div class="se-text">No swap requests made yet.</div>
-        </div>
-        {% endif %}
-
-      </div>
-      </div><!-- /view-shift-swap -->
 
       <div id="view-tickets" class="view">
       <div class="mod-title">🎫 Support Tickets <span>Raise a complaint or request admin support</span></div>
@@ -3065,52 +2743,6 @@
       /* ── SIDEBAR TOGGLE: toggleSidebar()/closeSidebar() now come from
          static/employee_sidebar.js, shared with the standalone
          my_performance/my_compoff/my_onboarding pages. ── */
-      function filterSwapCards() {
-        var name  = document.getElementById('ssName').value.toLowerCase().trim();
-        var empid = document.getElementById('ssEmpId').value.toLowerCase().trim();
-        var shift = document.getElementById('ssShift').value.toLowerCase().trim();
-        var cards = document.querySelectorAll('.swap-emp-card');
-        var visible = 0;
-        cards.forEach(function(c) {
-          var match = (!name  || c.dataset.name.includes(name))
-                   && (!empid || c.dataset.id.toLowerCase().includes(empid))
-                   && (!shift || c.dataset.shift === shift);
-          c.style.display = match ? '' : 'none';
-          if (match) visible++;
-        });
-        document.getElementById('swapNoResults').style.display = visible === 0 ? 'block' : 'none';
-        document.getElementById('swapCardGrid').style.display  = visible === 0 ? 'none' : 'grid';
-      }
-
-      function selectSwapCard(el, eid, ename, shift, st, et, dept, desig) {
-        document.querySelectorAll('.swap-emp-card').forEach(function(c) {
-          c.style.border = '2px solid #e2e8f0';
-          c.style.background = '#fff';
-        });
-        el.style.border = '2px solid #1E3A5F';
-        el.style.background = '#FAFAFA';
-
-        document.getElementById('swapTargetId').value = eid;
-        document.getElementById('spAvatar').textContent = ename.charAt(0).toUpperCase();
-        document.getElementById('spName').textContent   = ename;
-        document.getElementById('spId').textContent     = eid;
-        document.getElementById('spShift').textContent  = '🕐 ' + shift + (st ? '  ' + st + '–' + et : '');
-        document.getElementById('spDept').textContent   = dept + (desig ? ' · ' + desig : '');
-        document.getElementById('swapSelectedPreview').style.display = 'block';
-
-        var btn = document.getElementById('swapSubmitBtn');
-        btn.disabled = false;
-        btn.style.opacity = '1';
-        btn.style.cursor  = 'pointer';
-      }
-
-      document.getElementById('swapForm') && document.getElementById('swapForm').addEventListener('submit', function(e) {
-        if (!document.getElementById('swapTargetId').value) {
-          e.preventDefault();
-          alert('Please select a colleague to swap with.');
-        }
-      });
-
       function showPolicy(tab) {
         var tabs = ['terms','rules','limitations','instructions','posh','resignation'];
         tabs.forEach(function(t) {
@@ -3469,7 +3101,7 @@
 
       // On page load: restore last active view from hash → localStorage → dashboard
       (function() {
-        var validViews = ['dashboard','attendance','apply-leave','earnings','holidays','shift-swap','tickets','my-profile','resign','policies'];
+        var validViews = ['dashboard','attendance','apply-leave','earnings','holidays','tickets','my-profile','resign','policies'];
         var hash    = window.location.hash.replace('#', '');
         var stored  = '';
         try { stored = localStorage.getItem('portalView') || ''; } catch(e) {}

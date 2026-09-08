@@ -293,12 +293,6 @@ export const sendEmailBlast = (targetType, targetValue, subject, body) =>
   client.post('/api/admin/email-blast', { target_type: targetType, target_value: targetValue, subject, body });
 export const fetchAiHelpdeskResponse = (query) => client.post('/api/ai/hr-helpdesk', { query });
 
-// ── AI Recruitment (blueprints/ai_hrms.py, previously session-only/web-only) ─
-export const parseResumeText = (resumeText) => client.post('/api/ai/parse-resume', { resume_text: resumeText });
-
-export const screenCandidate = (parsedProfile, jobDescription) =>
-  client.post('/api/ai/screen-candidate', { parsed_profile: parsedProfile, job_description: jobDescription });
-
 export const evaluateInterview = (candidateName, position, notes) =>
   client.post('/api/ai/evaluate-interview', { candidate_name: candidateName, position, notes });
 
@@ -332,13 +326,13 @@ export const fetchSalaryReportExport = (year, month) =>
 
 // Field names match what blueprints/performance.py's api_submit_performance_review()
 // (and the web's performance_save_review()) actually store -- quarter/year
-// upsert with reviewer feedback + a manager-set potential rating, not the
-// rating/comments/hike/bonus shape this used to send (which had no
-// matching backend route or table columns at all).
-export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, potentialRating = 0, status = 'Draft') =>
+// upsert with reviewer feedback, not the rating/comments/hike/bonus shape
+// this used to send (which had no matching backend route or table columns
+// at all).
+export const submitPerformanceReview = (employeeId, quarter, year, reviewerFeedback, status = 'Draft') =>
   client.post('/api/performance/review', {
     employee_id: employeeId, quarter, year,
-    reviewer_feedback: reviewerFeedback, potential_rating: potentialRating, status,
+    reviewer_feedback: reviewerFeedback, status,
   });
 
 // createOnboardingTask (template creation) stays removed -- that's a

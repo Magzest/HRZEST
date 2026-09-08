@@ -16,12 +16,33 @@ import secrets
 import urllib.request
 import urllib.error
 
+from extensions import app_log
+
 _KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 _KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 # Signs incoming webhook payloads (blueprints/auto_debit.py's /webhooks/razorpay)
 # -- configured separately from _KEY_ID/_KEY_SECRET in the Razorpay dashboard's
 # Webhooks section, since it authenticates Razorpay -> us, not us -> Razorpay.
 _WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+
+# Sandbox-vs-live is entirely a function of which key prefix is configured
+# (Razorpay itself distinguishes rzp_test_... from rzp_live_...) -- there is
+# no separate "mode" flag to get out of sync. The one real risk is a
+# production deploy accidentally still carrying a test key (e.g. a copied
+# .env, or a developer never swapping .env.example's placeholder), which
+# would silently run every "live" signup through the sandbox. Fail fast
+# instead, same fail-secure posture as utils/helpers.py's ENCRYPTION_KEY
+# check above it in the import order.
+if os.environ.get("APP_ENV") == "production" and _KEY_ID.startswith("rzp_test_"):
+    app_log.critical(
+        "FATAL: APP_ENV=production but RAZORPAY_KEY_ID is a test-mode key "
+        "(rzp_test_...) -- refusing to start rather than silently taking real "
+        "signups through the Razorpay sandbox. Set RAZORPAY_KEY_ID/"
+        "RAZORPAY_KEY_SECRET to live (rzp_live_...) keys."
+    )
+    raise RuntimeError(
+        "RAZORPAY_KEY_ID is a test-mode key under APP_ENV=production -- refusing to start (fail-secure)."
+    )
 
 _API_BASE = "https://api.razorpay.com/v1"
 _TIMEOUT_SECONDS = 15

@@ -145,6 +145,29 @@ def admin_login():
                 (identifier,)
             )
             admin_row = cursor.fetchone()
+        if admin_row and admin_row[1] == "admin":
+            # Top-level admin accounts (not HR/SOC-analyst admin_users rows,
+            # which keep password login below) no longer authenticate with a
+            # password at all -- the emailed one-time code is the sole
+            # credential from here on, same mechanism _start_login_mfa
+            # already uses as a second factor for everyone else.
+            if not admin_row[3]:
+                # Terminated account -- same generic error as a wrong
+                # password, so a probe can't distinguish "deactivated" from
+                # "doesn't exist"/"wrong password".
+                _record_login_failure(identifier)
+                log_security_event(
+                    "access.denied", "Login attempt against a terminated admin account",
+                    level="WARNING", identifier=identifier,
+                )
+                return render_template(
+                    "admin_login.html", co=co,
+                    error="Invalid credentials. Check your ID and password.",
+                    show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY,
+                )
+            _clear_login_failures(identifier)
+            return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
+                                     "Executive Administrator")
         if admin_row and check_password_hash(admin_row[0], password):
             if not admin_row[3]:
                 # Terminated account -- same generic error as a wrong

@@ -8,7 +8,7 @@ import hashlib
 import urllib.request  # noqa: F401 -- module-level so tests can monkeypatch auth_module.urllib.request.urlopen
 import bcrypt as _bcrypt
 from functools import wraps
-from flask import session, request, jsonify, redirect, url_for, g as _flask_g
+from flask import session, request, jsonify, redirect, url_for, g as _flask_g, current_app
 from werkzeug.security import check_password_hash as _wz_check_pw
 from extensions import app_log, log_security_event
 from utils.session_risk import is_session_compromised, evaluate_session_risk
@@ -583,9 +583,14 @@ def security_settings_step_up_clear():
 def require_email_2fa(f):
     """Gate for Email Settings routes (SMTP config, including a
     reveal-plaintext-password action) behind a recent TOTP step-up --
-    see email_settings_step_up_valid() above."""
+    see email_settings_step_up_valid() above. Off by default (same as the
+    three MANDATORY_*_MFA flags in app.py) -- set REQUIRE_EMAIL_2FA=true in
+    .env, or app.config["REQUIRE_EMAIL_2FA"]=True in tests, to turn this
+    step-up back on."""
     @wraps(f)
     def wrapper(*args, **kwargs):
+        if not current_app.config.get("REQUIRE_EMAIL_2FA", False):
+            return f(*args, **kwargs)
         if not email_settings_step_up_valid():
             log_security_event(
                 "access.denied", "Email Settings accessed without a valid 2FA step-up",

@@ -1,6 +1,6 @@
 """Coverage tests for blueprints/employees.py.
 Targets: view_employees, api_employee_info, edit_employee_page,
-employee_profile, regenerate_qr, view_qrcodes, view_photos,
+employee_profile, regenerate_qr,
 generate_emp_id, api_employees, delete_employee.
 """
 import hashlib
@@ -155,21 +155,6 @@ class TestRegenerateQr:
         _admin_session(client, seed_admin)
         rv = client.post(f"/regenerate_qr/{seed_employee['employee_id']}")
         assert rv.status_code == 302
-
-
-# ── view_qrcodes / view_photos ────────────────────────────────────────────────
-
-class TestViewQrAndPhotos:
-
-    def test_view_qrcodes_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        rv = client.get("/view_qrcodes")
-        assert rv.status_code in (200, 302)
-
-    def test_view_photos_renders(self, client, seed_admin):
-        _admin_session(client, seed_admin)
-        rv = client.get("/view_photos")
-        assert rv.status_code == 200
 
 
 # ── generate_emp_id ───────────────────────────────────────────────────────────

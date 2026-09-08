@@ -18,7 +18,7 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info, coerce_datetime
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import get_indian_holidays
 import utils.config as cfg
@@ -47,54 +47,6 @@ def add_holiday():
     return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
 
 
-@leave_bp.route("/admin_leave_types", methods=["GET", "POST"])
-@admin_required
-def admin_leave_types():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    if request.method == "POST":
-        action = request.form.get("action", "")
-        if action == "add":
-            name = request.form.get("name", "").strip()
-            quota = int(request.form.get("annual_quota", 12) or 12)
-            is_paid = 1 if request.form.get("is_paid") else 0
-            if name:
-                cursor.execute(
-                    "INSERT INTO leave_types (name, annual_quota, is_paid) VALUES (%s,%s,%s)",
-                    (name, quota, is_paid)
-                )
-        elif action == "edit":
-            lt_id = int(request.form.get("lt_id", 0))
-            name = request.form.get("name", "").strip()
-            quota = int(request.form.get("annual_quota", 12) or 12)
-            is_paid = 1 if request.form.get("is_paid") else 0
-            if lt_id and name:
-                cursor.execute(
-                    "UPDATE leave_types SET name=%s, annual_quota=%s, is_paid=%s WHERE id=%s",
-                    (name, quota, is_paid, lt_id)
-                )
-        elif action == "toggle":
-            lt_id = int(request.form.get("lt_id", 0))
-            if lt_id:
-                cursor.execute(
-                    "UPDATE leave_types SET is_active = 1 - is_active WHERE id=%s", (lt_id,)
-                )
-        elif action == "delete":
-            lt_id = int(request.form.get("lt_id", 0))
-            if lt_id:
-                cursor.execute("DELETE FROM leave_types WHERE id=%s", (lt_id,))
-        db.commit()
-        cursor.close()
-        db.close()
-        return redirect(tpath("/admin_leave_types"))
-
-    cursor.execute("SELECT id, name, annual_quota, is_paid, is_active FROM leave_types ORDER BY id")
-    leave_types = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("leave_types_admin.html", leave_types=leave_types,
-        active_nav="leave_types",
-    )
 
 
 @leave_bp.route("/import_indian_holidays", methods=["POST"])
@@ -411,12 +363,13 @@ def leave_holidays():
     # admin_views.py's announcements_admin() handles create/delete for both).
     cursor.execute("""
         SELECT a.id, a.title, a.content, a.priority, a.created_at,
-               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,'')
+               COALESCE(a.visibility,'public'), COALESCE(a.target_employee_id,''), COALESCE(e.name,''),
+               a.attachment_original_name
         FROM announcements a
         LEFT JOIN employees e ON e.employee_id = a.target_employee_id
         ORDER BY a.created_at DESC
     """)
-    ann_list = cursor.fetchall()
+    ann_list = [r[:4] + (coerce_datetime(r[4]),) + r[5:] for r in cursor.fetchall()]
     pub_anns = [r for r in ann_list if r[5] == 'public']
     priv_anns = [r for r in ann_list if r[5] == 'private']
 
@@ -689,31 +642,12 @@ def request_resignation():
     return redirect(tpath("/employee_portal?resigned=1#resign"))
 
 
-@leave_bp.route("/resignation_requests")
-@admin_required
-def resignation_requests_view():
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("""
-        SELECT rr.id, e.name, rr.employee_id, rr.last_working_day, rr.reason, rr.status, rr.created_at
-        FROM resignation_requests rr
-        JOIN employees e ON rr.employee_id = e.employee_id
-        ORDER BY CASE WHEN rr.status='Pending' THEN 0 WHEN rr.status='Accepted' THEN 1 WHEN rr.status='Declined' THEN 2 ELSE 3 END, rr.created_at DESC
-    """)
-    resignations = cursor.fetchall()
-    cursor.close()
-    db.close()
-    return render_template("resignation_requests.html", resignations=resignations,
-        active_nav="resignations",
-    )
-
-
 @leave_bp.route("/resignation_action/<int:rid>", methods=["POST"])
 @admin_required
 def resignation_action(rid):
     action = request.form.get("action", "")
     if action not in ("Accepted", "Declined"):
-        return redirect(tpath("/resignation_requests"))
+        return redirect(tpath("/leave_holidays?tab=resignations"))
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -774,7 +708,7 @@ def resignation_action(rid):
 </div>"""
                 send_email_async(emp_email, f"Resignation {action} -- {emp_name}", html_body, cfg_row)
 
-    return redirect(tpath("/resignation_requests"))
+    return redirect(tpath("/leave_holidays?tab=resignations"))
 
 
 @leave_bp.route("/bulk_leave_action", methods=["POST"])

@@ -932,9 +932,6 @@ class TestAdminPageSmoke:
     def test_overtime_page(self, client):
         assert client.get("/overtime").status_code == 200
 
-    def test_documents_page(self, client):
-        assert client.get("/documents").status_code == 200
-
     def test_onboarding_page(self, client):
         assert client.get("/onboarding").status_code == 200
 

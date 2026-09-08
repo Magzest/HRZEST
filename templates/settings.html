@@ -458,9 +458,9 @@
         <div class="s3-tab-icon u-bg-eff6ff"><i class="ti ti-building u-c-1e3a8a"></i></div>
         <div class="s3-tab-text">
           <div class="s3-tab-title">Organisation</div>
-          <div class="s3-tab-sub">Attendance</div>
+          <div class="s3-tab-sub">Attendance · Company</div>
         </div>
-        <span class="s3-tab-count">1</span>
+        <span class="s3-tab-count">2</span>
       </button>
       <button class="s3-tab" id="s3tab-fin" onclick="switchGroup('fin')">
         <div class="s3-tab-icon u-bg-fefce8"><i class="ti ti-coin u-c-ca8a04"></i></div>
@@ -605,39 +605,50 @@
 
               <style>
                 /* ── Payroll Rules  Professional ── */
-                .py-wrap { display:flex; flex-direction:column; gap:8px; }
+                .py-wrap { display:flex; flex-direction:column; gap:18px; }
 
-                .py-card { background:#fff; border:1px solid #e4e7ec; border-radius:12px; overflow:hidden; transition:box-shadow .15s, border-color .15s; }
-                .py-card:hover { box-shadow:0 4px 16px rgba(15,23,42,.06); border-color:#d8dce3; }
-                .py-card--accent { border-left:4px solid #1E3A5F; background:#f7faff; }
+                .py-card { background:#fff; border:1px solid #e4e7ec; border-radius:14px; overflow:hidden; box-shadow:0 1px 2px rgba(15,23,42,.04); transition:box-shadow .18s, border-color .18s, transform .18s; }
+                .py-card:hover { box-shadow:0 10px 24px rgba(15,23,42,.08); border-color:#d8dce3; transform:translateY(-1px); }
+                .py-card--accent { border-left:4px solid #1E3A5F; background:linear-gradient(135deg,#f7faff,#FAFAFA); }
                 .py-card--accent .py-hdr { border-bottom-color:#e0ecff; }
 
-                .py-hdr { padding:13px 18px 11px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:12px; }
-                .py-hdr-icon { width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-                .py-hdr-icon i { font-size:16px; }
-                .py-hdr-title { font-size:12.5px; font-weight:700; color:#111827; letter-spacing:-.01em; }
-                .py-hdr-sub   { font-size:11px; color:#9ca3af; margin-top:2px; }
+                .py-hdr { padding:15px 20px 13px; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:13px; background:linear-gradient(180deg,#fbfcfe,#ffffff); }
+                .py-hdr-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; box-shadow:inset 0 0 0 1px rgba(15,23,42,.04); }
+                .py-hdr-icon i { font-size:17px; }
+                .py-hdr-title { font-size:13px; font-weight:800; color:#0f172a; letter-spacing:-.01em; }
+                .py-hdr-sub   { font-size:11.5px; color:#94a3b8; margin-top:2px; }
                 .py-badge-lock { font-size:10px; color:#c3c9d3; }
 
-                .py-row { display:flex; align-items:center; gap:16px; padding:12px 18px; border-bottom:1px solid #f9fafb; }
+                .py-row { display:flex; align-items:center; gap:16px; padding:13px 20px; border-bottom:1px solid #f9fafb; transition:background .15s; }
                 .py-row:last-child { border-bottom:none; }
+                .py-row:hover { background:#fafbfd; }
 
                 .py-info { flex:1; min-width:0; }
-                .py-label { font-size:12.5px; font-weight:600; color:#1f2937; }
-                .py-hint  { font-size:11px; color:#9ca3af; margin-top:2px; }
+                .py-label { font-size:12.5px; font-weight:700; color:#1f2937; }
+                .py-hint  { font-size:11.5px; color:#9ca3af; margin-top:2px; }
 
                 /* Segmented sliding control */
-                .py-seg { display:inline-flex; background:#f3f4f6; border-radius:9px; padding:3px; position:relative; flex-shrink:0; }
-                .py-seg-track { position:absolute; top:3px; left:3px; height:calc(100% - 6px); background:#fff; border-radius:6px; box-shadow:0 1px 2px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.05); transition:transform .2s cubic-bezier(.4,0,.2,1), width .2s cubic-bezier(.4,0,.2,1); pointer-events:none; }
-                .py-seg-btn { position:relative; z-index:1; padding:6px 11px; border:none; background:transparent; border-radius:6px; font-size:11.5px; font-weight:600; color:#9ca3af; cursor:pointer; white-space:nowrap; transition:color .15s; }
-                .py-seg-btn.on  { color:#111827; font-weight:700; }
-                .py-seg-btn:hover:not(.on) { color:#6b7280; }
+                .py-seg { display:inline-flex; background:#f1f3f6; border-radius:11px; padding:4px; position:relative; flex-shrink:0; box-shadow:inset 0 1px 2px rgba(15,23,42,.05); }
+                .py-seg-track {
+                  position:absolute; top:4px; left:4px; height:calc(100% - 8px);
+                  background:linear-gradient(135deg,#2563eb,#1d4ed8); border-radius:8px;
+                  box-shadow:0 3px 8px rgba(37,99,235,.35), 0 1px 2px rgba(37,99,235,.2);
+                  transition:transform .22s cubic-bezier(.4,0,.2,1), width .22s cubic-bezier(.4,0,.2,1);
+                  pointer-events:none;
+                }
+                .py-seg-btn {
+                  position:relative; z-index:1; padding:7px 13px; border:none; background:transparent; border-radius:8px;
+                  font-size:12px; font-weight:700; color:#8b95a5; cursor:pointer; white-space:nowrap;
+                  transition:color .2s;
+                }
+                .py-seg-btn.on  { color:#fff; font-weight:800; }
+                .py-seg-btn:hover:not(.on) { color:#475569; }
 
                 /* Locked value badge */
-                .py-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; background:#f9fafb; border:1px solid #e4e7ec; border-radius:7px; flex-shrink:0; }
-                .py-badge-val { font-size:13px; font-weight:800; color:#9ca3af; letter-spacing:-.02em; }
+                .py-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:repeating-linear-gradient(135deg,#f9fafb,#f9fafb 6px,#f3f4f6 6px,#f3f4f6 12px); border:1px solid #e4e7ec; border-radius:8px; flex-shrink:0; }
+                .py-badge-val { font-size:13px; font-weight:800; color:#6b7280; letter-spacing:-.02em; }
                 .py-badge-sep { font-size:9px; color:#d1d5db; }
-                .py-badge-tag { font-size:10px; font-weight:600; color:#d1d5db; letter-spacing:.03em; text-transform:uppercase; }
+                .py-badge-tag { font-size:10px; font-weight:700; color:#9ca3af; letter-spacing:.03em; text-transform:uppercase; }
 
                 /* Toggle */
                 .py-tog-row { display:flex; align-items:center; gap:9px; flex-shrink:0; }
@@ -651,28 +662,37 @@
                 .py-tog input:checked ~ .py-tog-track .py-tog-knob { left:23px; }
 
                 /* Save button */
-                .py-save { display:flex; align-items:center; justify-content:center; gap:7px; width:100%; padding:13px; background:#1E3A5F; color:#fff; border:none; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; letter-spacing:.01em; transition:background .15s, transform .1s; margin-top:6px; }
-                .py-save:hover  { background:#16293F; }
+                .py-save {
+                  display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:14px;
+                  background:#1E3A5F; color:#fff; border:none; border-radius:12px;
+                  font-size:13.5px; font-weight:800; letter-spacing:.01em; cursor:pointer;
+                  box-shadow:0 6px 16px rgba(30,58,95,.28); transition:filter .15s, transform .12s, box-shadow .15s;
+                  margin-top:4px;
+                }
+                .py-save:hover  { filter:brightness(1.06); box-shadow:0 8px 20px rgba(30,58,95,.34); transform:translateY(-1px); }
                 .py-save:active { transform:scale(.99); }
 
                 /* Dark mode */
-                body.dark-mode .py-card  { background:#161b22; border-color:#30363d; }
-                body.dark-mode .py-hdr   { border-color:#21262d; }
+                body.dark-mode .py-card  { background:#161b22; border-color:#30363d; box-shadow:none; }
+                body.dark-mode .py-hdr   { border-color:#21262d; background:linear-gradient(180deg,#171d26,#161b22); }
                 body.dark-mode .py-hdr-title { color:#cdd9e5; }
                 body.dark-mode .py-row   { border-color:#1c2128; }
+                body.dark-mode .py-row:hover { background:#1a2029; }
                 body.dark-mode .py-label { color:#cdd9e5; }
-                body.dark-mode .py-seg   { background:#21262d; }
-                body.dark-mode .py-seg-track { background:#30363d; box-shadow:none; }
+                body.dark-mode .py-seg   { background:#0d1117; box-shadow:inset 0 1px 2px rgba(0,0,0,.4); }
+                body.dark-mode .py-seg-track { background:linear-gradient(135deg,#3b82f6,#2563eb); box-shadow:0 3px 8px rgba(37,99,235,.4); }
                 body.dark-mode .py-seg-btn   { color:#6e7681; }
-                body.dark-mode .py-seg-btn.on { color:#cdd9e5; }
-                body.dark-mode .py-badge { background:#1c2128; border-color:#30363d; }
+                body.dark-mode .py-seg-btn.on { color:#fff; }
+                body.dark-mode .py-seg-btn:hover:not(.on) { color:#9ca3af; }
+                body.dark-mode .py-badge { background:repeating-linear-gradient(135deg,#1c2128,#1c2128 6px,#20262e 6px,#20262e 12px); border-color:#30363d; }
+                body.dark-mode .py-badge-val { color:#8b949e; }
                 body.dark-mode .py-badge-lock { color:#4b5563; }
                 body.dark-mode .py-tog-lbl.on { color:#cdd9e5; }
                 body.dark-mode .py-tog-track  { background:#30363d; }
                 body.dark-mode .py-tog input:checked ~ .py-tog-track { background:#1E3A5F; }
-                body.dark-mode .py-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.3); border-color:#3d4551; }
-                body.dark-mode .py-card--accent { background:#132030; border-left-color:#1E3A5F; }
-                body.dark-mode .py-card--accent .py-hdr { border-bottom-color:#1e2b3d; }
+                body.dark-mode .py-card:hover { box-shadow:0 10px 24px rgba(0,0,0,.35); border-color:#3d4551; }
+                body.dark-mode .py-card--accent { background:linear-gradient(135deg,#132030,#0f1a28); border-left-color:#1E3A5F; }
+                body.dark-mode .py-card--accent .py-hdr { border-bottom-color:#1e2b3d; background:transparent; }
               </style>
 
               <div class="py-wrap">
@@ -1437,6 +1457,7 @@
       company:    { icon:'<i class="ti ti-building u-c-1e3a8a"></i>',    bg:'#FAFAFA', title:'Companies',      sub:'Profiles, branches and branding' },
       appearance: { icon:'<i class="ti ti-palette u-c-7c3aed"></i>',     bg:'#EEF2F6', title:'Appearance',     sub:'Theme and display' },
       attendance: { icon:'<i class="ti ti-fingerprint u-c-16a34a"></i>', bg:'#f0fdf4', title:'Attendance',     sub:'Punch-in methods' },
+      company:    { icon:'<i class="ti ti-building u-c-1e3a8a"></i>',    bg:'#eff6ff', title:'Company',        sub:'Company management' },
       payroll:    { icon:'<i class="ti ti-coin u-c-ca8a04"></i>',        bg:'#fefce8', title:'Payroll',        sub:'Salary rules' },
       salary:     { icon:'<i class="ti ti-cash u-c-16a34a"></i>',        bg:'#f0fdf4', title:'Salary',         sub:'Per-employee rates' },
       email:      { icon:'<i class="ti ti-mail u-c-0284c7"></i>',        bg:'#f0f9ff', title:'Email',          sub:'SMTP and notifications' }
