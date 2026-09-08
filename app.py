@@ -265,6 +265,30 @@ _TENANT_STATUS_RECHECK_SEC = 5 * 60
 
 
 @app.before_request
+def _normalize_loopback_host():
+    """WebAuthn (utils/webauthn_utils.py) refuses "127.0.0.1"/"::1" as an RP
+    ID -- only a real hostname, or the spec's special-cased "localhost",
+    works -- so local dev needs every page served from "localhost", not the
+    IP literal. This used to be a client-side redirect placed on the
+    post-login templates only (admin_base.html/employee_portal.html/
+    index.html): it fired *after* login had already set a session cookie
+    scoped to host "127.0.0.1", then navigated to "localhost", a different
+    host as far as the browser's cookie jar is concerned -- so the
+    just-issued cookie never came along, the very next request looked
+    unauthenticated, and the user was bounced back to login for a second
+    full login+OTP cycle. Redirecting here instead, before any session
+    handling runs (registered first, ahead of tenant/session/CSRF hooks),
+    means every page -- including the login and MFA-verify pages -- is
+    already on "localhost" before any cookie is ever set, so no session
+    is ever bound to the host that's about to be abandoned.
+    """
+    host = request.host.partition(":")[0]
+    if host in ("127.0.0.1", "::1"):
+        new_host = request.host.replace(host, "localhost", 1)
+        return redirect(request.url.replace(request.host, new_host, 1), code=302)
+
+
+@app.before_request
 def _resolve_tenant():
     """Determine the tenant database for this request and store it in
     g.tenant_db. Registered second -- right after the perf timer, before
