@@ -1299,15 +1299,15 @@ def _init_core_tables(cursor, db):
             max_rating DECIMAL(3,1) NOT NULL,
             hike_pct DECIMAL(5,2) DEFAULT 0,
             incentive_pct DECIMAL(5,2) DEFAULT 0,
-            color VARCHAR(20) DEFAULT '#1E3A5F'
+            color VARCHAR(20) DEFAULT '#1e3a8a'
         )
     """)
     cursor.execute("SELECT COUNT(*) FROM hike_config")
     if cursor.fetchone()[0] == 0:
         for _lbl, _mn, _mx, _hp, _ip, _clr in [
             ("Exceptional", 4.5, 5.0, 20.00, 15.00, "#15803d"),
-            ("Exceeds Expectations", 4.0, 4.4, 15.00, 10.00, "#1E3A5F"),
-            ("Meets Expectations", 3.0, 3.9, 10.00, 5.00, "#16293F"),
+            ("Exceeds Expectations", 4.0, 4.4, 15.00, 10.00, "#2563eb"),
+            ("Meets Expectations", 3.0, 3.9, 10.00, 5.00, "#7c3aed"),
             ("Needs Improvement", 2.0, 2.9, 5.00, 0.00, "#d97706"),
             ("Below Expectations", 0.0, 1.9, 0.00, 0.00, "#dc2626"),
         ]:
