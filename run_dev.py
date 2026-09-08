@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 #!/usr/bin/env python3
 import os
+import sys
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 # Pre-set environment variables for smooth local execution
 os.environ.setdefault("FLASK_ENV", "development")

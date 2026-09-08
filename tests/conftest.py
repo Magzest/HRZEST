@@ -9,11 +9,12 @@ instance. Set them in .env.test or export before running:
 """
 import os
 import pytest
+from dotenv import load_dotenv
 
-# Override BEFORE dotenv loads (setdefault wins only if var not already in env).
-# Force-set here so they take priority over any .env file values.
+load_dotenv()
+
+# Override values for testing
 os.environ["DB_NAME"] = "att_test"
-os.environ["DB_HOST"] = "localhost"
 os.environ["APP_ENV"] = "development"   # avoids HTTPS-only cookies
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 # utils/helpers.py's PII-encryption bootstrap hard-fails at import time if
