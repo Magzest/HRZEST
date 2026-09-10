@@ -9,10 +9,22 @@ async function _writeAndShare(filename, content, encoding, mimeType) {
   file.create({ overwrite: true });
   file.write(content, encoding ? { encoding } : undefined);
 
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: filename });
+  try {
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(file.uri, { mimeType, dialogTitle: filename });
+    }
+    return file.uri;
+  } finally {
+    // These are financial documents (payslips, salary breakdowns) --
+    // left unencrypted in the app's cache directory indefinitely
+    // otherwise (this cache is never swept on its own). The share
+    // intent has already handed the OS/receiving app the file by the
+    // time shareAsync() resolves, so it's safe to remove here. Runs
+    // even if sharing was unavailable or the user cancelled, so a
+    // cancelled export doesn't leave a copy behind either. Best-effort:
+    // a delete failure must not surface as an export failure to the user.
+    try { file.delete(); } catch (_) {}
   }
-  return file.uri;
 }
 
 export const shareTextFile = (filename, textContent, mimeType = "text/csv") =>
