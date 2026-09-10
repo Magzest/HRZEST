@@ -86,6 +86,26 @@ class TestRegistrationOptionsAuthorization:
         resp = client.get("/webauthn/registration-options?emp_id=SOMEONE_ELSE")
         assert resp.status_code == 403
 
+    def test_internal_error_does_not_leak_exception_text(self, client, seed_admin, monkeypatch):
+        """Finding #17 (Low): this route used to echo the raw exception
+        string back to the client on any failure, inconsistent with
+        every other route's error handling in this codebase (generic
+        message to the client, full traceback server-side only)."""
+        import blueprints.auth as auth_bp_module
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_admin["username"]
+            sess["admin_role"] = "admin"
+
+        def _raise(*a, **k):
+            raise RuntimeError("some internal library detail nobody outside should see")
+
+        monkeypatch.setattr(auth_bp_module.webauthn, "generate_registration_options", _raise)
+        resp = client.get("/webauthn/registration-options?emp_id=ANY_EMP_ID")
+        assert resp.status_code == 500
+        assert b"internal library detail" not in resp.data
+        assert resp.get_json()["error"] == "Could not start WebAuthn registration. Please try again."
+
 
 class TestKioskFaceVerifyGate:
     def test_missing_fields_rejected(self, client):

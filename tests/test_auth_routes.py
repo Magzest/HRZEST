@@ -733,6 +733,46 @@ class TestGetEmployeeWebauthnCredential:
         resp = client.get(f"/api/employee/{seed_employee['employee_id']}/webauthn-credential")
         assert resp.status_code == 200
 
+    def test_employee_token_can_view_own_credential(self, client, seed_employee):
+        token = _employee_bearer_token(client, seed_employee)
+        resp = client.get(f"/api/employee/{seed_employee['employee_id']}/webauthn-credential",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+    def test_employee_token_cannot_view_someone_elses_credential(self, client, seed_employee, db_engine):
+        """Finding #15 (Low): the Bearer-token fallback used to only
+        check the token was valid, never binding its identity to the
+        requested emp_id -- any employee's own token could fetch any
+        OTHER employee's fingerprint_credential_id."""
+        from utils.auth import generate_password_hash
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO employees (employee_id, name, email, password, force_pin_change) "
+            "VALUES ('WATGT002','Other Employee','other@test.local',%s,0) ON CONFLICT DO NOTHING",
+            (generate_password_hash("Other@123"),)
+        )
+        db_engine.commit()
+        cur.close()
+        token = _employee_bearer_token(client, seed_employee)
+        try:
+            resp = client.get("/api/employee/WATGT002/webauthn-credential",
+                              headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+        finally:
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM employees WHERE employee_id='WATGT002'")
+            db_engine.commit()
+            cur.close()
+
+    def test_admin_token_can_view_any_credential(self, client, seed_admin, seed_employee):
+        resp = client.post("/api/login", json={
+            "username": seed_admin["username"], "password": seed_admin["password"],
+        })
+        token = resp.get_json()["token"]
+        resp = client.get(f"/api/employee/{seed_employee['employee_id']}/webauthn-credential",
+                          headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
 
 class TestWebauthnRegisterKiosk:
     def test_missing_emp_id_returns_400(self, client):

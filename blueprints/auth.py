@@ -810,8 +810,13 @@ def webauthn_registration_options():
         session["wa_reg_alg_ids"] = [a.value for a in _reg_algs]
         return webauthn.options_to_json(options), 200, {"Content-Type": "application/json"}
     except Exception as exc:
+        # Generic message to the client, full traceback server-side only --
+        # matches every other route's error handling in this codebase;
+        # this pair used to be the one place still echoing the raw
+        # exception string (library-internal, but a verbose-error
+        # inconsistency worth closing regardless).
         app_log.error("WebAuthn registration-options failed: %s", exc, exc_info=True)
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": "Could not start WebAuthn registration. Please try again."}), 500
 
 
 @auth_bp.route("/webauthn/authentication-options", methods=["GET"])
@@ -850,7 +855,7 @@ def webauthn_authentication_options():
         return webauthn.options_to_json(options), 200, {"Content-Type": "application/json"}
     except Exception as exc:
         app_log.error("WebAuthn authentication-options failed: %s", exc, exc_info=True)
-        return jsonify({"ok": False, "error": str(exc)}), 500
+        return jsonify({"ok": False, "error": "Could not start WebAuthn authentication. Please try again."}), 500
 
 
 @auth_bp.route("/api/employee/webauthn-verify-challenge", methods=["POST"])
@@ -1017,6 +1022,7 @@ def get_employee_webauthn_credential(emp_id):
     """Return the stored WebAuthn credential_id -- requires an active admin or employee session."""
     is_admin = session.get("admin_logged_in")
     session_emp = session.get("employee_id")
+    token_emp = None  # set below only for an employee-type Bearer token
     if not (is_admin or session_emp):
         # Also accept a valid Bearer token (kiosk uses admin token)
         auth = request.headers.get("Authorization", "")
@@ -1024,15 +1030,28 @@ def get_employee_webauthn_credential(emp_id):
             token_hash = _hash_token(auth[7:])
             with _db() as (cursor, _):
                 cursor.execute(
-                    "SELECT 1 FROM api_tokens WHERE token=%s AND expires_at > NOW()", (token_hash,)
+                    "SELECT identity, token_type FROM api_tokens WHERE token=%s AND expires_at > NOW()",
+                    (token_hash,)
                 )
-                if not cursor.fetchone():
+                token_row = cursor.fetchone()
+                if not token_row:
                     return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+                # Same ownership rule as a real employee session below --
+                # this path previously only checked the token was valid,
+                # never binding its identity to `emp_id` at all, so any
+                # employee's own token could fetch any OTHER employee's
+                # credential_id. An admin-type token (kiosk) is still
+                # unrestricted, matching the comment above.
+                if token_row[1] == "employee":
+                    token_emp = token_row[0]
         else:
             return jsonify({"ok": False, "msg": "Unauthorized"}), 401
     emp_id = emp_id.strip().upper()
-    # Employees may only retrieve their own credential; admins and Bearer tokens can retrieve any
+    # Employees (session- or token-based) may only retrieve their own
+    # credential; admins and admin-type Bearer tokens can retrieve any.
     if session_emp and not is_admin and session_emp.upper() != emp_id:
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 403
+    if token_emp and token_emp.upper() != emp_id:
         return jsonify({"ok": False, "msg": "Unauthorized"}), 403
     try:
         db = get_db_connection()
