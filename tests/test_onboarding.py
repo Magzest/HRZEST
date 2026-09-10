@@ -655,11 +655,14 @@ class TestMyOnboardingEmployeeFacing:
         the logged-in employee — otherwise any employee could mark any
         other employee's onboarding task as done by guessing task IDs.
 
-        Doesn't follow the redirect: my_onboarding() now clears the session
-        for a nonexistent employee_id (see the my_onboarding() fix this test
-        surfaced — it used to 500 on `emp[1]` when emp was None), which
-        would also wipe the flash message this test would otherwise assert
-        on. The DB-state assertion below is the real check anyway."""
+        A session for a nonexistent employee_id is indistinguishable from a
+        deleted employee's stale session, so employee_required's
+        _reject_if_account_deactivated() (see utils/auth.py) now kills it
+        before my_onboarding_task_done()'s own body ever runs, redirecting
+        to the unified login page with locked=1 rather than reaching the
+        route's own (now-unreachable-for-this-case) ownership check. The
+        DB-state assertion below is the real proof the task was never
+        touched."""
         ob_id, task_row_ids = assigned_onboarding
         with client.session_transaction() as sess:
             sess["employee_id"] = "SOMEONE_ELSE"
@@ -667,7 +670,7 @@ class TestMyOnboardingEmployeeFacing:
             "task_id": task_row_ids[0], "ob_id": ob_id,
         }, follow_redirects=False)
         assert resp.status_code in (301, 302)
-        assert "/my_onboarding" in resp.headers["Location"]
+        assert "/admin-login" in resp.headers["Location"] and "locked=1" in resp.headers["Location"]
 
         cur = db_engine.cursor()
         cur.execute("SELECT status FROM employee_onboarding_tasks WHERE id=%s", (task_row_ids[0],))
@@ -677,9 +680,15 @@ class TestMyOnboardingEmployeeFacing:
     def test_stale_session_for_deleted_employee_redirects_to_login(self, client):
         """my_onboarding() used to crash with a 500 (emp[1] on None) if the
         session's employee_id didn't match any row in employees — e.g. an
-        admin deletes an employee who is still logged in elsewhere."""
+        admin deletes an employee who is still logged in elsewhere.
+
+        That case is now caught earlier, at the auth layer:
+        employee_required's _reject_if_account_deactivated() (utils/auth.py)
+        treats a missing employees row the same as a deactivated one and
+        kills the session before the route body runs, redirecting to the
+        unified login page with locked=1."""
         with client.session_transaction() as sess:
             sess["employee_id"] = "DOES_NOT_EXIST"
         resp = client.get("/my_onboarding", follow_redirects=False)
         assert resp.status_code in (301, 302)
-        assert "/login" in resp.headers["Location"]
+        assert "/admin-login" in resp.headers["Location"] and "locked=1" in resp.headers["Location"]
