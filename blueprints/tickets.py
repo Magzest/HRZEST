@@ -2,7 +2,17 @@
 """Tickets blueprint -- support ticket lifecycle."""
 from flask import Blueprint, request, session, redirect, jsonify, flash
 from database import get_db_connection
-from utils.auth import admin_required, employee_required, api_required, employee_api_required
+from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
+
+# Roles allowed to read or act on company-wide support tickets via the
+# Bearer-token API below (/api/tickets, /api/tickets/<id>/action) -- the
+# web /tickets and /ticket_action routes are only @admin_required with no
+# stricter role split of their own, so this mirrors the same admin/hr
+# split used elsewhere for HR-adjacent, company-wide data (see
+# blueprints/leave.py's _LEAVE_APPROVER_ROLES, minus 'manager' -- there's
+# no per-team ticket ownership/assignment concept in this codebase for a
+# manager's involvement to scope down to).
+_TICKET_ADMIN_ROLES = ("admin", "hr")
 from utils.email_utils import get_email_config, send_email_async
 from utils.helpers import tpath, _create_notification
 
@@ -182,6 +192,7 @@ def api_employee_raise_ticket():
 
 @tickets_bp.route("/api/tickets", methods=["GET"])
 @api_required
+@api_role_required(*_TICKET_ADMIN_ROLES)
 def api_tickets():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -207,6 +218,7 @@ def api_tickets():
 
 @tickets_bp.route("/api/tickets/<int:tid>/action", methods=["POST"])
 @api_required
+@api_role_required(*_TICKET_ADMIN_ROLES)
 def api_ticket_action(tid):
     data = request.get_json(silent=True) or {}
     new_status = data.get("status", "").strip()

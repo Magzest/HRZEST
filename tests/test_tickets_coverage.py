@@ -264,8 +264,13 @@ class TestApiTickets:
         rv = client.get("/api/tickets")
         assert rv.status_code in (302, 401)
 
-    def test_returns_list_for_admin(self, client, db_engine):
-        token, cleanup = _make_admin_token(db_engine)
+    def test_returns_list_for_admin(self, client, db_engine, seed_admin):
+        # api_tickets is now role-gated (@api_role_required("admin","hr")) --
+        # needs a real admin_users row for the token's identity to resolve
+        # a role from (COALESCE(role,'admin') finds nothing for a bare
+        # "admin" identity with no matching row, same fix already applied
+        # to test_payroll_coverage.py's equivalent synthetic-token tests).
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
         try:
             rv = client.get("/api/tickets",
                             headers={"Authorization": f"Bearer {token}"})
@@ -274,3 +279,91 @@ class TestApiTickets:
             assert "tickets" in data
         finally:
             cleanup()
+
+    def test_non_admin_role_denied(self, client, db_engine, seed_admin):
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.get("/api/tickets", headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 403
+        finally:
+            cleanup()
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
+
+    def test_hr_role_allowed(self, client, db_engine, seed_admin):
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='hr' WHERE username=%s", (seed_admin["username"],))
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.get("/api/tickets", headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 200
+        finally:
+            cleanup()
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
+
+
+# ── api_ticket_action (admin) ────────────────────────────────────────────────
+
+class TestApiTicketAction:
+
+    def _make_ticket(self, db_engine, emp_id):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO tickets (employee_id, category, subject, description, priority) "
+            "VALUES (%s,'IT','Role Gate Test','desc','Medium') RETURNING id",
+            (emp_id,)
+        )
+        tid = cur.fetchone()[0]
+        cur.close()
+        db_engine.commit()
+        return tid
+
+    def test_unauthenticated_returns_401(self, client):
+        rv = client.post("/api/tickets/1/action", json={"status": "Resolved"})
+        assert rv.status_code == 401
+
+    def test_admin_can_act(self, client, db_engine, seed_admin, seed_employee):
+        tid = self._make_ticket(db_engine, seed_employee["employee_id"])
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.post(f"/api/tickets/{tid}/action",
+                             json={"status": "Resolved", "admin_response": "done"},
+                             headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 200
+            cur = db_engine.cursor()
+            cur.execute("SELECT status FROM tickets WHERE id=%s", (tid,))
+            assert cur.fetchone()[0] == "Resolved"
+            cur.close()
+        finally:
+            cleanup()
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM tickets WHERE id=%s", (tid,))
+            db_engine.commit()
+            cur.close()
+
+    def test_non_admin_role_denied(self, client, db_engine, seed_admin, seed_employee):
+        """api_ticket_action used to check only @api_required -- any
+        admin-side role could close/edit any employee's ticket. Now
+        gated to @api_role_required("admin","hr")."""
+        tid = self._make_ticket(db_engine, seed_employee["employee_id"])
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.post(f"/api/tickets/{tid}/action",
+                             json={"status": "Resolved"},
+                             headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 403
+            cur.execute("SELECT status FROM tickets WHERE id=%s", (tid,))
+            assert cur.fetchone()[0] != "Resolved", "ticket was mutated despite the role check"
+        finally:
+            cleanup()
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("DELETE FROM tickets WHERE id=%s", (tid,))
+            db_engine.commit()
+            cur.close()
