@@ -451,9 +451,16 @@
 
       <!-- ═══ VIEW: DASHBOARD ═══ -->
       <div id="view-dashboard" class="view">
-      <div class="page-header">
-        <h1>Welcome, <span data-scramble>{{ emp[1] }}</span>! 👋</h1>
-        <p>{{ today }} &nbsp;|&nbsp; <span id="clock"></span></p>
+      <div class="page-header u-d-flex u-ai-flex-start u-jc-space-between u-gap-12 u-fxw-wrap">
+        <div>
+          <h1>Welcome, <span data-scramble>{{ emp[1] }}</span>! 👋</h1>
+          <p>{{ today }} &nbsp;|&nbsp; <span id="clock"></span></p>
+        </div>
+        {% if emp[2] and emp[2].strip().lower() == 'hr' %}
+        <a href="{{ tpath('/employees') }}" class="u-d-flex u-ai-center u-gap-7 u-p-9-16 u-br-10 u-bg-1e3a8a u-c-fff u-fs-13 u-fw-700 u-tdec-none u-fxs-0">
+          <i class="ti ti-users"></i> HR Dashboard
+        </a>
+        {% endif %}
       </div>
 
       <!-- PROFILE + TODAY ROW -->
@@ -2778,7 +2785,16 @@
         if (ac) ac.scrollTo({ top: 0, behavior: 'smooth' });
         history.replaceState(null, '', '#' + viewId);
         try { localStorage.setItem('portalView', viewId); } catch(e) {}
-        closeSidebar();
+        // static/employee_sidebar.js (which defines closeSidebar) loads via
+        // a <script src> further down this document than this block -- the
+        // very first showView() call happens synchronously during this
+        // block's own page-load-time "restore last active view" IIFE below,
+        // before that later tag has run. Calling closeSidebar()
+        // unconditionally at that point threw a ReferenceError and aborted
+        // the rest of this script block, silently leaving every var
+        // declared after this point (attCfg included) unset -- breaking
+        // Mark Attendance and anything else defined later in this block.
+        if (typeof closeSidebar === 'function') closeSidebar();
       }
 
 

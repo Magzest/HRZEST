@@ -110,6 +110,32 @@ class TestEmployeePortalStoredXssEscaping:
         assert "escHtml(i.notes)" in body
 
 
+class TestShowViewClosesSidebarSafely:
+    """showView()'s closeSidebar() call used to be unconditional, but
+    closeSidebar() is only defined in static/employee_sidebar.js, which
+    this template loads via a plain <script src> placed AFTER the inline
+    <script> block that defines showView() -- and that same inline block
+    calls showView() once, synchronously, during its own page-load-time
+    "restore last active view" IIFE, well before the browser ever reaches
+    the later <script src> tag. That threw an uncaught ReferenceError on
+    every single page load, which aborted the rest of that script block's
+    top-level execution -- silently leaving every var declared later in
+    the block (attCfg, myEmpId) unset, which is what made the "Mark
+    Attendance" button (openWfhScanner() -> pickAuthCombo() -> attCfg.*)
+    appear to do nothing when clicked. Static-source regression check
+    (this codebase has no browser/JS test harness) confirming the guard
+    is in place so a future edit can't silently drop it back to an
+    unconditional call."""
+
+    def test_close_sidebar_call_is_guarded(self, client, seed_employee):
+        _emp_session(client, seed_employee)
+        rv = client.get("/employee_portal")
+        assert rv.status_code == 200
+        body = rv.data.decode("utf-8")
+        assert "if (typeof closeSidebar === 'function') closeSidebar();" in body
+        assert "\n        closeSidebar();" not in body
+
+
 # ── my_qr ─────────────────────────────────────────────────────────────────────
 
 class TestMyQr:
