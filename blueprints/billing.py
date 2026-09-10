@@ -173,14 +173,37 @@ def verify_payment():
         portal_url = f"{_safe_app_url()}/{subdomain}/login"  # "/admin_login" hasn't been a real route since an earlier rename
         return jsonify({"ok": True, "portal_url": portal_url, "already_provisioned": True})
 
+    # "AND status != 'paid'" is load-bearing, not decorative -- mirrors
+    # seats.py's verify_payment() exactly: two near-simultaneous requests
+    # for the same order (a flaky-network client retry, a double-tap)
+    # must not both pass the status=='provisioned' check above and each
+    # go on to call provision_tenant() for the same subdomain. Only the
+    # request whose UPDATE actually flips a row (cur.rowcount == 1) gets
+    # to provision below; the loser re-reads the now-committed status and
+    # returns the same idempotent "already provisioned"/"already paid"
+    # response a retried request expects, instead of racing into
+    # provision_tenant()'s own subdomain-taken rejection.
     cur.execute(
         "UPDATE payment_orders SET status='paid', razorpay_payment_id=%s, paid_at=NOW() "
-        "WHERE razorpay_order_id=%s",
+        "WHERE razorpay_order_id=%s AND status != 'paid'",
         (razorpay_payment_id, razorpay_order_id)
     )
+    won_race = cur.rowcount == 1
     conn.commit()
     cur.close()
     conn.close()
+
+    if not won_race:
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute("SELECT status FROM payment_orders WHERE razorpay_order_id=%s", (razorpay_order_id,))
+        _row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if _row and _row[0] == "provisioned":
+            portal_url = f"{_safe_app_url()}/{subdomain}/login"
+            return jsonify({"ok": True, "portal_url": portal_url, "already_provisioned": True})
+        return jsonify({"ok": True, "already_paid": True})
 
     # The applicant already set (and it was hashed at) their real admin
     # password during the gated signup application -- OTP-verified and

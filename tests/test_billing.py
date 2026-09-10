@@ -317,3 +317,41 @@ class TestVerifyPayment:
             cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
             cur.close()
             _cleanup(db_engine, application_id=application_id)
+
+    def test_concurrent_verify_never_provisions_twice(self, client, db_engine, monkeypatch):
+        """Finding #18 (Low): the UPDATE used to have no idempotency guard
+        of its own (unlike seats.py's equivalent) -- two near-simultaneous
+        requests for the same order could both pass the status=='created'
+        check above and both go on to call provision_tenant() for the same
+        subdomain. Simulates the race's mid-flight state directly (order
+        already flipped to 'paid' by a "concurrent" request, not yet
+        'provisioned') rather than real threading, since the point is the
+        UPDATE's own atomicity, not thread scheduling."""
+        monkeypatch.setattr("utils.razorpay_utils.razorpay_configured", lambda: True)
+        monkeypatch.setattr("blueprints.billing.verify_payment_signature", lambda *a, **k: True)
+        provision_calls = []
+        monkeypatch.setattr(
+            "blueprints.org.provision_tenant",
+            lambda *a, **k: provision_calls.append(1) or (True, None, "http://x/login", "http://x/checkin"),
+        )
+        monkeypatch.setattr("blueprints.org.send_payment_confirmation_email", lambda *a, **k: None)
+
+        application_id, fields = _insert_application(db_engine)
+        order_id = "order_race_" + secrets.token_hex(6)
+        _insert_payment_order(db_engine, application_id, fields, order_id)
+        cur = db_engine.cursor()
+        # Pre-flip to 'paid' -- the state a "winning" concurrent request
+        # would have already committed by the time this one's UPDATE runs.
+        cur.execute("UPDATE att_master.payment_orders SET status='paid' WHERE razorpay_order_id=%s", (order_id,))
+        cur.close()
+        try:
+            resp = client.post("/api/billing/verify_payment", json={
+                "razorpay_order_id": order_id, "razorpay_payment_id": "pay_ok", "razorpay_signature": "good-sig",
+            })
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["ok"] is True
+            assert data.get("already_paid") is True
+            assert not provision_calls, "the loser of the race must never call provision_tenant"
+        finally:
+            _cleanup(db_engine, application_id=application_id)
