@@ -257,6 +257,63 @@ class TestValidateUpload:
         assert not ok
         assert "too large" in msg.lower()
 
+    # Finding #11 (Medium): doc/docx/xls/xlsx previously had no magic-byte
+    # check at all -- only filename extension + client-supplied
+    # Content-Type, both attacker-controlled. Mirrors the existing pdf/
+    # png/jpg pattern above.
+    def test_docx_magic_bytes_mismatch_rejected(self, monkeypatch):
+        self._ok_scan(monkeypatch)
+        ok, msg = helpers._validate_upload(
+            _fs("resume.docx", b"NOT A REAL DOCX FILE AT ALL",
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            allowed_exts={"docx"})
+        assert not ok
+        assert "Invalid DOCX" in msg
+
+    def test_xlsx_magic_bytes_mismatch_rejected(self, monkeypatch):
+        self._ok_scan(monkeypatch)
+        ok, msg = helpers._validate_upload(
+            _fs("data.xlsx", b"<script>alert(1)</script>",
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            allowed_exts={"xlsx"})
+        assert not ok
+        assert "Invalid XLSX" in msg
+
+    def test_doc_magic_bytes_mismatch_rejected(self, monkeypatch):
+        self._ok_scan(monkeypatch)
+        ok, msg = helpers._validate_upload(
+            _fs("resume.doc", b"NOT A REAL DOC FILE AT ALL", content_type="application/msword"),
+            allowed_exts={"doc"})
+        assert not ok
+        assert "Invalid DOC" in msg
+
+    def test_xls_magic_bytes_mismatch_rejected(self, monkeypatch):
+        self._ok_scan(monkeypatch)
+        ok, msg = helpers._validate_upload(
+            _fs("data.xls", b"NOT A REAL XLS FILE AT ALL", content_type="application/vnd.ms-excel"),
+            allowed_exts={"xls"})
+        assert not ok
+        assert "Invalid XLS" in msg
+
+    def test_valid_docx_accepted(self, monkeypatch):
+        self._ok_scan(monkeypatch)
+        # A real docx/xlsx is a ZIP (OOXML) -- PK\x03\x04 is the real
+        # signature every such file starts with, regardless of what's
+        # actually zipped inside it.
+        ok, msg = helpers._validate_upload(
+            _fs("resume.docx", b"PK\x03\x04" + b"rest of a real zip container",
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            allowed_exts={"docx"})
+        assert ok
+
+    def test_valid_doc_accepted(self, monkeypatch):
+        self._ok_scan(monkeypatch)
+        ok, msg = helpers._validate_upload(
+            _fs("resume.doc", b"\xd0\xcf\x11\xe0" + b"rest of a real OLE2 container",
+                content_type="application/msword"),
+            allowed_exts={"doc"})
+        assert ok
+
 
 class TestValidateImageFile:
     def _ok_scan(self, monkeypatch):

@@ -462,6 +462,24 @@ def _validate_upload(file_storage, allowed_exts=None):
         log_security_event("validation.failure", "Upload rejected: magic bytes don't match .jpg",
                            level="WARNING", upload_filename=file_storage.filename)
         return False, "Invalid JPEG file."
+    if ext in ("docx", "xlsx") and not header.startswith(b"PK\x03\x04"):
+        # Modern Office formats are just ZIP archives (OOXML) -- same
+        # magic bytes as every other ZIP, but neither extension nor
+        # content-type alone is attacker-controlled the way this check
+        # is, so this is what actually stops a payload uploaded with a
+        # spoofed .docx/.xlsx extension + matching Content-Type header.
+        log_security_event("validation.failure", f"Upload rejected: magic bytes don't match .{ext}",
+                           level="WARNING", upload_filename=file_storage.filename)
+        return False, f"Invalid {ext.upper()} file."
+    if ext in ("doc", "xls") and not header.startswith(b"\xd0\xcf\x11\xe0"):
+        # Legacy Office formats are OLE2 compound files, always starting
+        # with this exact 4-byte signature (the same on-disk format .msi/
+        # .msg files also use, so this only proves "a real OLE2 container",
+        # not specifically Word/Excel -- ClamAV below is the real backstop
+        # for what's actually inside one).
+        log_security_event("validation.failure", f"Upload rejected: magic bytes don't match .{ext}",
+                           level="WARNING", upload_filename=file_storage.filename)
+        return False, f"Invalid {ext.upper()} file."
     file_storage.stream.seek(0, 2)
     size_mb = file_storage.stream.tell() / (1024 * 1024)
     file_storage.stream.seek(0)
