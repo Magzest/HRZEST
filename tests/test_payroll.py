@@ -463,6 +463,52 @@ class TestApiSalaryConfigPost:
         })
         assert resp.status_code == 401
 
+    def test_non_admin_role_denied(self, client, seed_admin, seed_employee, db_engine):
+        """api_salary_config_post used to check only @api_required (any
+        admin-side token, any role) -- a lower-privilege role like
+        soc_analyst could silently overwrite any employee's pay rate. Now
+        gated to @api_role_required("admin"), same as the GET twin and
+        the web /update_salary route."""
+        token = _admin_token(client, seed_admin)
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.post("/api/salary_config", json={
+                "employee_id": seed_employee["employee_id"],
+                "salary_per_day": 99999,
+            }, headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+            cur.execute("SELECT salary_per_day FROM salary_config WHERE employee_id=%s",
+                        (seed_employee["employee_id"],))
+            row = cur.fetchone()
+            assert row is None or float(row[0]) != 99999, "salary was written despite the role check"
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
+
+    def test_write_is_audited(self, client, seed_admin, seed_employee, db_engine):
+        # audit_logs is append-only at the DB level (a trigger rejects
+        # DELETE/UPDATE against it) -- no pre-test cleanup possible or
+        # needed; a distinctive salary value is enough to find THIS
+        # write's own row without touching any other test's rows.
+        token = _admin_token(client, seed_admin)
+        cur = db_engine.cursor()
+        resp = client.post("/api/salary_config", json={
+            "employee_id": seed_employee["employee_id"],
+            "salary_per_day": 4242,
+        }, headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+        cur.execute(
+            "SELECT detail FROM audit_logs WHERE target_id=%s AND action='update_salary' "
+            "ORDER BY id DESC LIMIT 1",
+            (seed_employee["employee_id"],)
+        )
+        row = cur.fetchone()
+        assert row is not None, "api_salary_config_post's write was not audited"
+        assert "4242" in row[0]
+        cur.close()
+
 
 # ===========================================================================
 # 12. API: GET /api/salary_report

@@ -444,7 +444,10 @@ class TestApiSalaryConfig:
         finally:
             cleanup()
 
-    def test_post_missing_fields_returns_400(self, client, db_engine):
+    def test_post_missing_fields_returns_400(self, client, db_engine, seed_admin):
+        # api_salary_config_post is now role-gated (@api_role_required("admin"))
+        # same as its GET twin above -- needs seed_admin's row to exist for
+        # "test_admin" to resolve to a real admin_users.role.
         raw, cleanup = _make_api_token(db_engine)
         try:
             rv = client.post("/api/salary_config",
@@ -455,7 +458,7 @@ class TestApiSalaryConfig:
         finally:
             cleanup()
 
-    def test_post_insert_salary(self, client, db_engine, seed_employee):
+    def test_post_insert_salary(self, client, db_engine, seed_employee, seed_admin):
         raw, cleanup = _make_api_token(db_engine)
         try:
             cur = db_engine.cursor()
@@ -471,7 +474,7 @@ class TestApiSalaryConfig:
         finally:
             cleanup()
 
-    def test_post_update_existing_salary(self, client, db_engine, seed_employee):
+    def test_post_update_existing_salary(self, client, db_engine, seed_employee, seed_admin):
         raw, cleanup = _make_api_token(db_engine)
         try:
             cur = db_engine.cursor()

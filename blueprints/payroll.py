@@ -18,12 +18,15 @@ import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from flask import (
     Blueprint, request, session, redirect, jsonify, render_template,
-    flash,
+    flash, current_app,
 )
 
 from database import get_db_connection
 from extensions import app_log, limiter, log_security_event
-from utils.auth import admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required
+from utils.auth import (
+    admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required,
+    email_settings_step_up_valid,
+)
 from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
@@ -369,6 +372,23 @@ def email_config():
     # keeps the "Setup Email First" link on the salary report page working.
     if request.method == "GET":
         return redirect(tpath("/settings?tab=email"))
+
+    # This POST branch writes the exact same smtp_pass column as the newer,
+    # step-up-gated /api/settings/email (blueprints/admin_views.py) -- a
+    # security audit found it had been left completely unguarded when the
+    # GET side was retired above, letting anyone with a plain admin session
+    # bypass the 2FA step-up gate entirely by posting here directly instead
+    # (no template links to this POST target anymore -- see templates/
+    # salary_report.html, which only GETs it -- so this closes a live but
+    # UI-unreachable bypass, not a used flow). Same off-by-default flag
+    # (current_app.config["REQUIRE_EMAIL_2FA"]) as every other step-up gate
+    # in this codebase.
+    if current_app.config.get("REQUIRE_EMAIL_2FA", False) and not email_settings_step_up_valid():
+        log_security_event(
+            "access.denied", "Email Settings (legacy /email_config) accessed without a valid 2FA step-up",
+            level="WARNING", identifier=session.get("admin_username"),
+        )
+        return jsonify({"ok": False, "msg": "2FA verification required"}), 403
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -1114,6 +1134,7 @@ def api_salary_config_get():
 
 @payroll_bp.route("/api/salary_config", methods=["POST"])
 @api_required
+@api_role_required("admin")
 def api_salary_config_post():
     data = request.get_json() or {}
     emp_id = data.get("employee_id")
@@ -1130,6 +1151,7 @@ def api_salary_config_post():
     db.commit()
     cursor.close()
     db.close()
+    _audit("update_salary", "salary_config", emp_id, f"salary_per_day set to {salary} (via API)")
     return jsonify({"ok": True})
 
 
