@@ -356,6 +356,13 @@ def edit_employee():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
+    # Fetched before the UPDATE specifically to audit a role (job-title)
+    # change -- this is HR display data, not admin_users.role (the real
+    # privilege field, which has no write path at all outside account
+    # creation), but it had no audit trail on any write path before.
+    cursor.execute("SELECT role FROM employees WHERE employee_id=%s", (emp_id,))
+    _prev_row = cursor.fetchone()
+    _prev_role = _prev_row[0] if _prev_row else None
     cursor.execute(
         "UPDATE employees SET name=%s, email=%s, role=%s, date_of_joining=%s, "
         "department=%s, manager_name=%s, manager_id=%s, phone=%s, gender=%s, dob=%s, blood_group=%s, "
@@ -372,6 +379,8 @@ def edit_employee():
     db.commit()
     cursor.close()
     db.close()
+    if role != _prev_role:
+        _audit("update_employee_role", "employees", emp_id, f"role changed from {_prev_role!r} to {role!r}")
     flash(f"Employee '{emp_id}' updated successfully.", "success")
     return redirect(tpath("/employees"))
 
@@ -2004,6 +2013,9 @@ def api_edit_employee(emp_id):
         return jsonify({"ok": False, "msg": "name required"}), 400
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT role FROM employees WHERE employee_id=%s", (emp_id,))
+    _prev_row = cursor.fetchone()
+    _prev_role = _prev_row[0] if _prev_row else None
     cursor.execute(
         "UPDATE employees SET name=%s, email=%s, role=%s, date_of_joining=%s WHERE employee_id=%s",
         (name, email, role, date_of_joining, emp_id)
@@ -2011,6 +2023,8 @@ def api_edit_employee(emp_id):
     db.commit()
     cursor.close()
     db.close()
+    if role != _prev_role:
+        _audit("update_employee_role", "employees", emp_id, f"role changed from {_prev_role!r} to {role!r} (via API)")
     return jsonify({"ok": True, "msg": "Employee updated."})
 
 

@@ -472,6 +472,30 @@ class TestApiEditEmployee:
         assert cur.fetchone()[0] == "Updated Via API"
         cur.close()
 
+    def test_role_change_is_audited(self, client, seed_admin, seed_employee, db_engine):
+        """Finding #13 (Medium) -- API twin of the same web-path
+        regression in test_employees_coverage.py::TestEditEmployee."""
+        token = _admin_bearer_token(client, seed_admin)
+        emp_id = seed_employee["employee_id"]
+        cur = db_engine.cursor()
+        try:
+            resp = client.put(f"/api/employees/{emp_id}", json={
+                "name": seed_employee["name"], "role": "Staff Engineer (API)"},
+                headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+            cur.execute(
+                "SELECT detail FROM audit_logs WHERE target_id=%s AND action='update_employee_role' "
+                "ORDER BY id DESC LIMIT 1",
+                (emp_id,)
+            )
+            row = cur.fetchone()
+            assert row is not None, "API role change was not audited"
+            assert "Staff Engineer (API)" in row[0]
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (emp_id,))
+            db_engine.commit()
+            cur.close()
+
 
 class TestApiDeleteEmployee:
     def test_not_found(self, client, seed_admin):

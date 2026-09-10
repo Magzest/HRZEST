@@ -357,3 +357,46 @@ class TestEditEmployee:
         cur.execute("UPDATE employees SET name=%s WHERE employee_id=%s",
                     (seed_employee["name"], seed_employee["employee_id"]))
         cur.close()
+
+    def test_role_change_is_audited(self, client, seed_admin, seed_employee, db_engine):
+        """Finding #13 (Medium): no write path to employees.role (the
+        free-text job-title field -- confirmed distinct from
+        admin_users.role, the real privilege field) called _audit(), so a
+        role/job-title change left no trail. A no-op edit (role
+        unchanged) must NOT create a fresh audit_logs row each time --
+        audit_logs is append-only, so this is checked by row count, not
+        by deleting between assertions."""
+        _admin_session(client, seed_admin)
+        emp_id = seed_employee["employee_id"]
+        cur = db_engine.cursor()
+        cur.execute("SELECT COUNT(*) FROM audit_logs WHERE target_id=%s AND action='update_employee_role'", (emp_id,))
+        before = cur.fetchone()[0]
+        try:
+            rv = client.post("/edit_employee", data={
+                "emp_id": emp_id, "name": seed_employee["name"], "role": "Senior Engineer",
+                "email": "emp@test.local", "date_of_joining": "2024-01-01",
+                "work_mode": "office", "department": "Engineering",
+            })
+            assert rv.status_code == 302
+            cur.execute(
+                "SELECT detail FROM audit_logs WHERE target_id=%s AND action='update_employee_role' "
+                "ORDER BY id DESC LIMIT 1",
+                (emp_id,)
+            )
+            row = cur.fetchone()
+            assert row is not None, "role change was not audited"
+            assert "Senior Engineer" in row[0]
+
+            # Editing again with the SAME role must not add another row.
+            client.post("/edit_employee", data={
+                "emp_id": emp_id, "name": seed_employee["name"], "role": "Senior Engineer",
+                "email": "emp@test.local", "date_of_joining": "2024-01-01",
+                "work_mode": "office", "department": "Engineering",
+            })
+            cur.execute("SELECT COUNT(*) FROM audit_logs WHERE target_id=%s AND action='update_employee_role'", (emp_id,))
+            after_noop = cur.fetchone()[0]
+            assert after_noop == before + 1, "an unchanged role must not create a second audit row"
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (emp_id,))
+            db_engine.commit()
+            cur.close()
