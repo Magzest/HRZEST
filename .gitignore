@@ -13,6 +13,7 @@ dataset/
 static/qrcodes/
 mobile/node_modules/
 mobile/.expo/
+mobile/dist/
 static/employee_docs/
 static/company_logos/
 static/id_card_templates/
