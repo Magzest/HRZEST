@@ -771,3 +771,46 @@ class TestCompanyNameFuzzyMatching:
             assert check_duplicate_admin_email("nobody-else@test.local") is None
         finally:
             self._cleanup(db_engine, "email-direct-test")
+
+
+class TestSignupOtpCleartextLoggingGate:
+    """Finding #12 (Medium): the no-SMTP-configured fallback in
+    send_org_signup_otp_email() used to log the raw OTP code unconditionally
+    whenever SMTP wasn't configured -- gated only on "no email_cfg", not on
+    APP_ENV. A production deployment with SMTP creds missing/expired/
+    misconfigured would write the real signup-verification code to
+    application logs, letting anyone with log/SIEM read access complete
+    email verification for an arbitrary address. Now explicitly gated on
+    APP_ENV == "development" (mirroring _verify_application_otp's own dev
+    bypass); production instead logs an ERROR with no code in it at all."""
+
+    def test_development_with_no_smtp_still_logs_the_code(self, monkeypatch):
+        import blueprints.org as org_module
+        monkeypatch.setenv("APP_ENV", "development")
+        monkeypatch.setattr(org_module, "get_email_config", lambda: None)
+        mock_log = type("M", (), {"calls": []})()
+        monkeypatch.setattr(org_module.app_log, "warning",
+                             lambda *a, **k: mock_log.calls.append(("warning", a, k)))
+        monkeypatch.setattr(org_module.app_log, "error",
+                             lambda *a, **k: mock_log.calls.append(("error", a, k)))
+        ok = org_module.send_org_signup_otp_email("someone@test.local", "Acme", "123456")
+        assert ok is False
+        assert any(lvl == "warning" and "123456" in args for lvl, args, _ in mock_log.calls)
+
+    def test_production_with_no_smtp_does_not_log_the_code(self, monkeypatch):
+        import blueprints.org as org_module
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setattr(org_module, "get_email_config", lambda: None)
+        mock_log = type("M", (), {"calls": []})()
+        monkeypatch.setattr(org_module.app_log, "warning",
+                             lambda *a, **k: mock_log.calls.append(("warning", a, k)))
+        monkeypatch.setattr(org_module.app_log, "error",
+                             lambda *a, **k: mock_log.calls.append(("error", a, k)))
+        ok = org_module.send_org_signup_otp_email("someone@test.local", "Acme", "123456")
+        assert ok is False
+        # The code must not appear in ANY logged call, at any level.
+        for _lvl, args, _kwargs in mock_log.calls:
+            for a in args:
+                assert "123456" not in str(a)
+        # ...but the failure must still be visible to ops as an ERROR.
+        assert any(lvl == "error" for lvl, _args, _kwargs in mock_log.calls)

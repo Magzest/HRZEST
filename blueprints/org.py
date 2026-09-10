@@ -586,16 +586,37 @@ def send_org_signup_otp_email(to_email, company_name, otp_code):
     try:
         email_cfg = get_email_config()
         if not email_cfg:
-            # No SMTP configured (local dev only, same situation
-            # MANDATORY_PLATFORM_ADMIN_MFA's .env comment documents for
-            # login MFA) -- this OTP step is a required business gate, not
-            # an optional hardening layer, so there's no bypass flag for it
-            # the way login MFA has one. Logging the code here (never in a
-            # response body, and only reached when there's genuinely no
-            # other way to deliver it) is what makes the flow testable
-            # locally at all without real SMTP creds.
-            app_log.warning("send_org_signup_otp_email: no SMTP configured -- OTP for %s (%s) is %s",
-                             to_email, company_name, otp_code)
+            if os.environ.get("APP_ENV", "production") == "development":
+                # Local dev only (same situation MANDATORY_PLATFORM_ADMIN_MFA's
+                # .env comment documents for login MFA) -- this OTP step is a
+                # required business gate, not an optional hardening layer, so
+                # there's no bypass flag for it the way login MFA has one.
+                # Logging the code here (never in a response body, and only
+                # reached when there's genuinely no other way to deliver it)
+                # is what makes the flow testable locally without real SMTP
+                # creds. Explicitly gated on APP_ENV -- a production
+                # deployment with SMTP creds missing/expired/misconfigured
+                # must never fall into this branch: anyone with log/SIEM
+                # read access (a broader population than DB access, often
+                # including junior ops/on-call) could otherwise complete the
+                # email-verification step for an arbitrary address during an
+                # SMTP outage.
+                app_log.warning("send_org_signup_otp_email: no SMTP configured -- OTP for %s (%s) is %s",
+                                 to_email, company_name, otp_code)
+            else:
+                # Fails closed in production: no code anywhere an operator's
+                # log/alert pipeline (utils/alerts.py) would surface it, so
+                # this is visible to ops without being a usable bypass. The
+                # applicant is stuck at the OTP-entry screen with no way to
+                # receive a code -- a real signup is blocked, which is the
+                # correct outcome for a genuinely broken SMTP config, versus
+                # silently handing out a working credential to anyone
+                # reading the logs.
+                app_log.error(
+                    "send_org_signup_otp_email: SMTP not configured in production -- OTP delivery to %s "
+                    "for '%s' failed. Fix SMTP configuration; applicant cannot complete signup until then.",
+                    to_email, company_name,
+                )
             return False
         _company = html.escape(str(company_name))
         _code = html.escape(str(otp_code))
