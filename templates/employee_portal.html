@@ -32,11 +32,11 @@
       .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 
       /* ── APP CONTENT ── */
-      .app-content { flex: 1; overflow-y: auto; padding: 24px; }
+      .app-content { flex: 1; overflow-y: auto; padding: 18px; }
 
       /* ── RESPONSIVE ── */
       @media (max-width: 768px) {
-        .app-content { padding: 16px; }
+        .app-content { padding: 14px; }
       }
 
       /* ── ONE-SHOT CONFIRMATION BANNER (server-rendered post-redirect
@@ -57,28 +57,28 @@
       .flash-banner-red   { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; }
 
       /* CARDS ROW */
-      .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px; }
+      .cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-bottom: 14px; }
       .card {
         background: #ffffff;
         border: 1px solid #dbeafe;
-        border-radius: 16px; padding: 30px;
-        min-height: 200px;
+        border-radius: 14px; padding: 16px;
+        min-height: 160px;
       }
-      .card-title { font-size: 13px; color: #64748b; margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+      .card-title { font-size: 13px; color: #64748b; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 
       /* PROFILE */
       .profile-avatar {
-        width: 80px; height: 80px; border-radius: 50%;
+        width: 64px; height: 64px; border-radius: 50%;
         background: linear-gradient(135deg, #1e3a8a, #3b82f6);
         display: flex; align-items: center; justify-content: center;
-        font-size: 28px; font-weight: 700; margin-bottom: 12px; color: white;
+        font-size: 22px; font-weight: 700; margin-bottom: 8px; color: white;
         overflow: hidden; border: 3px solid #dbeafe; flex-shrink: 0;
       }
       .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
-      .profile-name { font-size: 17px; font-weight: 700; color: #1e293b; }
+      .profile-name { font-size: 16px; font-weight: 700; color: #1e293b; }
       .profile-sub  { font-size: 12px; color: #64748b; margin-top: 2px; }
-      .profile-rows { margin-top: 14px; display: flex; flex-direction: column; gap: 0; }
-      .profile-row  { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #1e293b; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+      .profile-rows { margin-top: 8px; display: flex; flex-direction: column; gap: 0; }
+      .profile-row  { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #1e293b; padding: 5px 0; border-bottom: 1px solid #f1f5f9; }
       .profile-row:last-child { border-bottom: none; }
       .profile-row .lbl { color: #94a3b8; width: 110px; flex-shrink: 0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
       .profile-row .val { font-size: 13px; color: #1e293b; }
@@ -106,38 +106,38 @@
       .time-val { font-weight: 600; font-size: 15px; color: #1e293b; }
 
       /* ── STATS ── */
-      .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px; }
+      .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 14px; }
       .stat-card {
-        background: white; border: 1px solid #e2e8f0; border-radius: 14px;
-        padding: 22px 16px; display: flex; align-items: center; gap: 14px;
-        transition: 0.2s; min-height: 90px;
+        background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+        padding: 12px 14px; display: flex; align-items: center; gap: 10px;
+        transition: 0.2s; min-height: 64px;
       }
       .stat-card:hover { border-color: #93c5fd; box-shadow: 0 4px 16px rgba(30,58,138,0.08); }
       .stat-icon {
-        width: 52px; height: 52px; border-radius: 12px;
+        width: 36px; height: 36px; border-radius: 10px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 24px; flex-shrink: 0;
+        font-size: 17px; flex-shrink: 0;
       }
       .si-blue   { background: #dbeafe; }
       .si-green  { background: #dcfce7; }
       .si-red    { background: #fee2e2; }
       .si-yellow { background: #fef9c3; }
-      .stat-num  { font-size: 28px; font-weight: 800; line-height: 1; }
+      .stat-num  { font-size: 21px; font-weight: 800; line-height: 1; }
       .stat-lbl  { font-size: 11px; color: #64748b; margin-top: 3px; font-weight: 500; }
       .sn-blue   { color: #2563eb; }
       .sn-green  { color: #16a34a; }
       .sn-red    { color: #dc2626; }
       .sn-yellow { color: #d97706; }
-      .stat-num-sm { font-size: 18px; }
+      .stat-num-sm { font-size: 15px; }
 
       /* CALENDAR */
-      .cal-filter { background: #ffffff; border: 1px solid #dbeafe; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+      .cal-filter { background: #ffffff; border: 1px solid #dbeafe; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
       .cal-filter label { font-size: 13px; color: #64748b; }
       .cal-filter select { padding: 7px 10px; border: 1px solid #dbeafe; border-radius: 7px; background: #f8fafc; color: #1e293b; font-size: 13px; }
       .cal-filter .btn-view { padding: 8px 18px; border: none; border-radius: 8px; background: #3b82f6; color: white; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
       .cal-filter .btn-pdf  { padding: 8px 18px; border: none; border-radius: 8px; background: #16a34a; color: white; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
 
-      .calendar { background: #ffffff; border: 1px solid #dbeafe; border-radius: 14px; padding: 18px 22px; margin-bottom: 22px; }
+      .calendar { background: #ffffff; border: 1px solid #dbeafe; border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
       .cal-header { display: grid; grid-template-columns: repeat(7, 52px); gap: 6px; justify-content: center; text-align: center; margin-bottom: 6px; }
       .cal-header span { font-size: 12px; font-weight: 700; color: #94a3b8; padding: 4px 0; text-transform: uppercase; letter-spacing: 0.3px; }
       .cal-grid  { display: grid; grid-template-columns: repeat(7, 52px); gap: 6px; justify-content: center; }
@@ -172,13 +172,13 @@
       .cal-weekend{ background: #f8fafc; color: #cbd5e1; border: 1.5px solid #e2e8f0; }
       .cal-future { background: #f8fafc; color: #e2e8f0; border: 1.5px solid #f1f5f9; }
       .cal-today  { box-shadow: 0 0 0 2px #3b82f6 !important; }
-      .cal-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: #64748b; }
-      .leg-item   { display: flex; align-items: center; gap: 5px; }
-      .leg-dot    { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+      .cal-legend { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: #64748b; }
+      .leg-item   { display: flex; align-items: center; gap: 4px; }
+      .leg-dot    { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 
       /* SECTION */
-      .section { background: #ffffff; border: 1px solid #dbeafe; border-radius: 16px; padding: 22px; margin-bottom: 22px; }
-      .section h3 { font-size: 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: #1e293b; }
+      .section { background: #ffffff; border: 1px solid #dbeafe; border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+      .section h3 { font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; color: #1e293b; }
 
       /* TABLE */
       .table-wrap { overflow-x: auto; border-radius: 10px; }
@@ -318,7 +318,7 @@
       .payslip-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
       .payslip-card {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        padding: 18px 10px; background: #f8fafc; border: 1px solid #dbeafe;
+        padding: 14px 10px; background: #f8fafc; border: 1px solid #dbeafe;
         border-radius: 12px; text-decoration: none; color: #1e293b;
         transition: background 0.2s, border-color 0.2s; gap: 6px;
       }
@@ -336,19 +336,19 @@
       .view.active { display: block; }
       #view-dashboard { display: block; } /* visible by default so page never shows blank */
       .mod-title {
-        font-size: 20px; font-weight: 700; color: #1e293b;
-        margin-bottom: 20px; padding-bottom: 14px;
+        font-size: 17px; font-weight: 700; color: #1e293b;
+        margin-bottom: 14px; padding-bottom: 10px;
         border-bottom: 2px solid #dbeafe;
-        display: flex; align-items: center; gap: 10px;
+        display: flex; align-items: center; gap: 8px;
       }
-      .mod-title span { font-size: 13px; font-weight: 400; color: #64748b; margin-left: 4px; }
+      .mod-title span { font-size: 12px; font-weight: 400; color: #64748b; margin-left: 4px; }
 
-      .page-header { margin-bottom: 20px; }
-      .page-header h1 { font-size: 22px; color: #0f172a; font-weight: 800; }
-      .page-header p  { font-size: 12px; color: #64748b; margin-top: 4px; }
+      .page-header { margin-bottom: 12px; }
+      .page-header h1 { font-size: 18px; color: #0f172a; font-weight: 800; }
+      .page-header p  { font-size: 12px; color: #64748b; margin-top: 2px; }
 
       /* ── EMPLOYEE HOLIDAY CALENDAR ── */
-      .hol-year-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+      .hol-year-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
       .hol-year-nav a { padding: 7px 14px; border-radius: 9px; text-decoration: none; background: #dbeafe; color: #1e40af; font-weight: 700; font-size: 13px; transition: 0.2s; }
       .hol-year-nav a:hover { background: #bfdbfe; }
       .hol-year-nav .hol-cur-yr { font-size: 20px; font-weight: 900; color: #1e3a8a; min-width: 60px; text-align: center; }
@@ -461,8 +461,8 @@
 
         <!-- PROFILE CARD -->
         <div class="card" data-tilt>
-          <div class="card-title">👤 My Profile</div>
-          <div class="u-d-flex u-ai-center u-gap-18 u-mb-14">
+          <div class="card-title">My Profile</div>
+          <div class="u-d-flex u-ai-center u-gap-12 u-mb-10">
             <div class="profile-avatar u-mb-0 u-fxs-0">
               {% if emp[4] %}
                 <img src="/my_photo?v={{ photo_v }}" alt="{{ emp[1] }}"
@@ -530,7 +530,7 @@
 
           <!-- title + status badge -->
           <div class="u-d-flex u-ai-flex-start u-jc-space-between u-gap-8 u-mb-4">
-            <div class="u-fs-13 u-fw-700 u-c-1e293b">📅 Today's Attendance</div>
+            <div class="u-fs-13 u-fw-700 u-c-1e293b">Today's Attendance</div>
             {% if today_att %}
               {% if att_type == 'Full Day' %}
                 <span class="u-p-4-10 u-br-999 u-fs-11 u-fw-700 u-bg-dcfce7 u-c-16a34a u-ws-nowrap u-fxs-0">✅ Full Day</span>
@@ -625,8 +625,8 @@
 
             <!-- QR code -->
             {% if emp[27] %}
-            <div class="u-fxs-0 u-d-flex u-fxd-column u-ai-center u-jc-flex-start u-pt-6 u-bdl-1-solid-f1f5f9 u-pl-14 u-gap-6">
-              <img class="u-w-116 u-h-116 u-br-8 u-bd-1-solid-e2e8f0 u-d-block" src="/{{ emp[27]|qr_url }}" alt="My QR" />
+            <div class="u-fxs-0 u-d-flex u-fxd-column u-ai-center u-jc-flex-start u-pt-4 u-bdl-1-solid-f1f5f9 u-pl-14 u-gap-4">
+              <img class="u-w-100 u-h-100 u-br-8 u-bd-1-solid-e2e8f0 u-d-block" src="/{{ emp[27]|qr_url }}" alt="My QR" />
               <div class="u-fs-9 u-fw-600 u-c-94a3b8 u-ttr-uppercase u-ls-0d5">Your QR</div>
             </div>
             {% endif %}
@@ -634,8 +634,8 @@
           </div>
 
           {% if attendance_auth_cfg.qr_enabled or attendance_auth_cfg.face_enabled or attendance_auth_cfg.fingerprint_enabled %}
-          <button class="u-mt-12 u-w-100pct u-p-11 u-bd-none u-br-10 u-bg-linear-gradienb4a52d u-c-fff u-fs-13 u-fw-700 u-cur-pointer u-d-flex u-ai-center u-jc-center u-gap-8" onclick="openWfhScanner()">
-            📍 Mark Attendance
+          <button class="u-mt-8 u-w-100pct u-p-9 u-bd-none u-br-10 u-bg-linear-gradienb4a52d u-c-fff u-fs-13 u-fw-700 u-cur-pointer u-d-flex u-ai-center u-jc-center u-gap-8" onclick="openWfhScanner()">
+            Mark Attendance
           </button>
           {% endif %}
         </div>
@@ -659,17 +659,17 @@
       </div>
 
       <!-- DONUT + HOLIDAYS ROW -->
-      <div class="u-d-grid u-gtc-1fr-1fr u-gap-18 u-mb-20">
+      <div class="u-d-grid u-gtc-1fr-1fr u-gap-12 u-mb-14">
 
         <!-- SVG Donut Chart -->
-        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-52-36 u-d-flex u-ai-center u-gap-24" data-tilt>
+        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-16-18 u-d-flex u-ai-center u-gap-16" data-tilt>
           {% set total_shown = full_days + late_days + half_days + absent_days %}
           {% if total_shown > 0 %}
             {% set full_pct  = (full_days  / total_shown * 100) | int %}
             {% set late_pct  = (late_days  / total_shown * 100) | int %}
             {% set half_pct  = (half_days  / total_shown * 100) | int %}
             {% set abs_pct   = (absent_days / total_shown * 100) | int %}
-            {% set circ = 251.2 %}
+            {% set circ = 213.6 %}
             {% set f_d  = (full_pct  / 100 * circ) | round(1) %}
             {% set l_d  = (late_pct  / 100 * circ) | round(1) %}
             {% set h_d  = (half_pct  / 100 * circ) | round(1) %}
@@ -678,48 +678,48 @@
             {% set l_o  = circ - f_d %}
             {% set h_o  = l_o - l_d %}
             {% set a_o  = h_o - h_d %}
-            <svg class="u-fxs-0" width="110" height="110" viewBox="0 0 110 110">
-              <circle cx="55" cy="55" r="40" fill="none" stroke="#e2e8f0" stroke-width="14"/>
+            <svg class="u-fxs-0" width="90" height="90" viewBox="0 0 90 90">
+              <circle cx="45" cy="45" r="34" fill="none" stroke="#e2e8f0" stroke-width="12"/>
               {% if f_d > 0 %}
-              <circle cx="55" cy="55" r="40" fill="none" stroke="#16a34a" stroke-width="14"
+              <circle cx="45" cy="45" r="34" fill="none" stroke="#16a34a" stroke-width="12"
                 stroke-dasharray="{{ f_d }} {{ circ - f_d }}" stroke-dashoffset="{{ circ * 0.25 }}"
-                transform="rotate(-90 55 55)"/>
+                transform="rotate(-90 45 45)"/>
               {% endif %}
               {% if l_d > 0 %}
-              <circle cx="55" cy="55" r="40" fill="none" stroke="#d97706" stroke-width="14"
+              <circle cx="45" cy="45" r="34" fill="none" stroke="#d97706" stroke-width="12"
                 stroke-dasharray="{{ l_d }} {{ circ - l_d }}" stroke-dashoffset="{{ circ * 0.25 - f_d }}"
-                transform="rotate(-90 55 55)"/>
+                transform="rotate(-90 45 45)"/>
               {% endif %}
               {% if h_d > 0 %}
-              <circle cx="55" cy="55" r="40" fill="none" stroke="#f97316" stroke-width="14"
+              <circle cx="45" cy="45" r="34" fill="none" stroke="#f97316" stroke-width="12"
                 stroke-dasharray="{{ h_d }} {{ circ - h_d }}" stroke-dashoffset="{{ circ * 0.25 - f_d - l_d }}"
-                transform="rotate(-90 55 55)"/>
+                transform="rotate(-90 45 45)"/>
               {% endif %}
               {% if a_d > 0 %}
-              <circle cx="55" cy="55" r="40" fill="none" stroke="#ef4444" stroke-width="14"
+              <circle cx="45" cy="45" r="34" fill="none" stroke="#ef4444" stroke-width="12"
                 stroke-dasharray="{{ a_d }} {{ circ - a_d }}" stroke-dashoffset="{{ circ * 0.25 - f_d - l_d - h_d }}"
-                transform="rotate(-90 55 55)"/>
+                transform="rotate(-90 45 45)"/>
               {% endif %}
-              <text x="55" y="51" text-anchor="middle" font-size="16" font-weight="700" fill="#1e293b">{{ att_pct }}%</text>
-              <text x="55" y="65" text-anchor="middle" font-size="9" fill="#94a3b8">attendance</text>
+              <text x="45" y="41" text-anchor="middle" font-size="13" font-weight="700" fill="#1e293b">{{ att_pct }}%</text>
+              <text x="45" y="53" text-anchor="middle" font-size="8" fill="#94a3b8">attendance</text>
             </svg>
           {% else %}
-            <svg class="u-fxs-0" width="110" height="110" viewBox="0 0 110 110">
-              <circle cx="55" cy="55" r="40" fill="none" stroke="#e2e8f0" stroke-width="14"/>
-              <text x="55" y="58" text-anchor="middle" font-size="11" fill="#94a3b8">No data</text>
+            <svg class="u-fxs-0" width="90" height="90" viewBox="0 0 90 90">
+              <circle cx="45" cy="45" r="34" fill="none" stroke="#e2e8f0" stroke-width="12"/>
+              <text x="45" y="48" text-anchor="middle" font-size="10" fill="#94a3b8">No data</text>
             </svg>
           {% endif %}
-          <div class="u-d-flex u-fxd-column u-gap-8 u-fs-12">
-            <div class="u-d-flex u-ai-center u-gap-7"><span class="u-w-10 u-h-10 u-br-3 u-bg-16a34a u-fxs-0"></span><span>Full Days <strong>{{ full_days }}</strong></span></div>
-            <div class="u-d-flex u-ai-center u-gap-7"><span class="u-w-10 u-h-10 u-br-3 u-bg-d97706 u-fxs-0"></span><span>Late Days <strong>{{ late_days }}</strong></span></div>
-            <div class="u-d-flex u-ai-center u-gap-7"><span class="u-w-10 u-h-10 u-br-3 u-bg-f97316 u-fxs-0"></span><span>Half Days <strong>{{ half_days }}</strong></span></div>
-            <div class="u-d-flex u-ai-center u-gap-7"><span class="u-w-10 u-h-10 u-br-3 u-bg-ef4444 u-fxs-0"></span><span>Absent <strong>{{ absent_days }}</strong></span></div>
+          <div class="u-d-flex u-fxd-column u-gap-5 u-fs-12">
+            <div class="u-d-flex u-ai-center u-gap-5"><span class="u-w-8 u-h-8 u-br-3 u-bg-16a34a u-fxs-0"></span><span>Full Days <strong>{{ full_days }}</strong></span></div>
+            <div class="u-d-flex u-ai-center u-gap-5"><span class="u-w-8 u-h-8 u-br-3 u-bg-d97706 u-fxs-0"></span><span>Late Days <strong>{{ late_days }}</strong></span></div>
+            <div class="u-d-flex u-ai-center u-gap-5"><span class="u-w-8 u-h-8 u-br-3 u-bg-f97316 u-fxs-0"></span><span>Half Days <strong>{{ half_days }}</strong></span></div>
+            <div class="u-d-flex u-ai-center u-gap-5"><span class="u-w-8 u-h-8 u-br-3 u-bg-ef4444 u-fxs-0"></span><span>Absent <strong>{{ absent_days }}</strong></span></div>
           </div>
         </div>
 
         <!-- Upcoming Holidays -->
-        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-52-36" data-tilt>
-          <div class="u-fs-14 u-fw-700 u-c-1e293b u-mb-12">🗓 Upcoming Holidays</div>
+        <div class="u-bg-fff u-bd-1-solid-dbeafe u-br-14 u-p-16-18" data-tilt>
+          <div class="u-fs-14 u-fw-700 u-c-1e293b u-mb-8">Upcoming Holidays</div>
           {% if upcoming_holidays %}
             {% for hdate, hname in upcoming_holidays %}
             <div class="u-d-flex u-ai-center u-gap-12 u-p-9-0 u-bdb-1-solid-f1f5f9">
@@ -1567,7 +1567,7 @@
 
       <!-- ══ VIEW: MY PROFILE ══ -->
       <div id="view-my-profile" class="view">
-        <div class="mod-title">👤 My Profile <span>View and update your personal details</span></div>
+        <div class="mod-title">My Profile <span>View and update your personal details</span></div>
 
         {% if request.args.get('profile_saved') %}
         <div class="flash-banner flash-banner-green">✅ Profile updated successfully.</div>
@@ -2640,6 +2640,15 @@
     </div><!-- /main-area -->
 
     <script>
+      // Server-sourced strings (incentive titles/notes below, and
+      // result.name further down this same block) reach innerHTML with no
+      // escaping elsewhere in this file -- admin-set text (an incentive
+      // bonus title, an employee's own display name) rendered unescaped
+      // into another employee's authenticated session is a stored-XSS
+      // sink. Mirrors the escape helper already used in admin.html and
+      // _admin_chat_widget.html.
+      function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;'); }
+
       function loadPayslip(year, month, label) {
         const modal   = document.getElementById('payslip-modal');
         const title   = document.getElementById('payslip-modal-title');
@@ -2691,7 +2700,7 @@
                 <div class="u-d-grid u-gtc-1fr-auto-auto u-p-14-18 u-fs-14 u-bdt-1-solid-e2e8f0 u-bg-f0fdf4 u-ai-center">
                   <div>
                     <span class="u-c-16a34a u-fw-700">🏆 Incentive Bonus</span>
-                    ${d.incentive_details && d.incentive_details.length ? '<div class="u-fs-11 u-c-64748b u-mt-4">' + d.incentive_details.map(function(i){return i.title + (i.notes?' — '+i.notes:'');}).join(' &nbsp;·&nbsp; ') + '</div>' : ''}
+                    ${d.incentive_details && d.incentive_details.length ? '<div class="u-fs-11 u-c-64748b u-mt-4">' + d.incentive_details.map(function(i){return escHtml(i.title) + (i.notes?' — '+escHtml(i.notes):'');}).join(' &nbsp;·&nbsp; ') + '</div>' : ''}
                   </div>
                   <span></span>
                   <span class="u-ta-right u-c-16a34a u-fw-700">+₹${d.incentive.toFixed(2)}</span>
@@ -3026,6 +3035,9 @@
                     </a>
                     <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-fff u-c-1e3a8a u-br-8 u-fs-12 u-fw-700 u-tdec-none" href="/view_payslip/{{ emp[0] }}/${year}/${month}">
                       <i class="ti ti-printer"></i> Print
+                    </a>
+                    <a class="u-d-inline-flex u-ai-center u-gap-6 u-p-8-16 u-bg-rgba255_255_255_d15 u-c-fff u-bd-1-solid-rgba255b647a u-br-8 u-fs-12 u-fw-700 u-tdec-none" href="/download_tax_statement/{{ emp[0] }}/${year}" title="Annual Form 16 / tax statement for ${year}">
+                      <i class="ti ti-file-invoice"></i> Tax Statement
                     </a>
                   </div>
                 </div>
@@ -3384,10 +3396,10 @@
           var resType   = result.att_type ? (typeMap[result.att_type] || result.att_type) : "";
           resBox.innerHTML =
             "<div style='font-size:15px;font-weight:800;color:#15803d;margin-bottom:12px;'>" + resTitle + "</div>" +
-            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Employee</span><span style='font-weight:700;color:#2563eb;'>" + result.name + "</span></div>" +
-            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Time</span><span style='font-weight:700;color:#2563eb;'>" + result.time + "</span></div>" +
-            "<div style='display:flex;justify-content:space-between;padding:7px 0;" + (resType ? "border-bottom:1px solid #d1fae5;" : "") + "font-size:13px;'><span style='color:#64748b;'>Status</span><span style='font-weight:700;color:#16a34a;'>" + resStatus + "</span></div>" +
-            (resType ? "<div style='display:flex;justify-content:space-between;padding:7px 0;font-size:13px;'><span style='color:#64748b;'>Attendance Type</span><span style='font-weight:700;color:#16a34a;'>" + resType + "</span></div>" : "");
+            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Employee</span><span style='font-weight:700;color:#2563eb;'>" + escHtml(result.name) + "</span></div>" +
+            "<div style='display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #d1fae5;font-size:13px;'><span style='color:#64748b;'>Time</span><span style='font-weight:700;color:#2563eb;'>" + escHtml(result.time) + "</span></div>" +
+            "<div style='display:flex;justify-content:space-between;padding:7px 0;" + (resType ? "border-bottom:1px solid #d1fae5;" : "") + "font-size:13px;'><span style='color:#64748b;'>Status</span><span style='font-weight:700;color:#16a34a;'>" + escHtml(resStatus) + "</span></div>" +
+            (resType ? "<div style='display:flex;justify-content:space-between;padding:7px 0;font-size:13px;'><span style='color:#64748b;'>Attendance Type</span><span style='font-weight:700;color:#16a34a;'>" + escHtml(resType) + "</span></div>" : "");
           resBox.style.display = "block";
         } catch(err) {
           stopWfhCamera();
@@ -3512,6 +3524,12 @@
       var NOTIFIED = {};   // key = "breakId_YYYY-MM-DD" → true when shown today
       var snoozeUntil = {}; // key = breakId → Date when snooze expires
 
+      // Admin-set break names reach innerHTML with no escaping in
+      // renderBreakSchedule() below -- a stored-XSS sink. Mirrors the
+      // escape helper already used in admin.html/_admin_chat_widget.html
+      // (locally scoped here since this whole block is its own IIFE).
+      function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;'); }
+
       function padZ(n) { return n < 10 ? '0'+n : ''+n; }
       function todayKey() {
         var d = new Date();
@@ -3579,7 +3597,7 @@
           var el   = document.createElement('div');
           el.style.cssText = 'display:flex;align-items:center;gap:10px;background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:10px 16px;min-width:180px;';
           el.innerHTML = '<span class="u-fs-22">' + icon + '</span>'
-            + '<div><div class="u-fs-13 u-fw-700 u-c-1e293b">' + b.name + '</div>'
+            + '<div><div class="u-fs-13 u-fw-700 u-c-1e293b">' + escHtml(b.name) + '</div>'
             + '<div class="u-fs-12 u-c-64748b u-mt-2">' + tstr + ' &nbsp;·&nbsp; ' + b.duration + ' min</div></div>';
           list.appendChild(el);
         });
@@ -3644,6 +3662,13 @@
     .ai-msg.bot { align-self: flex-start; background: #eef2f7; color: #1e293b; border-bottom-left-radius: 4px; }
     .ai-msg.bot.error { background: #fef2f2; color: #b91c1c; }
     .ai-msg.typing { align-self: flex-start; color: #94a3b8; font-size: 12px; font-style: italic; }
+    #aiChatSuggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px; }
+    .ai-suggestion {
+      border: 1px solid #cbd5e1; background: #fff; color: #1a3a8f;
+      border-radius: 20px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: 0.15s; white-space: nowrap;
+    }
+    .ai-suggestion:hover { background: #eef2f7; border-color: #93c5fd; }
     #aiChatInputRow {
       display: flex; gap: 8px; padding: 10px; border-top: 1px solid #e2e8f0; flex-shrink: 0; background: #fff;
     }
@@ -3668,7 +3693,7 @@
     </div>
     <div id="aiChatMessages"></div>
     <div id="aiChatInputRow">
-      <input id="aiChatInput" type="text" placeholder="Ask about leave, attendance…" maxlength="1000" autocomplete="off" />
+      <input id="aiChatInput" type="text" placeholder="Ask about any part of your dashboard…" maxlength="1000" autocomplete="off" />
       <button id="aiChatSend" aria-label="Send"><i class="ti ti-send"></i></button>
     </div>
   </div>
@@ -3683,6 +3708,15 @@
     var history  = [];
     var busy     = false;
 
+    var SUGGESTIONS = [
+      'What does the QR code on my dashboard do?',
+      'How do I apply for leave?',
+      'What counts as a late login?',
+      'How do I read my earnings breakdown?',
+      'How does comp-off work?',
+      'How do I raise a support ticket?',
+    ];
+
     function addMessage(text, cls) {
       var el = document.createElement('div');
       el.className = 'ai-msg ' + cls;
@@ -3692,10 +3726,30 @@
       return el;
     }
 
+    function addSuggestions() {
+      var row = document.createElement('div');
+      row.id = 'aiChatSuggestions';
+      SUGGESTIONS.forEach(function(q) {
+        var chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'ai-suggestion';
+        chip.textContent = q;
+        chip.addEventListener('click', function() {
+          row.remove();
+          send(q);
+        });
+        row.appendChild(chip);
+      });
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+      return row;
+    }
+
     function toggle(open) {
       panel.classList.toggle('open', open);
       if (open && !messages.children.length) {
-        addMessage("Hi! I'm your HR assistant — ask me about your leave balance, recent attendance, or company policy.", 'bot');
+        addMessage("Hi! I'm your HR assistant — ask me about your leave balance, attendance, earnings, or anything else on your dashboard (Comp-off/OT, Performance, Onboarding, Tickets included).", 'bot');
+        addSuggestions();
       }
       if (open) input.focus();
     }
@@ -3703,9 +3757,11 @@
     bubble.addEventListener('click', function() { toggle(!panel.classList.contains('open')); });
     closeBtn.addEventListener('click', function() { toggle(false); });
 
-    function send() {
-      var text = input.value.trim();
+    function send(presetText) {
+      var text = (typeof presetText === 'string' ? presetText : input.value).trim();
       if (!text || busy) return;
+      var suggestionsRow = document.getElementById('aiChatSuggestions');
+      if (suggestionsRow) suggestionsRow.remove();
       addMessage(text, 'user');
       input.value = '';
       busy = true;

@@ -69,6 +69,47 @@ class TestEmployeePortal:
         assert "force_change_pin" in rv.headers["Location"]
 
 
+class TestEmployeePortalStoredXssEscaping:
+    """Finding #7 (Medium): renderBreakSchedule()'s break name (admin-set
+    free text) and the WFH check-in result panel's employee name used to
+    be concatenated straight into el.innerHTML/resBox.innerHTML with no
+    escaping -- a stored-XSS sink reachable by any admin setting a break
+    name, or via an employee's own (admin-editable) display name. Fixed
+    by adding an escHtml() helper (mirroring admin.html's existing one)
+    and applying it at every server-sourced innerHTML interpolation in
+    this template. These are static-source regression checks (this
+    codebase has no browser/JS test harness) -- they verify the escaping
+    call is actually present at each fixed sink so a future edit can't
+    silently drop it back to raw concatenation."""
+
+    def test_break_schedule_name_is_escaped(self, client, seed_employee):
+        _emp_session(client, seed_employee)
+        rv = client.get("/employee_portal")
+        assert rv.status_code == 200
+        body = rv.data.decode("utf-8")
+        # The innerHTML sink specifically -- NOT the only other b.name
+        # reference in the file (a browser Notification() call's `body`
+        # text, which renders as plain text, not HTML, so it's not a sink).
+        assert "escHtml(b.name)" in body
+        assert "'<div><div class=\"u-fs-13 u-fw-700 u-c-1e293b\">' + b.name +" not in body
+
+    def test_checkin_result_fields_are_escaped(self, client, seed_employee):
+        _emp_session(client, seed_employee)
+        rv = client.get("/employee_portal")
+        assert rv.status_code == 200
+        body = rv.data.decode("utf-8")
+        assert "escHtml(result.name)" in body
+        assert "+ result.name +" not in body
+
+    def test_incentive_details_are_escaped(self, client, seed_employee):
+        _emp_session(client, seed_employee)
+        rv = client.get("/employee_portal")
+        assert rv.status_code == 200
+        body = rv.data.decode("utf-8")
+        assert "escHtml(i.title)" in body
+        assert "escHtml(i.notes)" in body
+
+
 # ── my_qr ─────────────────────────────────────────────────────────────────────
 
 class TestMyQr:
