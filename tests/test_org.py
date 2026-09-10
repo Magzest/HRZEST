@@ -17,7 +17,21 @@ test for, with explicit cleanup (DROP SCHEMA) after.
 Run with:
     python -m pytest tests/test_org.py -v
 """
+import secrets
 import pytest
+
+
+def _random_gst():
+    """A syntactically valid, but not otherwise meaningful, 15-character
+    GSTIN -- matches blueprints/org.py's _GST_RE so create_org()/
+    api_create_org() accept it, freshly random each call so unrelated
+    tests/companies never collide on check_duplicate_gst()."""
+    letters = ''.join(secrets.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in range(5))
+    return (
+        f"{secrets.randbelow(100):02d}{letters}{secrets.randbelow(10000):04d}"
+        f"{secrets.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{secrets.choice('123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+        f"Z{secrets.choice('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+    )
 
 
 def _drop_schema(db_engine, schema_name):
@@ -98,6 +112,81 @@ class TestLeadSubmission:
         resp = client.post("/api/leads", json={"name": "No Email"})
         assert resp.status_code == 400
         assert resp.get_json()["ok"] is False
+
+
+class TestFeedbackSubmission:
+    """/api/feedback backs the landing page's Feedback & Suggestions form
+    (templates/landing.html's #feedback section, static/landing_v2.js) --
+    was previously a pure client-side fake-success simulation (form hidden,
+    "Thanks!" banner shown, no request ever sent)."""
+
+    def test_submit_feedback_stores_all_fields(self, client, db_engine):
+        resp = client.post("/api/feedback", json={
+            "feedback_type": "Biometrics", "rating": 4,
+            "email": "feedback-test@test.local", "message": "Fingerprint sync is great.",
+        })
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT feedback_type, rating, email, message FROM att_master.feedback WHERE email=%s",
+            ("feedback-test@test.local",),
+        )
+        row = cur.fetchone()
+        assert row == ("Biometrics", 4, "feedback-test@test.local", "Fingerprint sync is great.")
+        cur.execute("DELETE FROM att_master.feedback WHERE email=%s", ("feedback-test@test.local",))
+        db_engine.commit()
+
+    def test_missing_message_rejected(self, client):
+        resp = client.post("/api/feedback", json={"feedback_type": "General Praise"})
+        assert resp.status_code == 400
+        assert resp.get_json()["ok"] is False
+
+    def test_email_is_optional(self, client, db_engine):
+        resp = client.post("/api/feedback", json={"feedback_type": "User Experience", "message": "Nice UI."})
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT email FROM att_master.feedback WHERE message='Nice UI.'")
+        assert cur.fetchone() == (None,)
+        cur.execute("DELETE FROM att_master.feedback WHERE message='Nice UI.'")
+        db_engine.commit()
+
+    def test_invalid_email_rejected(self, client):
+        resp = client.post("/api/feedback", json={"message": "hi", "email": "not-an-email"})
+        assert resp.status_code == 400
+
+    def test_rating_out_of_range_rejected(self, client):
+        resp = client.post("/api/feedback", json={"message": "hi", "rating": 7})
+        assert resp.status_code == 400
+
+    def test_rating_is_optional(self, client, db_engine):
+        resp = client.post("/api/feedback", json={"message": "No rating given."})
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT rating FROM att_master.feedback WHERE message='No rating given.'")
+        assert cur.fetchone() == (None,)
+        cur.execute("DELETE FROM att_master.feedback WHERE message='No rating given.'")
+        db_engine.commit()
+
+    def test_unknown_feedback_type_normalized_to_default(self, client, db_engine):
+        resp = client.post("/api/feedback", json={"feedback_type": "Nonsense Type", "message": "test normalize"})
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT feedback_type FROM att_master.feedback WHERE message='test normalize'")
+        assert cur.fetchone() == ("Feature Request",)
+        cur.execute("DELETE FROM att_master.feedback WHERE message='test normalize'")
+        db_engine.commit()
+
+    def test_message_length_is_capped(self, client, db_engine):
+        long_message = "x" * 3000
+        resp = client.post("/api/feedback", json={"message": long_message})
+        assert resp.status_code == 200
+        cur = db_engine.cursor()
+        cur.execute("SELECT LENGTH(message) FROM att_master.feedback WHERE message LIKE 'xxx%'")
+        assert cur.fetchone()[0] == 2000
+        cur.execute("DELETE FROM att_master.feedback WHERE message LIKE 'xxx%'")
+        db_engine.commit()
 
 
 class TestSignupValidation:
@@ -206,6 +295,7 @@ class TestGatedSignupFlow:
             "company_name": "Gated Flow Org", "subdomain": "gated-flow-org",
             "admin_username": "gf_admin", "admin_password": "password123",
             "admin_email": "gf@test.local", "email_domain": "test.local",
+            "gst_number": _random_gst(),
         }
         payload.update(overrides)
         resp = client.post("/create_org", data=payload, follow_redirects=False)
@@ -387,6 +477,10 @@ class TestGatedSignupFlow:
                 "company_name": "  acme duplicate test  ", "subdomain": "some-other-slug",
                 "admin_username": "impersonator", "admin_password": "password123",
                 "admin_email": "impersonator@test.local", "email_domain": "impersonator.test",
+                # Deliberately a DIFFERENT GST than the original application's --
+                # this test isolates the company-name-based match, not GST dedup
+                # (see TestGstAndEmailDuplicateChecks below for that).
+                "gst_number": _random_gst(),
             }, follow_redirects=True)
             assert resp.status_code == 200
             assert b"already" in resp.data
@@ -467,3 +561,213 @@ class TestGatedSignupFlow:
             cur.execute("DELETE FROM att_master.tenant_applications WHERE subdomain=%s", (subdomain,))
             db_engine.commit()
             cur.close()
+
+    def test_duplicate_gst_blocked_even_with_a_wholly_different_company_name(self, client, db_engine, monkeypatch):
+        """The trial-abuse case check_duplicate_name() alone can't catch:
+        the same real business re-registers under a completely different
+        company name (no string similarity at all) to get a second free
+        trial. check_duplicate_gst() must block this even though the name
+        check would let it straight through."""
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-gstdupe-org"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        shared_gst = _random_gst()
+        _drop_schema(db_engine, schema_name)
+        try:
+            application_id = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="Gst Dupe Org One",
+                admin_username="gstdupe_admin1", admin_email="gstdupe1@test.local", gst_number=shared_gst,
+            )
+            self._login_platform_admin(client)
+            client.post(f"/super_admin/applications/{application_id}/approve", follow_redirects=False)
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            assert cur.fetchone()[0] == "active"
+
+            # Wholly unrelated company name/subdomain/email -- only the
+            # GST number is reused.
+            resp = client.post("/create_org", data={
+                "company_name": "A Totally Different Business", "subdomain": "totally-different-biz",
+                "admin_username": "gstimpersonator", "admin_password": "password123",
+                "admin_email": "gstimpersonator@test.local", "email_domain": "gstimpersonator.test",
+                "gst_number": shared_gst,
+            }, follow_redirects=True)
+            assert resp.status_code == 200
+            assert b"already" in resp.data
+            assert b"gstdupe1@test.local" not in resp.data
+
+            cur.execute(
+                "SELECT match_type, conflicting_admin_email FROM att_master.tenant_duplicate_alerts "
+                "WHERE attempted_admin_email=%s",
+                ("gstimpersonator@test.local",)
+            )
+            alert = cur.fetchone()
+            assert alert is not None, "GST duplicate attempt was not recorded for platform-admin review"
+            assert alert[0] == "gst"
+            assert alert[1] == "gstdupe1@test.local"
+
+            cur.execute("SELECT 1 FROM att_master.tenants WHERE subdomain=%s", ("totally-different-biz",))
+            assert cur.fetchone() is None, "a GST-duplicate signup must never reach provisioning"
+
+            cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE attempted_admin_email=%s",
+                        ("gstimpersonator@test.local",))
+            cur.execute("DELETE FROM att_master.tenant_applications WHERE subdomain=%s", ("totally-different-biz",))
+            db_engine.commit()
+            cur.close()
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+    def test_duplicate_admin_email_blocked_even_with_different_name_and_gst(self, client, db_engine, monkeypatch):
+        """Same trial-abuse case as GST above, but the registrant changes
+        company name AND GST and only reuses their own email address."""
+        from app import init_master_db
+        init_master_db()
+
+        subdomain = "e2e-emaildupe-org"
+        schema_name = "att_" + subdomain.replace("-", "_")
+        shared_email = "emaildupe-owner@test.local"
+        _drop_schema(db_engine, schema_name)
+        try:
+            application_id = self._run_full_pipeline(
+                client, monkeypatch, subdomain=subdomain, company_name="Email Dupe Org One",
+                admin_username="emaildupe_admin1", admin_email=shared_email,
+            )
+            self._login_platform_admin(client)
+            client.post(f"/super_admin/applications/{application_id}/approve", follow_redirects=False)
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT status FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+            assert cur.fetchone()[0] == "active"
+
+            resp = client.post("/create_org", data={
+                "company_name": "Yet Another Unrelated Business", "subdomain": "yet-another-unrelated-biz",
+                "admin_username": "emailimpersonator", "admin_password": "password123",
+                # Case/whitespace-varied but the same real address -- must
+                # still be caught.
+                "admin_email": f"  {shared_email.upper()}  ", "email_domain": "unrelated.test",
+                "gst_number": _random_gst(),
+            }, follow_redirects=True)
+            assert resp.status_code == 200
+            assert b"already" in resp.data
+
+            cur.execute(
+                "SELECT match_type FROM att_master.tenant_duplicate_alerts WHERE attempted_company_name=%s",
+                ("Yet Another Unrelated Business",)
+            )
+            alert = cur.fetchone()
+            assert alert is not None, "email duplicate attempt was not recorded for platform-admin review"
+            assert alert[0] == "email"
+
+            cur.execute("SELECT 1 FROM att_master.tenants WHERE subdomain=%s", ("yet-another-unrelated-biz",))
+            assert cur.fetchone() is None, "an email-duplicate signup must never reach provisioning"
+
+            cur.execute("DELETE FROM att_master.tenant_duplicate_alerts WHERE attempted_company_name=%s",
+                        ("Yet Another Unrelated Business",))
+            cur.execute("DELETE FROM att_master.tenant_applications WHERE subdomain=%s", ("yet-another-unrelated-biz",))
+            db_engine.commit()
+            cur.close()
+        finally:
+            _drop_schema(db_engine, schema_name)
+
+    def test_missing_gst_rejected(self, client):
+        resp = client.post("/create_org", data={
+            "company_name": "No Gst Co", "subdomain": "no-gst-co",
+            "admin_username": "nogst_admin", "admin_password": "password123",
+            "admin_email": "nogst@test.local", "email_domain": "test.local",
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"GST" in resp.data
+
+    def test_malformed_gst_rejected(self, client):
+        resp = client.post("/create_org", data={
+            "company_name": "Bad Gst Co", "subdomain": "bad-gst-co",
+            "admin_username": "badgst_admin", "admin_password": "password123",
+            "admin_email": "badgst@test.local", "email_domain": "test.local",
+            "gst_number": "not-a-real-gstin",
+        }, follow_redirects=True)
+        assert resp.status_code == 200
+        assert b"valid" in resp.data.lower()
+
+
+class TestCompanyNameFuzzyMatching:
+    """check_duplicate_name() used to be an exact (post-normalization)
+    string match only -- trivially defeated by adding/dropping a word
+    ("Acme Pvt Ltd" -> "Acme India"). It now also runs a normalized
+    SequenceMatcher comparison against every existing tenant, unit-tested
+    here directly (no schema provisioning needed -- the function only
+    ever reads att_master.tenants)."""
+
+    def _insert_fake_tenant(self, db_engine, company_name, subdomain, admin_email="owner@test.local", gst=None):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO att_master.tenants (company_name, subdomain, db_name, admin_email, gst_number) "
+            "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (company_name, subdomain, "att_" + subdomain.replace("-", "_"), admin_email, gst)
+        )
+        tenant_id = cur.fetchone()[0]
+        cur.close()
+        db_engine.commit()
+        return tenant_id
+
+    def _cleanup(self, db_engine, subdomain):
+        cur = db_engine.cursor()
+        cur.execute("DELETE FROM att_master.tenants WHERE subdomain=%s", (subdomain,))
+        db_engine.commit()
+        cur.close()
+
+    def test_legal_suffix_variant_matches_exactly(self, db_engine):
+        from blueprints.org import check_duplicate_name
+        self._insert_fake_tenant(db_engine, "Fuzzy Test Widgets Private Limited", "fuzzy-widgets-a")
+        try:
+            row, match_type = check_duplicate_name("Fuzzy Test Widgets Pvt Ltd")
+            assert row is not None
+            assert match_type == "exact", "stripping the legal-entity suffix should make these identical"
+        finally:
+            self._cleanup(db_engine, "fuzzy-widgets-a")
+
+    def test_near_identical_name_matches_fuzzy(self, db_engine):
+        from blueprints.org import check_duplicate_name
+        self._insert_fake_tenant(db_engine, "Fuzzy Test Consolidated Enterprises", "fuzzy-widgets-b")
+        try:
+            row, match_type = check_duplicate_name("Fuzzy Test Consolidated Enterprise")
+            assert row is not None
+            assert match_type == "fuzzy"
+        finally:
+            self._cleanup(db_engine, "fuzzy-widgets-b")
+
+    def test_genuinely_different_name_does_not_match(self, db_engine):
+        from blueprints.org import check_duplicate_name
+        self._insert_fake_tenant(db_engine, "Fuzzy Test Consolidated Enterprises", "fuzzy-widgets-c")
+        try:
+            row, match_type = check_duplicate_name("A Completely Unrelated Bakery")
+            assert row is None
+            assert match_type is None
+        finally:
+            self._cleanup(db_engine, "fuzzy-widgets-c")
+
+    def test_check_duplicate_gst_direct(self, db_engine):
+        from blueprints.org import check_duplicate_gst
+        gst = _random_gst()
+        self._insert_fake_tenant(db_engine, "Gst Direct Test Co", "gst-direct-test", gst=gst)
+        try:
+            row = check_duplicate_gst(gst)
+            assert row is not None
+            assert row[1] == "Gst Direct Test Co"
+            assert check_duplicate_gst(_random_gst()) is None
+        finally:
+            self._cleanup(db_engine, "gst-direct-test")
+
+    def test_check_duplicate_admin_email_direct(self, db_engine):
+        from blueprints.org import check_duplicate_admin_email
+        self._insert_fake_tenant(db_engine, "Email Direct Test Co", "email-direct-test",
+                                  admin_email="Direct.Owner@Test.Local")
+        try:
+            row = check_duplicate_admin_email("  direct.owner@test.local  ")
+            assert row is not None
+            assert row[1] == "Email Direct Test Co"
+            assert check_duplicate_admin_email("nobody-else@test.local") is None
+        finally:
+            self._cleanup(db_engine, "email-direct-test")

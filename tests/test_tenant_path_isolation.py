@@ -14,7 +14,20 @@ Provisions two real tenant schemas (same heavy-but-necessary pattern as
 tests/test_org.py's TestSuccessfulProvisioning), with explicit DROP SCHEMA
 cleanup after each test.
 """
+import secrets
 import pytest
+
+
+def _random_gst():
+    """A syntactically valid, but not otherwise meaningful, 15-character
+    GSTIN -- matches blueprints/org.py's _GST_RE, now required by
+    POST /create_org (see tests/test_org.py's identical helper)."""
+    letters = ''.join(secrets.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") for _ in range(5))
+    return (
+        f"{secrets.randbelow(100):02d}{letters}{secrets.randbelow(10000):04d}"
+        f"{secrets.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')}{secrets.choice('123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+        f"Z{secrets.choice('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')}"
+    )
 
 
 def _drop_schema(db_engine, schema_name):
@@ -60,6 +73,7 @@ def _provision(client, monkeypatch, subdomain, admin_username, admin_password):
         "admin_password": admin_password,
         "admin_email": f"{admin_username}@test.local",
         "email_domain": "test.local",
+        "gst_number": _random_gst(),
     }, follow_redirects=False)
     assert resp.status_code in (301, 302), resp.data
     application_id = int(resp.headers["Location"].rsplit("=", 1)[-1])

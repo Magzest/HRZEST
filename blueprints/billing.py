@@ -190,14 +190,16 @@ def verify_payment():
     # "set your password" reset-link dance needed: provision_tenant() just
     # gets the hash that's already on file.
     admin_password_hash = None
+    gst_number = None
     if application_id:
         aconn = get_master_db()
         acur = aconn.cursor(buffered=True)
-        acur.execute("SELECT admin_password_hash FROM tenant_applications WHERE id=%s", (application_id,))
+        acur.execute("SELECT admin_password_hash, gst_number FROM tenant_applications WHERE id=%s", (application_id,))
         arow = acur.fetchone()
         acur.close()
         aconn.close()
         admin_password_hash = arow[0] if arow else None
+        gst_number = arow[1] if arow else None
     if not admin_password_hash:
         # Defensive fallback for a payment_orders row with no linked
         # application (shouldn't happen via create_order() above, which
@@ -208,7 +210,7 @@ def verify_payment():
 
     ok, error, portal_url, checkin_url = provision_tenant(
         company_name, subdomain, admin_username, admin_password_hash, admin_email,
-        email_domain=email_domain, employee_count=employee_count, logo_path=logo_path
+        email_domain=email_domain, employee_count=employee_count, logo_path=logo_path, gst_number=gst_number,
     )
     if not ok:
         app_log.error("billing.verify_payment: provisioning failed for order %s: %s", razorpay_order_id, error)

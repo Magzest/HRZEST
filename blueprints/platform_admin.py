@@ -28,7 +28,10 @@ from database import get_master_db, get_db_connection, get_tenant_db
 from extensions import app_log, log_security_event, limiter
 from utils.auth import check_password_hash
 from utils.totp import send_mfa_login_email
-from utils.plan_limits import get_per_employee_paise, invalidate_rate_paise_cache, calculate_price, format_price_inr, get_tenant_employee_count
+from utils.plan_limits import (
+    get_per_employee_paise, invalidate_rate_paise_cache, calculate_price, format_price_inr,
+    get_tenant_employee_count, get_base_fee_paise, get_minimum_monthly_paise, invalidate_extra_cost_cache,
+)
 from utils.helpers import coerce_datetime, _safe_app_url
 from utils.analytics import get_traffic_stats
 from utils import chat_utils
@@ -409,6 +412,33 @@ def _recent_leads(limit=20):
         return []
 
 
+def _recent_feedback(limit=20):
+    """Product feedback / star ratings from the public landing page
+    (templates/landing.html's #feedback form -> POST /api/feedback). Purely
+    informational (no status workflow like leads above -- there's no
+    "convert" action for a feature request), so this is read-only on the
+    dashboard."""
+    try:
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute(
+            "SELECT id, feedback_type, rating, email, message, created_at "
+            "FROM feedback ORDER BY created_at DESC LIMIT %s",
+            (limit,)
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [
+            {"id": r[0], "feedback_type": r[1], "rating": r[2], "email": r[3],
+             "message": r[4], "created_at": r[5]}
+            for r in rows
+        ]
+    except Exception as exc:
+        app_log.warning("platform_admin: feedback lookup failed: %s", exc)
+        return []
+
+
 # Minimum profit margin the suggested rate targets above break-even --
 # purely a "don't suggest exactly zero margin" cushion, not tied to any
 # external benchmark.
@@ -564,6 +594,8 @@ def platform_admin_dashboard():
         "super_admin_dashboard.html", tenants=tenants,
         portal_base_url=_safe_app_url(),
         per_employee_paise=get_per_employee_paise(),
+        base_fee_paise=get_base_fee_paise(),
+        minimum_monthly_paise=get_minimum_monthly_paise(),
         mrr_display=format_price_inr(mrr_paise),
         active_tenant_count=sum(1 for t in all_tenants if t["status"] == "active"),
         total_tenant_count=len(all_tenants),
@@ -574,6 +606,7 @@ def platform_admin_dashboard():
         recent_activity=_recent_platform_activity(),
         recent_payments=_recent_payments(),
         leads=_recent_leads(),
+        feedback_items=_recent_feedback(),
         traffic=get_traffic_stats(),
         pnl=pnl,
         costs=costs,
@@ -719,11 +752,35 @@ def platform_admin_set_rate():
     new_paise = round(rupees * 100)
     old_paise = get_per_employee_paise()
 
+    # Both optional -- blank/omitted leaves the existing value untouched
+    # rather than resetting it to 0, since this route only ever receives
+    # one form submission at a time (the rate field above is always
+    # present; these two are additive knobs a platform admin may never
+    # touch). See utils/plan_limits.py's calculate_price() for the formula.
+    base_fee_paise = get_base_fee_paise()
+    base_fee_raw = request.form.get("base_fee_rupees", "").strip()
+    if base_fee_raw:
+        try:
+            base_fee_paise = round(float(base_fee_raw) * 100)
+        except ValueError:
+            flash("Enter a valid base fee in rupees.", "error")
+            return redirect("/super_admin")
+
+    minimum_monthly_paise = get_minimum_monthly_paise()
+    minimum_raw = request.form.get("minimum_monthly_rupees", "").strip()
+    if minimum_raw:
+        try:
+            minimum_monthly_paise = round(float(minimum_raw) * 100)
+        except ValueError:
+            flash("Enter a valid minimum monthly amount in rupees.", "error")
+            return redirect("/super_admin")
+
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
-        "UPDATE platform_costs SET per_employee_paise=%s, updated_at=CURRENT_TIMESTAMP WHERE id=1",
-        (new_paise,)
+        "UPDATE platform_costs SET per_employee_paise=%s, base_fee_paise=%s, minimum_monthly_paise=%s, "
+        "updated_at=CURRENT_TIMESTAMP WHERE id=1",
+        (new_paise, base_fee_paise, minimum_monthly_paise)
     )
 
     migration_note = ""
@@ -743,6 +800,7 @@ def platform_admin_set_rate():
     cur.close()
     conn.close()
     invalidate_rate_paise_cache()
+    invalidate_extra_cost_cache()
 
     log_security_event(
         "platform_admin.rate_updated",
@@ -970,7 +1028,7 @@ def platform_admin_delete_tenant(tenant_id):
 
 _APPLICATION_DOC_KINDS = ("registration_cert", "address_proof", "visiting_card", "name_board_photo")
 _APPLICATION_STATUS_COLS = (
-    "id, company_name, subdomain, admin_username, admin_email, email_domain, employee_count, "
+    "id, company_name, subdomain, admin_username, admin_email, email_domain, gst_number, employee_count, "
     "payment_option, logo_path, email_verified_at, doc_registration_cert, doc_address_proof, "
     "doc_visiting_card, doc_name_board_photo, documents_submitted_at, status, reviewed_by, "
     "reviewed_at, rejection_reason, tenant_id, created_at"
@@ -1072,8 +1130,8 @@ def platform_admin_view_document(application_id, doc_kind):
 @platform_admin_bp.route("/super_admin/applications/<int:application_id>/approve", methods=["POST"])
 @_platform_admin_required
 def platform_admin_approve_application(application_id):
-    from blueprints.org import provision_tenant, check_duplicate_name, _record_duplicate_alert, \
-        send_portal_ready_email, _GENERIC_DUPLICATE_MSG
+    from blueprints.org import provision_tenant, check_duplicate_name, check_duplicate_gst, \
+        check_duplicate_admin_email, _record_duplicate_alert, send_portal_ready_email, _GENERIC_DUPLICATE_MSG
 
     application = _fetch_application(application_id)
     if not application:
@@ -1083,12 +1141,17 @@ def platform_admin_approve_application(application_id):
         flash("This application isn't awaiting review.", "error")
         return redirect("/super_admin/applications")
 
-    # Re-check for a name collision -- state may have shifted since this
-    # application was submitted (e.g. a different applicant with the same
-    # name was approved first).
-    conflicting = check_duplicate_name(application["company_name"])
+    # Re-check for a name/GST/email collision -- state may have shifted
+    # since this application was submitted (e.g. a different applicant
+    # with the same name, GST, or email was approved first).
+    conflicting, match_type = check_duplicate_name(application["company_name"])
+    if not conflicting:
+        conflicting, match_type = check_duplicate_gst(application["gst_number"]), "gst"
+    if not conflicting:
+        conflicting, match_type = check_duplicate_admin_email(application["admin_email"]), "email"
     if conflicting:
-        _record_duplicate_alert(application_id, application["company_name"], application["admin_email"], conflicting)
+        _record_duplicate_alert(application_id, application["company_name"], application["admin_email"],
+                                 conflicting, match_type=match_type)
         flash(_GENERIC_DUPLICATE_MSG + " (duplicate detected at approval time)", "error")
         return redirect(f"/super_admin/applications/{application_id}")
 
@@ -1123,6 +1186,45 @@ def platform_admin_approve_application(application_id):
         flash(f"Application approved. Applicant has been emailed a payment link: {pay_url}", "success")
         return redirect("/super_admin/applications")
 
+    if application["payment_option"] == "trial":
+        # Same deferred-provisioning shape as the online branch above --
+        # provisioning only starts once the applicant authorizes a payment
+        # mandate via blueprints/org.py's create_org_setup_trial_confirm(),
+        # not at approval time. The trial clock itself starts even later,
+        # at the tenant's first login (app.py's inject_billing_lock_status()).
+        # Reuses the
+        # 'approved_pending_payment' status (same meaning here: "approved,
+        # one external step still outstanding") rather than adding a
+        # parallel status string every status-aware view would also need
+        # to learn -- create_org_status.html branches on payment_option to
+        # show trial-appropriate copy for it.
+        cur.execute(
+            "UPDATE tenant_applications SET status='approved_pending_payment', reviewed_by=%s, reviewed_at=NOW(), "
+            "updated_at=NOW() WHERE id=%s",
+            (reviewer, application_id)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        from utils.email_utils import get_email_config, send_email_async
+        setup_url = f"{request.url_root.rstrip('/')}/create_org/setup_trial/{application_id}"
+        email_cfg = get_email_config()
+        if email_cfg:
+            from blueprints.trial_billing import TRIAL_DURATION_DAYS
+            send_email_async(
+                application["admin_email"],
+                f"Your application was approved -- set up your {TRIAL_DURATION_DAYS}-day free trial for {application['company_name']}",
+                f"<p>Your company registration for <strong>{application['company_name']}</strong> has been approved.</p>"
+                f"<p><a href=\"{setup_url}\">Set up your free trial</a> -- you'll authorize a payment method now, "
+                f"and your {TRIAL_DURATION_DAYS}-day trial starts the first time you log in. You can cancel anytime "
+                f"before it ends with no charge.</p>",
+                email_cfg,
+            )
+        log_security_event("platform_admin.application_approved", f"Application {application_id} approved (awaiting trial mandate setup)",
+                            level="INFO", identifier=reviewer, application_id=application_id)
+        flash(f"Application approved. Applicant has been emailed a trial setup link: {setup_url}", "success")
+        return redirect("/super_admin/applications")
+
     cur.execute("SELECT admin_password_hash FROM tenant_applications WHERE id=%s", (application_id,))
     admin_password_hash = cur.fetchone()[0]
     cur.close()
@@ -1132,7 +1234,7 @@ def platform_admin_approve_application(application_id):
         application["company_name"], application["subdomain"], application["admin_username"], admin_password_hash,
         application["admin_email"], payment_option=application["payment_option"],
         email_domain=application["email_domain"], employee_count=application["employee_count"],
-        logo_path=application["logo_path"],
+        logo_path=application["logo_path"], gst_number=application["gst_number"],
     )
     if not ok:
         flash(f"Approval failed: {error}", "error")
@@ -1163,6 +1265,8 @@ def platform_admin_approve_application(application_id):
 @_platform_admin_required
 def platform_admin_reject_application(application_id):
     from blueprints.org import send_application_rejected_email
+    from utils.auth import _hash_token
+    from utils.helpers import _safe_app_url
     reason = request.form.get("reason", "").strip()[:1000]
     application = _fetch_application(application_id)
     if not application:
@@ -1170,18 +1274,28 @@ def platform_admin_reject_application(application_id):
         return redirect("/super_admin/applications")
 
     reviewer = session.get("platform_admin_username")
+    # A fresh access_token is issued here specifically so the rejection
+    # email can carry a working re-upload link -- the original raw token
+    # (from application submission) was never persisted anywhere except
+    # that first session, which is very often long gone by the time
+    # someone acts on a rejection email days later. Rotating it here is
+    # safe: the old token stops working the moment this UPDATE lands,
+    # same one-token-live-at-a-time model as every other flow that reuses
+    # access_token_hash.
+    new_token = secrets.token_urlsafe(32)
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute(
         "UPDATE tenant_applications SET status='rejected', reviewed_by=%s, reviewed_at=NOW(), rejection_reason=%s, "
-        "updated_at=NOW() WHERE id=%s",
-        (reviewer, reason, application_id)
+        "access_token_hash=%s, updated_at=NOW() WHERE id=%s",
+        (reviewer, reason, _hash_token(new_token), application_id)
     )
     conn.commit()
     cur.close()
     conn.close()
 
-    send_application_rejected_email(application["admin_email"], application["company_name"], reason)
+    status_url = f"{_safe_app_url()}/create_org/status/{application_id}?token={new_token}"
+    send_application_rejected_email(application["admin_email"], application["company_name"], reason, status_url)
     log_security_event("platform_admin.application_rejected", f"Application {application_id} rejected",
                         level="INFO", identifier=reviewer, application_id=application_id, reason=reason)
     flash("Application rejected.", "success")

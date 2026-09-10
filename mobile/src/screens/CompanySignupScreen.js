@@ -25,6 +25,7 @@ export default function CompanySignupScreen({ navigation }) {
   const [subdomain, setSubdomain] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -33,13 +34,19 @@ export default function CompanySignupScreen({ navigation }) {
     setSubdomain((prev) => (prev ? prev : value.toLowerCase().replace(/[^a-z0-9\-]/g, "")));
   };
 
+  // Mirrors blueprints/org.py's _GST_RE -- checked here only so a typo is
+  // caught before the network round trip; the server re-validates this
+  // exact format regardless (never trust a client-side check alone).
+  const GST_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
   const handleSubmit = async () => {
     const cleanSubdomain = subdomain.trim().toLowerCase().replace(/[^a-z0-9\-]/g, "");
     const trimmedEmail = adminEmail.trim();
     const trimmedPassword = adminPassword.trim();
+    const cleanGst = gstNumber.trim().toUpperCase().replace(/\s+/g, "");
     const atIndex = trimmedEmail.indexOf("@");
 
-    if (!companyName.trim() || !cleanSubdomain || !trimmedEmail || !trimmedPassword) {
+    if (!companyName.trim() || !cleanSubdomain || !trimmedEmail || !trimmedPassword || !cleanGst) {
       Alert.alert("Missing Information", "Please fill in every field.");
       return;
     }
@@ -49,6 +56,10 @@ export default function CompanySignupScreen({ navigation }) {
     }
     if (trimmedPassword.length < 8) {
       Alert.alert("Weak Password", "Password must be at least 8 characters.");
+      return;
+    }
+    if (!GST_RE.test(cleanGst)) {
+      Alert.alert("Invalid GSTIN", "Enter a valid 15-character GSTIN (e.g. 27AAAAA0000A1Z5).");
       return;
     }
 
@@ -64,6 +75,7 @@ export default function CompanySignupScreen({ navigation }) {
         admin_email: trimmedEmail,
         admin_password: trimmedPassword,
         email_domain: emailDomain,
+        gst_number: cleanGst,
       });
       if (res?.data?.ok) {
         navigation.navigate("CompanyOtpVerify", {
@@ -136,6 +148,20 @@ export default function CompanySignupScreen({ navigation }) {
                 onChangeText={setAdminEmail}
                 autoCapitalize="none"
                 keyboardType="email-address"
+              />
+            </View>
+
+            <Text style={styles.label}>GST NUMBER</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="document-text-outline" size={18} color="#64748B" style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                placeholder="27AAAAA0000A1Z5"
+                placeholderTextColor={colors.textLight}
+                value={gstNumber}
+                onChangeText={(v) => setGstNumber(v.toUpperCase().replace(/\s+/g, ""))}
+                autoCapitalize="characters"
+                maxLength={15}
               />
             </View>
 

@@ -5,6 +5,7 @@ import re
 import html
 import secrets
 import datetime
+import difflib
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log, limiter, log_security_event
 from utils.auth import generate_password_hash, _hash_token, turnstile_enabled, verify_turnstile, _TURNSTILE_SITE_KEY, validate_new_password
@@ -82,7 +83,8 @@ _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
 def provision_tenant(company_name, subdomain, admin_username, admin_password_hash, admin_email,
-                      payment_option="online", email_domain=None, employee_count=None, logo_path=None):
+                      payment_option="online", email_domain=None, employee_count=None, logo_path=None,
+                      gst_number=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
@@ -122,6 +124,12 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password_has
     (the local-dev fallback POST /create_org, the mobile app's own
     /api/create_org registration flow, and Platform Admin's own tenant
     creation), which intentionally don't gate on payment.
+
+    gst_number (already format-validated and normalized by the caller --
+    see _clean_gst()/_validate_gst_number()) is written onto the new
+    tenants row so check_duplicate_gst() can block a second signup under
+    the same real-world business later. None for the Platform Admin
+    direct-create path, which doesn't collect one.
 
     Returns (ok, error_message_or_None, portal_url_or_None, checkin_url_or_None).
     """
@@ -203,11 +211,36 @@ def provision_tenant(company_name, subdomain, admin_username, admin_password_has
         from database import get_master_db
         mconn = get_master_db()
         mcur = mconn.cursor()
-        mcur.execute(
-            "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, payment_option, status) "
-            "VALUES (%s, %s, %s, %s, %s, %s, 'active')",
-            (company_name, subdomain, db_name, admin_email, PLAN_LABEL, payment_option)
-        )
+        if payment_option == "trial":
+            # subscription_status='trialing', but trial_start_date/
+            # trial_end_date are deliberately left NULL here -- the trial
+            # clock starts at the tenant's FIRST admin login (app.py's
+            # inject_billing_lock_status() stamps both columns then, once,
+            # using blueprints/trial_billing.TRIAL_DURATION_DAYS), not at
+            # provisioning, so a company that gets provisioned but doesn't
+            # log in for a few days isn't silently burning trial time it
+            # never used. Applies uniformly to every trial-tenant creation
+            # path -- the public self-serve signup (blueprints/org.py's
+            # create_org_setup_trial_confirm(), which collects a payment
+            # mandate first) and the Platform Admin "Free Signup" panel
+            # alike -- so a trial tenant is never billed forever/never
+            # regardless of which path created it. One with no mandate on
+            # file (the Platform Admin path doesn't collect one) safely
+            # degrades to subscription_status='past_due' at trial end
+            # instead of crashing -- see blueprints/trial_billing.py.
+            mcur.execute(
+                "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, payment_option, "
+                "status, subscription_status, gst_number) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'active', 'trialing', %s)",
+                (company_name, subdomain, db_name, admin_email, PLAN_LABEL, payment_option, gst_number)
+            )
+        else:
+            mcur.execute(
+                "INSERT INTO tenants (company_name, subdomain, db_name, admin_email, plan, payment_option, "
+                "status, gst_number) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)",
+                (company_name, subdomain, db_name, admin_email, PLAN_LABEL, payment_option, gst_number)
+            )
         mconn.commit()
         mcur.close()
         mconn.close()
@@ -365,34 +398,149 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url,
         return False
 
 
+_COMPANY_SUFFIX_RE = re.compile(
+    r'\b(private\s+limited|pvt\.?\s*ltd\.?|public\s+limited|limited|ltd\.?|llp|inc\.?|incorporated|'
+    r'corp\.?|corporation|co\.?|company|llc)\b'
+)
+# A pure-normalization-based match still catches most real re-registration
+# attempts (same legal name, different casing/punctuation/legal suffix)
+# with zero false-positive risk. A second, SequenceMatcher-based pass below
+# catches near-identical names a registrant deliberately tweaks (a typo, a
+# dropped/added plural) -- no Postgres extension (pg_trgm) required, so
+# this works identically in every deployment without needing CREATE
+# EXTENSION privileges.
+#
+# Deliberately high (0.95, not the more obvious ~0.85): this blocks a real
+# SIGNUP outright, not just a soft admin-review flag, so a false positive
+# means refusing a legitimate, genuinely-different business. Two real
+# companies that happen to share most of their name (regional arms, near-
+# namesakes -- "Acme Logistics" vs "Acme Logistics West") are far more
+# common than this threshold's headroom suggests: at a looser threshold,
+# a single differing word/character in an otherwise-templated name (e.g.
+# "Northgate Retail A" vs "Northgate Retail B") already scores ~0.92 and
+# would be wrongly blocked. 0.95 still reliably catches the actual abuse
+# case this exists for -- a registrant re-submitting the near-identical
+# name with a cosmetic tweak (a typo, a dropped/added "s") -- which scores
+# ~0.97+ in practice.
+_FUZZY_MATCH_THRESHOLD = 0.95
+
+
+def _normalize_company_name(name):
+    """Strips legal-entity suffixes and punctuation so "Acme Pvt Ltd" and
+    "Acme Private Limited" collapse to the same core string before either
+    the exact or the fuzzy comparison in check_duplicate_name() runs."""
+    s = re.sub(r'\s+', ' ', (name or '').strip()).lower()
+    s = _COMPANY_SUFFIX_RE.sub('', s)
+    s = re.sub(r'[^a-z0-9 ]', '', s)
+    return re.sub(r'\s+', ' ', s).strip()
+
+
 def check_duplicate_name(company_name):
-    """Case-insensitive lookup for an existing, already-provisioned tenant
-    with this company name. Returns (tenant_id, company_name, admin_email)
-    if found, else None.
+    """Looks for an existing, already-provisioned tenant whose name is the
+    same business as `company_name` -- either an exact (post-normalization)
+    match, or a fuzzy one close enough that it's almost certainly the same
+    registrant trying again under a slightly different name (e.g. "Acme
+    Pvt Ltd" vs "Acme India"). Returns ((tenant_id, company_name,
+    admin_email), match_type) if found, else (None, None).
 
     Deliberately NOT folded into _validate_new_tenant_fields() -- that
     function is also called by platform_admin_create_tenant(), where a
     platform admin legitimately re-creating/fixing a tenant must not be
     blocked by this. Only the gated step-1 signup route calls this."""
-    normalized = re.sub(r'\s+', ' ', (company_name or '').strip()).lower()
+    normalized = _normalize_company_name(company_name)
     if not normalized:
+        return None, None
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute("SELECT id, company_name, admin_email FROM tenants")
+    rows = mcur.fetchall()
+    mcur.close()
+    mconn.close()
+
+    best_row, best_ratio = None, 0.0
+    for row in rows:
+        existing_normalized = _normalize_company_name(row[1])
+        if not existing_normalized:
+            continue
+        if existing_normalized == normalized:
+            return row, "exact"
+        ratio = difflib.SequenceMatcher(None, normalized, existing_normalized).ratio()
+        if ratio > best_ratio:
+            best_row, best_ratio = row, ratio
+    if best_row is not None and best_ratio >= _FUZZY_MATCH_THRESHOLD:
+        return best_row, "fuzzy"
+    return None, None
+
+
+_GST_RE = re.compile(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$')
+
+
+def _clean_gst(raw):
+    return re.sub(r'\s+', '', (raw or '')).upper()
+
+
+def _validate_gst_number(gst_number):
+    """15-character GSTIN format (state code + PAN + entity code + 'Z' +
+    checksum) -- the standard Indian business-registration identifier.
+    Required at public signup (create_org()/api_create_org()) specifically
+    so check_duplicate_gst() has something real to dedup on; NOT required
+    by _validate_new_tenant_fields() since that's shared with the Platform
+    Admin direct-create path, which doesn't collect one."""
+    if not gst_number:
+        return "GST / business registration number is required."
+    if not _GST_RE.match(gst_number):
+        return "Enter a valid 15-character GSTIN (e.g. 27AAAAA0000A1Z5)."
+    return None
+
+
+def check_duplicate_gst(gst_number):
+    """Exact match against every already-provisioned tenant's GSTIN.
+    Catches the case check_duplicate_name() can't: the same real business
+    registering again under a genuinely different company name after a
+    prior trial locked/expired. Returns (tenant_id, company_name,
+    admin_email) if found, else None."""
+    if not gst_number:
         return None
     from database import get_master_db
     mconn = get_master_db()
     mcur = mconn.cursor()
-    mcur.execute("SELECT id, company_name, admin_email FROM tenants WHERE LOWER(TRIM(company_name))=%s", (normalized,))
+    mcur.execute("SELECT id, company_name, admin_email FROM tenants WHERE gst_number=%s", (gst_number,))
     row = mcur.fetchone()
     mcur.close()
     mconn.close()
     return row
 
 
-def _record_duplicate_alert(application_id, attempted_company_name, attempted_admin_email, conflicting):
-    """Internal-only record of a signup blocked by check_duplicate_name().
-    The registrant never sees any of `conflicting`'s contents -- only the
-    platform-admin duplicate-alerts screen (blueprints/platform_admin.py)
-    ever reads this table. Best-effort: a logging failure must not be able
-    to block (or un-block) the signup rejection itself."""
+def check_duplicate_admin_email(admin_email):
+    """Exact (case-insensitive) match against every already-provisioned
+    tenant's admin_email. A trial-abuse registrant reusing their own email
+    under a new company name/GST is still caught here even if the other
+    two checks somehow miss it. Returns (tenant_id, company_name,
+    admin_email) if found, else None."""
+    normalized = (admin_email or '').strip().lower()
+    if not normalized:
+        return None
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute("SELECT id, company_name, admin_email FROM tenants WHERE LOWER(admin_email)=%s", (normalized,))
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    return row
+
+
+def _record_duplicate_alert(application_id, attempted_company_name, attempted_admin_email, conflicting,
+                             match_type="exact"):
+    """Internal-only record of a signup blocked by check_duplicate_name()/
+    check_duplicate_gst()/check_duplicate_admin_email() (match_type
+    identifies which one fired: 'exact'/'fuzzy' for a company-name match,
+    'gst' or 'email' for the other two). The registrant never sees any of
+    `conflicting`'s contents -- only the platform-admin duplicate-alerts
+    screen (blueprints/platform_admin.py) ever reads this table.
+    Best-effort: a logging failure must not be able to block (or un-block)
+    the signup rejection itself."""
     conflicting_id, conflicting_name, conflicting_email = conflicting
     try:
         from database import get_master_db
@@ -401,9 +549,9 @@ def _record_duplicate_alert(application_id, attempted_company_name, attempted_ad
         mcur.execute(
             "INSERT INTO tenant_duplicate_alerts "
             "(application_id, attempted_company_name, attempted_admin_email, conflicting_tenant_id, "
-            "conflicting_company_name, conflicting_admin_email, match_type, source_ip) VALUES (%s,%s,%s,%s,%s,%s,'exact',%s)",
+            "conflicting_company_name, conflicting_admin_email, match_type, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
             (application_id, attempted_company_name, attempted_admin_email, conflicting_id, conflicting_name,
-             conflicting_email, request.remote_addr)
+             conflicting_email, match_type, request.remote_addr)
         )
         mconn.commit()
         mcur.close()
@@ -412,7 +560,7 @@ def _record_duplicate_alert(application_id, attempted_company_name, attempted_ad
         app_log.error("_record_duplicate_alert failed: %s", exc)
     log_security_event(
         "org.duplicate_company_blocked",
-        "Signup blocked: company name matches an existing tenant",
+        f"Signup blocked: {match_type} match against an existing tenant",
         level="WARNING", attempted_company_name=attempted_company_name,
         conflicting_tenant_id=conflicting_id,
     )
@@ -472,13 +620,25 @@ def send_org_signup_otp_email(to_email, company_name, otp_code):
         return False
 
 
-def send_application_rejected_email(to_email, company_name, reason):
+def send_application_rejected_email(to_email, company_name, reason, status_url=None):
+    """status_url (when given) is a fresh magic link -- see
+    blueprints/platform_admin.py's platform_admin_reject_application(),
+    which rotates access_token_hash specifically so this link works even
+    once the applicant's original browser session is long gone. Lets them
+    re-upload corrected documents directly from this email instead of
+    restarting the whole application from scratch."""
     try:
         email_cfg = get_email_config()
         if not email_cfg:
             return False
         _company = html.escape(str(company_name))
         _reason = html.escape(str(reason or "It did not meet our verification requirements."))
+        _link_block = ""
+        if status_url:
+            _link_block = f"""
+    <a href="{status_url}" style="display:block;text-align:center;padding:13px 20px;background:#1e3a8a;color:#fff;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;margin:18px 0 6px;">
+      Re-upload Corrected Documents
+    </a>"""
         html_body = f"""
 <div style="font-family:Segoe UI,sans-serif;max-width:480px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;">
   <div style="background:#7f1d1d;padding:22px 26px;color:#fff;">
@@ -488,6 +648,8 @@ def send_application_rejected_email(to_email, company_name, reason):
   <div style="padding:26px;">
     <p style="color:#334155;font-size:14px;">We're unable to approve your company registration at this time.</p>
     <div style="background:#fef2f2;border-left:4px solid #dc2626;padding:14px;border-radius:6px;margin:16px 0;font-size:13px;color:#7f1d1d;">{_reason}</div>
+    <p style="color:#334155;font-size:13px;">You don't need to start over -- fix what's noted above and re-upload just your documents.</p>
+    {_link_block}
     <p style="color:#64748b;font-size:12px;">If you believe this is an error, please contact support.</p>
   </div>
 </div>"""
@@ -647,8 +809,15 @@ def _save_application_documents(application, files):
     """Shared document-upload logic for both web and mobile. `files` is a
     dict-like of {doc_kind: FileStorage} (request.files works directly).
     Returns (True, None) on success (advances the row to 'pending_review'),
-    or (False, error_message)."""
-    if application["status"] not in ("otp_verified", "pending_review"):
+    or (False, error_message).
+
+    'rejected' is deliberately allowed back in here -- re-uploading
+    corrected documents is the ONLY recovery path for a rejected applicant;
+    without it they'd have to restart the entire application (company_name/
+    subdomain/admin_username/password, all of it) from scratch at
+    POST /create_org, re-triggering the duplicate-name check and a fresh
+    OTP for no reason, since none of that was ever wrong."""
+    if application["status"] not in ("otp_verified", "pending_review", "rejected"):
         return False, "This application isn't ready for document upload."
 
     saved_paths = {}
@@ -665,8 +834,13 @@ def _save_application_documents(application, files):
     mconn = get_master_db()
     mcur = mconn.cursor()
     mcur.execute(
+        # rejection_reason/reviewed_by/reviewed_at reset to NULL -- a
+        # re-upload from 'rejected' must look like a fresh submission to
+        # the platform admin's queue/detail view, not carry forward stale
+        # rejection context from the prior review.
         "UPDATE tenant_applications SET doc_registration_cert=%s, doc_address_proof=%s, doc_visiting_card=%s, "
-        "doc_name_board_photo=%s, documents_submitted_at=NOW(), status='pending_review', updated_at=NOW() "
+        "doc_name_board_photo=%s, documents_submitted_at=NOW(), status='pending_review', updated_at=NOW(), "
+        "rejection_reason=NULL, reviewed_by=NULL, reviewed_at=NULL "
         "WHERE id=%s",
         (saved_paths["registration_cert"], saved_paths["address_proof"], saved_paths["visiting_card"],
          saved_paths["name_board_photo"], application["id"])
@@ -703,6 +877,7 @@ def create_org():
     admin_password = request.form.get("admin_password", "").strip()
     admin_email = request.form.get("admin_email", "").strip()
     email_domain = clean_email_domain(request.form.get("email_domain", ""))
+    gst_number = _clean_gst(request.form.get("gst_number", ""))
 
     error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
                                          email_domain)
@@ -710,9 +885,18 @@ def create_org():
         flash(error, "error")
         return redirect("/create_org")
 
-    conflicting = check_duplicate_name(company_name)
+    gst_error = _validate_gst_number(gst_number)
+    if gst_error:
+        flash(gst_error, "error")
+        return redirect("/create_org")
+
+    conflicting, match_type = check_duplicate_name(company_name)
+    if not conflicting:
+        conflicting, match_type = check_duplicate_gst(gst_number), "gst"
+    if not conflicting:
+        conflicting, match_type = check_duplicate_admin_email(admin_email), "email"
     if conflicting:
-        _record_duplicate_alert(None, company_name, admin_email, conflicting)
+        _record_duplicate_alert(None, company_name, admin_email, conflicting, match_type=match_type)
         flash(_GENERIC_DUPLICATE_MSG, "error")
         return redirect("/create_org")
 
@@ -726,7 +910,16 @@ def create_org():
             return redirect("/create_org")
 
     from utils.razorpay_utils import razorpay_configured
-    payment_option = "online" if razorpay_configured() else "manual"
+    # "trial" is only ever chosen explicitly on the signup form (a "Start a
+    # free trial" option, blueprints/trial_billing.TRIAL_DURATION_DAYS long,
+    # alongside "Pay now") -- any caller that doesn't send signup_plan (the
+    # mobile app, an older cached form) keeps the original online/manual
+    # auto-detect behavior unchanged.
+    signup_plan = request.form.get("signup_plan", "pay_now").strip().lower()
+    if signup_plan == "trial":
+        payment_option = "trial"
+    else:
+        payment_option = "online" if razorpay_configured() else "manual"
 
     access_token = _generate_access_token()
     otp_code = _generate_otp()
@@ -735,11 +928,11 @@ def create_org():
     mcur = mconn.cursor()
     mcur.execute(
         "INSERT INTO tenant_applications (company_name, subdomain, admin_username, admin_email, "
-        "admin_password_hash, email_domain, payment_option, logo_path, access_token_hash, otp_code_hash, "
-        "otp_expires_at, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW() + (%s * INTERVAL '1 minute'), %s) "
+        "admin_password_hash, email_domain, gst_number, payment_option, logo_path, access_token_hash, otp_code_hash, "
+        "otp_expires_at, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW() + (%s * INTERVAL '1 minute'), %s) "
         "RETURNING id",
         (company_name, subdomain, admin_username, admin_email, generate_password_hash(admin_password),
-         email_domain, payment_option, logo_path, _hash_token(access_token), _hash_token(otp_code),
+         email_domain, gst_number, payment_option, logo_path, _hash_token(access_token), _hash_token(otp_code),
          _OTP_TTL_MINUTES, request.remote_addr)
     )
     application_id = mcur.fetchone()[0]
@@ -821,13 +1014,22 @@ def create_org_resend_otp():
 
 @org_bp.route("/create_org/upload_documents", methods=["GET"])
 def create_org_upload_documents_page():
-    return render_template("create_org_upload_documents.html", application_id=request.args.get("application_id", ""))
+    # token: carries a re-upload magic link through from create_org_status.html's
+    # rejected branch (a rejected application's original session is very
+    # often long gone by the time someone acts on the rejection email) --
+    # forwarded into the form as a hidden field so the POST below can use
+    # it too. Falls back to nothing for the normal same-session flow, which
+    # doesn't need it (session["org_access_token"] already covers that).
+    return render_template("create_org_upload_documents.html",
+                           application_id=request.args.get("application_id", ""),
+                           token=request.args.get("token", ""))
 
 
 @org_bp.route("/create_org/upload_documents", methods=["POST"])
 def create_org_upload_documents():
     application_id = request.form.get("application_id", "")
-    application = _load_application(application_id, session.get("org_access_token"))
+    access_token = session.get("org_access_token") or request.form.get("token", "")
+    application = _load_application(application_id, access_token)
     if not application:
         flash("Application not found. Please start again.", "error")
         return redirect("/create_org")
@@ -835,7 +1037,8 @@ def create_org_upload_documents():
     ok, error = _save_application_documents(application, request.files)
     if not ok:
         flash(error, "error")
-        return redirect(f"/create_org/upload_documents?application_id={application_id}")
+        _token_qs = f"&token={request.form.get('token', '')}" if request.form.get("token") else ""
+        return redirect(f"/create_org/upload_documents?application_id={application_id}{_token_qs}")
 
     return redirect(f"/create_org/pending?application_id={application_id}")
 
@@ -861,7 +1064,8 @@ def create_org_status_page(application_id):
         flash("Application not found.", "error")
         return redirect("/create_org")
     portal_url = f"{_safe_app_url()}/{application['subdomain']}/login" if application["status"] == "provisioned" else None
-    return render_template("create_org_status.html", application=application, portal_url=portal_url)
+    return render_template("create_org_status.html", application=application, portal_url=portal_url,
+                           access_token=access_token)
 
 
 @org_bp.route("/create_org/pay/<int:application_id>", methods=["GET"])
@@ -896,6 +1100,192 @@ def create_org_pay_page(application_id):
     )
 
 
+@org_bp.route("/create_org/setup_trial/<int:application_id>", methods=["GET"])
+def create_org_setup_trial_page(application_id):
+    """Landing page linked from the approval email for trial applications
+    (blueprints/platform_admin.py's approve action, once payment_option==
+    'trial') -- same shape as create_org_pay_page above, just collecting a
+    payment MANDATE (authorized now, not charged) instead of an immediate
+    payment. Provisioning happens once create_org_setup_trial_confirm()
+    below verifies the authorization -- the trial clock itself only starts
+    later, at first login (see app.py's inject_billing_lock_status())."""
+    from database import get_master_db
+    mconn = get_master_db()
+    mcur = mconn.cursor()
+    mcur.execute(
+        "SELECT company_name, status, payment_option FROM tenant_applications WHERE id=%s",
+        (application_id,)
+    )
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    if not row:
+        flash("Application not found.", "error")
+        return redirect("/create_org")
+    company_name, status, payment_option = row
+    if payment_option != "trial" or status != "approved_pending_payment":
+        return redirect(f"/create_org/status/{application_id}")
+    return render_template(
+        "create_org_setup_trial.html", application_id=application_id, company_name=company_name,
+        per_employee_paise=get_per_employee_paise(),
+    )
+
+
+@org_bp.route("/api/create_org/setup_trial/<int:application_id>/create_subscription", methods=["POST"])
+@limiter.limit("10 per minute")
+def create_org_setup_trial_create_subscription(application_id):
+    """Authorizes (but does not charge) a Razorpay Subscription for a
+    trial applicant -- same create_id_or_demo/create_customer/
+    create_subscription calls blueprints/auto_debit.py's enroll() makes for
+    an already-provisioned tenant, reused here (via that module's plan-id
+    cache) before the tenant schema even exists yet. Quantity starts at 1
+    as a placeholder -- there are no employees yet, and the recurring daily
+    sync (blueprints/auto_debit.py's sync_and_bill_auto_debit(), or the
+    one-off sync in trial_billing.py's check_trial_expirations()) corrects
+    it to the real headcount well before the trial ends and any charge
+    happens."""
+    from database import get_master_db
+    from blueprints.auto_debit import _get_or_create_plan_id, _DEMO_SUBSCRIPTION_PREFIX
+    from utils.razorpay_utils import create_customer, create_subscription, create_id_or_demo, key_id as razorpay_key_id
+
+    mconn = get_master_db()
+    mcur = mconn.cursor(buffered=True)
+    mcur.execute(
+        "SELECT company_name, admin_email, status, payment_option FROM tenant_applications WHERE id=%s",
+        (application_id,)
+    )
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "Application not found."}), 404
+    company_name, admin_email, status, payment_option = row
+    if payment_option != "trial" or status != "approved_pending_payment":
+        return jsonify({"ok": False, "msg": "This application isn't ready for trial setup."}), 400
+
+    def _create_real_subscription():
+        plan_id, error = _get_or_create_plan_id()
+        if error:
+            return None, error
+        customer_id, error = create_customer(company_name, admin_email)
+        if error:
+            return None, error
+        return create_subscription(plan_id, customer_id, 1)
+
+    subscription_id, is_demo, error = create_id_or_demo(_DEMO_SUBSCRIPTION_PREFIX, _create_real_subscription)
+    if error:
+        app_log.error("create_org_setup_trial_create_subscription: subscription setup failed: %s", error)
+        return jsonify({"ok": False, "msg": error}), 502
+
+    return jsonify({
+        "ok": True, "subscription_id": subscription_id, "key_id": razorpay_key_id(), "demo": is_demo,
+    })
+
+
+@org_bp.route("/api/create_org/setup_trial/<int:application_id>/confirm", methods=["POST"])
+@limiter.limit("20 per minute")
+def create_org_setup_trial_confirm(application_id):
+    """Verifies the subscription-authorization callback (same signature
+    check blueprints/auto_debit.py's confirm() uses for an existing
+    tenant), then provisions the tenant -- provision_tenant() itself sets
+    subscription_status='trialing' for payment_option=='trial' (dates left
+    NULL until first login). The authorized mandate is armed and waiting
+    (auto_debit_mandates.status='active') but nothing is charged until
+    blueprints/trial_billing.py's check_trial_expirations() runs, which
+    only ever fires once trial_end_date is actually set and past."""
+    from database import get_master_db
+    from blueprints.auto_debit import _DEMO_SUBSCRIPTION_PREFIX
+    from utils.razorpay_utils import verify_subscription_signature, verify_or_demo
+
+    data = request.get_json(silent=True) or request.form
+    subscription_id = (data.get("razorpay_subscription_id") or "").strip()
+    payment_id = (data.get("razorpay_payment_id") or "").strip()
+    signature = (data.get("razorpay_signature") or "").strip()
+    if not subscription_id:
+        return jsonify({"ok": False, "msg": "Missing subscription id."}), 400
+
+    mconn = get_master_db()
+    mcur = mconn.cursor(buffered=True)
+    mcur.execute(
+        "SELECT company_name, subdomain, admin_username, admin_email, admin_password_hash, email_domain, "
+        "logo_path, status, payment_option, gst_number FROM tenant_applications WHERE id=%s",
+        (application_id,)
+    )
+    row = mcur.fetchone()
+    mcur.close()
+    mconn.close()
+    if not row:
+        return jsonify({"ok": False, "msg": "Application not found."}), 404
+    (company_name, subdomain, admin_username, admin_email, admin_password_hash, email_domain,
+     logo_path, status, payment_option, gst_number) = row
+
+    # Idempotent: a retried/duplicate client POST for an already-provisioned
+    # application must not attempt to re-provision.
+    if status == "provisioned":
+        portal_url = f"{_safe_app_url()}/{subdomain}/login"
+        return jsonify({"ok": True, "portal_url": portal_url, "already_provisioned": True})
+    if payment_option != "trial" or status != "approved_pending_payment":
+        return jsonify({"ok": False, "msg": "This application isn't ready for trial setup."}), 400
+
+    ok, is_demo, error = verify_or_demo(
+        subscription_id, _DEMO_SUBSCRIPTION_PREFIX, payment_id, signature, verify_subscription_signature
+    )
+    if not ok:
+        if not is_demo:
+            log_security_event(
+                "org.trial_signature_invalid", "Razorpay subscription-authorization signature verification failed",
+                level="ERROR", subscription_id=subscription_id, application_id=application_id,
+            )
+        return jsonify({"ok": False, "msg": error}), 400
+
+    ok, error, portal_url, checkin_url = provision_tenant(
+        company_name, subdomain, admin_username, admin_password_hash, admin_email,
+        payment_option="trial", email_domain=email_domain, logo_path=logo_path, gst_number=gst_number,
+    )
+    if not ok:
+        app_log.error("create_org_setup_trial_confirm: provisioning failed for application %s: %s", application_id, error)
+        return jsonify({"ok": False, "msg": f"Trial setup failed: {error}. Contact support."}), 500
+
+    mconn = get_master_db()
+    mcur = mconn.cursor(buffered=True)
+    mcur.execute("SELECT id, db_name FROM tenants WHERE subdomain=%s", (subdomain,))
+    tenant_row = mcur.fetchone()
+    tenant_id, tenant_db_name = tenant_row if tenant_row else (None, None)
+    mcur.execute(
+        "UPDATE tenant_applications SET status='provisioned', tenant_id=%s, updated_at=NOW() WHERE id=%s",
+        (tenant_id, application_id)
+    )
+    # Mandate is authorized and ready, but the tenant has no employees yet
+    # (schema was just created) -- quantity_synced starts at 0 so the very
+    # first daily sync (or trial_billing.py's own one-off sync at trial end)
+    # PATCHes it to whatever headcount actually exists by then.
+    if tenant_db_name:
+        mcur.execute(
+            "INSERT INTO auto_debit_mandates (tenant_schema, company_name, razorpay_customer_id, "
+            "razorpay_subscription_id, quantity_synced, status, requested_by, created_at, activated_at) "
+            "VALUES (%s, %s, NULL, %s, 0, 'active', %s, NOW(), NOW()) "
+            "ON CONFLICT (tenant_schema) DO UPDATE SET razorpay_subscription_id=%s, status='active', "
+            "activated_at=NOW(), cancelled_at=NULL",
+            (tenant_db_name, company_name, subscription_id, admin_username, subscription_id)
+        )
+    mconn.commit()
+    mcur.close()
+    mconn.close()
+
+    if is_demo:
+        log_security_event(
+            "org.trial_demo_enrolled", "Demo/test-mode trial mandate authorized (no real mandate)",
+            level="INFO", subscription_id=subscription_id, application_id=application_id,
+        )
+    log_security_event(
+        "org.trial_tenant_provisioned", f"Trial tenant '{company_name}' provisioned, trial clock starts at first login",
+        level="INFO", subdomain=subdomain, application_id=application_id, tenant_id=tenant_id,
+    )
+    send_portal_ready_email(admin_email, company_name, admin_username, portal_url, checkin_url=checkin_url)
+
+    return jsonify({"ok": True, "portal_url": portal_url})
+
+
 @org_bp.route("/api/create_org", methods=["POST"])
 @limiter.limit("10 per hour")
 def api_create_org():
@@ -917,15 +1307,24 @@ def api_create_org():
         admin_password = data.get("admin_password", "").strip()
         admin_email = data.get("admin_email", "").strip()
         email_domain = clean_email_domain(data.get("email_domain", ""))
+        gst_number = _clean_gst(data.get("gst_number", ""))
 
         error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
                                              email_domain)
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
-        conflicting = check_duplicate_name(company_name)
+        gst_error = _validate_gst_number(gst_number)
+        if gst_error:
+            return jsonify({"ok": False, "msg": gst_error}), 400
+
+        conflicting, match_type = check_duplicate_name(company_name)
+        if not conflicting:
+            conflicting, match_type = check_duplicate_gst(gst_number), "gst"
+        if not conflicting:
+            conflicting, match_type = check_duplicate_admin_email(admin_email), "email"
         if conflicting:
-            _record_duplicate_alert(None, company_name, admin_email, conflicting)
+            _record_duplicate_alert(None, company_name, admin_email, conflicting, match_type=match_type)
             return jsonify({"ok": False, "msg": _GENERIC_DUPLICATE_MSG}), 409
 
         from utils.razorpay_utils import razorpay_configured
@@ -938,11 +1337,11 @@ def api_create_org():
         mcur = mconn.cursor()
         mcur.execute(
             "INSERT INTO tenant_applications (company_name, subdomain, admin_username, admin_email, "
-            "admin_password_hash, email_domain, payment_option, access_token_hash, otp_code_hash, "
-            "otp_expires_at, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW() + (%s * INTERVAL '1 minute'), %s) "
+            "admin_password_hash, email_domain, gst_number, payment_option, access_token_hash, otp_code_hash, "
+            "otp_expires_at, source_ip) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, NOW() + (%s * INTERVAL '1 minute'), %s) "
             "RETURNING id",
             (company_name, subdomain, admin_username, admin_email, generate_password_hash(admin_password),
-             email_domain, payment_option, _hash_token(access_token), _hash_token(otp_code),
+             email_domain, gst_number, payment_option, _hash_token(access_token), _hash_token(otp_code),
              _OTP_TTL_MINUTES, request.remote_addr)
         )
         application_id = mcur.fetchone()[0]
@@ -1085,3 +1484,62 @@ def submit_lead():
         return jsonify({"ok": False, "msg": "Could not submit right now. Please try again."}), 500
 
     return jsonify({"ok": True, "msg": "Thanks! We'll be in touch shortly."})
+
+
+_FEEDBACK_TYPES = frozenset({"Feature Request", "User Experience", "Biometrics", "General Praise"})
+
+
+@org_bp.route("/api/feedback", methods=["POST"])
+@limiter.limit("5 per minute")
+def submit_feedback():
+    """Product feedback / star-rating form on the public landing page
+    (templates/landing.html's #feedback section) -- was previously a pure
+    client-side fake-success simulation (the form was hidden and a "Thanks!"
+    banner shown on submit with no request ever sent). Stored in
+    att_master.feedback, surfaced read-only on the Platform Admin dashboard
+    (blueprints/platform_admin.py's _recent_feedback()). Same public/
+    unauthenticated/rate-limited/optional-Turnstile posture as submit_lead()
+    above -- co-located here rather than in its own module since it's the
+    same "public landing page form" family."""
+    if turnstile_enabled():
+        token = request.form.get("cf-turnstile-response") or (request.get_json(silent=True) or {}).get("cf_turnstile_response", "")
+        if not verify_turnstile(token, request.remote_addr):
+            return jsonify({"ok": False, "msg": "Captcha verification failed. Please try again."}), 400
+
+    data = request.get_json(silent=True) or request.form
+    feedback_type = (data.get("feedback_type") or "").strip()
+    if feedback_type not in _FEEDBACK_TYPES:
+        feedback_type = "Feature Request"
+    email = (data.get("email") or "").strip()[:200] or None
+    message = (data.get("message") or "").strip()[:2000]
+    rating_raw = data.get("rating")
+
+    if not message:
+        return jsonify({"ok": False, "msg": "Please enter your feedback."}), 400
+    if email and not _EMAIL_RE.match(email):
+        return jsonify({"ok": False, "msg": "Enter a valid email address, or leave it blank."}), 400
+    rating = None
+    if rating_raw not in (None, "", "0"):
+        try:
+            rating = int(rating_raw)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "msg": "Rating must be a number."}), 400
+        if rating < 1 or rating > 5:
+            return jsonify({"ok": False, "msg": "Rating must be between 1 and 5."}), 400
+
+    try:
+        from database import get_master_db
+        conn = get_master_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO feedback (feedback_type, rating, email, message) VALUES (%s, %s, %s, %s)",
+            (feedback_type, rating, email, message)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as exc:
+        app_log.error("submit_feedback failed: %s", exc)
+        return jsonify({"ok": False, "msg": "Could not submit right now. Please try again."}), 500
+
+    return jsonify({"ok": True, "msg": "Thanks for the feedback! It goes straight to our product team."})

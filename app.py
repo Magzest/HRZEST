@@ -242,15 +242,42 @@ def inject_billing_lock_status():
         db = get_master_db()
         cur = db.cursor(buffered=True)
         cur.execute(
-            "SELECT billing_state, grace_period_ends_at FROM tenants WHERE db_name=%s",
+            "SELECT id, billing_state, grace_period_ends_at, subscription_status, trial_start_date "
+            "FROM tenants WHERE db_name=%s",
             (_g.tenant_db,)
         )
         row = cur.fetchone()
         cur.close()
         db.close()
-        if not row or row[0] == "current":
+        if not row:
             return {"billing_lock_status": None}
-        return {"billing_lock_status": {"state": row[0], "grace_period_ends_at": coerce_datetime(row[1])}}
+        tenant_id, billing_state, grace_period_ends_at, subscription_status, trial_start_date = row
+        # First-login trial-start stamp: deliberately here, not in
+        # blueprints/auth.py's admin_login(), since that route has two
+        # separate points where a session actually gets established
+        # (direct login when MANDATORY_LOGIN_MFA is off, vs after a
+        # separate /mfa_verify completion when it's on) -- this context
+        # processor runs on every admin-authenticated page render
+        # regardless of which path was used, so it's the one place
+        # guaranteed to see "this tenant's first real login" exactly once,
+        # via the trial_start_date IS NULL guard below. Fires at most once
+        # ever per tenant; every render after that just no-ops on the
+        # subscription_status/trial_start_date check.
+        if subscription_status == "trialing" and trial_start_date is None:
+            from blueprints.trial_billing import TRIAL_DURATION_DAYS
+            db2 = get_master_db()
+            cur2 = db2.cursor()
+            cur2.execute(
+                "UPDATE tenants SET trial_start_date=NOW(), "
+                "trial_end_date=NOW() + (%s * INTERVAL '1 day') WHERE id=%s AND trial_start_date IS NULL",
+                (TRIAL_DURATION_DAYS, tenant_id)
+            )
+            db2.commit()
+            cur2.close()
+            db2.close()
+        if billing_state == "current":
+            return {"billing_lock_status": None}
+        return {"billing_lock_status": {"state": billing_state, "grace_period_ends_at": coerce_datetime(grace_period_ends_at)}}
     except Exception:
         return {"billing_lock_status": None}
 
@@ -455,11 +482,20 @@ def _enforce_billing_lock():
         return
     if request.path.startswith("/static/") or request.path == "/healthz" or request.path in _BILLING_LOCK_EXEMPT_PATHS:
         return
-    msg = "Your account is locked because of an overdue payment. Pay your outstanding bill to unlock it."
+    # An employee session hitting this has no way to pay the bill --
+    # /pay_overdue_bill is @admin_required, so redirecting them there just
+    # bounces them straight to the admin login with no explanation of why.
+    # Point them back at their own portal with a message telling them who
+    # actually needs to act, instead.
+    is_employee_session = bool(session.get("employee_id")) and not session.get("admin_logged_in")
+    if is_employee_session:
+        msg = "Your company's account needs attention -- please contact your admin."
+    else:
+        msg = "Your account is locked because of an overdue payment. Pay your outstanding bill to unlock it."
     if request.path.startswith("/api/"):
         return jsonify({"ok": False, "msg": msg, "billing_locked": True}), 402
     flash(msg, "error")
-    return redirect(_tpath("/pay_overdue_bill"))
+    return redirect(_tpath("/employee_portal") if is_employee_session else _tpath("/pay_overdue_bill"))
 
 
 @app.before_request
@@ -649,11 +685,6 @@ def _enforce_csrf():
         # exists to carry a CSRF token in the first place; authenticated by
         # request signature instead (blueprints/webhooks.py's generic
         # /webhooks/<provider> route).
-        return
-    if request.path.startswith("/iclock/"):
-        # Physical biometric terminal push (blueprints/biometric.py) -- a
-        # device pushing attendance logs has no browser session/CSRF token
-        # to carry, same posture as /webhooks/ above.
         return
     if request.path in ("/login", "/admin_login", "/hr_login"):
         return  # Login routes handle credential verification & rate-limiting
@@ -1689,42 +1720,6 @@ def _init_core_tables(cursor, db):
             verified_at TIMESTAMP DEFAULT NULL
         )
     """)
-    # Maps a physical biometric terminal's own internal user number
-    # (device_pin -- the device knows nothing about employee_id) to a real
-    # employee, set up once via the admin "Enroll Device" flow
-    # (blueprints/biometric.py). Scoped per (device_serial, device_pin)
-    # since two different terminals both number their own users starting
-    # from 1.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS device_pin_map (
-            id SERIAL PRIMARY KEY,
-            device_serial VARCHAR(50) NOT NULL,
-            device_pin VARCHAR(20) NOT NULL,
-            employee_id VARCHAR(50) NOT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(device_serial, device_pin)
-        )
-    """)
-    # Dedup guard for device punch pushes. Biometric terminals commonly
-    # resend already-delivered logs (queued retry after a dropped
-    # connection, or a manual "re-upload attendance" on the device) -- since
-    # process_punch()'s login/logout/relogin state machine is a toggle, not
-    # an idempotent action, replaying the same punch twice would wrongly
-    # flip a login into a logout. Keyed on (device_serial, device_pin,
-    # punch_time) -- the same triple the device itself uses to identify a
-    # single punch record -- and checked via INSERT ... ON CONFLICT DO
-    # NOTHING before process_punch() ever runs for a given line.
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS device_punch_log (
-            id SERIAL PRIMARY KEY,
-            device_serial VARCHAR(50) NOT NULL,
-            device_pin VARCHAR(20) NOT NULL,
-            punch_time TIMESTAMP NOT NULL,
-            employee_id VARCHAR(50) NOT NULL,
-            processed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(device_serial, device_pin, punch_time)
-        )
-    """)
     db.commit()
     # Seed default leave types if empty
     cursor.execute("SELECT COUNT(*) FROM leave_types")
@@ -2461,6 +2456,34 @@ def init_master_db():
         cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_state VARCHAR(20) NOT NULL DEFAULT 'current'")
         cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS grace_period_ends_at TIMESTAMP DEFAULT NULL")
         cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS locked_at TIMESTAMP DEFAULT NULL")
+        # Trial lifecycle (blueprints/trial_billing.py, TRIAL_DURATION_DAYS).
+        # subscription_status defaults to 'active' so every pre-existing
+        # tenant is unaffected -- only a tenant provisioned through the
+        # trial signup path (blueprints/org.py's create_org_setup_trial_confirm())
+        # is ever set to 'trialing'. trial_start_date/trial_end_date stay
+        # NULL until the tenant's FIRST admin login (app.py's
+        # inject_billing_lock_status() stamps them then, not at
+        # provisioning) -- the trial clock starts when the company actually
+        # starts using the product, not when the mandate was authorized.
+        # billing_cycle_day records the day-of-month the mandate was
+        # authorized on, for display only (Razorpay's own subscription
+        # schedule is the actual source of truth for when a charge fires).
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_start_date TIMESTAMP DEFAULT NULL")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_end_date TIMESTAMP DEFAULT NULL")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) NOT NULL DEFAULT 'active'")
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS billing_cycle_day SMALLINT DEFAULT NULL")
+        # Dedup guard for blueprints/trial_billing.py's check_trial_ending_soon()
+        # -- a one-time reminder sent TRIAL_REMINDER_WINDOW_HOURS before
+        # trial_end_date; this column is what stops it firing twice.
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS trial_reminder_sent_at TIMESTAMP DEFAULT NULL")
+        # Business-registration identifier collected at signup (blueprints/
+        # org.py's create_org()/api_create_org()) -- lets check_duplicate_gst()
+        # block a second free trial/signup under a different company name
+        # but the same real-world business, a gap the old company-name-only
+        # dedup didn't cover. NULL for tenants provisioned before this
+        # existed, or via the Platform Admin direct-create path (which
+        # deliberately doesn't collect one -- see platform_admin_create_tenant()).
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS gst_number VARCHAR(20) DEFAULT NULL")
         # Platform-operator identity (blueprints/platform_admin.py) --
         # lives in att_master, not any tenant schema, since tenant
         # admin_users rows only exist inside their own schema and this
@@ -2602,6 +2625,10 @@ def init_master_db():
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_applications_status ON tenant_applications (status, created_at)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_tenant_applications_email ON tenant_applications (admin_email)")
+        # Business-registration identifier -- see tenants.gst_number above
+        # for why this exists; carried on the application row first and
+        # copied onto tenants.gst_number by provision_tenant() once approved.
+        cur.execute("ALTER TABLE tenant_applications ADD COLUMN IF NOT EXISTS gst_number VARCHAR(20) DEFAULT NULL")
         # Internal-only record of a signup blocked because its company_name
         # matched an existing tenant. Deliberately a SEPARATE table from
         # tenant_applications (rather than a flag/column on it) so the real
@@ -2699,6 +2726,12 @@ def init_master_db():
         # the new rate -- migration happens at the subscriber's own next
         # renewal, never mid-cycle.
         cur.execute("ALTER TABLE auto_debit_mandates ADD COLUMN IF NOT EXISTS needs_rate_migration BOOLEAN NOT NULL DEFAULT FALSE")
+        # 'pending_cancellation' is a legal status value alongside the ones
+        # documented above -- set by /api/auto_debit/cancel when called with
+        # at_period_end=true (blueprints/auto_debit.py). The mandate keeps
+        # billing normally until Razorpay's subscription.cancelled webhook
+        # fires at the end of the current cycle, which is what actually
+        # flips status to 'cancelled'.
         # One row per successfully (or unsuccessfully) collected monthly
         # auto-debit charge -- written by the Razorpay webhook
         # (subscription.charged / payment.failed) in real mode, or by the
@@ -2727,26 +2760,18 @@ def init_master_db():
         # path above never needed this column since its webhook arrives
         # already carrying a subscription_id to look up by instead.
         cur.execute("ALTER TABLE monthly_invoices ADD COLUMN IF NOT EXISTS razorpay_order_id VARCHAR(100) DEFAULT NULL")
-        # Which tenant a physical biometric terminal (fingerprint/face
-        # attendance device) belongs to -- looked up by device_serial, the
-        # only identifier the device itself sends. Lives in the master
-        # schema (not per-tenant) because blueprints/biometric.py's device
-        # push endpoint has no session/URL slug to resolve a tenant from
-        # the normal way (see utils/tenant_routing.py); this is that
-        # resolution's single source of truth. api_key_hash is checked the
-        # same way admin_users.password is (never store the raw key).
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS biometric_devices (
-                id SERIAL PRIMARY KEY,
-                device_serial VARCHAR(50) UNIQUE NOT NULL,
-                tenant_schema VARCHAR(100) NOT NULL,
-                api_key_hash VARCHAR(64) NOT NULL,
-                location_name VARCHAR(200) DEFAULT NULL,
-                registered_by VARCHAR(100) DEFAULT NULL,
-                last_seen_at TIMESTAMP DEFAULT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        # Exact per-employee rate applied to this specific charge, captured
+        # at charge time -- amount_paise/employee_count already implies it,
+        # but storing it explicitly keeps the audit trail correct even if
+        # the platform-wide rate changes later (get_per_employee_paise() is
+        # a live, mutable read; this column is a frozen historical fact).
+        cur.execute("ALTER TABLE monthly_invoices ADD COLUMN IF NOT EXISTS rate_paise INT DEFAULT NULL")
+        # Real DB-level guarantee against double-processing a retried
+        # Razorpay webhook (subscription.charged / payment.captured), on top
+        # of the existing check-then-write idiom in _record_charge() /
+        # _mark_invoice_paid_and_unlock() -- partial index since most rows
+        # (pending orders, demo charges) never get a real payment id.
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_invoices_payment_id ON monthly_invoices (razorpay_payment_id) WHERE razorpay_payment_id IS NOT NULL")
         # Lightweight traffic counter for the public marketing pages
         # (landing page, get-started, create_org) -- one row per
         # (path, day), incremented via ON CONFLICT below rather than one
@@ -2779,6 +2804,24 @@ def init_master_db():
         # Pre-existing leads tables created before phone existed --
         # CREATE TABLE IF NOT EXISTS above is a no-op against them.
         cur.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS phone VARCHAR(30) DEFAULT NULL")
+        # Product feedback / star ratings from the public landing page
+        # (templates/landing.html's #feedback form -> POST /api/feedback,
+        # blueprints/org.py). Separate table from leads above -- this is
+        # unsolicited product input from anyone (existing customer,
+        # prospect, or neither), not a sales inquiry, so it carries no
+        # name/company/status-workflow, just what the form actually asks
+        # for. Surfaced read-only on the Platform Admin dashboard
+        # (blueprints/platform_admin.py's _recent_feedback()).
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id SERIAL PRIMARY KEY,
+                feedback_type VARCHAR(50) NOT NULL DEFAULT 'Feature Request',
+                rating SMALLINT DEFAULT NULL,
+                email VARCHAR(200) DEFAULT NULL,
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         # Singleton row (id=1) holding the platform operator's own monthly
         # running costs -- there's no API that can discover real AWS/
         # maintenance spend automatically, so these are admin-entered and
@@ -2802,6 +2845,13 @@ def init_master_db():
         # next read (utils/plan_limits.py's get_per_employee_paise(), 30s
         # cache) -- no redeploy needed.
         cur.execute("ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS per_employee_paise INT NOT NULL DEFAULT 9900")
+        # Both default 0 -- utils/plan_limits.py's calculate_price() formula
+        # (base_fee + employee_count*rate, floored at minimum_monthly) is
+        # byte-identical to the old flat-rate-only behavior until a
+        # platform admin explicitly sets one of these (blueprints/
+        # platform_admin.py's platform_admin_set_rate()).
+        cur.execute("ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS base_fee_paise INT NOT NULL DEFAULT 0")
+        cur.execute("ALTER TABLE platform_costs ADD COLUMN IF NOT EXISTS minimum_monthly_paise INT NOT NULL DEFAULT 0")
         # ── Mini-CRM: per-company internal notes + a support-ticket queue ──
         # (blueprints/platform_admin.py's company profile / tickets pages).
         # Both key off tenants.id, not tenant_schema, so a note/ticket
@@ -3819,13 +3869,12 @@ if "core.home" not in app.view_functions:
     from blueprints.billing_dunning import billing_dunning_bp
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.honeypot_routes import honeypot_bp
-    from blueprints.biometric import biometric_bp
     from blueprints.disbursement import disbursement_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                billing_dunning_bp, platform_admin_bp, honeypot_bp, biometric_bp, disbursement_bp):
+                billing_dunning_bp, platform_admin_bp, honeypot_bp, disbursement_bp):
         app.register_blueprint(_bp)
 
 
