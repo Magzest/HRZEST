@@ -43,6 +43,26 @@ if os.environ.get("APP_ENV") == "production" and _KEY_ID.startswith("rzp_test_")
     raise RuntimeError(
         "RAZORPAY_KEY_ID is a test-mode key under APP_ENV=production -- refusing to start (fail-secure)."
     )
+# The check above only catches a LEFTOVER test key -- it says nothing about
+# the keys being MISSING entirely (a broken secret-manager injection, a
+# typo'd env var name, a .env that never got the production secrets added).
+# In that case razorpay_configured() below is simply False, and every
+# payment flow (utils/razorpay_utils.create_id_or_demo()/verify_or_demo(),
+# used throughout blueprints/seats.py, billing.py, auto_debit.py, org.py,
+# billing_dunning.py) transparently falls into its demo branch: orders/
+# subscriptions get fabricated demo_* ids, and verify_or_demo() accepts
+# them with NO signature check and no real charge -- silently provisioning
+# tenants, crediting seats, and activating mandates for zero real money.
+# Refuse to start rather than let that happen unnoticed.
+if os.environ.get("APP_ENV") == "production" and not (_KEY_ID and _KEY_SECRET):
+    app_log.critical(
+        "FATAL: APP_ENV=production but RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET are not "
+        "configured -- refusing to start rather than silently running every payment "
+        "flow through the no-charge demo path. Set both to live (rzp_live_...) keys."
+    )
+    raise RuntimeError(
+        "RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET are unset under APP_ENV=production -- refusing to start (fail-secure)."
+    )
 
 _API_BASE = "https://api.razorpay.com/v1"
 _TIMEOUT_SECONDS = 15
