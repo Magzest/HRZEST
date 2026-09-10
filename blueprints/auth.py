@@ -62,6 +62,31 @@ _INJECTION_PATTERN_RE = re.compile(
 _MFA_OTP_TTL_SEC = 300
 
 
+def _start_login_mfa_decoy(login_template):
+    """Enumeration-safe stand-in for _start_login_mfa(), used by
+    admin_login() (below) when `identifier` doesn't correspond to any
+    real account at all. Top-level admin accounts never check a password
+    on that branch -- the emailed OTP is their sole credential -- so
+    without this, "redirected to /mfa_verify" vs. the generic invalid-
+    credentials error trivially reveals whether a given username is a
+    real admin-role account, before an attacker ever has to guess a
+    password. Sets up the identical session-state shape and redirect
+    target as a genuine send, but with no email delivered anywhere
+    (there's no real account to deliver one to) and a random code that
+    can therefore never be entered correctly -- mfa_verify()'s own
+    admin_users re-lookup for a username that doesn't exist safely
+    no-ops (session.clear() + redirect to login) even in the
+    astronomical case someone guesses it."""
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+    session.clear()
+    session["mfa_pending"] = True
+    session["mfa_kind"] = "admin_users"
+    session["mfa_user"] = "__nonexistent__"
+    session["mfa_otp_code"] = otp_code
+    session["mfa_issued_at"] = time.time()
+    return redirect(tpath("/mfa_verify"))
+
+
 def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     """Common second step once a password has already checked out (called
     from admin_login()'s admin/employee branches): email a one-time code
@@ -145,6 +170,19 @@ def admin_login():
                 (identifier,)
             )
             admin_row = cursor.fetchone()
+        if app.config.get("MANDATORY_LOGIN_MFA", True) and not admin_row:
+            # See _start_login_mfa_decoy()'s docstring -- closes the
+            # enumeration gap below by giving a genuinely nonexistent
+            # identifier the SAME redirect-to-MFA response, backed by an
+            # undeliverable decoy OTP. Guarded on "also not a real
+            # employee_id" so a legitimate employee login (which never
+            # has an admin_users row either) isn't hijacked into this
+            # decoy path before its own password is ever checked below.
+            with _db() as (_ec, _ed):
+                _ec.execute("SELECT 1 FROM employees WHERE employee_id=%s", (identifier,))
+                _is_employee = _ec.fetchone() is not None
+            if not _is_employee:
+                return _start_login_mfa_decoy("admin_login.html")
         if admin_row and admin_row[1] == "admin" and app.config.get("MANDATORY_LOGIN_MFA", True):
             # Top-level admin accounts (not HR/SOC-analyst admin_users rows,
             # which keep password login below) no longer authenticate with a

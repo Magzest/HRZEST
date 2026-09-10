@@ -93,6 +93,49 @@ class TestAdminLoginMfa:
             db_engine.cursor().execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
             db_engine.commit()
 
+    def test_nonexistent_identifier_gets_the_same_mfa_redirect(self, client, mandatory_login_mfa_enabled):
+        """Finding #10 (username enumeration): a real admin-role account
+        skips password verification entirely on this branch (OTP is its
+        sole credential) and always redirects to /mfa_verify -- before
+        the fix, a nonexistent identifier fell through to a plain 200
+        "Invalid credentials" render instead, trivially distinguishing
+        "real admin username" from "made up" without ever guessing a
+        password. Both must now produce the identical 302 redirect."""
+        resp = client.post("/login", data={
+            "identifier": "definitely_not_a_real_admin_98765", "password": "whatever",
+        }, follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers.get("Location") == "/mfa_verify"
+        with client.session_transaction() as sess:
+            assert sess.get("mfa_pending") is True
+            assert sess.get("mfa_kind") == "admin_users"
+
+    def test_decoy_mfa_state_can_never_be_completed(self, client, mandatory_login_mfa_enabled):
+        client.post("/login", data={
+            "identifier": "definitely_not_a_real_admin_98765", "password": "whatever",
+        })
+        with client.session_transaction() as sess:
+            code = sess["mfa_otp_code"]
+        resp = client.post("/mfa_verify", data={"otp_code": code}, follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers.get("Location") == "/login"
+        with client.session_transaction() as sess:
+            assert not sess.get("admin_logged_in")
+
+    def test_real_employee_identifier_not_hijacked_into_admin_decoy(self, client, seed_employee, mandatory_login_mfa_enabled):
+        """The enumeration-guard branch above only fires when `identifier`
+        matches neither admin_users NOR employees -- a real employee_id
+        (which also has no admin_users row) must still reach the normal
+        employee password check below it, not get redirected into the
+        decoy admin flow before its password is ever verified."""
+        resp = client.post("/login", data={
+            "identifier": seed_employee["employee_id"], "password": "totally wrong password",
+        }, follow_redirects=False)
+        assert resp.status_code == 200
+        assert b"Invalid credentials" in resp.data
+        with client.session_transaction() as sess:
+            assert not sess.get("mfa_pending")
+
     def test_admin_with_no_email_on_file_rejected_generically(self, client, db_engine, mandatory_login_mfa_enabled):
         from utils.auth import generate_password_hash
         cur = db_engine.cursor()
