@@ -888,26 +888,48 @@ def add_employee_page():
         filepath = new_filepath
         qr_path = generate_qr(emp_id)
         try:
-            _mgr_id = request.form.get("manager_id", "").strip() or None
-            _mgr_name = request.form.get("manager_name", "").strip() or None
-            _dept = request.form.get("department", "").strip() or None
-            cursor.execute(
-                "INSERT INTO employees (name, employee_id, email, role, phone, face_image, qr_code, password, "
-                "date_of_joining, work_mode, work_lat, work_lon, company_id, manager_id, manager_name, department, "
-                "shift_id, gender, dob, blood_group, address, city, state, pincode, "
-                "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
-                "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
-                "force_pin_change) "
-                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
-                "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
-                (name, emp_id, email, role, phone, filepath, qr_path, hashed_pwd,
-                 date_of_joining, work_mode, work_lat, work_lon, company_id,
-                 _mgr_id, _mgr_name, _dept, shift_id,
-                 gender, dob, blood_group, address, city, state, pincode,
-                 ec_name, ec_phone, ec_relation,
-                 aadhar, pan, bank_name, bank_account, bank_ifsc, uan)
-            )
-            db.commit()
+            # Authoritative, lock-protected recheck immediately before the
+            # INSERT, wrapped in an explicit transaction() (not just the
+            # same cursor) -- the pooled connection defaults to
+            # autocommit=True (database.py's _borrow_connection()), so
+            # without this the FOR UPDATE lock taken inside
+            # add_employee_seat_cap_check() would release itself the
+            # instant that one SELECT statement finished, before this
+            # INSERT ever ran, and the race would still be wide open. The
+            # earlier add_employee_seat_cap_check() call above (no
+            # cursor, own connection) is only a cheap UX preflight and
+            # does NOT prevent two concurrent requests both passing it
+            # before either has inserted -- see that function's docstring.
+            _seat_error = None
+            with transaction(db):
+                _seat_error = add_employee_seat_cap_check(cursor)
+                if not _seat_error:
+                    _mgr_id = request.form.get("manager_id", "").strip() or None
+                    _mgr_name = request.form.get("manager_name", "").strip() or None
+                    _dept = request.form.get("department", "").strip() or None
+                    cursor.execute(
+                        "INSERT INTO employees (name, employee_id, email, role, phone, face_image, qr_code, password, "
+                        "date_of_joining, work_mode, work_lat, work_lon, company_id, manager_id, manager_name, department, "
+                        "shift_id, gender, dob, blood_group, address, city, state, pincode, "
+                        "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
+                        "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
+                        "force_pin_change) "
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
+                        "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
+                        (name, emp_id, email, role, phone, filepath, qr_path, hashed_pwd,
+                         date_of_joining, work_mode, work_lat, work_lon, company_id,
+                         _mgr_id, _mgr_name, _dept, shift_id,
+                         gender, dob, blood_group, address, city, state, pincode,
+                         ec_name, ec_phone, ec_relation,
+                         aadhar, pan, bank_name, bank_account, bank_ifsc, uan)
+                    )
+            if _seat_error:
+                cursor.close()
+                db.close()
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                flash(_seat_error, "error")
+                return redirect(tpath("/employees"))
             _enroll_fingerprint_from_form(emp_id, cursor, db)
             assign_leave_balances_for_employee(cursor, emp_id)
             for _deg, _inst, _yr, _pct in zip(edu_degrees, edu_institutions, edu_years, edu_pcts):
@@ -1903,12 +1925,31 @@ def api_register_employee():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     try:
-        cursor.execute(
-            "INSERT INTO employees (name, employee_id, email, face_image, qr_code, password, force_pin_change) "
-            "VALUES (%s,%s,%s,%s,%s,%s,1)",
-            (name, emp_id, email, filepath, qr_path, hashed_pwd)
-        )
-        db.commit()
+        # Authoritative, lock-protected recheck immediately before the
+        # INSERT, wrapped in an explicit transaction() -- the pooled
+        # connection defaults to autocommit=True, so without an explicit
+        # transaction the FOR UPDATE lock taken inside
+        # add_employee_seat_cap_check() would release itself the instant
+        # that one SELECT statement finished, before this INSERT ever
+        # ran, and the race would still be wide open. The earlier
+        # add_employee_seat_cap_check() call above (no cursor, own
+        # connection) is only a cheap UX preflight -- see that function's
+        # docstring.
+        _seat_error = None
+        with transaction(db):
+            _seat_error = add_employee_seat_cap_check(cursor)
+            if not _seat_error:
+                cursor.execute(
+                    "INSERT INTO employees (name, employee_id, email, face_image, qr_code, password, force_pin_change) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,1)",
+                    (name, emp_id, email, filepath, qr_path, hashed_pwd)
+                )
+        if _seat_error:
+            cursor.close()
+            db.close()
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({"ok": False, "msg": _seat_error}), 403
     except Exception:
         app_log.error("API employee register failed", exc_info=True)
         db.rollback()
@@ -1977,6 +2018,12 @@ def api_edit_employee(emp_id):
 @api_required
 @api_role_required("admin")
 def api_delete_employee(emp_id):
+    """Bearer-token twin of delete_employee() above -- same
+    transaction-wrapped multi-table delete (all-or-nothing, and files are
+    only removed AFTER the DB transaction actually commits, not before)
+    and the same _audit() call, so a deletion made from the mobile app
+    leaves an identical trail to one made from the web admin UI instead
+    of a silent, unaudited, non-atomic one."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT face_image, qr_code FROM employees WHERE employee_id=%s", (emp_id,))
@@ -1985,21 +2032,28 @@ def api_delete_employee(emp_id):
         cursor.close()
         db.close()
         return jsonify({"ok": False, "msg": "Employee not found"}), 404
+    try:
+        with transaction(db):
+            cursor.execute("DELETE FROM attendance WHERE employee_id=%s", (emp_id,))
+            cursor.execute("DELETE FROM salary_config WHERE employee_id=%s", (emp_id,))
+            cursor.execute("DELETE FROM leave_requests WHERE employee_id=%s", (emp_id,))
+            cursor.execute("DELETE FROM resignation_requests WHERE employee_id=%s", (emp_id,))
+            cursor.execute("DELETE FROM tickets WHERE employee_id=%s", (emp_id,))
+            cursor.execute("DELETE FROM employees WHERE employee_id=%s", (emp_id,))
+    except Exception:
+        cursor.close()
+        db.close()
+        app_log.warning("api_delete_employee failed mid-transaction for %s, rolled back", emp_id)
+        return jsonify({"ok": False, "msg": f"Failed to delete employee '{emp_id}'; no changes were made."}), 500
     for path in row:
         if path and os.path.exists(path):
             try:
                 os.remove(path)
             except Exception as _e:
                 app_log.warning("Could not delete file %s: %s", path, _e)
-    cursor.execute("DELETE FROM attendance WHERE employee_id=%s", (emp_id,))
-    cursor.execute("DELETE FROM salary_config WHERE employee_id=%s", (emp_id,))
-    cursor.execute("DELETE FROM leave_requests WHERE employee_id=%s", (emp_id,))
-    cursor.execute("DELETE FROM resignation_requests WHERE employee_id=%s", (emp_id,))
-    cursor.execute("DELETE FROM tickets WHERE employee_id=%s", (emp_id,))
-    cursor.execute("DELETE FROM employees WHERE employee_id=%s", (emp_id,))
-    db.commit()
     cursor.close()
     db.close()
+    _audit("delete_employee", "employees", emp_id, f"Employee {emp_id} permanently deleted (via API)")
     return jsonify({"ok": True, "msg": f"Employee '{emp_id}' deleted."})
 
 

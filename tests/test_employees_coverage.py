@@ -225,6 +225,108 @@ class TestDeleteEmployee:
         cur.close()
 
 
+# ── api_delete_employee (mobile/API twin of delete_employee) ──────────────────
+
+class TestApiDeleteEmployee:
+    """api_delete_employee used to perform the identical destructive
+    multi-table delete as delete_employee() (web) above, but without
+    wrapping it in a transaction (partial-failure risk) and without
+    calling _audit() (the deletion left no trail at all when done from
+    the mobile app, unlike the web path)."""
+
+    def _seed(self, db_engine, emp_id="DELAPI001"):
+        from utils.auth import generate_password_hash
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO employees (employee_id, name, email, password) "
+            "VALUES (%s,'Del Api Test','delapi@test.local',%s) ON CONFLICT DO NOTHING",
+            (emp_id, generate_password_hash("Del@123"))
+        )
+        cur.close()
+        db_engine.commit()
+
+    def test_unauthenticated_returns_401(self, client):
+        rv = client.delete("/api/employees/GHOST_99")
+        assert rv.status_code == 401
+
+    def test_unknown_employee_returns_404(self, client, db_engine, seed_admin):
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.delete("/api/employees/GHOST_NEVER_EXISTS",
+                               headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 404
+        finally:
+            cleanup()
+
+    def test_deletes_employee_and_related_rows(self, client, db_engine, seed_admin):
+        emp_id = "DELAPI001"
+        self._seed(db_engine, emp_id)
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s)",
+            (emp_id, datetime.date(2027, 2, 1), "x")
+        )
+        db_engine.commit()
+        cur.close()
+
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.delete(f"/api/employees/{emp_id}",
+                               headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 200
+            assert rv.get_json()["ok"] is True
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
+            assert cur.fetchone() is None
+            cur.execute("SELECT 1 FROM leave_requests WHERE employee_id=%s", (emp_id,))
+            assert cur.fetchone() is None, "related leave_requests row survived the delete"
+            cur.close()
+        finally:
+            cleanup()
+
+    def test_delete_is_audited(self, client, db_engine, seed_admin):
+        emp_id = "DELAPI002"
+        self._seed(db_engine, emp_id)
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.delete(f"/api/employees/{emp_id}",
+                               headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 200
+
+            cur = db_engine.cursor()
+            cur.execute(
+                "SELECT detail FROM audit_logs WHERE target_id=%s AND action='delete_employee' "
+                "ORDER BY id DESC LIMIT 1",
+                (emp_id,)
+            )
+            row = cur.fetchone()
+            assert row is not None, "api_delete_employee's deletion was not audited"
+            assert emp_id in row[0]
+            cur.close()
+        finally:
+            cleanup()
+
+    def test_non_admin_role_denied(self, client, db_engine, seed_admin):
+        emp_id = "DELAPI003"
+        self._seed(db_engine, emp_id)
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        token, cleanup = _make_admin_token(db_engine, identity=seed_admin["username"])
+        try:
+            rv = client.delete(f"/api/employees/{emp_id}",
+                               headers={"Authorization": f"Bearer {token}"})
+            assert rv.status_code == 403
+            cur.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
+            assert cur.fetchone() is not None, "employee was deleted despite the role check"
+        finally:
+            cleanup()
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("DELETE FROM employees WHERE employee_id=%s", (emp_id,))
+            db_engine.commit()
+            cur.close()
+
+
 # ── edit_employee POST ────────────────────────────────────────────────────────
 
 class TestEditEmployee:
