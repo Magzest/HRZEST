@@ -293,6 +293,53 @@ def _reject_if_compromised(login_endpoint: str):
     return None
 
 
+def _account_still_active(table: str, id_column: str, id_value) -> bool:
+    """Re-checks that the session's own account still exists and is
+    active. api_required() (below) already gives every Bearer-token route
+    this same guarantee on each request -- LEFT JOIN admin_users, check
+    is_active -- specifically so deactivating/deleting an account revokes
+    access immediately rather than just blocking future logins. Web
+    sessions (admin_required/employee_required/role_required below) never
+    had the equivalent: they only ever checked session flags, with no
+    per-request DB re-check at all, so a deleted/deactivated account's
+    already-open browser tab kept working until the session's own idle/
+    absolute timeout. table/id_column are always call-site literals
+    ("admin_users"/"username" or "employees"/"employee_id"), never
+    request-controlled. Fails OPEN on a DB error (same posture as
+    is_session_compromised() above) so a transient outage doesn't lock
+    every legitimate session out of the whole app."""
+    if not id_value:
+        return True
+    try:
+        from database import get_db_connection
+        db = get_db_connection()
+        cur = db.cursor()
+        cur.execute(f"SELECT COALESCE(is_active,1) FROM {table} WHERE {id_column}=%s", (id_value,))  # nosec B608 -- table/id_column are fixed call-site literals, never request input; id_value is %s-bound
+        row = cur.fetchone()
+        cur.close()
+        db.close()
+        return bool(row) and bool(row[0])
+    except Exception as e:
+        app_log.error("_account_still_active check failed for %s.%s: %s", table, id_column, e)
+        return True
+
+
+def _reject_if_account_deactivated(table: str, id_column: str, id_value, login_endpoint: str):
+    """Companion to _reject_if_compromised() above -- same return
+    contract (a redirect Response to kill the request, or None to let it
+    proceed). Kept as a separate function/DB round trip rather than
+    folded into that one so a session-risk failure and an account-status
+    failure stay independently diagnosable in the logs."""
+    if not _account_still_active(table, id_column, id_value):
+        log_security_event(
+            "access.denied", "Session rejected: account deactivated or deleted since login",
+            level="WARNING", identifier=id_value,
+        )
+        session.clear()
+        return redirect(url_for(login_endpoint, locked="1"))
+    return None
+
+
 # ── Web session guards ────────────────────────────────────────────────────────
 def admin_required(f):
     @wraps(f)
@@ -322,6 +369,9 @@ def admin_required(f):
         _killed = _reject_if_compromised("auth.admin_login")
         if _killed:
             return _killed
+        _killed = _reject_if_account_deactivated("admin_users", "username", session.get("admin_username"), "auth.admin_login")
+        if _killed:
+            return _killed
         return f(*args, **kwargs)
     return wrapper
 
@@ -344,6 +394,9 @@ def employee_required(f):
             # also what url_for(...) resolves to a build error for below.
             return redirect(url_for("auth.admin_login"))
         _killed = _reject_if_compromised("auth.admin_login")
+        if _killed:
+            return _killed
+        _killed = _reject_if_account_deactivated("employees", "employee_id", session.get("employee_id"), "auth.admin_login")
         if _killed:
             return _killed
         # Prevent bypassing forced password change by navigating directly to portal
@@ -376,6 +429,9 @@ def role_required(*allowed_roles):
                                     "redirect": url_for("auth.admin_login")}), 401
                 return redirect(url_for("auth.admin_login"))
             _killed = _reject_if_compromised("auth.admin_login")
+            if _killed:
+                return _killed
+            _killed = _reject_if_account_deactivated("admin_users", "username", session.get("admin_username"), "auth.admin_login")
             if _killed:
                 return _killed
             user_role = session.get("admin_role", "admin")

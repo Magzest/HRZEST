@@ -144,6 +144,95 @@ class TestLogout:
             assert "admin_logged_in" not in sess
 
 
+class TestDeactivatedAccountSessionRevocation:
+    """admin_required/employee_required/role_required used to check only
+    session flags -- a deactivated or deleted account's already-open
+    browser session kept working until its own idle/absolute timeout.
+    Bearer-token routes (api_required) already re-check is_active on
+    every request; these three decorators now do the session-based
+    equivalent (utils/auth.py's _reject_if_account_deactivated())."""
+
+    def test_active_admin_session_still_works(self, client, seed_admin):
+        """Baseline -- confirms the new check doesn't false-positive on
+        an ordinary active account."""
+        _admin_session(client, seed_admin["username"])
+        resp = client.get("/admin")
+        assert resp.status_code == 200
+
+    def test_deactivated_admin_session_rejected(self, client, seed_admin, db_engine):
+        _admin_session(client, seed_admin["username"])
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET is_active=0 WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.get("/admin", follow_redirects=False)
+            assert resp.status_code == 302
+            assert "admin-login" in resp.headers["Location"]
+            with client.session_transaction() as sess:
+                assert "admin_logged_in" not in sess
+        finally:
+            cur.execute("UPDATE admin_users SET is_active=1 WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
+
+    def test_deactivated_admin_session_rejected_on_role_required_route(self, client, seed_admin, db_engine):
+        """Same check, the role_required() decorator's own copy (a
+        separate code path from admin_required's)."""
+        _admin_session(client, seed_admin["username"])
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET is_active=0 WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.get("/settings")
+            assert resp.status_code in (302, 401, 403)
+        finally:
+            cur.execute("UPDATE admin_users SET is_active=1 WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
+
+    def test_active_employee_session_still_works(self, client, seed_employee):
+        _employee_session(client, seed_employee["employee_id"])
+        resp = client.get("/employee_portal")
+        assert resp.status_code == 200
+
+    def test_deactivated_employee_session_rejected(self, client, seed_employee, db_engine):
+        _employee_session(client, seed_employee["employee_id"])
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET is_active=0 WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            resp = client.get("/employee_portal", follow_redirects=False)
+            assert resp.status_code == 302
+            with client.session_transaction() as sess:
+                assert "employee_id" not in sess
+        finally:
+            cur.execute("UPDATE employees SET is_active=1 WHERE employee_id=%s", (seed_employee["employee_id"],))
+            db_engine.commit()
+            cur.close()
+
+    def test_deleted_employee_session_rejected(self, client, seed_employee, db_engine):
+        """Hard-deletion (blueprints/employees.py's delete_employee(), a
+        real reachable feature) -- no row at all, not just is_active=0.
+        Deleted directly here rather than via the route so this test
+        exercises only the auth check, not the whole delete flow."""
+        _employee_session(client, seed_employee["employee_id"])
+        cur = db_engine.cursor()
+        cur.execute("DELETE FROM employees WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            resp = client.get("/employee_portal", follow_redirects=False)
+            assert resp.status_code == 302
+        finally:
+            # Restore so the seed_employee fixture's own teardown (a plain
+            # DELETE) doesn't fail trying to remove an already-gone row --
+            # ON CONFLICT DO NOTHING makes this idempotent either way.
+            from utils.auth import generate_password_hash
+            cur.execute(
+                "INSERT INTO employees (employee_id, name, email, password, force_pin_change) "
+                "VALUES (%s,%s,%s,%s,0) ON CONFLICT (employee_id) DO NOTHING",
+                (seed_employee["employee_id"], seed_employee["name"], "emp@test.local",
+                 generate_password_hash(seed_employee["password"]))
+            )
+            db_engine.commit()
+            cur.close()
+
+
 class TestChangeAdminPassword:
     def test_mismatched_new_passwords_redirects_with_error(self, client, seed_admin):
         _admin_session(client, seed_admin["username"])
