@@ -422,6 +422,70 @@ def admin_mfa_required_page():
     return render_template("admin_mfa_required.html")
 
 
+_ACTIVITY_LOG_PER_PAGE = 50
+
+
+@admin_views_bp.route("/activity_log")
+@role_required("admin")
+def activity_log_page():
+    """Browsable view over this tenant's own audit_logs table (utils/
+    helpers.py's _audit(), written from ~20 call sites across leave.py,
+    payroll.py, disbursement.py, documents.py, employees.py, and more --
+    salary changes, payroll lock/unlock, leave/resignation approvals,
+    disbursement bank-config edits, document uploads, employee deletion).
+    Those writes previously had no reviewer anywhere in the product --
+    the only existing "Audit Log" page (super_admin_audit_log.html) is a
+    completely separate table (security_events: login/access-denial
+    events only), not this one. Mirrors that page's search/filter/
+    pagination shape, tenant-scoped and admin-only instead of platform-
+    operator-only."""
+    q = request.args.get("q", "").strip()
+    action_filter = request.args.get("action", "").strip()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    conditions = []
+    params = []
+    if action_filter:
+        conditions.append("action=%s")
+        params.append(action_filter)
+    if q:
+        conditions.append("(detail ILIKE %s OR actor ILIKE %s OR target_id ILIKE %s OR action ILIKE %s)")
+        like = f"%{q}%"
+        params.extend([like, like, like, like])
+    where_sql = (" WHERE " + " AND ".join(conditions)) if conditions else ""  # nosec B608 -- conditions are fixed literals built above, never from unescaped request input; all variable values are bound params
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute(f"SELECT COUNT(*) FROM audit_logs{where_sql}", params)  # nosec B608 -- see where_sql note above
+    total = cursor.fetchone()[0]
+    total_pages = max(1, -(-total // _ACTIVITY_LOG_PER_PAGE))
+    page = min(page, total_pages)
+    offset = (page - 1) * _ACTIVITY_LOG_PER_PAGE
+    cursor.execute(
+        f"SELECT actor, actor_type, action, target_table, target_id, detail, ip_address, created_at "  # nosec B608 -- see where_sql note above
+        f"FROM audit_logs{where_sql} ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        params + [_ACTIVITY_LOG_PER_PAGE, offset],
+    )
+    rows = cursor.fetchall()
+    cursor.execute("SELECT DISTINCT action FROM audit_logs ORDER BY action")
+    all_actions = [r[0] for r in cursor.fetchall()]
+    cursor.close()
+    db.close()
+    entries = [
+        {"actor": r[0], "actor_type": r[1], "action": r[2], "target_table": r[3],
+         "target_id": r[4], "detail": r[5], "ip_address": r[6], "created_at": r[7]}
+        for r in rows
+    ]
+    return render_template(
+        "activity_log.html", entries=entries, q=q, action_filter=action_filter,
+        all_actions=all_actions, page=page, total_pages=total_pages, total=total,
+        active_nav="activity_log",
+    )
+
+
 @admin_views_bp.route("/settings")
 @role_required("admin")
 def settings_page():
@@ -649,12 +713,55 @@ def settings_page():
     from utils.payout_utils import payout_provider_configured as _ppc
     payout_provider_ready = _ppc()
 
+    # Seats & Billing (Razorpay) -- was its own standalone page
+    # (blueprints/seats.py's seats_page(), templates/seat_checkout.html);
+    # embedded here so "Billing" behaves the same as every other Finances
+    # sub-section (switchSub, no full page nav) instead of navigating away.
+    # seats_page() itself now just redirects here (same retirement pattern
+    # as /email_config's GET redirect to /settings?tab=email). paid_employee_
+    # slots comes from `co`, already injected into every template by
+    # app.py's inject_company() context processor -- no need to fetch it
+    # again here.
+    from utils.plan_limits import get_billing_snapshot, format_price_inr
+    from utils.razorpay_utils import razorpay_configured as _razorpay_configured
+    _billing_snapshot = get_billing_snapshot(g.tenant_db)
+    auto_debit_status = _billing_snapshot["auto_debit"]
+    invoices = [
+        {**inv, "amount_display": format_price_inr(inv["amount_paise"]),
+         "rate_display": format_price_inr(inv["rate_paise"]) if inv["rate_paise"] else None}
+        for inv in _billing_snapshot["invoices"]
+    ]
+    razorpay_is_configured = _razorpay_configured()
+
+    # Trial/subscription lifecycle (blueprints/trial_billing.py) --
+    # att_master.tenants, not this tenant's own schema, same cross-schema
+    # join every other billing-lock/status read in this app already does
+    # (app.py's inject_billing_lock_status()).
+    from database import get_master_db
+    from utils.helpers import coerce_datetime
+    _mconn = get_master_db()
+    _mcur = _mconn.cursor(buffered=True)
+    _mcur.execute(
+        "SELECT trial_end_date, subscription_status FROM tenants WHERE db_name=%s",
+        (g.tenant_db,)
+    )
+    _trial_row = _mcur.fetchone()
+    _mcur.close()
+    _mconn.close()
+    trial_end_date = coerce_datetime(_trial_row[0]) if _trial_row else None
+    subscription_status = _trial_row[1] if _trial_row else "active"
+
     cursor.close()
     db.close()
     return render_template("settings.html",
                            disbursement_runs=disbursement_runs,
                            payout_configured=payout_configured,
                            payout_provider_ready=payout_provider_ready,
+                           auto_debit_status=auto_debit_status,
+                           invoices=invoices,
+                           razorpay_configured=razorpay_is_configured,
+                           trial_end_date=trial_end_date,
+                           subscription_status=subscription_status,
                            tab=tab,
                            admin_recovery_email=admin_recovery_email,
                            company_code=company_code,

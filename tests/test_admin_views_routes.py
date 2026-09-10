@@ -4,6 +4,7 @@ tests/test_soc_gate.py, tests/test_security_settings_hub.py,
 tests/test_email_2fa.py, tests/test_org.py, or tests/test_admin_search.py
 (2FA, SOC dashboard, security-settings hub, org provisioning, search).
 """
+import secrets
 import pytest
 
 
@@ -37,6 +38,69 @@ class TestAdminDashboardWithActiveCompany:
             sess["active_company_id"] = temp_company
         resp = client.get("/admin")
         assert resp.status_code == 200
+
+
+class TestActivityLogPage:
+    """New Activity Log view (Finding #5) -- a browsable page over
+    audit_logs, which previously had no reviewer anywhere in the product.
+    audit_logs is append-only at the DB level (DELETE is rejected by a
+    trigger), so these tests use a distinctive marker string to find only
+    their own rows rather than cleaning up afterward."""
+
+    def _seed_entry(self, db_engine, action, actor, detail, target_id=None):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO audit_logs (actor, actor_type, action, target_table, target_id, detail) "
+            "VALUES (%s,'admin',%s,'employees',%s,%s)",
+            (actor, action, target_id, detail)
+        )
+        cur.close()
+        db_engine.commit()
+
+    def test_unauthenticated_redirects(self, client):
+        resp = client.get("/activity_log", follow_redirects=False)
+        assert resp.status_code in (302, 401, 403)
+
+    def test_non_admin_role_denied(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="hr")
+        resp = client.get("/activity_log")
+        assert resp.status_code == 403
+
+    def test_admin_sees_page(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"])
+        resp = client.get("/activity_log")
+        assert resp.status_code == 200
+        assert b"Activity Log" in resp.data
+
+    def test_search_finds_seeded_entry(self, client, seed_admin, db_engine):
+        marker = "ACTLOGMARKER_" + secrets.token_hex(6)
+        self._seed_entry(db_engine, "update_salary", seed_admin["username"],
+                          f"salary_per_day set to 5000 ({marker})")
+        _admin_session(client, seed_admin["username"])
+        resp = client.get(f"/activity_log?q={marker}")
+        assert resp.status_code == 200
+        assert marker.encode() in resp.data
+
+    def test_action_filter_excludes_non_matching_entries(self, client, seed_admin, db_engine):
+        # No `q` here deliberately -- the search box always echoes back
+        # whatever `q` was submitted (value="{{ q }}"), so asserting a
+        # marker's absence while also passing it as `q` would trivially
+        # fail regardless of whether the *table* actually excluded it.
+        # Filtering by `action` alone isolates that check correctly.
+        marker = "ACTLOGMARKER_" + secrets.token_hex(6)
+        self._seed_entry(db_engine, "delete_employee", seed_admin["username"], f"deleted ({marker})")
+        _admin_session(client, seed_admin["username"])
+        resp = client.get("/activity_log?action=update_salary")
+        assert resp.status_code == 200
+        assert marker.encode() not in resp.data
+
+    def test_action_filter_includes_matching_entry(self, client, seed_admin, db_engine):
+        marker = "ACTLOGMARKER_" + secrets.token_hex(6)
+        self._seed_entry(db_engine, "delete_employee", seed_admin["username"], f"deleted ({marker})")
+        _admin_session(client, seed_admin["username"])
+        resp = client.get(f"/activity_log?q={marker}&action=delete_employee")
+        assert resp.status_code == 200
+        assert marker.encode() in resp.data
 
 
 class TestSaveDefaultOnboardingTemplate:
@@ -471,7 +535,9 @@ class TestAnnouncementsAdmin:
         resp = client.post("/announcements", data={
             "action": "add", "visibility": "private", "title": "x", "content": "y"},
             follow_redirects=True)
-        assert b"select an employee" in resp.data
+        # Exact wording from admin_views.py's announcements_admin():
+        # "Please select at least one employee for a private announcement."
+        assert b"select at least one employee" in resp.data
 
     def test_public_announcement_posted_and_deleted(self, client, seed_admin, db_engine, seed_employee):
         _admin_session(client, seed_admin["username"])
@@ -490,9 +556,15 @@ class TestAnnouncementsAdmin:
 
     def test_private_announcement_targets_one_employee(self, client, seed_admin, seed_employee, db_engine):
         _admin_session(client, seed_admin["username"])
+        # The real form (templates/leave_holidays.html) is a multi-select
+        # <select name="target_employee_ids" multiple> -- the handler reads
+        # it via request.form.getlist("target_employee_ids") (plural), one
+        # announcement row created per selected target. A single-value
+        # "target_employee_id" (as this test used to send) matches nothing,
+        # so the request was silently treated as having zero targets.
         resp = client.post("/announcements", data={
             "action": "add", "visibility": "private", "title": "Private Ann",
-            "target_employee_id": seed_employee["employee_id"], "content": "just for you"},
+            "target_employee_ids": [seed_employee["employee_id"]], "content": "just for you"},
             follow_redirects=True)
         assert b"Announcement posted" in resp.data
         cur = db_engine.cursor()
