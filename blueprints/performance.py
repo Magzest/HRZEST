@@ -7,40 +7,95 @@ literal chosen by a bool (`dept`/`active_cid`) -- never user input. Actual
 values are always %s-bound params.
 """
 import datetime
+from functools import wraps
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, employee_api_required
 from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings, get_employee_sidebar_info
-from extensions import limiter
+from extensions import limiter, log_security_event
 
 performance_bp = Blueprint("performance", __name__)
 
 RATING_LABELS = {0: "Not Rated", 1: "Unsatisfactory", 2: "Needs Improvement",
                  3: "Meets Expectations", 4: "Exceeds Expectations", 5: "Outstanding"}
 
+# Roles allowed to read or write company-wide performance reviews via
+# api_performance()/api_submit_performance_review() below.
+_PERFORMANCE_ROLES = ("admin", "hr")
+
+
+def _admin_session_or_api_role_required(*allowed_roles):
+    """Hybrid guard for the two routes below, which the web Performance
+    page calls directly from an already-authenticated admin session (no
+    Bearer token involved -- see their own docstrings for why) AND the
+    mobile app calls via a Bearer token. Neither utils/auth.py's
+    session-based role_required() nor its Bearer-only api_required()/
+    api_role_required() cover this combination alone, so this mirrors
+    both exactly rather than picking one: the session path checks
+    admin_role the same way role_required() does (including its
+    'superadmin' always-allowed bypass); the Bearer path re-checks
+    admin_users.is_active on every request -- so deactivating an account
+    revokes access immediately, the same guarantee api_required() gives
+    every other Bearer route, which the previous hand-rolled check here
+    (a bare api_tokens lookup with no admin_users join at all) did not --
+    and admin_users.role, like api_role_required()."""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if session.get("admin_logged_in"):
+                user_role = session.get("admin_role", "admin")
+                if user_role not in allowed_roles and user_role != "superadmin":
+                    log_security_event(
+                        "access.denied", "Insufficient role for restricted route",
+                        level="ERROR", required="|".join(allowed_roles),
+                        actual_role=user_role, identifier=session.get("admin_username"),
+                    )
+                    return jsonify({"ok": False, "msg": "Insufficient permissions."}), 403
+                return f(*args, **kwargs)
+            auth = request.headers.get("Authorization", "")
+            if not auth.startswith("Bearer "):
+                return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+            from utils.auth import _hash_token
+            token_hash = _hash_token(auth[7:])
+            with _db() as (cursor, _conn):
+                cursor.execute(
+                    "SELECT t.identity, COALESCE(u.is_active, 1), COALESCE(u.role, 'admin') "
+                    "FROM api_tokens t LEFT JOIN admin_users u ON u.username = t.identity "
+                    "WHERE t.token=%s AND t.token_type='admin' AND t.expires_at > NOW()",
+                    (token_hash,)
+                )
+                row = cursor.fetchone()
+            if not row:
+                log_security_event("access.denied", "API request with invalid or expired admin token",
+                                   level="WARNING", required="admin_api")
+                return jsonify({"ok": False, "msg": "Invalid or expired token"}), 401
+            identity, is_active, actual_role = row
+            if not is_active:
+                log_security_event("access.denied", "API request from deactivated admin account",
+                                   level="WARNING", required="admin_api", identifier=identity)
+                return jsonify({"ok": False, "msg": "This account has been deactivated. Contact your administrator."}), 403
+            if actual_role not in allowed_roles and actual_role != "superadmin":
+                log_security_event(
+                    "access.denied", "API token's role insufficient for restricted endpoint",
+                    level="ERROR", required="|".join(allowed_roles),
+                    actual_role=actual_role, identifier=identity,
+                )
+                return jsonify({"ok": False, "msg": "Insufficient permissions."}), 403
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 @performance_bp.route("/api/performance", methods=["GET"])
+@_admin_session_or_api_role_required(*_PERFORMANCE_ROLES)
 def api_performance():
     """JSON API endpoint for employee performance reviews from database.
 
-    Accepts both Bearer API tokens (@api_required) and active admin sessions
-    so the Performance page can fetch data without requiring an API token.
+    Accepts both Bearer API tokens and active admin sessions so the
+    Performance page can fetch data without requiring an API token --
+    see _admin_session_or_api_role_required() above for how both paths
+    are equally role-gated.
     """
-    # Allow active admin sessions to access this endpoint
-    if not session.get("admin_logged_in"):
-        # Fall back to Bearer token check
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return jsonify({"ok": False, "msg": "Unauthorized"}), 401
-        from utils.auth import _hash_token
-        from utils.helpers import _db as _authdb
-        token_hash = _hash_token(auth[7:])
-        with _authdb() as (cursor, _conn):
-            cursor.execute(
-                "SELECT identity FROM api_tokens WHERE token=%s AND token_type='admin' AND expires_at > NOW()",
-                (token_hash,)
-            )
-            if not cursor.fetchone():
-                return jsonify({"ok": False, "msg": "Invalid or expired token"}), 401
     with _db() as (cursor, conn):
         cursor.execute("""
             SELECT e.employee_id, e.name, COALESCE(e.role,'Employee'), COALESCE(e.department,'General'),
@@ -69,6 +124,7 @@ def api_performance():
 
 
 @performance_bp.route("/api/performance/review", methods=["POST"])
+@_admin_session_or_api_role_required(*_PERFORMANCE_ROLES)
 def api_submit_performance_review():
     """Bearer-token twin of performance_save_review() below -- same
     upsert-by-(employee_id, quarter, year) and overall_rating recompute
@@ -76,20 +132,6 @@ def api_submit_performance_review():
     identically to one saved from web. Same hybrid session-or-Bearer check
     as api_performance() above, for the same reason (Performance page can
     call this without a token when the admin is already logged in)."""
-    if not session.get("admin_logged_in"):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return jsonify({"ok": False, "msg": "Unauthorized"}), 401
-        from utils.auth import _hash_token
-        token_hash = _hash_token(auth[7:])
-        with _db() as (cursor, _conn):
-            cursor.execute(
-                "SELECT identity FROM api_tokens WHERE token=%s AND token_type='admin' AND expires_at > NOW()",
-                (token_hash,)
-            )
-            if not cursor.fetchone():
-                return jsonify({"ok": False, "msg": "Invalid or expired token"}), 401
-
     data = request.get_json(silent=True) or {}
     emp_id = (data.get("employee_id") or "").strip()
     try:

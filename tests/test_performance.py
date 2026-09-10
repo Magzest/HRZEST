@@ -422,3 +422,99 @@ class TestExcelExportImport:
             "excel_file": (buf, "import.xlsx"),
         }, content_type="multipart/form-data", follow_redirects=True)
         assert resp.status_code == 200
+
+
+# ===========================================================================
+# /api/performance + /api/performance/review -- hybrid session-or-Bearer
+# role gating (_admin_session_or_api_role_required in blueprints/performance.py)
+# ===========================================================================
+
+def _admin_bearer_token(client, seed_admin):
+    resp = client.post("/api/login", json={
+        "username": seed_admin["username"], "password": seed_admin["password"],
+    })
+    return resp.get_json()["token"]
+
+
+class TestApiPerformanceHybridAuth:
+    """Both routes used to hand-roll their own "session OR bearer token"
+    check with no role restriction at all and no admin_users join on the
+    Bearer path -- any admin-side role (not just admin/hr) could read and
+    write every employee's performance reviews, and a just-deactivated
+    admin/HR account's Bearer token kept working (every other Bearer
+    route re-checks is_active on each request; this one never did)."""
+
+    def test_unauthenticated_denied(self, client):
+        assert client.get("/api/performance").status_code == 401
+        assert client.post("/api/performance/review", json={}).status_code == 401
+
+    def test_admin_session_allowed(self, client, seed_admin):
+        _admin_session(client, seed_admin)
+        resp = client.get("/api/performance")
+        assert resp.status_code == 200
+        assert resp.get_json()["ok"] is True
+
+    def test_hr_session_allowed(self, client, seed_admin, db_engine):
+        _admin_session(client, seed_admin)
+        with client.session_transaction() as sess:
+            sess["admin_role"] = "hr"
+        resp = client.get("/api/performance")
+        assert resp.status_code == 200
+
+    def test_non_admin_role_session_denied(self, client, seed_admin):
+        _admin_session(client, seed_admin)
+        with client.session_transaction() as sess:
+            sess["admin_role"] = "soc_analyst"
+        resp = client.get("/api/performance")
+        assert resp.status_code == 403
+
+    def test_non_admin_role_session_denied_on_write(self, client, seed_admin, seed_employee, db_engine):
+        _admin_session(client, seed_admin)
+        with client.session_transaction() as sess:
+            sess["admin_role"] = "soc_analyst"
+        today = datetime.date.today()
+        resp = client.post("/api/performance/review", json={
+            "employee_id": seed_employee["employee_id"], "quarter": ((today.month - 1) // 3) + 1,
+            "year": today.year, "reviewer_feedback": "should not land", "status": "Approved",
+        })
+        assert resp.status_code == 403
+        cur = db_engine.cursor()
+        cur.execute("SELECT 1 FROM performance_reviews WHERE employee_id=%s AND reviewer_feedback=%s",
+                    (seed_employee["employee_id"], "should not land"))
+        assert cur.fetchone() is None, "a review was written despite the role check"
+        cur.close()
+
+    def test_bearer_token_admin_role_allowed(self, client, seed_admin):
+        token = _admin_bearer_token(client, seed_admin)
+        resp = client.get("/api/performance", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+    def test_bearer_token_non_admin_role_denied(self, client, seed_admin, db_engine):
+        token = _admin_bearer_token(client, seed_admin)
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.get("/api/performance", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
+
+    def test_bearer_token_from_deactivated_account_denied(self, client, seed_admin, db_engine):
+        """The core deactivation-revocation gap this finding calls out --
+        confirmed the OLD hand-rolled check had no admin_users join at
+        all, so a deactivated account's still-unexpired token kept
+        working here even though every other Bearer route revokes it
+        immediately."""
+        token = _admin_bearer_token(client, seed_admin)
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET is_active=0 WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.get("/api/performance", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+            assert "deactivated" in resp.get_json()["msg"].lower()
+        finally:
+            cur.execute("UPDATE admin_users SET is_active=1 WHERE username=%s", (seed_admin["username"],))
+            db_engine.commit()
+            cur.close()
