@@ -593,20 +593,46 @@ def save_application_document(file_storage, application_id, doc_kind):
 
 
 # ── Company settings cache (60-second TTL) ────────────────────────────────────
-_co_cache = {"data": None, "expires": None}
-_auth_cache = {"data": None, "expires": None}
+# Every cache below is keyed by _tenant_cache_key(), not a bare {"data":...}
+# singleton -- a single shared dict would let one tenant's company_settings/
+# auth_config/companies-list/pending-counts leak into another tenant's
+# response for up to its TTL window under ordinary concurrent multi-tenant
+# traffic (two different companies' requests interleaved on the same
+# process), not just a test artifact. get_db_connection() already scopes the
+# underlying query correctly per g.tenant_db; only the cache layer on top of
+# it was unscoped.
+_co_cache = {}
+_auth_cache = {}
 _settings_lock = threading.Lock()
 _CO_CACHE_TTL = 60
 
 
+def _tenant_cache_key():
+    try:
+        from flask import g as _flask_g
+        return getattr(_flask_g, "tenant_db", None) or "__no_tenant__"
+    except RuntimeError:
+        return "__no_tenant__"  # no active Flask request/app context
+
+
 def _co_expired(cache):
-    return cache["data"] is None or datetime.datetime.now() >= cache["expires"]
+    entry = cache.get(_tenant_cache_key())
+    return entry is None or entry["data"] is None or datetime.datetime.now() >= entry["expires"]
 
 
 def invalidate_settings_cache():
+    """Clears every tenant's cached entry, not just the caller's current
+    one -- deliberately, matching this cache's original (pre-tenant-keying)
+    "always clear everything" behavior. A caller that updated
+    company_settings without an active Flask request context (a test
+    fixture writing directly via its own DB connection, a script) would
+    otherwise invalidate the "__no_tenant__" key while the real per-tenant
+    entry that live requests actually read from stays stale -- invalidation
+    is rare enough (only after a genuine settings write) that clearing
+    everyone's cache is a fine trade for never getting this wrong."""
     with _settings_lock:
-        _co_cache["data"] = None
-        _auth_cache["data"] = None
+        _co_cache.clear()
+        _auth_cache.clear()
 
 
 def post_announcement(cursor, db, title, content, priority, visibility, target_emp=None,
@@ -710,15 +736,18 @@ def get_employee_sidebar_info(cursor, emp_id):
     return cursor.fetchone()
 
 
-_pending_counts_cache = {"data": None, "expires": None}
+_pending_counts_cache = {}
 _PENDING_COUNTS_CACHE_TTL = 30  # shorter than company_settings' 60s -- these
 # counts (leave/resignation/ticket approvals) change far more often, so a
 # tighter window keeps sidebar badges from looking stale for too long.
 
 
 def invalidate_pending_counts_cache():
+    # Clears every tenant's entry -- see invalidate_settings_cache()'s
+    # docstring for why (a caller without an active request context must
+    # not silently invalidate the wrong key).
     with _settings_lock:
-        _pending_counts_cache["data"] = None
+        _pending_counts_cache.clear()
 
 
 def get_pending_counts():
@@ -737,7 +766,7 @@ def get_pending_counts():
     not this shared unscoped cache."""
     with _settings_lock:
         if not _co_expired(_pending_counts_cache):
-            return tuple(_pending_counts_cache["data"])
+            return tuple(_pending_counts_cache[_tenant_cache_key()]["data"])
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -749,8 +778,10 @@ def get_pending_counts():
         cursor.close()
         db.close()
         with _settings_lock:
-            _pending_counts_cache["data"] = result
-            _pending_counts_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_PENDING_COUNTS_CACHE_TTL)
+            _pending_counts_cache[_tenant_cache_key()] = {
+                "data": result,
+                "expires": datetime.datetime.now() + datetime.timedelta(seconds=_PENDING_COUNTS_CACHE_TTL),
+            }
         return result
     except Exception:
         return (0, 0, 0)
@@ -759,7 +790,7 @@ def get_pending_counts():
 def get_company_settings():
     with _settings_lock:
         if not _co_expired(_co_cache):
-            return dict(_co_cache["data"])
+            return dict(_co_cache[_tenant_cache_key()]["data"])
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -794,8 +825,10 @@ def get_company_settings():
                 "paid_employee_slots": row_dict.get("paid_employee_slots"),
             }
             with _settings_lock:
-                _co_cache["data"] = result
-                _co_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL)
+                _co_cache[_tenant_cache_key()] = {
+                    "data": result,
+                    "expires": datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL),
+                }
             return dict(result)
     except Exception as exc:
         # Falls through to generic hardcoded defaults below -- every page
@@ -883,29 +916,116 @@ def validate_employee_email_domain(email) -> str:
     return None
 
 
-# ── Paid employee-seat cap (employee-registration gate) ──────────────────────
-def add_employee_seat_cap_check() -> str:
-    """Enforces the seat count actually paid for at signup (self-service
-    /create_org via blueprints/billing.py's payment-verified flow) --
-    company_settings.paid_employee_slots. None means unlimited: the
-    free/unmetered provisioning paths (local-dev fallback, mobile app
-    registration, Platform Admin's own tenant creation) never set this
-    column, and existing tenants provisioned before this check existed
-    also have it unset, so this never blocks them. Returns an error
-    message ready to flash/return as-is, or None if there's room."""
-    cap = get_company_settings().get("paid_employee_slots")
-    if cap is None:
-        return None
+# ── Trial employee cap (hard, server-side, independent of the frontend) ──────
+TRIAL_EMPLOYEE_CAP = 2
+
+
+def _tenant_is_trialing() -> bool:
+    """Cheap, lock-free check against the master control-plane DB (a
+    different DB/connection than the tenant DB entirely, so it can't
+    share the tenant-side row lock below anyway)."""
     try:
-        db = get_db_connection()
-        cur = db.cursor()
-        cur.execute("SELECT COUNT(*) FROM employees")
-        current = cur.fetchone()[0]
+        from flask import g as _g
+        from database import get_master_db
+        db = get_master_db()
+        cur = db.cursor(buffered=True)
+        cur.execute("SELECT subscription_status FROM tenants WHERE db_name=%s", (_g.tenant_db,))
+        row = cur.fetchone()
         cur.close()
         db.close()
+        return bool(row and row[0] == "trialing")
+    except Exception:
+        return False
+
+
+# ── Paid employee-seat cap (employee-registration gate) ──────────────────────
+def add_employee_seat_cap_check(cursor=None) -> str:
+    """Enforces whichever employee-count cap applies to this tenant --
+    the hardcoded TRIAL_EMPLOYEE_CAP for a tenant mid-trial, or otherwise
+    company_settings.paid_employee_slots (the seat count actually paid for
+    at signup via blueprints/billing.py's payment-verified flow). Both
+    checks live in this one function (rather than a separate
+    _get_trial_employee_cap_error()) so there's exactly one COUNT(*) and
+    one lock acquisition per call, not one per cap type. A slots value of
+    None means unlimited: the free/unmetered provisioning paths
+    (local-dev fallback, mobile app registration, Platform Admin's own
+    tenant creation) never set this column, and existing tenants
+    provisioned before this check existed also have it unset, so this
+    never blocks them -- unless they're also mid-trial, which still
+    applies TRIAL_EMPLOYEE_CAP regardless. Returns an error message ready
+    to flash/return as-is, or None if there's room.
+
+    Pass the caller's own open cursor -- the same one it will use for the
+    employee INSERT right after this returns None -- to make the cap
+    race-safe, AND wrap both this call and that INSERT in
+    `with database.transaction(db):`. The transaction() part is not
+    optional: database.py's connection pool hands out connections with
+    autocommit=True (_borrow_connection()), so on a bare cursor (no
+    explicit transaction) the row lock this takes below would release
+    itself the instant its own SELECT statement finished -- a full
+    statement earlier than the INSERT it's supposed to still be
+    protecting -- and the race would be exactly as open as if no cursor
+    had been passed at all. With a real transaction, and only when
+    there's an actual cap to enforce (trialing, or paid_employee_slots is
+    not None), this takes a row lock on company_settings FIRST (the one
+    tenant-wide settings row), before counting employees, so a second
+    concurrent caller blocks here until the first either commits its
+    INSERT (and this recount then correctly sees it, and rejects) or
+    rolls back (and this recount doesn't see it, so a slot is still
+    free). That's what actually closes the classic check-then-insert
+    TOCTOU race: two requests both reading COUNT()==cap-1 before either
+    has inserted, and both proceeding. Unlimited, non-trial tenants skip
+    the lock entirely -- there's no cap to protect, so there's no reason
+    to serialize their employee creation.
+
+    Called with no cursor (own short-lived, read-only connection,
+    released immediately, no lock taken) is NOT race-safe by itself --
+    it's kept only for a cheap early/UX preflight (e.g. rejecting before
+    an expensive face-photo upload), not as the actual enforcement point.
+    Every call site must also perform the cursor-and-transaction-carrying,
+    lock-protected call immediately before its INSERT for the cap to
+    actually hold under concurrency -- see blueprints/employees.py's
+    add_employee_page()/api_register_employee() and blueprints/core.py's
+    api_employee_signup() for the pattern.
+    """
+    is_trialing = _tenant_is_trialing()
+    cap = get_company_settings().get("paid_employee_slots")
+    if not is_trialing and cap is None:
+        return None
+
+    owns_conn = cursor is None
+    db = None
+    try:
+        if owns_conn:
+            db = get_db_connection()
+            cursor = db.cursor()
+        else:
+            # Postgres: blocks concurrent callers until the lock holder's
+            # transaction ends. SQLite fallback: FOR UPDATE isn't
+            # supported and this execute() silently no-ops (see
+            # database.py's _SqliteCursor.execute), which is fine there --
+            # that fallback already serializes all queries behind one
+            # process-wide lock, so no additional locking is needed.
+            cursor.execute("SELECT id FROM company_settings ORDER BY id LIMIT 1 FOR UPDATE")
+
+        cursor.execute("SELECT COUNT(*) FROM employees")
+        current = cursor.fetchone()[0]
     except Exception:
         return None  # fail open -- a transient DB hiccup shouldn't block registration
-    if current >= cap:
+    finally:
+        if owns_conn:
+            try:
+                cursor.close()
+                db.close()
+            except Exception:
+                pass
+
+    if is_trialing and current >= TRIAL_EMPLOYEE_CAP:
+        return (
+            f"Your trial allows up to {TRIAL_EMPLOYEE_CAP} employees. "
+            f"Upgrade under Settings → Finances → Billing to add more."
+        )
+    if cap is not None and current >= cap:
         return (
             f"You've reached your plan's limit of {cap} employee"
             f"{'s' if cap != 1 else ''}. Buy more seats under Seats & Billing to add more."
@@ -922,15 +1042,18 @@ def add_employee_seat_cap_check() -> str:
 # few seconds of staleness (a brand-new company not yet in the switcher, an
 # onboarding-overdue badge lagging slightly) is an acceptable trade for
 # cutting 2 of the ~4 DB round trips every admin page load previously paid.
-_companies_cache = {"data": None, "expires": None}
-_onboarding_cache = {"data": None, "expires": None}
+_companies_cache = {}
+_onboarding_cache = {}
 _COMPANIES_CACHE_TTL = 30
 _ONBOARDING_CACHE_TTL = 20
 
 
 def invalidate_companies_cache():
+    # Clears every tenant's entry -- see invalidate_settings_cache()'s
+    # docstring for why (a caller without an active request context must
+    # not silently invalidate the wrong key).
     with _settings_lock:
-        _companies_cache["data"] = None
+        _companies_cache.clear()
 
 
 def get_companies_list():
@@ -939,7 +1062,7 @@ def get_companies_list():
     (add/edit/delete/set-pin/rename-code)."""
     with _settings_lock:
         if not _co_expired(_companies_cache):
-            return list(_companies_cache["data"])
+            return list(_companies_cache[_tenant_cache_key()]["data"])
     try:
         db = get_db_connection()
         cur = db.cursor(buffered=True)
@@ -951,8 +1074,10 @@ def get_companies_list():
         cur.close()
         db.close()
         with _settings_lock:
-            _companies_cache["data"] = rows
-            _companies_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_COMPANIES_CACHE_TTL)
+            _companies_cache[_tenant_cache_key()] = {
+                "data": rows,
+                "expires": datetime.datetime.now() + datetime.timedelta(seconds=_COMPANIES_CACHE_TTL),
+            }
         return list(rows)
     except Exception:
         return []
@@ -962,7 +1087,7 @@ def get_overdue_onboarding_count():
     """Cached count of non-completed onboarding tasks past their due date."""
     with _settings_lock:
         if not _co_expired(_onboarding_cache):
-            return _onboarding_cache["data"]
+            return _onboarding_cache[_tenant_cache_key()]["data"]
     try:
         db = get_db_connection()
         cur = db.cursor()
@@ -974,8 +1099,10 @@ def get_overdue_onboarding_count():
         cur.close()
         db.close()
         with _settings_lock:
-            _onboarding_cache["data"] = count
-            _onboarding_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_ONBOARDING_CACHE_TTL)
+            _onboarding_cache[_tenant_cache_key()] = {
+                "data": count,
+                "expires": datetime.datetime.now() + datetime.timedelta(seconds=_ONBOARDING_CACHE_TTL),
+            }
         return count
     except Exception:
         return 0
@@ -991,7 +1118,7 @@ _AUTH_CONFIG_DEFAULTS = {
 def get_auth_config():
     with _settings_lock:
         if not _co_expired(_auth_cache):
-            return dict(_auth_cache["data"])
+            return dict(_auth_cache[_tenant_cache_key()]["data"])
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -1013,8 +1140,10 @@ def get_auth_config():
                 "office_lat": row[6], "office_lon": row[7],
             }
             with _settings_lock:
-                _auth_cache["data"] = result
-                _auth_cache["expires"] = datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL)
+                _auth_cache[_tenant_cache_key()] = {
+                    "data": result,
+                    "expires": datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL),
+                }
             return dict(result)
     except Exception as exc:
         app_log.warning("get_auth_config failed, using defaults: %s", exc, exc_info=True)

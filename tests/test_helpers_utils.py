@@ -347,29 +347,29 @@ class TestCompaniesListCache:
 
 class TestOverdueOnboardingCount:
     def test_returns_int(self):
-        helpers._onboarding_cache["data"] = None
+        helpers._onboarding_cache.clear()
         count = helpers.get_overdue_onboarding_count()
         assert isinstance(count, int)
 
     def test_db_error_returns_zero(self, monkeypatch):
-        helpers._onboarding_cache["data"] = None
+        helpers._onboarding_cache.clear()
         monkeypatch.setattr(helpers, "get_db_connection", _raise)
         assert helpers.get_overdue_onboarding_count() == 0
-        helpers._onboarding_cache["data"] = None
+        helpers._onboarding_cache.clear()
 
 
 class TestAuthConfig:
     def test_returns_dict(self):
-        helpers._auth_cache["data"] = None
+        helpers._auth_cache.clear()
         result = helpers.get_auth_config()
         assert "face_enabled" in result
 
     def test_db_error_falls_back_to_defaults(self, monkeypatch):
-        helpers._auth_cache["data"] = None
+        helpers._auth_cache.clear()
         monkeypatch.setattr(helpers, "get_db_connection", _raise)
         result = helpers.get_auth_config()
         assert result == helpers._AUTH_CONFIG_DEFAULTS
-        helpers._auth_cache["data"] = None
+        helpers._auth_cache.clear()
 
 
 class TestReadGlobalFeatures:
