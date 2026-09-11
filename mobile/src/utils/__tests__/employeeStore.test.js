@@ -4,6 +4,7 @@ import {
   deleteLocalEmployee,
   getLocalEmployees,
   mergeEmployeesWithLocal,
+  clearLocalEmployees,
 } from '../employeeStore';
 
 const STORAGE_KEY = '@custom_created_employees_v1';
@@ -64,6 +65,21 @@ describe('employeeStore', () => {
       await saveLocalEmployee({ employee_id: 'E1', name: 'Alice' });
       const list = await deleteLocalEmployee('NOPE');
       expect(list).toHaveLength(1);
+    });
+  });
+
+  describe('clearLocalEmployees', () => {
+    it('removes every cached employee', async () => {
+      await saveLocalEmployee({ employee_id: 'E1', name: 'Alice' });
+      await saveLocalEmployee({ employee_id: 'E2', name: 'Bob' });
+      await clearLocalEmployees();
+      expect(await getLocalEmployees()).toEqual([]);
+      expect(await AsyncStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
+
+    it('is a no-op when nothing is cached', async () => {
+      await expect(clearLocalEmployees()).resolves.toBeUndefined();
+      expect(await getLocalEmployees()).toEqual([]);
     });
   });
 

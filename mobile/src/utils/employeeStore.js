@@ -37,6 +37,14 @@ export const getLocalEmployees = async () => {
   }
 };
 
+export const clearLocalEmployees = async () => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    // best-effort -- nothing else to fall back to
+  }
+};
+
 export const mergeEmployeesWithLocal = async (serverEmployees = []) => {
   try {
     const localList = await getLocalEmployees();

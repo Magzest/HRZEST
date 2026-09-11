@@ -1,13 +1,49 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { adminLogout, employeeLogout, setUnauthorizedHandler } from '../api/client';
 import { secureGetItem, secureSetItem, secureMultiRemove } from '../utils/secureStorage';
 import { getBiometricLockEnabled } from '../utils/preferences';
+import { clearLocalEmployees } from '../utils/employeeStore';
+import { clearQueue as clearOfflinePunchQueue } from '../utils/offlineQueue';
 
 const AuthContext = createContext(null);
 
 const SESSION_KEYS = ['token', 'user', 'user_role', 'user_id'];
+
+// Plain (non-secure) AsyncStorage key -- not a credential, just a marker of
+// "which account last used this device," so a signOut()/kill followed by a
+// DIFFERENT account signing in can be detected and the previous account's
+// locally-cached data (locally-created employees, queued offline punches --
+// both plain AsyncStorage, neither scoped to an account or company) wiped
+// before the new session ever reads it. Deliberately persists across
+// signOut() and app kills (only ever overwritten by a successful signIn())
+// so it still catches the "app was killed, never called signOut(), a
+// different account logs in next launch" case, not just a clean logout.
+const DEVICE_SESSION_OWNER_KEY = 'device_session_owner';
+
+// Both current identity fields this app's login responses actually
+// provide: admin sessions carry `name` (the admin username itself -- see
+// LoginScreen.js's handleAdminLogin), employee sessions carry
+// `employeeId`. Prefixed with role so an admin and an employee that
+// happen to share a string never collide.
+const ownerKeyFor = (userData) =>
+  `${userData?.role || 'unknown'}:${userData?.role === 'employee' ? userData?.employeeId : userData?.name}`;
+
+// Wipes every locally-persisted, non-session-keyed cache this app keeps --
+// currently the admin-side "created employees" cache and the employee-side
+// offline attendance punch queue. Called whenever the account about to use
+// the device differs from whichever account last did (see
+// DEVICE_SESSION_OWNER_KEY above), and unconditionally on every clean
+// signOut(), so neither survives into a different account's session on the
+// same device.
+const clearCrossAccountCaches = async () => {
+  await Promise.all([
+    clearLocalEmployees().catch(() => {}),
+    clearOfflinePunchQueue().catch(() => {}),
+  ]);
+};
 
 export function AuthProvider({ children }) {
   const [user, setUser]     = useState(null);   // { role:'admin'|'employee', adminRole:'admin'|'hr' (only set when role==='admin'), name, employeeId? }
@@ -51,6 +87,21 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signIn = async (token, userData) => {
+    // Cross-account cache isolation: if the account signing in now isn't
+    // the same one that last used this device (whether the last session
+    // ended via a clean signOut() or the app was simply killed), wipe the
+    // previous account's locally-cached data first -- see
+    // clearCrossAccountCaches()/DEVICE_SESSION_OWNER_KEY above for why
+    // this can't just be handled at signOut() time alone.
+    const newOwnerKey = ownerKeyFor(userData);
+    try {
+      const previousOwnerKey = await AsyncStorage.getItem(DEVICE_SESSION_OWNER_KEY);
+      if (previousOwnerKey && previousOwnerKey !== newOwnerKey) {
+        await clearCrossAccountCaches();
+      }
+      await AsyncStorage.setItem(DEVICE_SESSION_OWNER_KEY, newOwnerKey);
+    } catch (_) {}
+
     await secureSetItem('token', token);
     await secureSetItem('user', JSON.stringify(userData));
     setUser(userData);
@@ -66,6 +117,7 @@ export function AuthProvider({ children }) {
       }
     } catch (_) {}
     await secureMultiRemove(SESSION_KEYS);
+    await clearCrossAccountCaches();
     setUser(null);
     setLocked(false);
   };
