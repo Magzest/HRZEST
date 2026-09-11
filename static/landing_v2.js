@@ -423,27 +423,96 @@ function initFeedbackForm() {
     });
   });
 
-  // Star Rating Component
+  // Star Rating Component -- fills solid up to the clicked star (not just
+  // a color change: ti-star is the outline glyph, ti-star-filled is the
+  // solid one, both shipped in the same self-hosted tabler-icons.min.css)
+  // and an emoji reacts across the same 5 steps, sad at 1 star easing up
+  // to happy at 5.
   const stars = document.querySelectorAll('#starRating .star');
   const ratingScoreText = document.getElementById('ratingScoreText');
+  const ratingEmoji = document.getElementById('ratingEmoji');
+  const RATING_EMOJI = { 1: '😞', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' };
+
+  function setStarRating(rating) {
+    stars.forEach((s, idx) => {
+      const filled = idx < rating;
+      s.classList.toggle('active', filled);
+      s.classList.toggle('ti-star-filled', filled);
+      s.classList.toggle('ti-star', !filled);
+    });
+    if (ratingScoreText) ratingScoreText.textContent = `${rating}.0 / 5.0`;
+    if (ratingEmoji) ratingEmoji.textContent = RATING_EMOJI[rating] || '🤔';
+  }
 
   stars.forEach(star => {
     star.addEventListener('click', () => {
-      const rating = parseInt(star.getAttribute('data-rating') || '5', 10);
-      stars.forEach((s, idx) => {
-        if (idx < rating) {
-          s.classList.add('active');
-        } else {
-          s.classList.remove('active');
-        }
-      });
-      if (ratingScoreText) ratingScoreText.textContent = `${rating}.0 / 5.0`;
+      setStarRating(parseInt(star.getAttribute('data-rating') || '5', 10));
+    });
+    // Hover preview -- same fill/emoji logic, reverts on mouseleave to
+    // whatever was actually clicked (or the neutral default if nothing
+    // was clicked yet), same UX convention as every star-rating widget.
+    star.addEventListener('mouseenter', () => {
+      setStarRating(parseInt(star.getAttribute('data-rating') || '5', 10));
     });
   });
+  const starRatingEl = document.getElementById('starRating');
+  starRatingEl?.addEventListener('mouseleave', () => {
+    const activeStars = document.querySelectorAll('#starRating .star.active').length;
+    if (activeStars > 0) {
+      setStarRating(activeStars);
+    } else {
+      stars.forEach(s => { s.classList.remove('active', 'ti-star-filled'); s.classList.add('ti-star'); });
+      if (ratingScoreText) ratingScoreText.textContent = 'Not rated yet';
+      if (ratingEmoji) ratingEmoji.textContent = '🤔';
+    }
+  });
 
-  feedbackForm?.addEventListener('submit', (e) => {
+  feedbackForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (feedbackForm) feedbackForm.style.display = 'none';
-    if (feedbackSuccessMsg) feedbackSuccessMsg.style.display = 'flex';
+    const submitBtn = feedbackForm.querySelector('button[type="submit"]');
+    const errorEl = document.getElementById('feedbackErrorMsg');
+    const errorText = errorEl?.querySelector('span');
+    function showFeedbackError(msg) {
+      if (!errorEl) return;
+      if (errorText) errorText.textContent = msg; else errorEl.textContent = msg;
+      errorEl.style.display = 'flex';
+    }
+    if (errorEl) errorEl.style.display = 'none';
+
+    const typeInput = feedbackForm.querySelector('input[name="feedbackType"]:checked');
+    const activeStarCount = document.querySelectorAll('#starRating .star.active').length;
+    const emailEl = document.getElementById('feedbackEmail');
+    const textEl = document.getElementById('feedbackText');
+
+    const payload = {
+      feedback_type: typeInput ? typeInput.value : 'Feature Request',
+      rating: activeStarCount > 0 ? activeStarCount : null,
+      email: emailEl ? emailEl.value.trim() : '',
+      message: textEl ? textEl.value.trim() : '',
+    };
+    if (!payload.message) {
+      showFeedbackError('Please enter your feedback.');
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        showFeedbackError(json.msg || 'Could not submit right now. Please try again.');
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+      feedbackForm.style.display = 'none';
+      if (feedbackSuccessMsg) feedbackSuccessMsg.style.display = 'flex';
+    } catch (ex) {
+      showFeedbackError('Network error. Please check your connection and try again.');
+      if (submitBtn) submitBtn.disabled = false;
+    }
   });
 }

@@ -6,16 +6,50 @@
     <title>Platform Admin — SaaS Operator Console</title>
     <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
     <link rel="stylesheet" href="{{ static_url('tabler-icons.min.css') }}" />
+    <link rel="stylesheet" href="{{ static_url('landing_v2.css') }}" />
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <style>
+      /* Same top-nav component/tokens as templates/admin_login.html --
+         landing_v2.css's --gradient-brand etc. -- so the operator console
+         reads as the same product, not a bare unbranded internal tool. */
       * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
       body {
         min-height: 100vh;
         background: radial-gradient(1200px 560px at 50% -14%, #eef0fb 0%, #f3f4f8 55%) fixed, #f3f4f8;
         color: #0b1220;
         display: flex; align-items: center; justify-content: center;
-        padding: 24px;
+        padding: 24px; padding-top: 96px;
       }
+
+      /* ── Header ── */
+      .top-nav {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+        background: rgba(255, 255, 255, 0.72);
+        backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+        border-bottom: 1px solid #e3e5ec;
+      }
+      .top-nav-inner {
+        display: flex; justify-content: space-between; align-items: center;
+        max-width: 1180px; margin: 0 auto; padding: 16px 24px;
+      }
+      .brand-logo {
+        display: flex; align-items: center; gap: 10px;
+        text-decoration: none; color: #0b1220; font-weight: 800; font-size: 20px;
+      }
+      .brand-logo .logo-badge {
+        width: 36px; height: 36px; border-radius: 8px;
+        background: var(--gradient-brand);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; color: #fff; box-shadow: 0 4px 18px rgba(79, 70, 229, 0.35);
+      }
+      .console-badge {
+        display: inline-flex; align-items: center; gap: 7px;
+        font-size: 12px; font-weight: 700; color: #23268f;
+        background: #eef0fd; border: 1px solid #c7ccf5;
+        padding: 7px 14px; border-radius: 20px;
+      }
+      .console-badge i { font-size: 14px; }
       .card {
         width: 100%; max-width: 420px;
         background: #ffffff;
@@ -62,6 +96,16 @@
     </style>
   </head>
   <body>
+    <header class="top-nav">
+      <div class="top-nav-inner">
+        <a href="/" class="brand-logo">
+          <div class="logo-badge"><i class="ti ti-shield-check"></i></div>
+          <span>HRzest</span>
+        </a>
+        <span class="console-badge"><i class="ti ti-building-fortress"></i> Platform Operator Console</span>
+      </div>
+    </header>
+
     <div class="card">
       {% if mfa_step %}
       <div class="logo-hdr">

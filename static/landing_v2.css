@@ -1053,6 +1053,20 @@ textarea { resize: vertical; }
   gap: 0.65rem;
 }
 
+.form-error-banner {
+  background: rgba(225, 29, 72, 0.1);
+  border: 1px solid rgba(225, 29, 72, 0.3);
+  color: var(--accent-rose);
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
 /* CTA Banner & Footer */
 .cta-banner {
   background: linear-gradient(135deg, #EEF0FF 0%, #F7ECF7 50%, #FDF3E3 100%);

@@ -547,6 +547,14 @@
                 <label>New Rate (₹ per employee / month)</label>
                 <input type="number" name="per_employee_rupees" min="0.01" step="0.01" value="{{ '%.2f' | format(per_employee_paise / 100) }}" required />
               </div>
+              <div class="field">
+                <label>Base fee (₹ / month, optional — added on top of the per-employee rate)</label>
+                <input type="number" name="base_fee_rupees" min="0" step="0.01" value="{{ '%.2f' | format(base_fee_paise / 100) }}" />
+              </div>
+              <div class="field">
+                <label>Minimum monthly bill (₹, optional — floor applied after the above)</label>
+                <input type="number" name="minimum_monthly_rupees" min="0" step="0.01" value="{{ '%.2f' | format(minimum_monthly_paise / 100) }}" />
+              </div>
               <div class="actions">
                 <button type="submit" class="submit-btn">Save Rate</button>
               </div>
@@ -691,6 +699,35 @@
         </table>
         {% else %}
         <div class="empty-state" style="padding:20px;"><p>No inquiries yet — submissions from the landing page's "Talk to Us" form will show up here.</p></div>
+        {% endif %}
+      </div>
+        </div>
+      </section>
+
+      <section class="page-section">
+        <div class="section-heading"><img class="icon-photo" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Product Feedback</div>
+        <div class="section-body">
+      <div class="card section-card">
+        <h2><img class="icon-photo" src="{{ static_url('icons/photos/message-2.jpg') }}" alt=""> Landing Page Feedback</h2>
+        {% if feedback_items %}
+        <table>
+          <thead>
+            <tr><th>Type</th><th>Rating</th><th>Email</th><th>Message</th><th>Submitted</th></tr>
+          </thead>
+          <tbody>
+            {% for fb in feedback_items %}
+            <tr>
+              <td class="subdomain">{{ fb.feedback_type }}</td>
+              <td class="subdomain">{% if fb.rating %}{{ '★' * fb.rating }}{{ '☆' * (5 - fb.rating) }}{% else %}—{% endif %}</td>
+              <td class="subdomain">{{ fb.email or '—' }}</td>
+              <td class="lead-msg">{{ fb.message }}</td>
+              <td class="subdomain">{{ fb.created_at.strftime('%Y-%m-%d %H:%M') if fb.created_at else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state" style="padding:20px;"><p>No feedback yet — submissions from the landing page's Feedback &amp; Suggestions form will show up here.</p></div>
         {% endif %}
       </div>
         </div>
