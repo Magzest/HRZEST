@@ -1,5 +1,9 @@
 # Suppressions for mobile/package-lock.json findings that cannot be fixed
-# without a breaking Expo SDK upgrade (~52.0.0 -> ^57.0.8). npm's own
+# without a breaking Expo SDK upgrade (currently ~54.0.0 -> ^57.0.x --
+# re-verified via `npm audit`/`npm audit fix --dry-run`, which still shows
+# 0 fixable-without-major-bump vulnerabilities: every one of the 20
+# findings there traces back through @expo/config/@expo/config-plugins,
+# gated the same way). npm's own
 # dependency graph pins these three packages via @expo/cli/@expo/config-plugins
 # to versions below their fixed release; `npm audit fix --force` will bump
 # expo/expo-asset/expo-linking to SDK 57 but leaves expo-camera,
