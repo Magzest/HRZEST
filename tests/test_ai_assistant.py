@@ -34,6 +34,86 @@ class TestBuildEmployeeContext:
         cur.close()
         assert isinstance(context, str) and len(context) > 0
 
+    def test_includes_assigned_shift(self, db_engine, seed_employee):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO shifts (name, start_time, half_time, end_time) VALUES (%s,%s,%s,%s) RETURNING id",
+            ("Morning Shift", "09:00:00", "13:00:00", "18:00:00"))
+        shift_id = cur.fetchone()[0]
+        cur.execute("UPDATE employees SET shift_id=%s WHERE employee_id=%s",
+                    (shift_id, seed_employee["employee_id"]))
+        context = build_employee_context(cur, seed_employee["employee_id"])
+        cur.execute("UPDATE employees SET shift_id=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+        cur.execute("DELETE FROM shifts WHERE id=%s", (shift_id,))
+        cur.close()
+        assert "Morning Shift" in context
+        assert "09:00:00" in context
+
+    def test_includes_compoff_balance_and_pending_overtime(self, db_engine, seed_employee):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO compoff_balance (employee_id, earned_minutes, used_minutes) VALUES (%s,%s,%s)",
+            (seed_employee["employee_id"], 960, 0))
+        cur.execute(
+            "INSERT INTO overtime_records (employee_id, date, shift_end, actual_logout, ot_minutes, ot_pay, status) "
+            "VALUES (%s,CURRENT_DATE,'18:00:00','20:00:00',120,0,'Pending')",
+            (seed_employee["employee_id"],))
+        context = build_employee_context(cur, seed_employee["employee_id"])
+        cur.execute("DELETE FROM compoff_balance WHERE employee_id=%s", (seed_employee["employee_id"],))
+        cur.execute("DELETE FROM overtime_records WHERE employee_id=%s", (seed_employee["employee_id"],))
+        cur.close()
+        assert "Comp-off balance" in context
+        assert "2" in context  # 960 minutes / 480 default minutes-per-day = 2 days
+        assert "Pending overtime requests: 1" in context
+
+    def test_includes_onboarding_progress(self, db_engine, seed_employee):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO onboarding_templates (name, is_active) VALUES (%s,1) RETURNING id",
+            ("New Hire Checklist",))
+        tpl_id = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date, status) "
+            "VALUES (%s,%s,CURRENT_DATE,CURRENT_DATE,'In Progress') RETURNING id",
+            (seed_employee["employee_id"], tpl_id))
+        ob_id = cur.fetchone()[0]
+        cur.execute(
+            "INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, status) "
+            "VALUES (%s,0,%s,'Submit ID proof','Done'), (%s,0,%s,'Sign policy','Pending')",
+            (ob_id, seed_employee["employee_id"], ob_id, seed_employee["employee_id"]))
+        context = build_employee_context(cur, seed_employee["employee_id"])
+        cur.execute("DELETE FROM employee_onboarding_tasks WHERE onboarding_id=%s", (ob_id,))
+        cur.execute("DELETE FROM employee_onboarding WHERE id=%s", (ob_id,))
+        cur.execute("DELETE FROM onboarding_templates WHERE id=%s", (tpl_id,))
+        cur.close()
+        assert "New Hire Checklist" in context
+        assert "1 of 2 tasks done" in context
+
+    def test_includes_open_ticket_count_but_not_closed(self, db_engine, seed_employee):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO tickets (employee_id, category, subject, description, priority, status) "
+            "VALUES (%s,'IT','Laptop issue','desc','Medium','Open'), "
+            "(%s,'HR','Old ticket','desc','Low','Closed')",
+            (seed_employee["employee_id"], seed_employee["employee_id"]))
+        context = build_employee_context(cur, seed_employee["employee_id"])
+        cur.execute("DELETE FROM tickets WHERE employee_id=%s", (seed_employee["employee_id"],))
+        cur.close()
+        assert "Open support tickets: 1" in context
+
+    def test_includes_latest_performance_review(self, db_engine, seed_employee):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO performance_reviews (employee_id, quarter, year, overall_rating, status) "
+            "VALUES (%s,2,2026,4,'Completed') RETURNING id",
+            (seed_employee["employee_id"],))
+        rev_id = cur.fetchone()[0]
+        context = build_employee_context(cur, seed_employee["employee_id"])
+        cur.execute("DELETE FROM performance_reviews WHERE id=%s", (rev_id,))
+        cur.close()
+        assert "Q2 2026" in context
+        assert "Exceeds Expectations" in context
+
 
 class TestSanitizeHistory:
     def test_keeps_well_formed_turns(self):
