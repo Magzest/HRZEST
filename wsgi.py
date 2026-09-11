@@ -95,67 +95,108 @@ threading.Thread(target=_email_queue_worker, daemon=True, name="email-queue-work
 import app as _app_module  # noqa: F401
 
 # ── Nightly daily report scheduler ───────────────────────────────────────────
+# Wave 2 item #9 (audit): a heartbeat/dead-man's-switch per job, so a job
+# that silently stops running (an exception every night, or the scheduler
+# itself never starting) is discovered by a monitoring alert instead of by
+# a customer noticing stale data weeks later. Set
+# HEARTBEAT_URL_<JOB_ID_UPPERCASED> (e.g. HEARTBEAT_URL_DAILY_ATTENDANCE_REPORT)
+# to a Healthchecks.io/Cronitor/UptimeRobot heartbeat check-in URL for any
+# job you want covered -- pinged only on that job's successful completion,
+# same convention as BACKUP_HEARTBEAT_URL in scripts/backup_db.sh. A job
+# with no matching env var runs exactly as before, heartbeat-free.
+def _with_heartbeat(job_id, fn):
+    def _wrapped(*args, **kwargs):
+        result = fn(*args, **kwargs)
+        url = _os.environ.get(f"HEARTBEAT_URL_{job_id.upper()}")
+        if url:
+            try:
+                import urllib.request
+                urllib.request.urlopen(url, timeout=10)  # nosec B310 -- URL is an operator-configured env var, not request input
+            except Exception as _hb_err:
+                app_log.warning("Heartbeat ping for job '%s' failed: %s", job_id, _hb_err)
+        return result
+    _wrapped.__name__ = getattr(fn, "__name__", job_id)
+    return _wrapped
+
+
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
-    from blueprints.daily_report import generate_and_send_daily_report
-    from blueprints.auto_debit import sync_and_bill_auto_debit
-    from blueprints.billing_dunning import check_tenant_billing
-    from blueprints.disbursement import prepare_pending_disbursements
-    from blueprints.trial_billing import check_trial_expirations, check_trial_ending_soon
-    _scheduler = BackgroundScheduler(daemon=True)
-    _scheduler.add_job(
-        func=generate_and_send_daily_report,
-        trigger="cron",
-        hour=23, minute=59,
-        id="daily_attendance_report",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        func=sync_and_bill_auto_debit,
-        trigger="cron",
-        hour=2, minute=0,
-        id="auto_debit_sync_and_bill",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        func=check_tenant_billing,
-        trigger="cron",
-        hour=3, minute=0,
-        id="tenant_billing_dunning_check",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        func=prepare_pending_disbursements,
-        trigger="cron",
-        hour=4, minute=0,
-        id="salary_disbursement_prep",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        func=check_trial_expirations,
-        trigger="cron",
-        hour=1, minute=0,
-        id="trial_expiration_check",
-        replace_existing=True,
-    )
-    _scheduler.add_job(
-        func=check_trial_ending_soon,
-        trigger="cron",
-        hour=0, minute=30,
-        id="trial_ending_soon_check",
-        replace_existing=True,
-    )
-    _scheduler.start()
-    app_log.info("Daily report scheduler started -- fires at 23:59 every night")
-    app_log.info("Auto-debit sync/billing scheduler started -- fires at 02:00 every night")
-    app_log.info("Tenant billing dunning check started -- fires at 03:00 every night")
-    app_log.info("Salary disbursement prep scheduler started -- fires at 04:00 every night")
-    app_log.info("Trial expiration check started -- fires at 01:00 every night")
-    app_log.info("Trial ending-soon reminder check started -- fires at 00:30 every night")
 except ImportError:
-    app_log.warning("APScheduler not installed -- daily email reports disabled. Run: pip install apscheduler")
-except Exception as _sch_err:
-    app_log.warning("Scheduler failed to start: %s", _sch_err)
+    app_log.warning("APScheduler not installed -- all 6 nightly scheduled jobs disabled. Run: pip install apscheduler")
+else:
+    try:
+        from blueprints.daily_report import generate_and_send_daily_report
+        from blueprints.auto_debit import sync_and_bill_auto_debit
+        from blueprints.billing_dunning import check_tenant_billing
+        from blueprints.disbursement import prepare_pending_disbursements
+        from blueprints.trial_billing import check_trial_expirations, check_trial_ending_soon
+    except ImportError as _job_import_err:
+        # Deliberately NOT the same except block as "apscheduler missing"
+        # above -- that used to be one try/except ImportError covering
+        # both apscheduler itself AND all 5 of these job modules, so a
+        # missing/broken job module (e.g. blueprints/trial_billing.py not
+        # yet present on a given checkout) got silently misreported as
+        # "APScheduler not installed" -- true-sounding, wrong cause, and
+        # it took down all 6 jobs instead of just the one with the bad
+        # import.
+        app_log.error(
+            "Nightly scheduler jobs disabled -- failed to import a job module (NOT an APScheduler problem): %s",
+            _job_import_err, exc_info=True,
+        )
+    else:
+        try:
+            _scheduler = BackgroundScheduler(daemon=True)
+            _scheduler.add_job(
+                func=_with_heartbeat("daily_attendance_report", generate_and_send_daily_report),
+                trigger="cron",
+                hour=23, minute=59,
+                id="daily_attendance_report",
+                replace_existing=True,
+            )
+            _scheduler.add_job(
+                func=_with_heartbeat("auto_debit_sync_and_bill", sync_and_bill_auto_debit),
+                trigger="cron",
+                hour=2, minute=0,
+                id="auto_debit_sync_and_bill",
+                replace_existing=True,
+            )
+            _scheduler.add_job(
+                func=_with_heartbeat("tenant_billing_dunning_check", check_tenant_billing),
+                trigger="cron",
+                hour=3, minute=0,
+                id="tenant_billing_dunning_check",
+                replace_existing=True,
+            )
+            _scheduler.add_job(
+                func=_with_heartbeat("salary_disbursement_prep", prepare_pending_disbursements),
+                trigger="cron",
+                hour=4, minute=0,
+                id="salary_disbursement_prep",
+                replace_existing=True,
+            )
+            _scheduler.add_job(
+                func=_with_heartbeat("trial_expiration_check", check_trial_expirations),
+                trigger="cron",
+                hour=1, minute=0,
+                id="trial_expiration_check",
+                replace_existing=True,
+            )
+            _scheduler.add_job(
+                func=_with_heartbeat("trial_ending_soon_check", check_trial_ending_soon),
+                trigger="cron",
+                hour=0, minute=30,
+                id="trial_ending_soon_check",
+                replace_existing=True,
+            )
+            _scheduler.start()
+            app_log.info("Daily report scheduler started -- fires at 23:59 every night")
+            app_log.info("Auto-debit sync/billing scheduler started -- fires at 02:00 every night")
+            app_log.info("Tenant billing dunning check started -- fires at 03:00 every night")
+            app_log.info("Salary disbursement prep scheduler started -- fires at 04:00 every night")
+            app_log.info("Trial expiration check started -- fires at 01:00 every night")
+            app_log.info("Trial ending-soon reminder check started -- fires at 00:30 every night")
+        except Exception as _sch_err:
+            app_log.warning("Scheduler failed to start: %s", _sch_err)
 
 # ── WSGI export ───────────────────────────────────────────────────────────────
 application = app   # gunicorn / uWSGI entry point
