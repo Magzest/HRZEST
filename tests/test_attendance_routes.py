@@ -5,6 +5,8 @@ shift-swap workflow, reporting pages, and the /api/shifts + /api/attendance
 REST endpoints.
 """
 import datetime
+import hashlib
+import secrets
 import pytest
 
 
@@ -18,6 +20,23 @@ def _admin_session(client, username, role="admin"):
 def _employee_session(client, employee_id):
     with client.session_transaction() as sess:
         sess["employee_id"] = employee_id
+
+
+def _make_token(db_engine, identity, token_type="employee"):
+    """Mints a real, live api_tokens row and returns the raw bearer value --
+    same pattern tests/test_employees_coverage.py's _make_admin_token uses.
+    Caller is responsible for cleanup (the row is left for the per-test DB
+    snapshot/restore fixture to clear)."""
+    raw = secrets.token_hex(32)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    expiry = datetime.datetime.now() + datetime.timedelta(hours=1)
+    cur = db_engine.cursor()
+    cur.execute(
+        "INSERT INTO api_tokens (identity, token, token_type, expires_at) VALUES (%s,%s,%s,%s)",
+        (identity, token_hash, token_type, expiry)
+    )
+    cur.close()
+    return raw
 
 
 def _admin_bearer_token(client, seed_admin):
@@ -156,6 +175,34 @@ class TestApiBreaks:
         _employee_session(client, seed_employee["employee_id"])
         resp = client.get("/api/breaks")
         assert resp.status_code == 200
+
+    def test_garbage_bearer_token_returns_401(self, client):
+        """Regression test: this route used to accept ANY string starting
+        with "Bearer " with no lookup against api_tokens at all -- a
+        garbage token got the same 200 a real session got."""
+        resp = client.get("/api/breaks", headers={"Authorization": "Bearer not-a-real-token"})
+        assert resp.status_code == 401
+
+    def test_valid_employee_bearer_token_allowed(self, client, db_engine, seed_employee):
+        token = _make_token(db_engine, seed_employee["employee_id"], "employee")
+        resp = client.get("/api/breaks", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+    def test_valid_admin_bearer_token_allowed(self, client, db_engine, seed_admin):
+        token = _make_token(db_engine, seed_admin["username"], "admin")
+        resp = client.get("/api/breaks", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+    def test_expired_bearer_token_returns_401(self, client, db_engine, seed_employee):
+        token_hash = hashlib.sha256(b"expired-token-value").hexdigest()
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO api_tokens (identity, token, token_type, expires_at) VALUES (%s,%s,'employee',%s)",
+            (seed_employee["employee_id"], token_hash, datetime.datetime.now() - datetime.timedelta(hours=1)),
+        )
+        cur.close()
+        resp = client.get("/api/breaks", headers={"Authorization": "Bearer expired-token-value"})
+        assert resp.status_code == 401
 
 
 class TestAddBreak:

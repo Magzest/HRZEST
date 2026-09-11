@@ -590,6 +590,36 @@ def resolve_admin_identity():
     return row[0]
 
 
+def resolve_bearer_identity_any():
+    """Bearer-token identity for routes usable by EITHER an employee or an
+    admin token, with no session fallback -- for API endpoints that accept
+    both personas and have no session cookie to fall back to at all (mobile
+    clients). Looks the token up against api_tokens for either token_type,
+    unlike resolve_admin_identity() above which is admin-only and also
+    checks the session first.
+
+    Returns the identity string, or None if the header is missing/
+    malformed or the token doesn't match a live, non-expired row. Does NOT
+    check an admin_users.is_active flag the way resolve_admin_identity()
+    does -- callers needing that guarantee for the admin case should use
+    resolve_admin_identity() instead; this is for routes where "any
+    unexpired token for either persona" is the actual requirement.
+    Extracted from blueprints/ai_hrms.py's _resolve_bearer_identity(),
+    which needed the same lookup and now delegates here.
+    """
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token_hash = _hash_token(auth[7:])
+    with _db() as (cursor, _conn):
+        cursor.execute(
+            "SELECT identity FROM api_tokens WHERE token=%s AND token_type IN ('employee','admin') AND expires_at > NOW()",
+            (token_hash,)
+        )
+        row = cursor.fetchone()
+    return row[0] if row else None
+
+
 # ── Email Settings 2FA step-up gate ───────────────────────────────────────────
 # Same time.time()-in-session idiom as the WebAuthn fingerprint window
 # (utils/webauthn_utils.py:_WA_FP_VERIFY_WINDOW_SEC), but NOT single-use/popped

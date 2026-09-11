@@ -17,7 +17,7 @@ from flask import (
 )
 from extensions import limiter, app_log
 from database import get_db_connection
-from utils.auth import admin_required, employee_required, api_required
+from utils.auth import admin_required, employee_required, api_required, resolve_bearer_identity_any
 from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, co_scope_subquery, hr_scope_column, hr_scope_subquery, hr_scope_denied, decrypt_pii, get_pending_action_counts, company_today, company_now
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
@@ -272,10 +272,15 @@ def assign_shift():
 @attendance_bp.route("/api/breaks")
 @limiter.limit("30 per minute")
 def api_breaks():
-    if not (session.get("admin_logged_in") or session.get("employee_id")):
-        auth = request.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return jsonify({"ok": False, "msg": "Unauthorized"}), 401
+    # Was checking only that an Authorization header starts with "Bearer "
+    # -- never looked the token up against api_tokens at all, so literally
+    # any string ("Bearer x") passed for an unauthenticated caller. Now
+    # shares the same real token lookup blueprints/ai_hrms.py's helpdesk
+    # route uses (identity for either an employee or admin token, expiry
+    # checked) instead of a session cookie OR a merely-shaped header.
+    if not (session.get("admin_logged_in") or session.get("employee_id")
+            or resolve_bearer_identity_any()):
+        return jsonify({"ok": False, "msg": "Unauthorized"}), 401
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("SELECT id, break_name, break_time, duration_minutes FROM break_config WHERE is_active=1 ORDER BY break_time")
