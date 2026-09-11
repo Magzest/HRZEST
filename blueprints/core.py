@@ -9,7 +9,7 @@ import secrets
 import datetime
 from flask import Blueprint, request, session, jsonify, render_template, redirect, Response, g
 from extensions import limiter, app_log, log_security_event
-from database import get_db_connection
+from database import get_db_connection, transaction
 from utils.auth import (
     api_required, check_password_hash, generate_password_hash, _hash_token,
     _check_login_lockout, _record_login_failure, _clear_login_failures,
@@ -548,13 +548,30 @@ def api_employee_signup():
             db.close()
             return jsonify({"ok": False, "msg": f"Employee ID '{emp_id}' is already registered."}), 400
 
+        # Authoritative, lock-protected recheck immediately before the
+        # INSERT, wrapped in an explicit transaction() -- the pooled
+        # connection defaults to autocommit=True, so without an explicit
+        # transaction the FOR UPDATE lock taken inside
+        # add_employee_seat_cap_check() would release itself the instant
+        # that one SELECT statement finished, before this INSERT ever
+        # ran, and the race would still be wide open. The earlier
+        # add_employee_seat_cap_check() call above (no cursor, own
+        # connection) is only a cheap UX preflight -- see that function's
+        # docstring.
         hashed_pw = generate_password_hash(password)
-        cursor.execute(
-            "INSERT INTO employees (employee_id, name, email, role, department, password, date_of_joining) "
-            "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-            (emp_id, name, email, role, department, hashed_pw)
-        )
-        db.commit()
+        _seat_error = None
+        with transaction(db):
+            _seat_error = add_employee_seat_cap_check(cursor)
+            if not _seat_error:
+                cursor.execute(
+                    "INSERT INTO employees (employee_id, name, email, role, department, password, date_of_joining) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+                    (emp_id, name, email, role, department, hashed_pw)
+                )
+        if _seat_error:
+            cursor.close()
+            db.close()
+            return jsonify({"ok": False, "msg": _seat_error}), 403
         cursor.close()
         db.close()
         if email:

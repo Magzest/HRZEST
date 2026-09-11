@@ -15,18 +15,16 @@ see signup payments via billing.py's payment_orders (see
 blueprints/platform_admin.py's _recent_payments()).
 """
 import datetime
-from flask import Blueprint, request, session, jsonify, render_template, g
+from flask import Blueprint, request, session, jsonify, redirect, g
 
 from extensions import app_log, limiter, log_security_event
 from database import get_db_connection, get_master_db
 from utils.auth import admin_required
-from utils.helpers import get_company_settings, invalidate_settings_cache
-from utils.plan_limits import (
-    calculate_price, format_price_inr, get_per_employee_paise, get_tenant_employee_count, get_billing_snapshot,
-)
+from utils.helpers import get_company_settings, invalidate_settings_cache, tpath
+from utils.plan_limits import calculate_price, format_price_inr
 from utils.razorpay_utils import (
     create_order as razorpay_create_order, verify_payment_signature,
-    key_id as razorpay_key_id, razorpay_configured, create_id_or_demo, verify_or_demo,
+    key_id as razorpay_key_id, create_id_or_demo, verify_or_demo,
 )
 
 seats_bp = Blueprint("seats", __name__)
@@ -40,28 +38,13 @@ _DEMO_ORDER_PREFIX = "demo_seat_order_"
 @seats_bp.route("/settings/seats", methods=["GET"])
 @admin_required
 def seats_page():
-    co = get_company_settings()
-    employee_count = get_tenant_employee_count(g.tenant_db)
-
-    snapshot = get_billing_snapshot(g.tenant_db)
-    auto_debit_status = snapshot["auto_debit"]
-    invoices = [
-        {**inv, "amount_display": format_price_inr(inv["amount_paise"])}
-        for inv in snapshot["invoices"]
-    ]
-
-    return render_template(
-        "seat_checkout.html",
-        active_nav="seats",
-        employee_count=employee_count,
-        paid_employee_slots=co.get("paid_employee_slots"),
-        per_employee_paise=get_per_employee_paise(),
-        per_employee_display=format_price_inr(get_per_employee_paise()),
-        monthly_bill_display=format_price_inr(calculate_price(employee_count)),
-        razorpay_configured=razorpay_configured(),
-        auto_debit_status=auto_debit_status,
-        invoices=invoices,
-    )
+    # Retired as a standalone page -- embedded into Settings > Finances >
+    # Billing instead (templates/settings.html's #ss-billing) so it behaves
+    # like every other Finances sub-section (no full page nav) rather than
+    # navigating away. Redirecting (not deleting the route) keeps old
+    # links/bookmarks working, same pattern as blueprints/payroll.py's
+    # retired GET /email_config.
+    return redirect(tpath("/settings?tab=billing"))
 
 
 @seats_bp.route("/api/seats/create_order", methods=["POST"])

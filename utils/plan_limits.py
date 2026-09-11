@@ -32,6 +32,14 @@ PLAN_LABEL = "per_employee"
 _RATE_CACHE_TTL_SEC = 30
 _rate_cache = {"value": None, "checked_at": 0.0}
 
+# Same cache shape as _rate_cache above, one entry per platform_costs
+# column -- base_fee_paise/minimum_monthly_paise both default to 0 (see
+# app.py's ALTER TABLE), so calculate_price()'s formula below is
+# byte-identical to the old flat-rate-only behavior until a platform admin
+# explicitly sets one of these two new knobs.
+_extra_cost_cache = {"base_fee_paise": {"value": None, "checked_at": 0.0},
+                      "minimum_monthly_paise": {"value": None, "checked_at": 0.0}}
+
 
 def get_per_employee_paise() -> int:
     """The live flat per-employee rate, admin-editable at
@@ -71,6 +79,54 @@ def invalidate_rate_paise_cache():
     _rate_cache["checked_at"] = 0.0
 
 
+def _get_extra_cost_paise(column: str) -> int:
+    """Shared reader for platform_costs.base_fee_paise / minimum_monthly_paise
+    -- same cache-with-fallback shape as get_per_employee_paise() above,
+    just parameterized by column since both default to 0 and are read the
+    same way."""
+    entry = _extra_cost_cache[column]
+    now = time.time()
+    if entry["value"] is not None and (now - entry["checked_at"]) < _RATE_CACHE_TTL_SEC:
+        return entry["value"]
+    try:
+        from database import get_master_db
+        conn = get_master_db()
+        cur = conn.cursor(buffered=True)
+        cur.execute(f"SELECT {column} FROM platform_costs WHERE id=1")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        value = row[0] if row and row[0] is not None else 0
+    except Exception:
+        value = entry["value"] if entry["value"] is not None else 0
+    entry["value"] = value
+    entry["checked_at"] = now
+    return value
+
+
+def get_base_fee_paise() -> int:
+    """Flat per-tenant fee added to every bill regardless of headcount,
+    admin-editable at /super_admin. Defaults to 0 -- most tenants are
+    billed purely per-employee same as before this existed."""
+    return _get_extra_cost_paise("base_fee_paise")
+
+
+def get_minimum_monthly_paise() -> int:
+    """Floor applied to the total bill (base fee + per-employee) so a very
+    small headcount is never billed below this. Defaults to 0 (no floor)."""
+    return _get_extra_cost_paise("minimum_monthly_paise")
+
+
+def invalidate_extra_cost_cache():
+    """Called right after the platform admin saves base_fee_paise/
+    minimum_monthly_paise (blueprints/platform_admin.py's
+    platform_admin_set_rate()) -- same purpose as
+    invalidate_rate_paise_cache() above, for the two newer knobs."""
+    for entry in _extra_cost_cache.values():
+        entry["value"] = None
+        entry["checked_at"] = 0.0
+
+
 def get_tenant_employee_count(schema_name: str) -> int:
     """Live employee count for a tenant schema -- the sole input to billing
     now. Fails to 0 on any DB error rather than raising, since this is used
@@ -89,15 +145,19 @@ def get_tenant_employee_count(schema_name: str) -> int:
 
 
 def calculate_price(employee_count: int) -> int:
-    """Price in paise for `employee_count` employees -- flat rate (the
-    current admin-set value, via get_per_employee_paise() above), no
-    bands, no tiers. Single source of truth for both display (create_org,
-    Platform Admin dashboard) and the Razorpay order amount
-    (blueprints/billing.py's create_order), so those never compute
+    """Price in paise for `employee_count` employees: a flat per-tenant base
+    fee (get_base_fee_paise(), 0 by default) plus the per-employee rate
+    (get_per_employee_paise()), floored at get_minimum_monthly_paise() (also
+    0 by default) so a very small headcount is never billed below the
+    platform's minimum. With both new knobs left at their 0 default this is
+    exactly the old flat-rate formula -- single source of truth for both
+    display (create_org, Platform Admin dashboard) and the Razorpay order
+    amount (blueprints/billing.py's create_order), so those never compute
     different numbers for the same input."""
     if employee_count < 0:
         employee_count = 0
-    return employee_count * get_per_employee_paise()
+    total = get_base_fee_paise() + employee_count * get_per_employee_paise()
+    return max(total, get_minimum_monthly_paise())
 
 
 def format_price_inr(paise: int) -> str:
@@ -144,7 +204,7 @@ def get_billing_snapshot(schema_name: str) -> dict:
                 "activated_at": coerce_datetime(row[2]),
             }
         cur.execute(
-            "SELECT billing_period, employee_count, amount_paise, status, created_at, failure_reason "
+            "SELECT billing_period, employee_count, amount_paise, status, created_at, failure_reason, rate_paise "
             "FROM monthly_invoices WHERE tenant_schema=%s ORDER BY created_at DESC LIMIT 12",
             (schema_name,)
         )
@@ -153,6 +213,7 @@ def get_billing_snapshot(schema_name: str) -> dict:
                 "billing_period": coerce_datetime(r[0]), "employee_count": r[1],
                 "amount_paise": r[2], "status": r[3],
                 "created_at": coerce_datetime(r[4]), "failure_reason": r[5],
+                "rate_paise": r[6],
             }
             for r in cur.fetchall()
         ]

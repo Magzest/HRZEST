@@ -23,8 +23,10 @@ Run with:
     python -m pytest tests/test_seats.py -v
 """
 import secrets
+import threading
 import pytest
 
+from extensions import app as flask_app
 from utils.plan_limits import calculate_price, format_price_inr
 from utils.helpers import get_company_settings, invalidate_settings_cache
 
@@ -62,10 +64,20 @@ class TestSeatsPage:
         resp = client.get("/settings/seats", follow_redirects=False)
         assert resp.status_code in (301, 302)
 
-    def test_admin_can_view_page(self, client, seed_admin):
+    def test_admin_view_redirects_into_unified_settings_billing_tab(self, client, seed_admin):
+        # Retired as a standalone page -- now redirects into Settings >
+        # Finances > Billing (templates/settings.html's #ss-billing) so old
+        # links/bookmarks (and the mobile bridge-login target) still land
+        # somewhere useful, same pattern as GET /email_config's retirement.
         _admin_session(client, seed_admin["username"])
-        resp = client.get("/settings/seats")
-        assert resp.status_code == 200
+        resp = client.get("/settings/seats", follow_redirects=False)
+        assert resp.status_code in (301, 302)
+        assert "/settings" in resp.headers["Location"]
+        assert "tab=billing" in resp.headers["Location"]
+
+        followed = client.get("/settings/seats", follow_redirects=True)
+        assert followed.status_code == 200
+        assert b"Seats" in followed.data
 
 
 class TestCreateOrder:
@@ -235,3 +247,57 @@ class TestVerifyPayment:
             assert co["paid_employee_slots"] == 16
         finally:
             _cleanup_orders(db_engine, order_id)
+
+
+class TestSeatCapConcurrency:
+    """utils/helpers.py's add_employee_seat_cap_check() used to be a plain
+    check-then-insert with no locking: two concurrent employee-creation
+    requests racing for the last available seat could both read
+    COUNT(*) < cap before either had inserted, and both succeed --
+    exceeding the cap. It's now lock-protected (a row lock on the single
+    company_settings row, held from an authoritative recheck through the
+    employee INSERT, in one transaction) -- this fires genuinely
+    concurrent signups at a tenant with exactly one seat free and asserts
+    only one of them wins, regardless of how the two threads interleave."""
+
+    def test_concurrent_signups_at_cap_only_one_succeeds(self, db_engine, seat_cap):
+        cur = db_engine.cursor()
+        cur.execute("SELECT COUNT(*) FROM employees")
+        baseline = cur.fetchone()[0]
+        seat_cap(baseline + 1)  # exactly one more seat available than employees that exist today
+
+        suffix = secrets.token_hex(3).upper()
+        emp_ids = [f"RACE{suffix}A", f"RACE{suffix}B"]
+        results = {}
+
+        def _signup(emp_id):
+            with flask_app.test_client() as c:
+                resp = c.post("/api/employee/signup", json={
+                    "employee_id": emp_id, "name": "Race Test",
+                    "password": "RacePass@1",
+                })
+                results[emp_id] = (resp.status_code, resp.get_json())
+
+        threads = [threading.Thread(target=_signup, args=(eid,)) for eid in emp_ids]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert len(results) == 2, f"a signup thread didn't finish: {results}"
+        successes = [eid for eid, (_status, body) in results.items() if body and body.get("ok")]
+        assert len(successes) == 1, (
+            f"expected exactly one of the two concurrent signups to succeed against a "
+            f"single free seat, got: {results}"
+        )
+        failure_eid = [eid for eid in emp_ids if eid not in successes][0]
+        fail_status, fail_body = results[failure_eid]
+        assert fail_status == 403
+        assert "limit" in (fail_body.get("msg") or "").lower()
+
+        cur.execute("SELECT COUNT(*) FROM employees")
+        assert cur.fetchone()[0] == baseline + 1
+
+        cur.execute("DELETE FROM employees WHERE employee_id = ANY(%s)", (emp_ids,))
+        cur.execute("DELETE FROM api_tokens WHERE identity = ANY(%s)", (emp_ids,))
+        cur.close()
