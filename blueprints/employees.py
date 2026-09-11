@@ -1662,7 +1662,7 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
         ("Phone", row[8] if row and row[8] else "-"),
     ]
     ROW_H = 38
-    y = 390
+    y = 368
     for i, (lbl, val) in enumerate(info_rows):
         if i % 2 == 0:
             fd.rectangle([(0, y - 4), (CW, y + ROW_H - 6)], fill=_IDC_LGRAY)
@@ -1684,7 +1684,7 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
     QS_SMALL = 120
     QR_MARGIN = 12
     qr_block_h = QS_SMALL + 2 * QR_MARGIN
-    max_qr_y = (CH - 70) - qr_block_h
+    max_qr_y = (CH - 64) - qr_block_h
 
     bg_val = row[7] if row and row[7] else None
     addr_y = y + 6
