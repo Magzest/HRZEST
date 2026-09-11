@@ -39,6 +39,72 @@ class TestSqliSignature:
         assert waf_module._sqli_signature(benign) is None
 
 
+class TestEncodedBlobExemption:
+    """Regression coverage for the 23.5% false-positive rate measured
+    against real face-check-in payloads before this exemption existed --
+    see utils/waf.py's _looks_like_encoded_blob() docstring. Every case
+    here must stay unblocked; the SQLi/XSS/path-traversal detection itself
+    is covered by the classes above and must stay unaffected by this."""
+
+    @staticmethod
+    def _random_b64(n_bytes=60 * 1024):
+        import base64
+        import os
+        return base64.b64encode(os.urandom(n_bytes)).decode()
+
+    def test_random_base64_blob_not_blocked(self):
+        payload = self._random_b64()
+        assert waf_module._sqli_signature(payload) is None
+        assert waf_module._xss_signature(payload) is None
+        assert waf_module._path_traversal_signature(payload) is None
+
+    def test_data_uri_prefixed_blob_not_blocked(self):
+        payload = "data:image/jpeg;base64," + self._random_b64()
+        assert waf_module._sqli_signature(payload) is None
+
+    def test_two_hundred_synthetic_face_payloads_all_pass(self):
+        """The exact measurement from the audit, kept as a permanent
+        regression check rather than a one-off script."""
+        blocked = 0
+        for _ in range(200):
+            payload = "data:image/jpeg;base64," + self._random_b64()
+            if (waf_module._sqli_signature(payload)
+                    or waf_module._xss_signature(payload)
+                    or waf_module._path_traversal_signature(payload)):
+                blocked += 1
+        assert blocked == 0
+
+    def test_real_face_checkin_json_not_blocked(self, client):
+        """End-to-end: the actual /attendance route with a realistic
+        face_image JSON payload must not 403."""
+        resp = client.post("/attendance", json={
+            "employee_id": "not-a-real-qr-value",
+            "face_image": self._random_b64(),
+            "auth_combo": "qr_face",
+        })
+        assert resp.status_code != 403
+
+    def test_short_base64_looking_string_still_scanned_normally(self):
+        """The blob exemption requires _ENCODED_BLOB_MIN_LEN characters --
+        a short value that happens to look base64-ish is not exempted, so
+        an actual short attack payload can't hide by mimicking the shape."""
+        short = "0xdeadbeef"
+        assert len(short) < waf_module._ENCODED_BLOB_MIN_LEN
+        # Still not a real attack (no injection syntax), but confirms the
+        # short path goes through the normal encoding-evasion check rather
+        # than being blob-exempted -- i.e. it's exercising the un-exempted
+        # code path, not asserting blocking behavior on it.
+        assert waf_module._sqli_signature(short) is not None
+
+    def test_attack_syntax_inside_long_string_still_detected(self):
+        """A payload can't smuggle real attack syntax past the exemption
+        just by padding it to blob length -- the required space/quote/
+        semicolon breaks the base64-only shape match, so it falls through
+        to full scanning."""
+        payload = self._random_b64(200) + " OR 1=1-- " + self._random_b64(200)
+        assert waf_module._sqli_signature(payload) is not None
+
+
 class TestXssSignature:
     @pytest.mark.parametrize("payload", [
         "<script>alert(1)</script>",
