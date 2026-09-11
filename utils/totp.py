@@ -8,12 +8,76 @@ one established encryption idiom rather than introducing a second scheme.
 import html as _html
 import base64
 import io
+import time
 import pyotp
 import qrcode
 from database import get_db_connection
 from utils.helpers import encrypt_pii, decrypt_pii
 
 _ISSUER = "HRzest.com"
+
+# ── totp_enabled cache (60-second TTL) ──────────────────────────────────────
+# app.py's _enforce_admin_mfa_enrollment() checks this on every single
+# request from every admin/manager/hr session now that mandatory enrollment
+# is on by default -- without a cache that's a DB round trip per request to
+# answer a question ("has this admin finished enrolling MFA") that only
+# ever changes twice in an admin's lifetime (enroll, or reset). Keyed by
+# (tenant, username) so one tenant's cached value can't leak into another's
+# session under concurrent multi-tenant traffic, matching the existing
+# company-settings cache pattern (utils/helpers.py).
+_totp_enabled_cache = {}
+_TOTP_ENABLED_CACHE_TTL = 60
+
+
+def _totp_cache_key(admin_username):
+    try:
+        from flask import g as _flask_g
+        tenant = getattr(_flask_g, "tenant_db", None) or "__no_tenant__"
+    except RuntimeError:
+        tenant = "__no_tenant__"  # no active Flask request/app context
+    return (tenant, admin_username)
+
+
+def is_totp_enabled_cached(admin_username: str) -> bool:
+    """Cached read of admin_users.totp_enabled for the mandatory-MFA-
+    enrollment gate. mark_totp_enabled()/reset_admin_totp_secret() below
+    invalidate this immediately on write, so the TTL window only ever
+    means "up to 60s stale in the direction of still requiring
+    enrollment" (annoying, never a security gap) -- a session can't use a
+    stale cache entry to skip a just-reset enrollment requirement."""
+    key = _totp_cache_key(admin_username)
+    now = time.time()
+    entry = _totp_enabled_cache.get(key)
+    if entry is not None and now < entry[1]:
+        return entry[0]
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT COALESCE(totp_enabled, 0) FROM admin_users WHERE username=%s", (admin_username,))
+    row = cursor.fetchone()
+    cursor.close()
+    db.close()
+    enabled = bool(row and row[0])
+    _totp_enabled_cache[key] = (enabled, now + _TOTP_ENABLED_CACHE_TTL)
+    return enabled
+
+
+def _invalidate_totp_cache(admin_username: str):
+    _totp_enabled_cache.pop(_totp_cache_key(admin_username), None)
+
+
+def clear_totp_cache_for_tests():
+    """Test-only: wipes every cached entry outright, regardless of
+    username/tenant. Production code should never need this -- the two
+    mutators above invalidate their own key correctly -- but tests/
+    conftest.py's per-test DB snapshot/restore fixture resets
+    admin_users.totp_enabled out from under this cache via raw SQL
+    (INSERT/DELETE, not through mark_totp_enabled()/
+    reset_admin_totp_secret()), and several fixtures (seed_admin et al.)
+    reuse the same fixed username across many tests, well within this
+    cache's 60-second TTL. Called once per test in conftest.py's DB reset
+    fixture so no test can ever read a cache entry left behind by a
+    different test's admin_users row."""
+    _totp_enabled_cache.clear()
 
 
 def get_or_create_admin_totp_secret(admin_username: str):
@@ -47,6 +111,7 @@ def mark_totp_enabled(admin_username: str):
     finally:
         cursor.close()
         db.close()
+    _invalidate_totp_cache(admin_username)
 
 
 def reset_admin_totp_secret(admin_username: str):
@@ -65,6 +130,7 @@ def reset_admin_totp_secret(admin_username: str):
     finally:
         cursor.close()
         db.close()
+    _invalidate_totp_cache(admin_username)
 
 
 def verify_totp_code(admin_username: str, code: str, require_enabled: bool = True) -> bool:

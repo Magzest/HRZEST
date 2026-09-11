@@ -164,7 +164,7 @@ def platform_admin_login():
             # MANDATORY_LOGIN_MFA -- defaults True (secure by default), only
             # off when explicitly set in .env. Password is still checked
             # above either way; this only skips the emailed-OTP step.
-            if not current_app.config.get("MANDATORY_PLATFORM_ADMIN_MFA", True):
+            if not current_app.config["MANDATORY_PLATFORM_ADMIN_MFA"]:
                 return _complete_platform_admin_login(username)
 
             email = row[1]

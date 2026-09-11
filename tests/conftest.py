@@ -125,6 +125,16 @@ flask_app.config["MANDATORY_ADMIN_MFA"] = False
 # (tests/test_login_mfa.py) re-enable it locally.
 flask_app.config["MANDATORY_LOGIN_MFA"] = False
 
+# Disable the platform (super-admin) console's mandatory-MFA gate and the
+# Email Settings TOTP step-up gate for the same reason as the two flags
+# above -- both now default on (app.py), and most of the suite logs a
+# platform-admin/admin session in directly without walking through
+# enrollment or a step-up code. Tests for these gates specifically
+# (tests/test_platform_admin.py's TestLoginFlow, tests/test_email_2fa.py)
+# re-enable them locally via their own fixture/per-test overrides.
+flask_app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = False
+flask_app.config["REQUIRE_EMAIL_2FA"] = False
+
 # Make utils/async_writer.py's background-thread write queue run
 # synchronously for the whole suite -- see set_synchronous_mode()'s
 # docstring. Existing tests that call _write_queue.join() to wait for a
@@ -395,6 +405,16 @@ def _reset_db_after_test(db_engine, _db_baseline_snapshot):
     extra_schemas = _list_user_schemas(cur) - baseline_schemas
     _restore_snapshot(cur, snap, extra_schemas)
     cur.close()
+    # utils/totp.py's is_totp_enabled_cached() caches admin_users.totp_enabled
+    # for 60s, invalidated only when mark_totp_enabled()/
+    # reset_admin_totp_secret() are the ones writing it -- but the restore
+    # above (and several fixtures like seed_admin, which reuse one fixed
+    # username across the whole suite) changes that row via raw SQL. Without
+    # this, a test enrolling MFA could leave a stale "enabled" cache entry
+    # that a LATER test using the same username reads within the TTL,
+    # regardless of what admin_users now actually says.
+    from utils.totp import clear_totp_cache_for_tests
+    clear_totp_cache_for_tests()
 
 
 @pytest.fixture

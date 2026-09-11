@@ -683,13 +683,13 @@ def security_settings_step_up_clear():
 def require_email_2fa(f):
     """Gate for Email Settings routes (SMTP config, including a
     reveal-plaintext-password action) behind a recent TOTP step-up --
-    see email_settings_step_up_valid() above. Off by default (same as the
-    three MANDATORY_*_MFA flags in app.py) -- set REQUIRE_EMAIL_2FA=true in
-    .env, or app.config["REQUIRE_EMAIL_2FA"]=True in tests, to turn this
-    step-up back on."""
+    see email_settings_step_up_valid() above. On by default (same as the
+    three MANDATORY_*_MFA flags in app.py) -- set REQUIRE_EMAIL_2FA=false in
+    .env, or app.config["REQUIRE_EMAIL_2FA"]=False in tests, to turn this
+    step-up off."""
     @wraps(f)
     def wrapper(*args, **kwargs):
-        if not current_app.config.get("REQUIRE_EMAIL_2FA", False):
+        if not current_app.config["REQUIRE_EMAIL_2FA"]:
             return f(*args, **kwargs)
         if not email_settings_step_up_valid():
             log_security_event(

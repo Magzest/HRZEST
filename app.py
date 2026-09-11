@@ -664,14 +664,21 @@ _MANDATORY_MFA_EXEMPT_PATHS = {
     "/logout", "/admin_login", "/hr_login"
 }
 
-# All three MFA/2FA gates below default OFF at the user's request -- set any
-# of them to "true" in .env to turn that layer back on.
-app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
-app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "False").lower() in ("true", "1", "yes")
-app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "False").lower() in ("true", "1", "yes")
+# All four MFA/2FA gates below default ON (secure by default) -- set any of
+# them to "false" in .env only for a deliberate, documented reason (e.g. a
+# local dev box with no authenticator app handy). This used to default OFF
+# despite every docstring/comment near these gates claiming otherwise (see
+# _enforce_admin_mfa_enrollment below, and the .get(key, True) fallbacks
+# throughout blueprints/auth.py and blueprints/platform_admin.py that could
+# never actually apply -- app.config[...] is unconditionally set here on
+# every boot, so those fallback defaults were dead code, not a real
+# secure-by-default posture).
+app.config["MANDATORY_ADMIN_MFA"] = os.environ.get("MANDATORY_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
+app.config["MANDATORY_LOGIN_MFA"] = os.environ.get("MANDATORY_LOGIN_MFA", "True").lower() in ("true", "1", "yes")
+app.config["MANDATORY_PLATFORM_ADMIN_MFA"] = os.environ.get("MANDATORY_PLATFORM_ADMIN_MFA", "True").lower() in ("true", "1", "yes")
 # Email Settings step-up gate (utils/auth.py's require_email_2fa) -- same
-# off-by-default posture as the three flags above.
-app.config["REQUIRE_EMAIL_2FA"] = os.environ.get("REQUIRE_EMAIL_2FA", "False").lower() in ("true", "1", "yes")
+# secure-by-default posture as the three flags above.
+app.config["REQUIRE_EMAIL_2FA"] = os.environ.get("REQUIRE_EMAIL_2FA", "True").lower() in ("true", "1", "yes")
 
 
 @app.before_request
@@ -683,13 +690,15 @@ def _enforce_admin_mfa_enrollment():
     SOC), which only apply once already enrolled; this is what forces
     enrollment to happen in the first place.
 
-    MANDATORY_ADMIN_MFA defaults on; tests disable it globally (matching the
-    existing pattern of disabling flask-limiter under pytest) since most of
-    the suite logs in admin sessions directly via session_transaction without
-    walking through enrollment, and re-enable it only in the tests that
-    specifically exercise this gate.
+    MANDATORY_ADMIN_MFA defaults on (app.config[...] is set unconditionally
+    at boot, above -- direct dict access here, not a .get(..., True)
+    fallback that could never actually apply). Tests disable it globally
+    (matching the existing pattern of disabling flask-limiter under pytest)
+    since most of the suite logs in admin sessions directly via
+    session_transaction without walking through enrollment, and re-enable
+    it only in the tests that specifically exercise this gate.
     """
-    if not current_app.config.get("MANDATORY_ADMIN_MFA", True):
+    if not current_app.config["MANDATORY_ADMIN_MFA"]:
         return
     if request.path.startswith("/static/") or request.path == "/healthz":
         return
@@ -700,13 +709,8 @@ def _enforce_admin_mfa_enrollment():
         return
     if session.get("admin_role", "admin") not in _MANDATORY_MFA_ROLES:
         return
-    db = get_db_connection()
-    cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT COALESCE(totp_enabled, 0) FROM admin_users WHERE username=%s", (username,))
-    row = cursor.fetchone()
-    cursor.close()
-    db.close()
-    if row and row[0]:
+    from utils.totp import is_totp_enabled_cached
+    if is_totp_enabled_cached(username):
         return
     if request.path.startswith("/api/"):
         return jsonify({"ok": False, "msg": "MFA enrollment required before continuing.",

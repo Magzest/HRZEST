@@ -203,7 +203,7 @@ def _finish_employee_login(employee_id, name, role, force_pin_change, email):
         # step happened, so this must NOT be marked -- that's what still
         # correctly forces real TOTP enrollment before HR admin access in
         # that configuration.
-        if app.config.get("MANDATORY_LOGIN_MFA", True):
+        if app.config["MANDATORY_LOGIN_MFA"]:
             mark_totp_enabled(employee_id)
         session.clear()
         session["admin_logged_in"] = True
@@ -367,7 +367,7 @@ def admin_login():
                 (identifier,)
             )
             admin_row = cursor.fetchone()
-        if app.config.get("MANDATORY_LOGIN_MFA", True) and not admin_row:
+        if app.config["MANDATORY_LOGIN_MFA"] and not admin_row:
             # See _start_login_mfa_decoy()'s docstring -- closes the
             # enumeration gap below by giving a genuinely nonexistent
             # identifier the SAME redirect-to-MFA response, backed by an
@@ -380,7 +380,7 @@ def admin_login():
                 _is_employee = _ec.fetchone() is not None
             if not _is_employee:
                 return _start_login_mfa_decoy("admin_login.html")
-        if admin_row and admin_row[1] == "admin" and app.config.get("MANDATORY_LOGIN_MFA", True):
+        if admin_row and admin_row[1] == "admin" and app.config["MANDATORY_LOGIN_MFA"]:
             # Top-level admin accounts (not HR/SOC-analyst admin_users rows,
             # which keep password login below) no longer authenticate with a
             # password at all -- the emailed one-time code is the sole
@@ -430,7 +430,7 @@ def admin_login():
                     _uc.execute("UPDATE admin_users SET password=%s WHERE username=%s",
                                 (generate_password_hash(password), identifier))
                     _ud.commit()
-            if app.config.get("MANDATORY_LOGIN_MFA", False):
+            if app.config["MANDATORY_LOGIN_MFA"]:
                 return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
                                          "Executive Administrator" if admin_row[1] == "admin" else admin_row[1].title())
             session.clear()
@@ -471,7 +471,7 @@ def admin_login():
                     _uc.execute("UPDATE employees SET password=%s WHERE employee_id=%s",
                                 (generate_password_hash(password), emp_row[0]))
                     _ud.commit()
-            if app.config.get("MANDATORY_LOGIN_MFA", True):
+            if app.config["MANDATORY_LOGIN_MFA"]:
                 return _start_login_mfa(co, "admin_login.html", "employee", emp_row[0], emp_row[5], "Employee")
             return _finish_employee_login(emp_row[0], emp_row[1], emp_row[2], bool(emp_row[4]), emp_row[5])
         _record_login_failure(identifier)

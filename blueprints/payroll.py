@@ -385,10 +385,10 @@ def email_config():
     # bypass the 2FA step-up gate entirely by posting here directly instead
     # (no template links to this POST target anymore -- see templates/
     # salary_report.html, which only GETs it -- so this closes a live but
-    # UI-unreachable bypass, not a used flow). Same off-by-default flag
+    # UI-unreachable bypass, not a used flow). Same on-by-default flag
     # (current_app.config["REQUIRE_EMAIL_2FA"]) as every other step-up gate
     # in this codebase.
-    if current_app.config.get("REQUIRE_EMAIL_2FA", False) and not email_settings_step_up_valid():
+    if current_app.config["REQUIRE_EMAIL_2FA"] and not email_settings_step_up_valid():
         log_security_event(
             "access.denied", "Email Settings (legacy /email_config) accessed without a valid 2FA step-up",
             level="WARNING", identifier=session.get("admin_username"),

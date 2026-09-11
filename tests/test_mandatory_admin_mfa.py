@@ -8,6 +8,7 @@ reasoning as disabling flask-limiter, since most of the suite logs in admin
 sessions directly without an enrolled TOTP secret. Re-enabled locally here."""
 import pyotp
 import pytest
+from utils.totp import reset_admin_totp_secret
 
 
 def _admin_session(client, username, role="admin"):
@@ -38,18 +39,20 @@ class TestMandatoryMfaGate:
         assert resp.status_code == 200
         assert b"Two-Factor Authentication Required" in resp.data
 
-    def test_setup_and_enable_endpoints_stay_reachable_before_enrollment(self, client, seed_admin, mandatory_mfa_enabled, db_engine):
+    def test_setup_and_enable_endpoints_stay_reachable_before_enrollment(self, client, seed_admin, mandatory_mfa_enabled):
         _admin_session(client, seed_admin["username"])
         resp = client.get("/api/settings/2fa/setup")
         assert resp.status_code == 200
         assert resp.get_json()["ok"] is True
-        cur = db_engine.cursor()
-        cur.execute("UPDATE admin_users SET totp_secret=NULL, totp_enabled=0 WHERE username=%s",
-                    (seed_admin["username"],))
-        db_engine.commit()
-        cur.close()
+        # reset_admin_totp_secret() (not a raw UPDATE) so this also
+        # invalidates app.py's is_totp_enabled_cached() cache -- a raw SQL
+        # write here would leave a stale cached "enabled" entry for
+        # seed_admin's shared username, which the NEXT test using the same
+        # fixture could read within the 60s TTL window regardless of what
+        # the database actually says.
+        reset_admin_totp_secret(seed_admin["username"])
 
-    def test_after_enrollment_admin_route_succeeds(self, client, seed_admin, mandatory_mfa_enabled, db_engine):
+    def test_after_enrollment_admin_route_succeeds(self, client, seed_admin, mandatory_mfa_enabled):
         _admin_session(client, seed_admin["username"])
         setup = client.get("/api/settings/2fa/setup").get_json()
         code = pyotp.TOTP(setup["secret"]).now()
@@ -59,11 +62,10 @@ class TestMandatoryMfaGate:
         resp = client.get("/admin", follow_redirects=False)
         assert resp.status_code == 200
 
-        cur = db_engine.cursor()
-        cur.execute("UPDATE admin_users SET totp_secret=NULL, totp_enabled=0 WHERE username=%s",
-                    (seed_admin["username"],))
-        db_engine.commit()
-        cur.close()
+        # See test_setup_and_enable_endpoints_stay_reachable_before_enrollment
+        # above for why this must go through reset_admin_totp_secret()
+        # rather than a raw UPDATE.
+        reset_admin_totp_secret(seed_admin["username"])
 
     def test_employee_only_session_unaffected(self, client, seed_employee, mandatory_mfa_enabled):
         with client.session_transaction() as sess:
