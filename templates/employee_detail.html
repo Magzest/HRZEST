@@ -419,6 +419,10 @@
         <div class="u-fs-13 u-c-64748b u-mt-4">
           Annual (~312 days): <strong class="u-c-1e293b">₹{{ "%.0f"|format(salary_pd * 312) }}</strong>
         </div>
+        <a class="u-d-inline-flex u-ai-center u-gap-6 u-mt-12 u-p-7-14 u-bd-1d5-solid-dbeafe u-br-8 u-c-1e3a8a u-fs-12 u-fw-700 u-tdec-none" id="taxStatementLink" href="#">
+          <i class="ti ti-file-invoice"></i> Download Tax Statement
+        </a>
+        <script>document.getElementById('taxStatementLink').href = '/download_tax_statement/{{ emp_id }}/' + new Date().getFullYear();</script>
       {% elif salary_hidden %}
         <div class="u-c-94a3b8 u-fs-13 u-p-8-0 u-fst-italic"><i class="ti ti-lock"></i> Restricted — requires finance/HR clearance.</div>
       {% else %}
