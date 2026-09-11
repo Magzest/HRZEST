@@ -17,12 +17,56 @@ Run with:
 """
 from unittest.mock import MagicMock
 
-from extensions import check_production_safety
+import pytest
+
+from extensions import check_production_safety, check_secret_key_configured
 
 
 def _fake_logger():
     logger = MagicMock()
     return logger
+
+
+class TestSecretKeyBootCheck:
+    """extensions.py used to fall back to a locally-generated, file-
+    persisted secret key whenever SECRET_KEY was unset -- fine for local
+    dev, but a container redeploy normally gets a fresh filesystem, so
+    every deploy would silently rotate the key and invalidate every
+    session/CSRF token in flight. Now refuses to start instead, same
+    fail-secure posture as utils/razorpay_utils.py's checks."""
+
+    def test_production_with_no_secret_key_refuses_to_boot(self):
+        logger = _fake_logger()
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            check_secret_key_configured("production", "", logger=logger)
+        logger.critical.assert_called_once()
+
+    def test_production_with_whitespace_only_secret_key_refuses_to_boot(self):
+        """A secret manager injection or template that resolved to just
+        whitespace is functionally the same as unset -- must not slip
+        through as a falsy-but-truthy string."""
+        logger = _fake_logger()
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            check_secret_key_configured("production", "   ", logger=logger)
+
+    def test_production_with_secret_key_set_boots_cleanly(self):
+        logger = _fake_logger()
+        check_secret_key_configured("production", "a-real-secret-key", logger=logger)
+        logger.critical.assert_not_called()
+
+    def test_development_with_no_secret_key_boots_cleanly(self):
+        """Local dev without SECRET_KEY set is the normal, documented case
+        -- extensions.py falls back to a persisted local file. Must not
+        raise."""
+        logger = _fake_logger()
+        check_secret_key_configured("development", "", logger=logger)
+        logger.critical.assert_not_called()
+
+    def test_default_logger_is_extensions_app_log(self):
+        """No logger passed -- must not raise a NameError/AttributeError
+        finding the default logger, matching check_production_safety()'s
+        own default-logger test."""
+        check_secret_key_configured("development", "")
 
 
 class TestClamavProductionCheck:

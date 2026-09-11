@@ -141,6 +141,40 @@ def _persist_security_event(event_type, level, message, identifier, ip, path, me
         app_log.error("Failed to persist security event to DB: %s", e)
 
 
+def check_secret_key_configured(app_env, secret_key_env_value, logger=None):
+    """Pure-ish (env values passed in, not read internally) so this can be
+    unit-tested directly without reloading this module or its side effects
+    -- see tests/test_production_safety_checks.py, and
+    check_production_safety() below for the same pattern.
+
+    The persisted-local-file fallback below (env var → persisted local file
+    → generated once) is fine for local dev (same box, same disk, across
+    restarts) but actively dangerous outside it: a container
+    redeploy/replacement normally gets a fresh filesystem, so every deploy
+    would silently generate a NEW secret key -- invalidating every session
+    and CSRF token in flight with no error, no warning, just a wave of
+    logged-out users. Worse, if two app processes ever start with different
+    filesystems (e.g. mid-rollout on two hosts) before either writes the
+    file, they'd sign with two different keys and reject each other's
+    sessions. Fail hard instead -- same fail-secure posture as
+    utils/razorpay_utils.py's module-level checks."""
+    logger = logger or app_log
+    if app_env == "development" or (secret_key_env_value or "").strip():
+        return
+    logger.critical(
+        "FATAL: APP_ENV=%s but SECRET_KEY is not set -- refusing to start rather than "
+        "silently falling back to a locally-generated key that won't survive a "
+        "redeploy. Set SECRET_KEY (see .env.example).",
+        app_env,
+    )
+    raise RuntimeError(
+        "SECRET_KEY is not set outside of APP_ENV=development -- refusing to start (fail-secure)."
+    )
+
+
+check_secret_key_configured(os.environ.get("APP_ENV", "production"), os.environ.get("SECRET_KEY", ""))
+
+
 # ── Flask app ─────────────────────────────────────────────────────────────────
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
@@ -156,7 +190,8 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 # changes them takes up to this long to reach an already-open browser tab.
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 3600
 
-# Secret key: env var → persisted local file → generated once
+# Secret key: env var → persisted local file (dev-only, see
+# check_secret_key_configured() above) → generated once
 _env_key = os.environ.get("SECRET_KEY", "").strip()
 if _env_key:
     app.secret_key = _env_key
