@@ -26,7 +26,7 @@ fi
 
 # 2. Pull latest code
 echo -e "\n${GREEN}📦 Pulling latest code...${NC}"
-git pull origin master
+git pull origin main
 
 # 3. Build and restart containers
 echo -e "\n${GREEN}🐳 Building Docker images...${NC}"
