@@ -945,7 +945,13 @@ class TestAdminPageSmoke:
         assert client.get("/announcements").status_code in (200, 302)
 
     def test_resignation_requests_page(self, client):
-        assert client.get("/resignation_requests").status_code == 200
+        # Resignations were consolidated onto the Leaves & Holidays page's
+        # Resignations tab (blueprints/leave.py's resignation_requests_redirect()) --
+        # same consolidation pattern as /leave_requests and /tickets above,
+        # this route stays only so old bookmarks/links resolve.
+        rv = client.get("/resignation_requests", follow_redirects=False)
+        assert rv.status_code == 302
+        assert "/leave_holidays" in rv.headers["Location"]
 
     def test_tickets_page(self, client):
         # /tickets is a redirect now (blueprints/tickets.py's tickets_view())

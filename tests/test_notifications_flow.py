@@ -227,10 +227,16 @@ class TestAnnouncementNotifications:
         cur.close()
 
         _admin_session(client, seed_admin)
+        # The real form (templates/leave_holidays.html) is a multi-select
+        # <select name="target_employee_ids" multiple>, read server-side via
+        # request.form.getlist("target_employee_ids") (plural) -- a
+        # single-value "target_employee_id" (as this test used to send)
+        # matches nothing, so the request was silently treated as having
+        # zero targets and no notification was ever created.
         resp = client.post("/announcements", data={
             "action": "add", "title": "Private Note",
             "content": "Just for you.", "priority": "Normal",
-            "visibility": "private", "target_employee_id": seed_employee["employee_id"],
+            "visibility": "private", "target_employee_ids": [seed_employee["employee_id"]],
         }, follow_redirects=False)
         assert resp.status_code in (302, 200)
 

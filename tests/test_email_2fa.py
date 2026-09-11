@@ -124,10 +124,18 @@ def seeded_email_config(db_engine):
 
 class TestEmailSettingsRoutes:
     def test_get_email_without_stepup_is_403(self, client, seed_admin, seeded_email_config):
-        _admin_session(client, seed_admin["username"])
-        resp = client.get("/api/settings/email")
-        assert resp.status_code == 403
-        assert "2FA" in resp.get_json()["msg"]
+        # require_email_2fa is off by default in tests (same convention as
+        # require_payout_2fa -- see tests/test_disbursement.py) -- turn it on
+        # here so this actually proves the gate blocks, rather than passing
+        # for the wrong reason (gate bypassed the whole time).
+        client.application.config["REQUIRE_EMAIL_2FA"] = True
+        try:
+            _admin_session(client, seed_admin["username"])
+            resp = client.get("/api/settings/email")
+            assert resp.status_code == 403
+            assert "2FA" in resp.get_json()["msg"]
+        finally:
+            client.application.config["REQUIRE_EMAIL_2FA"] = False
 
     def test_get_email_requires_admin_first(self, client, seeded_email_config):
         resp = client.get("/api/settings/email")
@@ -223,12 +231,16 @@ class TestEmailSettingsRoutes:
         assert setup["secret"] != old_secret
 
     def test_verify_2fa_wrong_code_denied(self, client, enrolled_admin):
-        username, _ = enrolled_admin
-        _admin_session(client, username)
-        resp = client.post("/api/settings/verify-2fa", json={"code": "111111"})
-        assert resp.status_code == 401
-        get_resp = client.get("/api/settings/email")
-        assert get_resp.status_code == 403
+        client.application.config["REQUIRE_EMAIL_2FA"] = True
+        try:
+            username, _ = enrolled_admin
+            _admin_session(client, username)
+            resp = client.post("/api/settings/verify-2fa", json={"code": "111111"})
+            assert resp.status_code == 401
+            get_resp = client.get("/api/settings/email")
+            assert get_resp.status_code == 403
+        finally:
+            client.application.config["REQUIRE_EMAIL_2FA"] = False
 
     def test_verify_2fa_correct_code_unlocks(self, client, enrolled_admin, seeded_email_config):
         username, secret = enrolled_admin
@@ -252,20 +264,28 @@ class TestEmailSettingsRoutes:
         assert resp.get_json() == {"ok": True, "password": "RealPassw0rd!"}
 
     def test_reveal_password_requires_own_stepup(self, client, enrolled_admin, seeded_email_config):
-        username, _ = enrolled_admin
-        _admin_session(client, username)
-        resp = client.post("/api/settings/email/reveal-password")
-        assert resp.status_code == 403
+        client.application.config["REQUIRE_EMAIL_2FA"] = True
+        try:
+            username, _ = enrolled_admin
+            _admin_session(client, username)
+            resp = client.post("/api/settings/email/reveal-password")
+            assert resp.status_code == 403
+        finally:
+            client.application.config["REQUIRE_EMAIL_2FA"] = False
 
     def test_lock_reasserts_gate(self, client, enrolled_admin, seeded_email_config):
-        username, secret = enrolled_admin
-        _admin_session(client, username)
-        code = pyotp.TOTP(secret).now()
-        client.post("/api/settings/verify-2fa", json={"code": code})
-        assert client.get("/api/settings/email").status_code == 200
+        client.application.config["REQUIRE_EMAIL_2FA"] = True
+        try:
+            username, secret = enrolled_admin
+            _admin_session(client, username)
+            code = pyotp.TOTP(secret).now()
+            client.post("/api/settings/verify-2fa", json={"code": code})
+            assert client.get("/api/settings/email").status_code == 200
 
-        client.post("/api/settings/2fa/lock")
-        assert client.get("/api/settings/email").status_code == 403
+            client.post("/api/settings/2fa/lock")
+            assert client.get("/api/settings/email").status_code == 403
+        finally:
+            client.application.config["REQUIRE_EMAIL_2FA"] = False
 
     def test_save_with_masked_password_keeps_existing(self, client, enrolled_admin, seeded_email_config, db_engine):
         from utils.helpers import decrypt_pii
@@ -311,3 +331,64 @@ class TestEmailSettingsRoutes:
         resp = client.get("/email_config", follow_redirects=False)
         assert resp.status_code == 302
         assert "/settings" in resp.headers.get("Location", "")
+
+    def test_legacy_email_config_post_cannot_bypass_stepup_gate(self, client, seed_admin, db_engine):
+        """Regression test: POST /email_config (blueprints/payroll.py) writes
+        the same smtp_pass column as the gated /api/settings/email but, until
+        this fix, had no step-up check at all -- a plain admin session could
+        silently rewrite the outbound SMTP credentials (including setting a
+        brand-new password) without ever passing 2FA, entirely bypassing the
+        gate this whole test file is about. No template posts to this route
+        anymore (only GETs it), so this was a live-but-UI-unreachable hole,
+        not a used flow -- see blueprints/payroll.py's email_config()."""
+        client.application.config["REQUIRE_EMAIL_2FA"] = True
+        try:
+            _admin_session(client, seed_admin["username"])
+            resp = client.post("/email_config", data={
+                "smtp_host": "evil.example.com", "smtp_port": "587",
+                "smtp_user": "attacker@evil.example.com", "smtp_pass": "hijacked",
+            })
+            assert resp.status_code == 403
+            assert "2FA" in resp.get_json()["msg"]
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT smtp_host FROM email_config ORDER BY id DESC LIMIT 1")
+            row = cur.fetchone()
+            cur.close()
+            assert row is None or row[0] != "evil.example.com"
+        finally:
+            client.application.config["REQUIRE_EMAIL_2FA"] = False
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM email_config WHERE smtp_host='evil.example.com'")
+            db_engine.commit()
+            cur.close()
+
+    def test_legacy_email_config_post_still_works_after_stepup(self, client, enrolled_admin, db_engine):
+        """The fix must not break the (now unguarded-only-via-2FA, not
+        unreachable) legacy route for an admin who actually completed the
+        step-up -- same gate, same shared session key as /api/settings/email."""
+        import pyotp
+        client.application.config["REQUIRE_EMAIL_2FA"] = True
+        try:
+            username, secret = enrolled_admin
+            _admin_session(client, username)
+            code = pyotp.TOTP(secret).now()
+            verify_resp = client.post("/api/settings/verify-2fa", json={"code": code})
+            assert verify_resp.get_json()["ok"] is True
+
+            resp = client.post("/email_config", data={
+                "smtp_host": "legit.example.com", "smtp_port": "587",
+                "smtp_user": "bot@legit.example.com", "smtp_pass": "SomePassw0rd!",
+            }, follow_redirects=False)
+            assert resp.status_code == 302
+
+            cur = db_engine.cursor()
+            cur.execute("SELECT smtp_host FROM email_config ORDER BY id DESC LIMIT 1")
+            assert cur.fetchone()[0] == "legit.example.com"
+            cur.close()
+        finally:
+            client.application.config["REQUIRE_EMAIL_2FA"] = False
+            cur = db_engine.cursor()
+            cur.execute("DELETE FROM email_config WHERE smtp_host='legit.example.com'")
+            db_engine.commit()
+            cur.close()

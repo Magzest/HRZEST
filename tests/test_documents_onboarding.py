@@ -725,15 +725,14 @@ class TestOnboardingClose:
     def test_close_onboarding(self, client, seed_admin, employee_onboarding, db_engine):
         _admin_session(client, seed_admin)
         resp = client.post("/onboarding_close", data={
-            "onboarding_id": str(employee_onboarding["id"]),
+            "ob_id": str(employee_onboarding["id"]),
         }, follow_redirects=True)
         assert resp.status_code == 200
         cur = db_engine.cursor()
         cur.execute("SELECT status FROM employee_onboarding WHERE id=%s", (employee_onboarding["id"],))
         row = cur.fetchone()
         cur.close()
-        if row:
-            assert row[0] in ("Completed", "In Progress")
+        assert row[0] == "Completed"
 
 
 # ---------------------------------------------------------------------------

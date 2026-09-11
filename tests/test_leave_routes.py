@@ -414,6 +414,175 @@ class TestBulkLeaveAction:
         cur.close()
 
 
+class TestLeaveApprovalRoleGating:
+    """leave_action/resignation_action/bulk_leave_action/overtime_action and
+    their /api/* twins used to only check @admin_required/@api_required --
+    any authenticated admin-side session or token, regardless of role,
+    could read and approve/reject every employee's leave/resignation/
+    overtime data. They're now role-gated to admin/hr/manager (see
+    blueprints/leave.py's _LEAVE_APPROVER_ROLES) -- a lower-privilege role
+    like soc_analyst must be rejected, while manager (previously
+    indistinguishable from admin here) must still work."""
+
+    def test_soc_analyst_denied_web_leave_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date(2027, 1, 5), "x"))
+        lid = cur.fetchone()[0]
+        _admin_session(client, seed_admin["username"], role="soc_analyst")
+        resp = client.post(f"/leave_action/{lid}", data={"action": "Approved"}, follow_redirects=False)
+        assert resp.status_code == 403
+        cur.execute("SELECT status FROM leave_requests WHERE id=%s", (lid,))
+        assert cur.fetchone()[0] == "Pending"
+        cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+        cur.close()
+
+    def test_manager_role_allowed_web_leave_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date(2027, 1, 6), "x"))
+        lid = cur.fetchone()[0]
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.post(f"/leave_action/{lid}", data={"action": "Approved"}, follow_redirects=False)
+        assert resp.status_code == 302
+        cur.execute("SELECT status FROM leave_requests WHERE id=%s", (lid,))
+        assert cur.fetchone()[0] == "Approved"
+        cur.execute("DELETE FROM attendance WHERE employee_id=%s AND date=%s",
+                    (seed_employee["employee_id"], datetime.date(2027, 1, 6)))
+        cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+        cur.close()
+
+    def test_soc_analyst_denied_web_resignation_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO resignation_requests (employee_id, last_working_day, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date.today() + datetime.timedelta(days=40), "x"))
+        rid = cur.fetchone()[0]
+        _admin_session(client, seed_admin["username"], role="soc_analyst")
+        resp = client.post(f"/resignation_action/{rid}", data={"action": "Accepted"}, follow_redirects=False)
+        assert resp.status_code == 403
+        cur.execute("SELECT status FROM resignation_requests WHERE id=%s", (rid,))
+        assert cur.fetchone()[0] == "Pending"
+        cur.execute("DELETE FROM resignation_requests WHERE id=%s", (rid,))
+        cur.close()
+
+    def test_soc_analyst_denied_web_bulk_leave_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date(2027, 1, 7), "x"))
+        lid = cur.fetchone()[0]
+        _admin_session(client, seed_admin["username"], role="soc_analyst")
+        resp = client.post("/bulk_leave_action", data={
+            "action": "Approved", "leave_ids": [str(lid)],
+        }, follow_redirects=False)
+        assert resp.status_code == 403
+        cur.execute("SELECT status FROM leave_requests WHERE id=%s", (lid,))
+        assert cur.fetchone()[0] == "Pending"
+        cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+        cur.close()
+
+    def test_soc_analyst_denied_web_overtime_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO overtime_records (employee_id, date, shift_end, actual_logout, ot_minutes, ot_pay, status) "
+            "VALUES (%s,%s,'18:00:00','19:00:00',60,0,'Pending') RETURNING id",
+            (seed_employee["employee_id"], datetime.date.today()))
+        oid = cur.fetchone()[0]
+        _admin_session(client, seed_admin["username"], role="soc_analyst")
+        resp = client.post(f"/overtime_action/{oid}", data={"action": "approve"}, follow_redirects=False)
+        assert resp.status_code == 403
+        cur.execute("SELECT status FROM overtime_records WHERE id=%s", (oid,))
+        assert cur.fetchone()[0] == "Pending"
+        cur.execute("DELETE FROM overtime_records WHERE id=%s", (oid,))
+        cur.close()
+
+    def test_soc_analyst_denied_api_leave_list(self, client, seed_admin, db_engine):
+        token = _admin_bearer_token(client, seed_admin)
+        cur = db_engine.cursor()
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.get("/api/leave_requests", headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.close()
+
+    def test_soc_analyst_denied_api_leave_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date(2027, 1, 8), "x"))
+        lid = cur.fetchone()[0]
+        token = _admin_bearer_token(client, seed_admin)
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.post(f"/api/leave_requests/{lid}/action", json={"action": "Approved"},
+                               headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+            cur.execute("SELECT status FROM leave_requests WHERE id=%s", (lid,))
+            assert cur.fetchone()[0] == "Pending"
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+            cur.close()
+
+    def test_manager_role_allowed_api_leave_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date(2027, 1, 9), "x"))
+        lid = cur.fetchone()[0]
+        token = _admin_bearer_token(client, seed_admin)
+        cur.execute("UPDATE admin_users SET role='manager' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.post(f"/api/leave_requests/{lid}/action", json={"action": "Approved"},
+                               headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 200
+            assert resp.get_json()["status"] == "Approved"
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+            cur.close()
+
+    def test_soc_analyst_denied_api_resignation_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO resignation_requests (employee_id, last_working_day, reason) VALUES (%s,%s,%s) RETURNING id",
+            (seed_employee["employee_id"], datetime.date.today() + datetime.timedelta(days=40), "x"))
+        rid = cur.fetchone()[0]
+        token = _admin_bearer_token(client, seed_admin)
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.post(f"/api/resignation_requests/{rid}/action", json={"action": "Accepted"},
+                               headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("DELETE FROM resignation_requests WHERE id=%s", (rid,))
+            cur.close()
+
+    def test_soc_analyst_denied_api_overtime_action(self, client, seed_admin, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO overtime_records (employee_id, date, shift_end, actual_logout, ot_minutes, ot_pay, status) "
+            "VALUES (%s,%s,'18:00:00','19:00:00',60,0,'Pending') RETURNING id",
+            (seed_employee["employee_id"], datetime.date.today()))
+        oid = cur.fetchone()[0]
+        token = _admin_bearer_token(client, seed_admin)
+        cur.execute("UPDATE admin_users SET role='soc_analyst' WHERE username=%s", (seed_admin["username"],))
+        try:
+            resp = client.post(f"/api/overtime/{oid}/action", json={"action": "approve"},
+                               headers={"Authorization": f"Bearer {token}"})
+            assert resp.status_code == 403
+        finally:
+            cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("DELETE FROM overtime_records WHERE id=%s", (oid,))
+            cur.close()
+
+
 class TestApiHolidaysAndLeaveRequests:
     def test_api_holidays(self, client, seed_admin):
         token = _admin_bearer_token(client, seed_admin)
