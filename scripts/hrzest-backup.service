@@ -1,0 +1,33 @@
+[Unit]
+Description=HRzest.com PostgreSQL backup (dump + upload to S3)
+# Best-effort dependency only -- Postgres running in a container (Podman
+# rootless, per compose.yaml) isn't a systemd-tracked unit on the host, so
+# this can't literally require/after it. If Postgres is down when this
+# fires, pg_dump just fails and the run shows as failed in `systemctl
+# status`/`journalctl` -- see the ExecStartPost health check below for a
+# stronger signal than "the unit failed" alone.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Change to match wherever this repo actually lives on the host --
+# deploy.sh's own documented convention is /opt/employee-attendance.
+WorkingDirectory=/opt/employee-attendance
+EnvironmentFile=/opt/employee-attendance/.env
+ExecStart=/opt/employee-attendance/scripts/backup_db.sh
+# Run as the same unprivileged user deploy.sh creates for rootless Podman
+# (see .github/workflows/deploy.yml's SSH deploy step) -- never root.
+User=attendance
+Group=attendance
+
+# Sends a heartbeat to a monitoring endpoint (e.g. a Healthchecks.io /
+# Cronitor / UptimeRobot heartbeat check-in URL) only on SUCCESS, since
+# ExecStartPost does not run after a failed ExecStart. This is what makes
+# a silently-broken backup job actually visible instead of failing quietly
+# for months -- see Wave 2 item #9's monitoring gap. Leave
+# BACKUP_HEARTBEAT_URL unset to skip this without erroring.
+ExecStartPost=/bin/sh -c '[ -z "$BACKUP_HEARTBEAT_URL" ] || curl -fsS -m 10 --retry 2 "$BACKUP_HEARTBEAT_URL" >/dev/null 2>&1 || true'
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=Run HRzest.com database backup daily
+
+[Timer]
+# 02:15 local server time -- comfortably outside typical business hours
+# for this app's target usage (attendance/payroll check-ins cluster around
+# shift start/end times), and far enough after midnight to avoid clashing
+# with any other midnight-anchored cron/timer on the same host.
+OnCalendar=*-*-* 02:15:00
+# If the host was powered off / the container was down at 02:15 (e.g. a
+# reboot for patching), run the missed backup as soon as the timer unit
+# is next active instead of silently skipping a whole day.
+Persistent=true
+# Spreads actual start time up to 5 min to avoid every host in a
+# multi-instance deployment hitting pg_dump at the exact same second --
+# harmless no-op for a single-instance deployment.
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
