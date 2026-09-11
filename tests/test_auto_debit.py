@@ -273,7 +273,7 @@ class TestCancel:
     def test_real_cancel_calls_razorpay_and_updates_mandate(self, client, db_engine, seed_admin, clean_mandate, monkeypatch):
         called = []
         monkeypatch.setattr("blueprints.auto_debit.razorpay_cancel_subscription",
-                             lambda sub_id: called.append(sub_id) or (True, None))
+                             lambda sub_id, **k: called.append(sub_id) or (True, None))
         sub_id = "sub_real_" + secrets.token_hex(4)
         _insert_mandate(db_engine, subscription_id=sub_id, status="active")
         _admin_session(client, seed_admin["username"])
@@ -286,7 +286,7 @@ class TestCancel:
 
     def test_real_cancel_failure_leaves_mandate_active(self, client, db_engine, seed_admin, clean_mandate, monkeypatch):
         monkeypatch.setattr("blueprints.auto_debit.razorpay_cancel_subscription",
-                             lambda sub_id: (False, "Razorpay is down"))
+                             lambda sub_id, **k: (False, "Razorpay is down"))
         sub_id = "sub_real_" + secrets.token_hex(4)
         _insert_mandate(db_engine, subscription_id=sub_id, status="active")
         _admin_session(client, seed_admin["username"])
