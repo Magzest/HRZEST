@@ -46,6 +46,30 @@ _write_queue: "queue.Queue" = queue.Queue(maxsize=_MAX_QUEUE_DEPTH)
 _last_drop_log = 0.0
 _DROP_LOG_INTERVAL_SECONDS = 5.0
 
+# Test-only switch -- see set_synchronous_mode() below.
+_SYNCHRONOUS_MODE = False
+
+
+def set_synchronous_mode(enabled: bool = True):
+    """Test-only: make enqueue_write() run its callable immediately on the
+    caller's thread instead of handing it to the background writer thread.
+    Called once from tests/conftest.py, never from production code.
+
+    Two independent reasons this matters for tests specifically:
+    (1) the background thread started at import time below calls
+    get_db_connection() itself (via _record_login_failure_db/
+    _clear_login_failures_db/_evaluate_session_risk_db) -- fully safe in
+    production, where it just borrows another connection from the pool
+    like any request thread, but a real hazard for any test-side mechanism
+    that assumes DB access during one test happens on one thread.
+    (2) even without that, a test asserting on the write's effect
+    immediately after the triggering request would otherwise race the
+    background thread's own queue/processing delay -- non-deterministic
+    by construction, independent of anything else in the test suite.
+    """
+    global _SYNCHRONOUS_MODE
+    _SYNCHRONOUS_MODE = enabled
+
 
 def enqueue_write(fn, *args, **kwargs):
     """Hand a DB-writing callable off to the background writer thread.
@@ -54,6 +78,13 @@ def enqueue_write(fn, *args, **kwargs):
     request thread, which would defeat the purpose of calling this at all.
     Rate-limits its own drop-warning so a flood can't also flood the logs.
     """
+    if _SYNCHRONOUS_MODE:
+        try:
+            fn(*args, **kwargs)
+        except Exception as e:
+            app_log.error("Synchronous test-mode write failed (%s): %s",
+                          getattr(fn, "__name__", fn), e)
+        return
     try:
         _write_queue.put_nowait((fn, args, kwargs))
     except queue.Full:

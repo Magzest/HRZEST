@@ -57,8 +57,9 @@ from blueprints.auto_debit import auto_debit_bp
 from blueprints.billing_dunning import billing_dunning_bp
 from blueprints.platform_admin import platform_admin_bp
 from blueprints.honeypot_routes import honeypot_bp
-from blueprints.biometric import biometric_bp
 from blueprints.disbursement import disbursement_bp
+from blueprints.hr_dashboard import hr_dashboard_bp
+from blueprints.policies import policies_bp
 flask_app.register_blueprint(health_bp)
 flask_app.register_blueprint(notifications_bp)
 flask_app.register_blueprint(payroll_bp)
@@ -84,8 +85,9 @@ flask_app.register_blueprint(auto_debit_bp)
 flask_app.register_blueprint(billing_dunning_bp)
 flask_app.register_blueprint(platform_admin_bp)
 flask_app.register_blueprint(honeypot_bp)
-flask_app.register_blueprint(biometric_bp)
 flask_app.register_blueprint(disbursement_bp)
+flask_app.register_blueprint(hr_dashboard_bp)
+flask_app.register_blueprint(policies_bp)
 
 # Mirror wsgi.py's WSGI-level tenant-prefix stripping so tests exercise the
 # real path-based tenant resolution (www.hrzest.com/<slug>/...), not just
@@ -122,6 +124,15 @@ flask_app.config["MANDATORY_ADMIN_MFA"] = False
 # expects it to complete immediately. Tests for the gate itself
 # (tests/test_login_mfa.py) re-enable it locally.
 flask_app.config["MANDATORY_LOGIN_MFA"] = False
+
+# Make utils/async_writer.py's background-thread write queue run
+# synchronously for the whole suite -- see set_synchronous_mode()'s
+# docstring. Existing tests that call _write_queue.join() to wait for a
+# drain (test_auth.py, test_auth_routes.py, test_comprehensive.py,
+# test_leave_routes.py) keep working unchanged: with nothing ever queued,
+# that join() returns immediately.
+from utils.async_writer import set_synchronous_mode
+set_synchronous_mode(True)
 
 
 @pytest.fixture(scope="session")
@@ -216,6 +227,176 @@ def _reset_attendance_lockouts(db_engine, _init_test_db):
     cur.close()
 
 
+# ── Per-test database isolation ──────────────────────────────────────────────
+# The suite previously shared one persistent att_test database across every
+# test with no reset between tests -- rows (and mutated config: several
+# tests POST to /settings and never revert it) leaked from one test into the
+# next, making the *number* of failures depend on run order: 256 failures
+# running the whole suite in one process vs. 124 running the same tests
+# split into two, with individual failures passing when run alone (see the
+# audit). Fixed below by snapshotting every table's full row contents right
+# after one-time baseline setup finishes, then restoring that exact
+# snapshot after every single test, pass or fail.
+#
+# Deliberately NOT done by wrapping each test in one shared connection/
+# transaction that rolls back at teardown (the other standard approach for
+# this kind of problem): this app has both a real background writer thread
+# (utils/async_writer.py, started unconditionally at import -- neutralized
+# for tests above via set_synchronous_mode, which was needed for this
+# reason regardless of which approach was used) AND a genuine multi-thread
+# concurrency test (test_seats.py's
+# test_concurrent_signups_at_cap_only_one_succeeds, which spawns two real
+# threads racing two independent real connections against a row lock to
+# prove only one wins). Forcing every get_db_connection() call during a
+# test onto one shared connection would break that test outright and would
+# need permanent special-casing for every future concurrency test. Snapshot/
+# restore instead leaves the app's normal connection pooling completely
+# untouched -- every test still gets real, independent, autocommit
+# connections exactly as production does; only the *starting data* is reset.
+_BASELINE_SCHEMAS = ("public", "att_master")
+
+
+def _list_tables(cur, schema):
+    cur.execute(
+        "SELECT table_name FROM information_schema.tables "
+        "WHERE table_schema=%s AND table_type='BASE TABLE'",
+        (schema,),
+    )
+    return [r[0] for r in cur.fetchall()]
+
+
+def _list_user_schemas(cur):
+    """Every non-system schema currently in the database -- used to detect
+    a schema created mid-test (e.g. blueprints/org.py's
+    create_tenant_schema(), exercised by the org/platform-admin
+    provisioning tests) so it can be dropped at teardown instead of
+    accumulating for the rest of the run."""
+    cur.execute(
+        "SELECT schema_name FROM information_schema.schemata "
+        r"WHERE schema_name NOT LIKE 'pg\_%' ESCAPE '\' AND schema_name != 'information_schema'"
+    )
+    return set(r[0] for r in cur.fetchall())
+
+
+def _serial_columns(cur, schema, table):
+    """[(column_name, sequence_name), ...] for every column in schema.table
+    backed by a sequence (SERIAL/BIGSERIAL/IDENTITY) -- needed because
+    TRUNCATE ... RESTART IDENTITY resets the sequence to its start, but
+    _restore_snapshot() below then re-inserts baseline rows WITH their
+    original id values (bypassing nextval() entirely). Left unfixed, the
+    sequence and the actual max id in the table fall out of sync -- the
+    very next auto-increment insert in the NEXT test would collide with a
+    baseline row's id and fail with a duplicate-key error. See
+    _target_setvals() below."""
+    cur.execute(
+        "SELECT column_name, pg_get_serial_sequence(%s, column_name) "
+        "FROM information_schema.columns WHERE table_schema=%s AND table_name=%s",
+        (f"{schema}.{table}", schema, table),
+    )
+    return [(col, seq) for col, seq in cur.fetchall() if seq]
+
+
+def _target_setvals(cols, rows, serial_cols):
+    """[(sequence_name, value, is_called), ...] -- the exact setval() args
+    each serial column needs after this table is truncated and its baseline
+    rows re-inserted. Computed once in Python from the already-fetched
+    baseline snapshot (max of the captured column, or 1/not-called for an
+    empty table) instead of a round-trip SELECT MAX(...) per column per
+    restore -- restoring the same frozen snapshot every time means this
+    value can never change between calls."""
+    out = []
+    for col, seq in serial_cols:
+        idx = cols.index(col)
+        values = [row[idx] for row in rows if row[idx] is not None]
+        if values:
+            out.append((seq, max(values), True))
+        else:
+            out.append((seq, 1, False))
+    return out
+
+
+def _snapshot_schema(cur, schema):
+    """{table_name: (column_names, [row_tuples], serial_columns)} for every
+    base table in `schema`, captured in the table's natural column order.
+    schema/table names come from information_schema, never request/test
+    input."""
+    snap = {}
+    for table in _list_tables(cur, schema):
+        cur.execute(f'SELECT * FROM "{schema}"."{table}"')  # nosec B608 -- identifiers sourced from information_schema, not external input
+        cols = [d[0] for d in cur.description]
+        snap[table] = (cols, cur.fetchall(), _serial_columns(cur, schema, table))
+    return snap
+
+
+def _restore_snapshot(cur, schema_snapshots, extra_schemas):
+    """Truncate every table across the snapshotted schemas in one statement
+    (Postgres resolves FK ordering for a multi-table TRUNCATE + CASCADE on
+    its own -- no manual dependency sort needed), re-insert exactly the
+    rows captured in schema_snapshots, then re-sync every serial column's
+    sequence in one combined round trip (see _target_setvals() above --
+    with ~80+ serial columns across the schema, one setval() per column
+    was the dominant per-test cost; a single statement chaining all of them
+    cut this fixture's per-test overhead by roughly 3x). Drops any schema
+    created mid-test that wasn't part of the baseline."""
+    for schema in extra_schemas:
+        cur.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')  # nosec B608 -- schema name sourced from information_schema, not external input
+
+    all_tables = [
+        f'"{schema}"."{table}"'
+        for schema, snap in schema_snapshots.items()
+        for table in snap
+    ]
+    if all_tables:
+        cur.execute(f'TRUNCATE {", ".join(all_tables)} RESTART IDENTITY CASCADE')  # nosec B608 -- table list built entirely from information_schema, never external input
+
+    setval_args = []
+    for schema, snap in schema_snapshots.items():
+        for table, (cols, rows, serial_cols) in snap.items():
+            if rows:
+                col_list = ", ".join(f'"{c}"' for c in cols)
+                placeholders = ", ".join(["%s"] * len(cols))
+                insert_sql = (
+                    f'INSERT INTO "{schema}"."{table}" ({col_list}) VALUES ({placeholders})'
+                )  # nosec B608 -- schema/table/columns sourced from information_schema; row values are fully parameterized
+                cur.executemany(insert_sql, rows)
+            setval_args.extend(_target_setvals(cols, rows, serial_cols))
+
+    if setval_args:
+        select_list = ", ".join(["setval(%s, %s, %s)"] * len(setval_args))
+        flat_params = [v for triple in setval_args for v in triple]
+        cur.execute(f"SELECT {select_list}", flat_params)  # nosec B608 -- fixed setval(...) template repeated N times; every value is a bound param
+
+
+@pytest.fixture(scope="session")
+def _db_baseline_snapshot(db_engine, _init_test_db, _reset_login_attempts, _reset_attendance_lockouts):
+    """Captured once, after every one-time baseline fixture above has run
+    (schema/table creation, seeded company_settings/admin/tenant-registry
+    rows, and the one-time login_attempts/attendance_lockouts clears) --
+    this is the exact state every single test should start from, and the
+    exact state every single test's teardown restores.
+    """
+    cur = db_engine.cursor()
+    snap = {schema: _snapshot_schema(cur, schema) for schema in _BASELINE_SCHEMAS}
+    baseline_schemas = _list_user_schemas(cur)
+    cur.close()
+    return snap, baseline_schemas
+
+
+@pytest.fixture(autouse=True)
+def _reset_db_after_test(db_engine, _db_baseline_snapshot):
+    """Restore the exact baseline snapshot after every test, pass or fail --
+    teardown-only; no setup step is needed since the previous test's own
+    teardown (or, for the very first test, _db_baseline_snapshot itself)
+    already leaves the database in the correct starting state.
+    """
+    yield
+    snap, baseline_schemas = _db_baseline_snapshot
+    cur = db_engine.cursor()
+    extra_schemas = _list_user_schemas(cur) - baseline_schemas
+    _restore_snapshot(cur, snap, extra_schemas)
+    cur.close()
+
+
 @pytest.fixture
 def client():
     flask_app.config["TESTING"] = True   # disables CSRF check + rate limits
@@ -292,4 +473,45 @@ def seed_employee(db_engine):
     yield {"employee_id": "TST001", "password": "EmpPass@1", "name": "Test Employee"}
     cur.execute("DELETE FROM employees WHERE employee_id='TST001'")
     cur.execute("DELETE FROM api_tokens WHERE identity='TST001'")
+    cur.close()
+
+
+@pytest.fixture
+def seed_hr_admin(db_engine):
+    """Insert a test HR-role admin_users account; clean up after the test.
+    Mirrors seed_admin above but role='hr' -- for tests of the
+    assigned_hr_username scoping added to attendance/leave/tickets/
+    performance/onboarding/payroll (see utils/helpers.py's
+    hr_scope_column/hr_scope_subquery/hr_scope_denied)."""
+    from utils.auth import generate_password_hash, HR_ROLE
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM login_attempts WHERE identifier='test_hr_admin'")
+    cur.execute(
+        "INSERT INTO admin_users (username, password, role, email, is_active) VALUES (%s,%s,%s,%s,1) "
+        "ON CONFLICT (username) DO NOTHING",
+        ("test_hr_admin", generate_password_hash("Test@1234"), HR_ROLE, "hr@test.local"),
+    )
+    yield {"username": "test_hr_admin", "password": "Test@1234"}
+    cur.execute("DELETE FROM admin_users WHERE username='test_hr_admin'")
+    cur.close()
+
+
+@pytest.fixture
+def seed_assigned_employee(db_engine, seed_hr_admin):
+    """A second test employee whose assigned_hr_username is seed_hr_admin's
+    username -- pairs with seed_employee (TST001, left unassigned) so an
+    HR-scoping test can seed one employee IN scope and one OUT of scope."""
+    from utils.auth import generate_password_hash
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM login_attempts WHERE identifier='TST002'")
+    cur.execute(
+        "INSERT INTO employees (employee_id, name, email, password, force_pin_change, assigned_hr_username) "
+        "VALUES (%s,%s,%s,%s,0,%s) "
+        "ON CONFLICT (employee_id) DO UPDATE SET assigned_hr_username=EXCLUDED.assigned_hr_username",
+        ("TST002", "Test Assigned Employee", "emp2@test.local",
+         generate_password_hash("EmpPass@1"), seed_hr_admin["username"]),
+    )
+    yield {"employee_id": "TST002", "password": "EmpPass@1", "name": "Test Assigned Employee"}
+    cur.execute("DELETE FROM employees WHERE employee_id='TST002'")
+    cur.execute("DELETE FROM api_tokens WHERE identity='TST002'")
     cur.close()
