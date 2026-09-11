@@ -220,7 +220,11 @@ if not _raw_origins:
     _allowed_origins = "*" if _app_env == "development" else []
 elif _raw_origins == "*":
     if _app_env != "development":
-        app_log.warning(
+        # CRITICAL (not just WARNING) -- this is a live CORS hole, not a
+        # cosmetic misconfiguration, so it belongs at the same severity as
+        # the ALLOWED_ORIGINS-unset case above rather than something a log
+        # pipeline might filter out at WARNING level.
+        app_log.critical(
             "ALLOWED_ORIGINS='*' in production allows all origins for /api/*. "
             "Restrict it to your domain(s)."
         )
@@ -229,6 +233,74 @@ elif _raw_origins == "*":
 else:
     _allowed_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()]
 CORS(app, resources={r"/api/*": {"origins": _allowed_origins}})
+
+
+# ── Production-safety startup checks ───────────────────────────────────────────
+# Deliberately warn-loudly rather than refuse to boot: a hard crash on an
+# already-running production deployment (e.g. this check shipping in a
+# routine deploy) is a worse outage than a misconfigured-but-running app,
+# and app_log.critical() above already writes to stdout unconditionally
+# (see the StreamHandler setup at the top of this file), so it can't be
+# silently swallowed the way a log line at a filtered level could.
+def check_production_safety(app_env, clamav_host, malware_scan_enabled=True,
+                             ai_assistant_configured=True, logger=None):
+    """Pure-ish (env values passed in, not read internally) so this can be
+    unit-tested directly without reloading this module or its side effects
+    (CORS registration, rate limiter, etc.) against the shared Flask app
+    instance -- see tests/test_production_safety_checks.py. Called once
+    below with the real environment at import time."""
+    logger = logger or app_log
+    if app_env == "development":
+        return
+    # CLAMAV_HOST defaults to "clamav" (the compose.yaml service name) --
+    # in a non-containerized production deploy that was never overridden,
+    # every single document/photo upload silently fails closed (rejected)
+    # the moment the first admin or employee tries one (utils/helpers.py's
+    # _scan_for_malware(), which fails closed whenever APP_ENV != "development"
+    # and the scanner is unreachable) -- but nothing says so until then. This
+    # surfaces that risk at boot instead of leaving it to be discovered as a
+    # confusing support ticket. Skipped entirely if malware scanning was
+    # deliberately turned off (MALWARE_SCAN_ENABLED=false) -- that's a clean,
+    # intentional choice, not a misconfiguration to warn about.
+    if malware_scan_enabled and not clamav_host:
+        logger.critical(
+            "APP_ENV=production but CLAMAV_HOST is not set (defaulting to 'clamav', the "
+            "compose.yaml service name). If no ClamAV instance is actually reachable at "
+            "that host, EVERY document/photo upload will be rejected (utils/helpers.py's "
+            "_scan_for_malware() fails closed outside development). Set CLAMAV_HOST to a "
+            "reachable ClamAV instance, or set MALWARE_SCAN_ENABLED=false if this "
+            "deployment intentionally runs without malware scanning."
+        )
+    # Unlike the ClamAV check above, an unconfigured AI assistant fails OPEN,
+    # not closed: utils/ai_assistant.py's ask_assistant() just returns a
+    # friendly "isn't configured yet" message forever -- nothing crashes,
+    # nothing 500s, no upload gets rejected. That's exactly why it needs a
+    # boot-time warning instead of relying on someone noticing: there's no
+    # error to trip an alert on, just a chat feature that quietly never
+    # works for any employee, indefinitely, until an admin happens to try it
+    # themselves. Not a fail-secure case like Razorpay's test-key-in-
+    # production check (utils/razorpay_utils.py) -- there's no unsafe
+    # fallback behavior to refuse here, just a missing feature -- so this
+    # warns rather than raising/refusing to start.
+    if not ai_assistant_configured:
+        logger.critical(
+            "APP_ENV=production but no AI assistant backend is configured (none of "
+            "N8N_WEBHOOK_URL, GEMINI_API_KEY, ANTHROPIC_API_KEY is set). The HR "
+            "Assistant chat on the employee portal will silently show every employee "
+            "the same \"isn't configured yet\" message instead of answering. Set one "
+            "of those three env vars, or ignore this if the assistant is "
+            "intentionally disabled for this deployment."
+        )
+
+
+_malware_scan_enabled_at_boot = os.environ.get("MALWARE_SCAN_ENABLED", "true").strip().lower() not in ("false", "0", "no")
+_ai_assistant_configured_at_boot = bool(
+    os.environ.get("N8N_WEBHOOK_URL", "").strip()
+    or os.environ.get("GEMINI_API_KEY", "").strip()
+    or os.environ.get("ANTHROPIC_API_KEY", "").strip()
+)
+check_production_safety(_app_env, os.environ.get("CLAMAV_HOST"), _malware_scan_enabled_at_boot,
+                         _ai_assistant_configured_at_boot)
 
 # ── Redis (optional shared cache — rate limiter + WAF auto-ban counters) ──────
 # PostgreSQL remains the only durable datastore this app runs; Redis here is
