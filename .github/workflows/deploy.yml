@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   lint:
@@ -61,7 +61,7 @@ jobs:
 
       - name: Check static assets exist
         run: |
-          for f in static/shared.css static/darkmode.js static/jsQR.min.js; do
+          for f in static/shared.min.css static/darkmode.min.js static/jsQR.min.js; do
             [ -f "$f" ] && echo "✅ $f" || (echo "❌ $f missing" && exit 1)
           done
 
@@ -353,8 +353,8 @@ jobs:
     name: Deploy to production
     runs-on: ubuntu-latest
     needs: podman
-    # Only deploy on a direct push to master, never on pull_request runs
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    # Only deploy on a direct push to main, never on pull_request runs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production   # requires approval from a repo admin before deploy runs
 
     steps:
@@ -373,7 +373,7 @@ jobs:
             set -e
             export XDG_RUNTIME_DIR="/run/user/$(id -u)"
             cd /opt/employee-attendance
-            git pull origin master
+            git pull origin main
             COMPOSE="podman-compose -f compose.yaml -f compose.prod.yaml"
             $COMPOSE build app
             $COMPOSE up -d --no-deps app nginx certbot

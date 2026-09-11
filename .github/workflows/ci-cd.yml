@@ -2,9 +2,9 @@ name: Total Automation CI/CD Pipeline
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 env:
   AWS_REGION: us-east-1
@@ -82,7 +82,7 @@ jobs:
     name: Build & Push to ECR
     needs: security-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     outputs:
       image: ${{ steps.build-image.outputs.image }}
     steps:

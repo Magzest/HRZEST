@@ -2,9 +2,9 @@ name: Security & Code Quality CI/CD Pipeline
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ main ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ main ]
 
 jobs:
   security_audit:
