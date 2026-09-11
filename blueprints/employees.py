@@ -13,11 +13,11 @@ from flask import (
 from extensions import app, app_log, limiter, log_security_event
 from database import get_db_connection, transaction
 from qr_generator import generate_qr
-from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required
+from utils.auth import admin_required, generate_password_hash, api_required, role_required, api_role_required, HR_ROLE
 from utils.helpers import (
     tpath, _audit, _db, _validate_image_file, decrypt_pii, decrypt_pii_date, encrypt_pii, validate_emp_id,
     validate_employee_email_domain, get_company_settings, get_pending_counts,
-    add_employee_seat_cap_check, _safe_app_url,
+    add_employee_seat_cap_check, _safe_app_url, hr_scope_denied as _hr_scope_denied,
 )
 from utils.dlp import has_pii_clearance, mask_tail
 from utils.email_utils import get_email_config, send_email_smtp
@@ -155,6 +155,16 @@ def admin_action():
     return redirect(tpath("/admin"))
 
 
+# _hr_scope_denied is utils/helpers.py's hr_scope_denied (imported above under
+# this name so every existing call site below -- add_employee/edit_employee/
+# employee_detail/etc. -- needed no change). One difference from the shared
+# version's docstring worth noting here: an HR session viewing its OWN record
+# (emp_id == admin_username) is always allowed even if that row isn't self-
+# assigned -- this is what backs templates/admin_base.html's "My Profile"
+# sidebar link, since an HR admin's own assigned_hr_username is usually NULL
+# or set to a different HR, not themselves.
+
+
 @employees_bp.route("/delete_employee/<emp_id>", methods=["POST"])
 @role_required("admin")
 @limiter.limit("10 per minute")
@@ -192,6 +202,8 @@ def delete_employee(emp_id):
 @employees_bp.route("/edit_employee/<emp_id>", methods=["GET"])
 @admin_required
 def edit_employee_page(emp_id):
+    if _hr_scope_denied(emp_id):
+        return "Employee not found", 404
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
@@ -208,6 +220,8 @@ def edit_employee_page(emp_id):
 @employees_bp.route("/employee_profile/<emp_id>")
 @admin_required
 def employee_profile(emp_id):
+    if _hr_scope_denied(emp_id):
+        return "Employee not found", 404
     today = datetime.date.today()
     with _db() as (cursor, db):
         cursor.execute("""
@@ -327,6 +341,9 @@ def employee_profile(emp_id):
 @admin_required
 def edit_employee():
     emp_id = request.form["emp_id"].strip()
+    if _hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath("/employees"))
     name = request.form.get("name", "").strip()
     email = request.form.get("email", "").strip() or None
     role = request.form.get("role", "").strip() or None
@@ -360,27 +377,55 @@ def edit_employee():
     # change -- this is HR display data, not admin_users.role (the real
     # privilege field, which has no write path at all outside account
     # creation), but it had no audit trail on any write path before.
-    cursor.execute("SELECT role FROM employees WHERE employee_id=%s", (emp_id,))
+    cursor.execute("SELECT role, assigned_hr_username FROM employees WHERE employee_id=%s", (emp_id,))
     _prev_row = cursor.fetchone()
     _prev_role = _prev_row[0] if _prev_row else None
+    _prev_hr = _prev_row[1] if _prev_row else None
+
+    # Reassigning which HR manages this employee is an admin-only action --
+    # an HR-scoped editor (already confirmed above to own this employee)
+    # never touches assigned_hr_username here, so they can't hand their
+    # own employee off to a different HR account. An admin editor may
+    # reassign to any real, active HR account, or clear it back to
+    # unassigned; anything else in the form is silently ignored (not
+    # trusted as free text) rather than erroring the whole save.
+    _reassign_sql = ""
+    _reassign_params = ()
+    _new_hr = _prev_hr
+    if session.get("admin_role") != HR_ROLE:
+        _new_hr_raw = request.form.get("assigned_hr_username", "").strip()
+        if _new_hr_raw:
+            cursor.execute("SELECT 1 FROM admin_users WHERE username=%s AND role=%s AND COALESCE(is_active,1)=1",
+                           (_new_hr_raw, HR_ROLE))
+            if cursor.fetchone():
+                _reassign_sql = ", assigned_hr_username=%s"
+                _reassign_params = (_new_hr_raw,)
+                _new_hr = _new_hr_raw
+        else:
+            _reassign_sql = ", assigned_hr_username=NULL"
+            _new_hr = None
+
     cursor.execute(
         "UPDATE employees SET name=%s, email=%s, role=%s, date_of_joining=%s, "
         "department=%s, manager_name=%s, manager_id=%s, phone=%s, gender=%s, dob=%s, blood_group=%s, "
         "shift_id=%s, address=%s, city=%s, state=%s, pincode=%s, "
         "emergency_contact_name=%s, emergency_contact_phone=%s, emergency_contact_relation=%s, "
-        "work_mode=%s, work_lat=%s, work_lon=%s "
+        f"work_mode=%s, work_lat=%s, work_lon=%s{_reassign_sql} "  # nosec B608 -- _reassign_sql is a hardcoded literal, never user input
         "WHERE employee_id=%s",
         (name, email, role, date_of_joining, department, manager_name, manager_id,
          phone, gender, dob, blood_group, shift_id,
          address, city, state, pincode,
          ec_name, ec_phone, ec_rel,
-         work_mode, work_lat, work_lon, emp_id)
+         work_mode, work_lat, work_lon) + _reassign_params + (emp_id,)
     )
     db.commit()
     cursor.close()
     db.close()
     if role != _prev_role:
         _audit("update_employee_role", "employees", emp_id, f"role changed from {_prev_role!r} to {role!r}")
+    if _reassign_sql and _new_hr != _prev_hr:
+        _audit("reassign_employee_hr", "employees", emp_id,
+               f"assigned HR changed from {_prev_hr or 'Unassigned'!r} to {_new_hr or 'Unassigned'!r}")
     flash(f"Employee '{emp_id}' updated successfully.", "success")
     return redirect(tpath("/employees"))
 
@@ -388,6 +433,8 @@ def edit_employee():
 @employees_bp.route("/api/employee_info/<emp_id>")
 @admin_required
 def api_employee_info(emp_id):
+    if _hr_scope_denied(emp_id):
+        return jsonify({"error": "not found"}), 404
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute(
@@ -396,7 +443,7 @@ def api_employee_info(emp_id):
         "phone, gender, dob, blood_group, shift_id, "
         "address, city, state, pincode, "
         "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
-        "COALESCE(manager_id,'') "
+        "COALESCE(manager_id,''), assigned_hr_username "
         "FROM employees WHERE employee_id=%s", (emp_id,)
     )
     row = cursor.fetchone()
@@ -407,7 +454,7 @@ def api_employee_info(emp_id):
     (eid, name, role, email, doj, wm, wlat, wlon, dept, mgr, face_image, qr_code,
      phone, gender, dob, blood_group, shift_id,
      address, city, state, pincode,
-     ec_name, ec_phone, ec_rel, mgr_id) = row
+     ec_name, ec_phone, ec_rel, mgr_id, assigned_hr_username) = row
     dob_date = decrypt_pii_date(dob)
     return jsonify({
         "emp_id": eid,
@@ -421,6 +468,7 @@ def api_employee_info(emp_id):
         "department": dept or "",
         "manager_name": mgr or "",
         "manager_id": mgr_id or "",
+        "assigned_hr_username": assigned_hr_username or "",
         "has_photo": bool(face_image and os.path.exists(face_image)),
         "has_qr": bool(qr_code and os.path.exists(qr_code)),
         "phone": phone or "",
@@ -444,43 +492,62 @@ def view_employees():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     active_cid = session.get("active_company_id")
+
+    # HR-role sessions (a real admin_users role='hr' account, or an
+    # employee auto-routed here because their own employees.role is
+    # exactly "HR" -- see blueprints/auth.py's _finish_employee_login) see
+    # ONLY the employees explicitly assigned to them, not the whole
+    # company -- 'admin' (and any other admin-side role reaching this
+    # @admin_required page) keeps the unscoped, full-company view exactly
+    # as before. An employee with no assigned_hr_username is invisible to
+    # every HR session until an admin assigns one; it never silently
+    # defaults to "visible to all HR."
+    is_hr_scoped = session.get("admin_role") == HR_ROLE
+    current_hr_username = session.get("admin_username")
+    _hr_filter = " AND e.assigned_hr_username = %s" if is_hr_scoped else ""
+
     if active_cid:
-        cursor.execute("""
+        _params = (active_cid, current_hr_username) if is_hr_scoped else (active_cid,)
+        cursor.execute(f"""
             SELECT e.employee_id, e.name, e.role, e.email, e.date_of_joining,
                    COUNT(a.date)  AS total_days,
                    MAX(a.date)    AS last_seen,
                    e.work_mode, e.work_lat, e.work_lon,
                    e.face_image, e.qr_code,
                    e.department, e.phone, e.gender,
-                   s.name AS shift_name, e.shift_id
+                   s.name AS shift_name, e.shift_id, e.assigned_hr_username
             FROM employees e
             LEFT JOIN attendance a ON e.employee_id = a.employee_id
             LEFT JOIN shifts     s ON e.shift_id = s.id
-            WHERE e.company_id = %s
+            WHERE e.company_id = %s {_hr_filter}
             GROUP BY e.employee_id, e.name, e.role, e.email, e.date_of_joining,
                      e.work_mode, e.work_lat, e.work_lon, e.face_image, e.qr_code,
-                     e.department, e.phone, e.gender, s.name, e.shift_id
+                     e.department, e.phone, e.gender, s.name, e.shift_id, e.assigned_hr_username
             ORDER BY e.name
             LIMIT 500
-        """, (active_cid,))
+        """, _params)  # nosec B608 -- _hr_filter is a hardcoded literal chosen by is_hr_scoped, never user input
     else:
-        cursor.execute("""
+        _params = (current_hr_username,) if is_hr_scoped else ()
+        # WHERE 1=1 (not a bare WHERE) so _hr_filter's leading " AND" is
+        # always valid whether or not the company-scoping branch above ran.
+        cursor.execute(f"""
             SELECT e.employee_id, e.name, e.role, e.email, e.date_of_joining,
                    COUNT(a.date)  AS total_days,
                    MAX(a.date)    AS last_seen,
                    e.work_mode, e.work_lat, e.work_lon,
                    e.face_image, e.qr_code,
                    e.department, e.phone, e.gender,
-                   s.name AS shift_name, e.shift_id
+                   s.name AS shift_name, e.shift_id, e.assigned_hr_username
             FROM employees e
             LEFT JOIN attendance a ON e.employee_id = a.employee_id
             LEFT JOIN shifts     s ON e.shift_id = s.id
+            WHERE 1=1 {_hr_filter}
             GROUP BY e.employee_id, e.name, e.role, e.email, e.date_of_joining,
                      e.work_mode, e.work_lat, e.work_lon, e.face_image, e.qr_code,
-                     e.department, e.phone, e.gender, s.name, e.shift_id
+                     e.department, e.phone, e.gender, s.name, e.shift_id, e.assigned_hr_username
             ORDER BY e.name
             LIMIT 500
-        """)
+        """, _params)  # nosec B608 -- _hr_filter is a hardcoded literal chosen by is_hr_scoped, never user input
     employees_raw = cursor.fetchall()
 
     cursor.execute("SELECT DISTINCT employee_id FROM resignation_requests WHERE status='Accepted'")
@@ -554,14 +621,70 @@ def view_employees():
     )
     departments = [r[0] for r in cursor.fetchall()]
 
-    pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
+    if is_hr_scoped:
+        # get_pending_counts() (below, for the unscoped case) is a shared,
+        # cached, company-wide helper reused by other pages (e.g. /admin) --
+        # deliberately NOT reused/modified here, since scoping IT to one
+        # HR's assignees would silently corrupt the cache for every other
+        # caller that wants the real company-wide count. This runs its own
+        # always-fresh, assignment-scoped queries instead.
+        _assignee_sub = "employee_id IN (SELECT employee_id FROM employees WHERE assigned_hr_username=%s)"
+        cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' AND {_assignee_sub}",
+                       (current_hr_username,))  # nosec B608 -- _assignee_sub is a hardcoded literal, not user input
+        pending_leaves = cursor.fetchone()[0]
+        cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' AND {_assignee_sub}",
+                       (current_hr_username,))  # nosec B608
+        pending_resignations = cursor.fetchone()[0]
+        cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status IN ('Open','In Progress') AND {_assignee_sub}",
+                       (current_hr_username,))  # nosec B608
+        pending_tickets = cursor.fetchone()[0]
+    else:
+        pending_leaves, pending_resignations, pending_tickets = get_pending_counts()
     cursor.execute("SELECT id, name FROM companies ORDER BY name")
     companies = cursor.fetchall()
     cursor.execute("SELECT id, name FROM onboarding_templates WHERE is_active=1 ORDER BY name")
     onboarding_templates = cursor.fetchall()
+    cursor.execute("SELECT username FROM admin_users WHERE role=%s AND COALESCE(is_active,1)=1 ORDER BY username",
+                   (HR_ROLE,))
+    hr_accounts = [r[0] for r in cursor.fetchall()]
+
+    # Onboarding summary for this page's stats row -- this page is where
+    # HR-role sessions land (see blueprints/auth.py's _finish_employee_login
+    # and app.py's _is_hr), so it doubles as their dashboard; same query
+    # shape as blueprints/admin_views.py's /admin dashboard, scoped to
+    # assigned employees only for an HR-role viewer.
+    try:
+        _ob_filter = "AND employee_id IN (SELECT employee_id FROM employees WHERE assigned_hr_username=%s)" if is_hr_scoped else ""
+        _ob_params = (current_hr_username,) if is_hr_scoped else ()
+        cursor.execute(f"""
+            SELECT
+              SUM(CASE WHEN status != 'Completed' THEN 1 ELSE 0 END),
+              SUM(CASE WHEN status != 'Completed' AND due_date < CURRENT_DATE THEN 1 ELSE 0 END)
+            FROM employee_onboarding
+            WHERE 1=1 {_ob_filter}
+        """, _ob_params)  # nosec B608 -- _ob_filter is a hardcoded literal chosen by is_hr_scoped, never user input
+        _ob = cursor.fetchone()
+        ob_active = int(_ob[0] or 0)
+        ob_overdue = int(_ob[1] or 0)
+    except Exception:
+        ob_active = ob_overdue = 0
+
     cursor.close()
     db.close()
+
+    # ?view=dashboard used to render a lightweight inline stub here --
+    # superseded by blueprints/hr_dashboard.py's real /hr_dashboard route
+    # (see templates/admin_base.html's sidebar "Dashboard" link, updated to
+    # point straight there). Kept as a redirect, not deleted, so any stale
+    # bookmark/link to the old ?view=dashboard URL still resolves.
+    if request.args.get("view") == "dashboard":
+        return redirect(tpath("/hr_dashboard"))
+
     return render_template("employees.html",
+                           ob_active=ob_active,
+                           ob_overdue=ob_overdue,
+                           is_hr_scoped=is_hr_scoped,
+                           hr_accounts=hr_accounts,
                            employees=employees,
                            shifts=shifts,
                            shift_full=shift_full,
@@ -606,6 +729,8 @@ def api_departments():
 @employees_bp.route("/employee_detail/<emp_id>")
 @admin_required
 def employee_detail(emp_id):
+    if _hr_scope_denied(emp_id):
+        return "Employee not found", 404
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
@@ -811,8 +936,13 @@ def add_employee_page():
     edu_institutions = request.form.getlist("institution[]")
     edu_years = request.form.getlist("year_of_passing[]")
     edu_pcts = request.form.getlist("percentage[]")
-    salary_per_day_raw = request.form.get("salary_per_day", "").strip()
-    salary_per_day = float(salary_per_day_raw) if salary_per_day_raw else None
+    # The Add Employee form collects a monthly figure (matches how payroll
+    # is actually quoted/discussed) and converts it to salary_per_day using
+    # the same 26-working-day divisor the rest of payroll already assumes
+    # (see blueprints/payroll.py's monthly_ctc <-> salary_per_day conversions).
+    monthly_salary_raw = request.form.get("monthly_salary", "").strip()
+    monthly_salary = float(monthly_salary_raw) if monthly_salary_raw else None
+    salary_per_day = round(monthly_salary / 26, 2) if monthly_salary is not None else None
 
     if not name or not emp_id:
         flash("Name and Employee ID are required.", "error")
@@ -831,6 +961,25 @@ def add_employee_page():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
+
+    # Which HR this new employee is managed by. An HR-role creator can only
+    # ever assign their own account -- never trusts a form value for this,
+    # so an HR session can't hand its own employees off to a DIFFERENT HR
+    # account it doesn't control. An admin (or other non-HR admin-side
+    # role) may pick any real, active HR account from the form, validated
+    # against admin_users itself rather than trusted as free text; leaving
+    # it unset is also valid (the employee stays unassigned/admin-only
+    # until an admin assigns one later).
+    if session.get("admin_role") == HR_ROLE:
+        assigned_hr_username = session.get("admin_username")
+    else:
+        assigned_hr_username = request.form.get("assigned_hr_username", "").strip() or None
+        if assigned_hr_username:
+            cursor.execute("SELECT 1 FROM admin_users WHERE username=%s AND role=%s AND COALESCE(is_active,1)=1",
+                           (assigned_hr_username, HR_ROLE))
+            if not cursor.fetchone():
+                assigned_hr_username = None
+
     # Auto-increment emp_id if already taken
     cursor.execute("SELECT employee_id FROM employees WHERE employee_id=%s", (emp_id,))
     if cursor.fetchone():
@@ -922,15 +1071,15 @@ def add_employee_page():
                         "shift_id, gender, dob, blood_group, address, city, state, pincode, "
                         "emergency_contact_name, emergency_contact_phone, emergency_contact_relation, "
                         "aadhar_number, pan_number, bank_name, bank_account, bank_ifsc, uan_number, "
-                        "force_pin_change) "
+                        "assigned_hr_username, force_pin_change) "
                         "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,"
-                        "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
+                        "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)",
                         (name, emp_id, email, role, phone, filepath, qr_path, hashed_pwd,
                          date_of_joining, work_mode, work_lat, work_lon, company_id,
                          _mgr_id, _mgr_name, _dept, shift_id,
                          gender, dob, blood_group, address, city, state, pincode,
                          ec_name, ec_phone, ec_relation,
-                         aadhar, pan, bank_name, bank_account, bank_ifsc, uan)
+                         aadhar, pan, bank_name, bank_account, bank_ifsc, uan, assigned_hr_username)
                     )
             if _seat_error:
                 cursor.close()
@@ -951,9 +1100,9 @@ def add_employee_page():
                     )
             if salary_per_day is not None:
                 cursor.execute(
-                    "INSERT INTO salary_config (employee_id, salary_per_day) VALUES (%s,%s) "
-                    "ON CONFLICT (employee_id) DO UPDATE SET salary_per_day=%s",
-                    (emp_id, salary_per_day, salary_per_day)
+                    "INSERT INTO salary_config (employee_id, salary_per_day, monthly_ctc) VALUES (%s,%s,%s) "
+                    "ON CONFLICT (employee_id) DO UPDATE SET salary_per_day=%s, monthly_ctc=%s",
+                    (emp_id, salary_per_day, monthly_salary, salary_per_day, monthly_salary)
                 )
             db.commit()
             registered = True
@@ -1480,8 +1629,11 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
                               "EMPLOYEE ID CARD", "Attendance Management System")
     fd.rectangle([(0, 108), (CW, 113)], fill=_IDC_GOLD)
 
-    fd.rectangle([(0, 113), (CW, 370)], fill=_IDC_LGRAY)
-    PH_W, PH_H = 160, 190
+    # PH_H trimmed from the original 190 (and everything below shifted up to
+    # match) to help make room for the front QR's new, much larger size
+    # further down -- still a clearly recognizable ID photo, just not as tall.
+    fd.rectangle([(0, 113), (CW, 340)], fill=_IDC_LGRAY)
+    PH_W, PH_H = 160, 160
     PH_X = CW // 2 - PH_W // 2
     PH_Y = 128
     fd.rounded_rectangle([(PH_X - 5, PH_Y - 5), (PH_X + PH_W + 5, PH_Y + PH_H + 5)], radius=8, fill=_IDC_GOLD)
@@ -1495,27 +1647,47 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
         ini = row[1][0].upper() if row and row[1] else "?"
         _idc_center_text(fd, ini, _idc_font(56, bold=True), CW, PH_Y + PH_H // 2 - 38, _IDC_WHITE)
 
-    _idc_center_text(fd, (row[1] or "Unknown")[:24], _idc_font(18, bold=True), CW, 328, _IDC_DGRAY)
-    _idc_center_text(fd, (row[2] or "Employee")[:28], _idc_font(12), CW, 352, _IDC_MGRAY)
-    fd.rectangle([(40, 372), (CW - 40, 374)], fill=_IDC_PALE)
+    _idc_center_text(fd, (row[1] or "Unknown")[:24], _idc_font(18, bold=True), CW, 298, _IDC_DGRAY)
+    _idc_center_text(fd, (row[2] or "Employee")[:28], _idc_font(12), CW, 322, _IDC_MGRAY)
+    fd.rectangle([(40, 342), (CW - 40, 344)], fill=_IDC_PALE)
 
+    # "Blood Group" used to also appear as a plain row here AND as the red
+    # badge below (both reading the same row[7]) -- dropped from this list
+    # (the badge stays) both to stop showing it twice and to free up the
+    # room the much bigger QR below now needs.
     info_rows = [
         ("Employee ID", row[0] if row else "-"),
         ("Department", department or "-"),
         ("Email", row[3] if row and row[3] else "-"),
         ("Phone", row[8] if row and row[8] else "-"),
-        ("Blood Group", row[7] if row and row[7] else "-"),
     ]
+    ROW_H = 38
     y = 390
     for i, (lbl, val) in enumerate(info_rows):
         if i % 2 == 0:
-            fd.rectangle([(0, y - 4), (CW, y + 38)], fill=_IDC_LGRAY)
+            fd.rectangle([(0, y - 4), (CW, y + ROW_H - 6)], fill=_IDC_LGRAY)
         _idc_center_text(fd, lbl, _idc_font(10), CW, y + 2, _IDC_MGRAY)
         _idc_center_text(fd, str(val)[:34], _idc_font(13, bold=True), CW, y + 17, _IDC_DGRAY)
-        y += 44
+        y += ROW_H
+
+    # The front QR is now the card's ONLY QR (the back's copy was removed --
+    # see _render_default_back) and sized for real phone-camera scanning
+    # (~2x the old convenience-copy size), so it needs to be guaranteed a
+    # fixed amount of room at the bottom -- reserved below via max_qr_y --
+    # rather than just trailing whatever optional content (blood group,
+    # office address) happened to be on file. The office address is only
+    # drawn when it actually fits above that reserved zone; a long address
+    # on an employee who also has a blood group on file is the one
+    # combination tight enough that it may be omitted here (still shown in
+    # full on /employee_detail and everywhere else -- this is a printed
+    # card's limited space, not the record itself).
+    QS_SMALL = 120
+    QR_MARGIN = 12
+    qr_block_h = QS_SMALL + 2 * QR_MARGIN
+    max_qr_y = (CH - 70) - qr_block_h
 
     bg_val = row[7] if row and row[7] else None
-    addr_y = y + 8
+    addr_y = y + 6
     if bg_val:
         font_bg = _idc_font(13, bold=True)
         text_w = _idc_text_width(fd, bg_val, font_bg)
@@ -1527,38 +1699,34 @@ def _render_default_front(emp_id, row, company_name=None, logo_path=None, compan
         icon_x, icon_y = bx + 14, by + (32 - icon_h) // 2
         _idc_blood_drop(fd, icon_x, icon_y, icon_w, icon_h, _IDC_WHITE)
         fd.text((icon_x + icon_w + gap, by + 8), _idc_safe_text(bg_val), font=font_bg, fill=_IDC_WHITE)
-        addr_y = by + 48
+        addr_y = by + 40
 
     if company_address:
         addr_font = _idc_font(11)
-        addr_y += 12
-        fd.rectangle([(60, addr_y), (CW - 60, addr_y + 2)], fill=_IDC_PALE)
-        addr_y += 14
-        _idc_center_text(fd, "OFFICE ADDRESS", _idc_font(9, bold=True), CW, addr_y, _IDC_MGRAY)
-        addr_y += 18
-        for line in _idc_wrap_text(fd, company_address, addr_font, CW - 80, max_lines=2):
-            _idc_center_text(fd, line, addr_font, CW, addr_y, _IDC_DGRAY)
-            addr_y += 18
+        addr_lines = _idc_wrap_text(fd, company_address, addr_font, CW - 80, max_lines=2)
+        addr_block_h = 10 + 12 + 16 * len(addr_lines)
+        if addr_lines and addr_y + addr_block_h + 6 <= max_qr_y:
+            addr_y += 10
+            fd.rectangle([(60, addr_y), (CW - 60, addr_y + 2)], fill=_IDC_PALE)
+            addr_y += 12
+            _idc_center_text(fd, "OFFICE ADDRESS", _idc_font(9, bold=True), CW, addr_y, _IDC_MGRAY)
+            addr_y += 16
+            for line in addr_lines:
+                _idc_center_text(fd, line, addr_font, CW, addr_y, _IDC_DGRAY)
+                addr_y += 16
 
-    # Small QR, front bottom -- a compact convenience copy of the full-size
-    # scannable one on the back (which keeps the "Scan to Mark Attendance"
-    # label and info block). Anchored off addr_y so it always sits below
-    # whatever optional content (blood group badge, office address) came
-    # before it, rather than a fixed y that could overlap on longer cards.
     qr_path = os.path.join("static", "qrcodes", emp_id + ".png")
     if not os.path.exists(qr_path):
         qr_path = generate_qr(emp_id)
-    QS_SMALL = 60
     qr_x = CW // 2 - QS_SMALL // 2
-    qr_y = addr_y + 8
+    qr_y = min(addr_y + 6, max_qr_y)
     try:
-        fd.rounded_rectangle([(qr_x - 6, qr_y - 6), (qr_x + QS_SMALL + 6, qr_y + QS_SMALL + 6)], radius=6, fill=_IDC_WHITE)
+        fd.rounded_rectangle([(qr_x - QR_MARGIN, qr_y - QR_MARGIN), (qr_x + QS_SMALL + QR_MARGIN, qr_y + QS_SMALL + QR_MARGIN)], radius=10, fill=_IDC_WHITE)
         qr_img = Image.open(qr_path).convert("RGB").resize((QS_SMALL, QS_SMALL), Image.LANCZOS)
         front.paste(qr_img, (qr_x, qr_y))
     except Exception as exc:
-        # Card still renders without the small front-face QR (the
-        # full-size one on the back is unaffected) -- not fatal, but a
-        # visibly missing QR is worth a trace when someone reports it.
+        # Card still renders without the front QR -- not fatal (this is now
+        # the card's only QR, so worth a trace if someone reports one missing).
         app_log.warning("ID card front-QR paste failed for %s: %s", emp_id, exc, exc_info=True)
 
     fd.rectangle([(0, CH - 60), (CW, CH)], fill=_IDC_BLUE)
@@ -1586,23 +1754,11 @@ def _render_default_back(emp_id, row, logo_path=None, emergency_name=None, emerg
                               "ATTENDANCE MANAGEMENT SYSTEM", "Employee Attendance Card")
     bd.rectangle([(0, 108), (CW, 113)], fill=_IDC_GOLD)
 
-    qr_path = os.path.join("static", "qrcodes", emp_id + ".png")
-    if not os.path.exists(qr_path):
-        qr_path = generate_qr(emp_id)
-    QS = 200
-    qr_x = (CW - QS) // 2
-    qr_y = 148
-    bd.rounded_rectangle([(qr_x - 16, qr_y - 16), (qr_x + QS + 16, qr_y + QS + 16)], radius=14, fill=_IDC_WHITE)
-    try:
-        qr_img = Image.open(qr_path).convert("RGB").resize((QS, QS), Image.LANCZOS)
-        back.paste(qr_img, (qr_x, qr_y))
-    except Exception:
-        _idc_center_text(bd, "QR NOT AVAILABLE", _idc_font(13), CW, qr_y + QS // 2, _IDC_MGRAY)
-
-    _idc_center_text(bd, "Scan to Mark Attendance", _idc_font(14, bold=True), CW, qr_y + QS + 28, _IDC_BLUE)
-    _idc_center_text(bd, row[0] if row else "", _idc_font(12), CW, qr_y + QS + 52, _IDC_MGRAY)
-    bd.rectangle([(40, qr_y + QS + 78), (CW - 40, qr_y + QS + 80)], fill=(203, 213, 225))
-
+    # No QR on the back anymore -- the front's own QR (see _render_default_front,
+    # now sized for easy phone-camera scanning) is the card's only one. The
+    # info block below is centered in the space between the header and footer
+    # bars that the QR + "Scan to Mark Attendance" caption used to occupy,
+    # rather than left pinned to the top with a big empty gap above the footer.
     sub_info = [
         ("Name", (row[1] or "-")[:26] if row else "-"),
         ("Designation", (row[2] or "-")[:26] if row else "-"),
@@ -1612,7 +1768,9 @@ def _render_default_back(emp_id, row, logo_path=None, emergency_name=None, emerg
         ("Reporting Manager", (manager_name or "-")[:26]),
         ("Blood Group", (row[7] or "-") if row else "-"),
     ]
-    sy = qr_y + QS + 90
+    _content_h = len(sub_info) * 30 + 68  # 68 = divider + emergency/return-to-HR block below
+    _zone_top, _zone_bottom = 123, CH - 110
+    sy = _zone_top + max(0, (_zone_bottom - _zone_top - _content_h) // 2)
     for lbl2, val2 in sub_info:
         _idc_center_text(bd, lbl2, _idc_font(10), CW, sy, _IDC_MGRAY)
         if lbl2 == "Blood Group" and val2 and val2 != "-":
@@ -1816,6 +1974,20 @@ def _build_id_card_buf(emp_id):
     company_address = company_address_raw or None
     company_website = company_website_raw or None
     company_phone = company_phone_raw or None
+    if not company_name or not logo_path:
+        # Most tenants never populate the multi-company `companies` table
+        # (that's an opt-in feature) -- their real org name/logo live in
+        # company_settings instead (set from the Settings page), so fall
+        # back to that before giving up and using the generic header.
+        _co = get_company_settings()
+        if not company_name:
+            _co_name = _co.get("company_name")
+            company_name = _co_name if _co_name and _co_name != "My Company" else company_name
+        if not logo_path:
+            _co_logo = (_co.get("logo_url") or "").strip().lstrip("/")
+            if _co_logo.startswith("static/"):
+                _co_logo = _co_logo[len("static/"):]
+            logo_path = _co_logo or None
     department, manager_name = row[9], row[10]
     emergency_name, emergency_phone, emergency_relation = row[11], row[12], row[13]
     shift_start, shift_end, work_mode = row[14], row[15], row[16]

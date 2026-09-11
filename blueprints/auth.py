@@ -9,7 +9,7 @@ import hashlib
 import datetime
 import html as _html
 from flask import (
-    Blueprint, request, session, redirect, jsonify, render_template, g,
+    Blueprint, request, session, redirect, jsonify, render_template, g, flash,
 )
 
 from extensions import app, limiter, app_log, log_security_event
@@ -110,6 +110,203 @@ def _start_login_mfa(co, login_template, kind, identifier, email, role_label):
     session["mfa_issued_at"] = time.time()
     return redirect(tpath("/mfa_verify"))
 
+
+# employees.role is free-text (whatever an admin typed as a job title) --
+# an EXACT, case-insensitive match only, never a substring check, so a
+# title like "HR Executive" or "Senior HR" does NOT grant this. Getting
+# this wrong turns a job-title text field into an accidental privilege
+# escalation path.
+_HR_EMPLOYEE_ROLE = "hr"
+
+
+def _ensure_hr_admin_account(employee_id, email):
+    """Auto-provisions (idempotently) the admin_users row that backs HR-tier
+    admin-panel access for an employee whose role is exactly "HR" -- see
+    _finish_employee_login() below. Without a REAL admin_users row here,
+    granting admin-panel access by just faking session["admin_logged_in"]
+    breaks the first time MANDATORY_ADMIN_MFA is turned on:
+    _enforce_admin_mfa_enrollment() (app.py) looks up session["admin_username"]
+    in admin_users to check TOTP enrollment, finds no row for an employee_id,
+    and permanently redirect-loops that account to the enrollment page with
+    no way to ever complete it.
+
+    The generated password is random and never shown to or typed by the
+    employee -- admin_login() always checks admin_users by username FIRST,
+    so an unguessable, never-typed password here is what prevents a
+    coincidental identifier collision from letting the wrong credential
+    authenticate the wrong account; the employee keeps logging in with
+    their own employee password exactly as before, and only reaches this
+    account via _finish_employee_login()'s session setup, never a direct
+    admin_users password check.
+    """
+    with _db() as (cursor, db):
+        cursor.execute("SELECT 1 FROM admin_users WHERE username=%s", (employee_id,))
+        if cursor.fetchone():
+            return
+        cursor.execute(
+            "INSERT INTO admin_users (username, password, role, email, is_active) VALUES (%s,%s,%s,%s,1)",
+            (employee_id, generate_password_hash(secrets.token_urlsafe(32)), HR_ROLE, email)
+        )
+        db.commit()
+    log_security_event(
+        "auth.hr_admin_autoprovisioned",
+        f"Auto-created admin_users HR-role account for employee '{employee_id}' (employees.role is exactly 'HR')",
+        level="INFO", identifier=employee_id,
+    )
+
+
+def _finish_employee_login(employee_id, name, role, force_pin_change, email):
+    """Completes an employee login -- called from both the direct
+    password-verified branch below and mfa_verify()'s employee branch, so
+    the two paths (MANDATORY_LOGIN_MFA off vs. on) can't drift apart.
+
+    A pending forced PIN change always wins, regardless of role -- an
+    employee who hasn't changed their initial PIN yet must not be able to
+    skip straight into the HR admin panel; they get the normal employee
+    session and /force_change_pin exactly as before this existed, and the
+    HR check only applies on a later login once that's done.
+
+    Otherwise: if this employee's role is exactly "HR" (see
+    _HR_EMPLOYEE_ROLE), auto-provisions and logs into the backing
+    admin_users HR account instead of a normal employee session, landing
+    on the HR admin panel (/employees) -- the same destination an
+    admin_users role='hr' login already reaches. Every other employee gets
+    the unchanged normal employee session and /employee_portal.
+    """
+    if force_pin_change:
+        session.clear()
+        session["employee_id"] = employee_id
+        session["employee_name"] = name
+        session["employee_role"] = role or ""
+        session["_session_created"] = time.time()
+        session["_fpc"] = True
+        session.permanent = True
+        ensure_session_id(session)
+        if email:
+            notify_if_new_login_ip(employee_id, "employee", request.remote_addr, name, email)
+        return redirect(tpath("/force_change_pin"))
+
+    if (role or "").strip().lower() == _HR_EMPLOYEE_ROLE:
+        _ensure_hr_admin_account(employee_id, email)
+        # If MANDATORY_LOGIN_MFA is on, every call site that can reach this
+        # function (the direct branch below, mfa_verify()'s employee
+        # branch, and force_change_pin()'s completion) is only reachable
+        # AFTER this employee already verified the emailed OTP -- that
+        # already-completed step is this login's MFA, exactly like the
+        # real admin_users MFA branch above treats it (see its own
+        # mark_totp_enabled() call). Without this, app.py's
+        # _enforce_admin_mfa_enrollment would immediately bounce this
+        # freshly auto-provisioned admin_users row (no TOTP enrolled yet)
+        # to a *separate* authenticator-app enrollment page on its very
+        # next request, demanding a second, redundant proof of identity
+        # right after the first. When MANDATORY_LOGIN_MFA is off, no OTP
+        # step happened, so this must NOT be marked -- that's what still
+        # correctly forces real TOTP enrollment before HR admin access in
+        # that configuration.
+        if app.config.get("MANDATORY_LOGIN_MFA", True):
+            mark_totp_enabled(employee_id)
+        session.clear()
+        session["admin_logged_in"] = True
+        session["admin_username"] = employee_id
+        session["admin_role"] = HR_ROLE
+        session["_session_created"] = time.time()
+        session.permanent = True
+        ensure_session_id(session)
+        log_security_event(
+            "auth.admin_login_success",
+            f"Employee '{employee_id}' logged in via employee credentials, routed to HR admin panel (role='HR')",
+            level="INFO", identifier=employee_id,
+        )
+        if email:
+            notify_if_new_login_ip(employee_id, "admin", request.remote_addr, employee_id, email)
+        return redirect(tpath("/hr_dashboard"))
+
+    session.clear()
+    session["employee_id"] = employee_id
+    session["employee_name"] = name
+    session["employee_role"] = role or ""
+    session["_session_created"] = time.time()
+    # No session["_fpc"] here -- session.clear() above already leaves it
+    # absent, matching employee_required()'s `session.get("_fpc")` check
+    # (falsy either way) and force_change_pin()'s original
+    # session.pop("_fpc", None) semantics precisely, not just a falsy value.
+    session.permanent = True
+    ensure_session_id(session)
+    if email:
+        notify_if_new_login_ip(employee_id, "employee", request.remote_addr, name, email)
+    return redirect(tpath("/employee_portal"))
+
+
+@auth_bp.route("/switch_to_my_employee_portal", methods=["POST"])
+@role_required(HR_ROLE)
+def switch_to_my_employee_portal():
+    """Lets an HR-role admin session (templates/admin_base.html's "My
+    Profile" button) hop over to the normal employee self-service portal
+    for that SAME person's own employee record -- the same
+    profile/leave/payslip/attendance view a regular employee sees.
+
+    This is a view-mode toggle for one already-authenticated identity,
+    not a second login or a way to view anyone else's portal, so it swaps
+    the session in place (no session.clear(), no re-auth) rather than
+    routing back through the real login flow. session["admin_username"]
+    is stashed under _hr_return_username so switch_back_to_hr_panel()
+    below can restore the HR session later without asking for credentials
+    or MFA again -- nothing more privileged than what this request
+    already held is being granted back.
+
+    404s harmlessly back to /employees if this HR account isn't actually
+    backed by an employees row (e.g. a standalone admin_users role='hr'
+    account created via /hr_accounts, not an employee auto-routed here) --
+    see the hr_has_own_employee context var that hides the button for
+    that case in the first place."""
+    employee_id = session.get("admin_username")
+    with _db() as (cursor, _conn):
+        cursor.execute("SELECT name, role FROM employees WHERE employee_id=%s", (employee_id,))
+        row = cursor.fetchone()
+    if not row:
+        flash("No personal employee profile is linked to this HR account.", "error")
+        return redirect(tpath("/hr_dashboard"))
+    session["_hr_return_username"] = employee_id
+    session.pop("admin_logged_in", None)
+    session.pop("admin_role", None)
+    session.pop("admin_username", None)
+    session["employee_id"] = employee_id
+    session["employee_name"] = row[0]
+    session["employee_role"] = row[1] or ""
+    session.permanent = True
+    log_security_event(
+        "auth.hr_switched_to_own_portal",
+        f"HR account '{employee_id}' switched to their own employee portal",
+        level="INFO", identifier=employee_id,
+    )
+    return redirect(tpath("/employee_portal"))
+
+
+@auth_bp.route("/switch_back_to_hr_panel", methods=["POST"])
+@employee_required
+def switch_back_to_hr_panel():
+    """Reverses switch_to_my_employee_portal() -- templates/
+    _employee_sidebar.html's "Back to HR Dashboard" button, shown only
+    when _hr_return_username is present in session (i.e. this employee
+    session was reached via the switch above, not a normal employee
+    login). Restores the HR admin session for the same identity without
+    re-authenticating."""
+    return_username = session.pop("_hr_return_username", None)
+    if not return_username or return_username != session.get("employee_id"):
+        return redirect(tpath("/employee_portal"))
+    session.pop("employee_id", None)
+    session.pop("employee_name", None)
+    session.pop("employee_role", None)
+    session["admin_logged_in"] = True
+    session["admin_username"] = return_username
+    session["admin_role"] = HR_ROLE
+    session.permanent = True
+    log_security_event(
+        "auth.hr_switched_back_to_panel",
+        f"HR account '{return_username}' switched back to the HR admin panel",
+        level="INFO", identifier=return_username,
+    )
+    return redirect(tpath("/hr_dashboard"))
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -250,7 +447,7 @@ def admin_login():
             if admin_row[2]:
                 notify_if_new_login_ip(identifier, "admin", request.remote_addr, identifier, admin_row[2])
             if admin_row[1] == HR_ROLE:
-                dest = redirect(tpath("/employees"))
+                dest = redirect(tpath("/hr_dashboard"))
             else:
                 dest = redirect(tpath("/admin"))
             return dest
@@ -276,18 +473,7 @@ def admin_login():
                     _ud.commit()
             if app.config.get("MANDATORY_LOGIN_MFA", True):
                 return _start_login_mfa(co, "admin_login.html", "employee", emp_row[0], emp_row[5], "Employee")
-            session.clear()
-            session["employee_id"] = emp_row[0]
-            session["employee_name"] = emp_row[1]
-            session["employee_role"] = emp_row[2] or ""
-            session["_session_created"] = time.time()
-            session["_fpc"] = bool(emp_row[4])  # force_pin_change flag in session
-            session.permanent = True
-            sid = ensure_session_id(session)
-            if emp_row[5]:
-                notify_if_new_login_ip(emp_row[0], "employee", request.remote_addr, emp_row[1], emp_row[5])
-            dest = redirect(tpath("/force_change_pin")) if emp_row[4] else redirect(tpath("/employee_portal"))
-            return dest
+            return _finish_employee_login(emp_row[0], emp_row[1], emp_row[2], bool(emp_row[4]), emp_row[5])
         _record_login_failure(identifier)
         return render_template("admin_login.html", error="Invalid credentials. Check your ID and password.",
                                show_captcha=will_need_captcha, turnstile_site_key=_TURNSTILE_SITE_KEY)
@@ -326,18 +512,7 @@ def mfa_verify():
                 if not row:
                     session.clear()
                     return redirect(tpath("/login"))
-                session.clear()
-                session["employee_id"] = row[0]
-                session["employee_name"] = row[1]
-                session["employee_role"] = row[2] or ""
-                session["_session_created"] = time.time()
-                session["_fpc"] = bool(row[3])
-                session.permanent = True
-                sid = ensure_session_id(session)
-                if row[4]:
-                    notify_if_new_login_ip(row[0], "employee", request.remote_addr, row[1], row[4])
-                dest = redirect(tpath("/force_change_pin")) if row[3] else redirect(tpath("/employee_portal"))
-                return dest
+                return _finish_employee_login(row[0], row[1], row[2], bool(row[3]), row[4])
             else:
                 with _db() as (cursor, db):
                     cursor.execute("SELECT role, email FROM admin_users WHERE username=%s", (username,))
@@ -360,7 +535,7 @@ def mfa_verify():
                 sid = ensure_session_id(session)
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
-                dest = redirect(tpath("/employees" if role == HR_ROLE else "/admin"))
+                dest = redirect(tpath("/hr_dashboard" if role == HR_ROLE else "/admin"))
                 return dest
 
         log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
@@ -690,8 +865,21 @@ def force_change_pin():
                 (generate_password_hash(new_pwd), emp_id)
             )
             db.commit()
+            cursor.execute("SELECT employee_id, name, role, email FROM employees WHERE employee_id=%s", (emp_id,))
+            row = cursor.fetchone()
             cursor.close()
             db.close()
+            # Re-run the same login-completion logic used right after
+            # password verification (_finish_employee_login), not just an
+            # unconditional redirect to /employee_portal -- a newly created
+            # employee always starts with force_pin_change=1 (see
+            # blueprints/employees.py's add_employee_page()), so an HR-role
+            # employee's FIRST login always lands here first. Without this,
+            # completing the forced PIN change would silently send them to
+            # the employee portal instead of the HR admin panel every time,
+            # since force_pin_change is now 0 but nothing re-checked role.
+            if row:
+                return _finish_employee_login(row[0], row[1], row[2], False, row[3])
             session.pop("_fpc", None)  # clear forced-change flag so portal is accessible
             return redirect(tpath("/employee_portal"))
     return render_template("force_change_pin.html", error=error,

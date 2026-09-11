@@ -353,6 +353,16 @@ class TestPayrollLockApi:
 
 class TestHolidayDeleteApi:
     def test_add_then_delete_holiday(self, client, seed_admin, db_engine):
+        # Self-healing: if a previous run of this same test crashed or was
+        # interrupted between the add and delete steps below, the
+        # '2031-03-03' row is left behind -- and since the add step
+        # asserts success before the delete step ever runs, that stale row
+        # would otherwise fail this exact assertion on every subsequent
+        # run forever (the test could never reach its own cleanup step).
+        cur = db_engine.cursor()
+        cur.execute("DELETE FROM holidays WHERE date='2031-03-03'")
+        cur.close()
+
         token = _admin_token(client, seed_admin)
         add = client.post("/api/holidays", json={"date": "2031-03-03", "name": "Pending-Work Test Holiday"}, headers=_auth(token))
         assert add.status_code == 200 and add.get_json()["ok"] is True

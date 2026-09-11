@@ -14,7 +14,7 @@ from utils.auth import admin_required, employee_required, api_required, employee
 # manager's involvement to scope down to).
 _TICKET_ADMIN_ROLES = ("admin", "hr")
 from utils.email_utils import get_email_config, send_email_async
-from utils.helpers import tpath, _create_notification
+from utils.helpers import tpath, _create_notification, hr_scope_denied
 
 tickets_bp = Blueprint("tickets", __name__)
 
@@ -76,6 +76,10 @@ def ticket_action(tid):
         WHERE t.id = %s
     """, (tid,))
     row = cursor.fetchone()
+    if row and hr_scope_denied(row[6]):
+        cursor.close()
+        db.close()
+        return (jsonify({"ok": False, "msg": "Ticket not found."}), 404) if is_ajax else ("Forbidden", 403)
 
     cursor.execute(
         "UPDATE tickets SET status=%s, admin_response=%s WHERE id=%s",

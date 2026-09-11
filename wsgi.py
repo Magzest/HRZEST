@@ -52,10 +52,11 @@ app.wsgi_app = TenantPrefixMiddleware(app.wsgi_app)
 # ── Startup DB init ───────────────────────────────────────────────────────────
 with app.app_context():
     try:
-        from app import init_master_db, init_db
+        from app import init_master_db, init_db, _run_migrations_for_all_tenants
         from utils.config import load_default_shift, load_salary_rules
         init_master_db()
         init_db()
+        _run_migrations_for_all_tenants()
         load_default_shift()
         load_salary_rules()
     except Exception as _e:
@@ -100,6 +101,7 @@ try:
     from blueprints.auto_debit import sync_and_bill_auto_debit
     from blueprints.billing_dunning import check_tenant_billing
     from blueprints.disbursement import prepare_pending_disbursements
+    from blueprints.trial_billing import check_trial_expirations, check_trial_ending_soon
     _scheduler = BackgroundScheduler(daemon=True)
     _scheduler.add_job(
         func=generate_and_send_daily_report,
@@ -129,11 +131,27 @@ try:
         id="salary_disbursement_prep",
         replace_existing=True,
     )
+    _scheduler.add_job(
+        func=check_trial_expirations,
+        trigger="cron",
+        hour=1, minute=0,
+        id="trial_expiration_check",
+        replace_existing=True,
+    )
+    _scheduler.add_job(
+        func=check_trial_ending_soon,
+        trigger="cron",
+        hour=0, minute=30,
+        id="trial_ending_soon_check",
+        replace_existing=True,
+    )
     _scheduler.start()
     app_log.info("Daily report scheduler started -- fires at 23:59 every night")
     app_log.info("Auto-debit sync/billing scheduler started -- fires at 02:00 every night")
     app_log.info("Tenant billing dunning check started -- fires at 03:00 every night")
     app_log.info("Salary disbursement prep scheduler started -- fires at 04:00 every night")
+    app_log.info("Trial expiration check started -- fires at 01:00 every night")
+    app_log.info("Trial ending-soon reminder check started -- fires at 00:30 every night")
 except ImportError:
     app_log.warning("APScheduler not installed -- daily email reports disabled. Run: pip install apscheduler")
 except Exception as _sch_err:

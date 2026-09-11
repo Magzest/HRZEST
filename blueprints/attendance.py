@@ -18,7 +18,7 @@ from flask import (
 from extensions import limiter, app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required
-from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, decrypt_pii, get_pending_action_counts, company_today, company_now
+from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, co_scope_subquery, hr_scope_column, hr_scope_subquery, hr_scope_denied, decrypt_pii, get_pending_action_counts, company_today, company_now
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
@@ -47,13 +47,14 @@ def today_present():
     today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
-    _args = (today,) + _co_args
+    _hr, _hr_args = hr_scope_column(alias="e")
+    _args = (today,) + _co_args + _hr_args
     cursor.execute(f"""
         SELECT e.employee_id, e.name, e.role, a.login_time, a.logout_time,
                a.status, a.logout_status, a.attendance_type
         FROM employees e
         JOIN attendance a ON e.employee_id = a.employee_id AND a.date = %s
-        WHERE a.login_time IS NOT NULL {_co}
+        WHERE a.login_time IS NOT NULL {_co} {_hr}
         ORDER BY a.login_time
     """, _args)  # nosec B608
     rows = cursor.fetchall()
@@ -74,12 +75,13 @@ def today_absent():
     today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
-    _args = (today,) + _co_args
+    _hr, _hr_args = hr_scope_column(alias="e")
+    _args = (today,) + _co_args + _hr_args
     cursor.execute(f"""
         SELECT e.employee_id, e.name, e.role
         FROM employees e
         LEFT JOIN attendance a ON e.employee_id = a.employee_id AND a.date = %s
-        WHERE a.employee_id IS NULL {_co}
+        WHERE a.employee_id IS NULL {_co} {_hr}
         ORDER BY e.name
     """, _args)  # nosec B608
     rows = cursor.fetchall()
@@ -100,12 +102,13 @@ def today_late():
     today = company_today()
     active_cid = session.get("active_company_id")
     _co, _co_args = co_scope_column(active_cid, alias="e")
-    _args = (today,) + _co_args
+    _hr, _hr_args = hr_scope_column(alias="e")
+    _args = (today,) + _co_args + _hr_args
     cursor.execute(f"""
         SELECT e.employee_id, e.name, e.role, a.login_time, a.status
         FROM employees e
         JOIN attendance a ON e.employee_id = a.employee_id AND a.date = %s
-        WHERE a.status IN ('Late Login', 'Half Day Login') {_co}
+        WHERE a.status IN ('Late Login', 'Half Day Login') {_co} {_hr}
         ORDER BY a.login_time
     """, _args)  # nosec B608
     rows = cursor.fetchall()
@@ -387,12 +390,12 @@ def monthly_report():
     cursor = db.cursor(buffered=True)
 
     active_cid = session.get("active_company_id")
-    if active_cid:
-        cursor.execute(
-            "SELECT employee_id, name, COALESCE(role,''), COALESCE(phone,''), COALESCE(email,'') FROM employees WHERE company_id=%s ORDER BY name", (active_cid,))
-    else:
-        cursor.execute(
-            "SELECT employee_id, name, COALESCE(role,''), COALESCE(phone,''), COALESCE(email,'') FROM employees ORDER BY name")
+    _co, _co_args = co_scope_column(active_cid)
+    _hr, _hr_args = hr_scope_column()
+    cursor.execute(
+        f"SELECT employee_id, name, COALESCE(role,''), COALESCE(phone,''), COALESCE(email,'') "  # nosec B608
+        f"FROM employees WHERE 1=1 {_co} {_hr} ORDER BY name",
+        _co_args + _hr_args)
     employees = cursor.fetchall()
 
     _, last_day = calendar.monthrange(year, month)
@@ -471,6 +474,8 @@ def monthly_report():
 @attendance_bp.route("/employee_attendance_detail/<emp_id>/<int:year>/<int:month>")
 @admin_required
 def employee_attendance_detail(emp_id, year, month):
+    if hr_scope_denied(emp_id):
+        return "Employee not found", 404
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
@@ -589,6 +594,10 @@ def correct_attendance():
         flash("Missing required fields.", "error")
         return redirect(_safe_referrer_redirect(request.referrer or "", "/monthly_report"))
 
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(_safe_referrer_redirect(request.referrer or "", "/monthly_report"))
+
     try:
         date_obj = datetime.date.fromisoformat(date_str)
     except ValueError:
@@ -646,7 +655,8 @@ def bulk_mark_attendance():
 
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute("SELECT employee_id FROM employees WHERE is_active=1")
+        _hr, _hr_args = hr_scope_column()
+        cursor.execute(f"SELECT employee_id FROM employees WHERE is_active=1 {_hr}", _hr_args)  # nosec B608
         emp_ids = [r[0] for r in cursor.fetchall()]
 
         rows = []
@@ -705,10 +715,11 @@ def bulk_mark_attendance():
         "FROM employees e LEFT JOIN shifts s ON s.id=e.shift_id "
     )
     active_cid = session.get("active_company_id")
-    if active_cid:
-        cursor.execute(base_select + "WHERE e.is_active=1 AND e.company_id=%s ORDER BY e.name", (active_cid,))
-    else:
-        cursor.execute(base_select + "WHERE e.is_active=1 ORDER BY e.name")
+    _co, _co_args = co_scope_column(active_cid, alias="e")
+    _hr, _hr_args = hr_scope_column(alias="e")
+    cursor.execute(  # nosec B608
+        base_select + f"WHERE e.is_active=1 {_co} {_hr} ORDER BY e.name",
+        _co_args + _hr_args)
     # [11]=gender is Fernet-encrypted at rest -- decrypt before display.
     employees = [row[:11] + (decrypt_pii(row[11]),) + row[12:] for row in cursor.fetchall()]
 
@@ -869,7 +880,12 @@ def monthly_report_export():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("SELECT employee_id, name FROM employees ORDER BY name")
+    active_cid = session.get("active_company_id")
+    _co, _co_args = co_scope_column(active_cid)
+    _hr, _hr_args = hr_scope_column()
+    cursor.execute(  # nosec B608
+        f"SELECT employee_id, name FROM employees WHERE 1=1 {_co} {_hr} ORDER BY name",
+        _co_args + _hr_args)
     employees = cursor.fetchall()
 
     _, last_day = calendar.monthrange(year, month)
@@ -1312,14 +1328,11 @@ def attendance():
 
 
 def process_punch(cursor, db, emp_id, employee_name, punch_dt=None):
-    """Core login/logout/relogin state machine, shared by every punch
-    source (mobile Bearer check-in, and blueprints/biometric.py's device
-    push ingestion). Caller owns the cursor/db connection -- already
-    pointed at the right tenant schema, whether that's via the normal
-    g.tenant_db path (api_checkin below) or an explicit
-    get_tenant_db(schema_name) for a source with no session (a biometric
-    device push). Returns a plain dict rather than a Response so callers
-    can add their own fields (e.g. a device's raw PIN) before jsonifying.
+    """Core login/logout/relogin state machine for the mobile Bearer
+    check-in flow (api_checkin below). Caller owns the cursor/db
+    connection -- already pointed at the right tenant schema via the
+    normal g.tenant_db path. Returns a plain dict rather than a Response
+    so the caller can add its own fields before jsonifying.
 
     punch_dt defaults to the tenant's current company-local time for a live
     human tap; a device push passes the device's own punch timestamp

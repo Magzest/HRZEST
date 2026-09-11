@@ -9,7 +9,7 @@ from flask import Blueprint, request, session, redirect, render_template, flash,
 from database import get_db_connection
 from werkzeug.utils import secure_filename
 from utils.auth import admin_required, employee_required, api_required, employee_api_required
-from utils.helpers import tpath, get_company_settings, _safe_app_url, _db
+from utils.helpers import tpath, get_company_settings, _safe_app_url, _db, hr_scope_column, hr_scope_denied
 from utils.email_utils import get_email_config, send_email_smtp, send_email_async
 from extensions import limiter, app_log
 
@@ -128,19 +128,20 @@ def onboarding():
     active_tab = request.args.get("tab", "active")
 
     # Active onboardings with progress
-    cursor.execute("""
+    _hr, _hr_args = hr_scope_column(alias="e")
+    cursor.execute(f"""
         SELECT eo.id, e.employee_id, e.name, e.role, e.department,
                ot.name AS template_name, eo.assigned_date, eo.due_date, eo.status,
                COUNT(eot.id) AS total_tasks,
                SUM(CASE WHEN eot.status='Done' THEN 1 ELSE 0 END) AS done_tasks
         FROM employee_onboarding eo
-        JOIN employees e ON e.employee_id = eo.employee_id
+        JOIN employees e ON e.employee_id = eo.employee_id {_hr}
         JOIN onboarding_templates ot ON ot.id = eo.template_id
         LEFT JOIN employee_onboarding_tasks eot ON eot.onboarding_id = eo.id
         GROUP BY eo.id, e.employee_id, e.name, e.role, e.department,
                  ot.name, eo.assigned_date, eo.due_date, eo.status
         ORDER BY eo.assigned_date DESC
-    """)
+    """, _hr_args)  # nosec B608
     active_onboardings = cursor.fetchall()
 
     # Templates with task count
@@ -155,7 +156,8 @@ def onboarding():
     templates = cursor.fetchall()
 
     # Employees list for assign dropdown
-    cursor.execute("SELECT employee_id, name, role FROM employees WHERE is_active=1 ORDER BY name")
+    _hr_noalias, _hr_noalias_args = hr_scope_column()
+    cursor.execute(f"SELECT employee_id, name, role FROM employees WHERE is_active=1 {_hr_noalias} ORDER BY name", _hr_noalias_args)  # nosec B608
     emp_list = cursor.fetchall()
 
     # Active templates for assign dropdown (include role for JS filtering)
@@ -240,6 +242,8 @@ def bulk_assign_onboarding():
     cursor.execute("SELECT name FROM onboarding_templates WHERE id=%s", (tid,))
     _tr = cursor.fetchone()
     for emp_id in emp_ids:
+        if hr_scope_denied(emp_id):
+            continue
         cursor.execute(
             "SELECT id FROM employee_onboarding WHERE employee_id=%s AND template_id=%s AND status='In Progress'", (emp_id, tid))
         if cursor.fetchone():
@@ -280,19 +284,20 @@ def export_onboarding_csv():
     import io
     db = get_db_connection()
     cursor = db.cursor()
-    cursor.execute("""
+    _hr, _hr_args = hr_scope_column(alias="e")
+    cursor.execute(f"""
         SELECT e.employee_id, e.name, e.department, ot.name,
                eo.assigned_date, eo.due_date, eo.status,
                COUNT(eot.id) AS total_tasks,
                SUM(CASE WHEN eot.status='Done' THEN 1 ELSE 0 END) AS done_tasks
         FROM employee_onboarding eo
-        JOIN employees e ON eo.employee_id = e.employee_id
+        JOIN employees e ON eo.employee_id = e.employee_id {_hr}
         JOIN onboarding_templates ot ON eo.template_id = ot.id
         LEFT JOIN employee_onboarding_tasks eot ON eot.onboarding_id = eo.id
         GROUP BY eo.id, e.employee_id, e.name, e.department, ot.name,
                  eo.assigned_date, eo.due_date, eo.status
         ORDER BY eo.assigned_date DESC
-    """)
+    """, _hr_args)  # nosec B608
     rows = cursor.fetchall()
     cursor.close()
     db.close()
@@ -439,6 +444,12 @@ def onboarding_assign():
     due_date = request.form.get("due_date") or None
     today = datetime.date.today()
 
+    if hr_scope_denied(emp_id):
+        cursor.close()
+        db.close()
+        flash("Employee not found.", "error")
+        return redirect(tpath("/onboarding?tab=active"))
+
     # Check not already assigned same template
     cursor.execute("SELECT id FROM employee_onboarding WHERE employee_id=%s AND template_id=%s AND status='In Progress'",
                    (emp_id, tid))
@@ -511,6 +522,10 @@ def onboarding_detail(ob_id):
         WHERE eo.id=%s
     """, (ob_id,))
     ob = cursor.fetchone()
+    if not ob or hr_scope_denied(ob[1]):
+        cursor.close()
+        db.close()
+        return "Onboarding record not found", 404
     cursor.execute("""
         SELECT id, task_title, task_description, requires_document, due_days,
                status, completed_at, document_path, admin_notes, employee_note
@@ -537,6 +552,12 @@ def onboarding_admin_task_update():
     new_status = request.form.get("status")
     notes = request.form.get("admin_notes", "")
     ob_id = request.form.get("ob_id")
+    cursor.execute("SELECT employee_id FROM employee_onboarding WHERE id=%s", (ob_id,))
+    _ob_owner = cursor.fetchone()
+    if not _ob_owner or hr_scope_denied(_ob_owner[0]):
+        cursor.close()
+        db.close()
+        return "Onboarding record not found", 404
     completed = datetime.datetime.now() if new_status == "Done" else None
     cursor.execute("""UPDATE employee_onboarding_tasks
                       SET status=%s, completed_at=%s, admin_notes=%s WHERE id=%s""",
@@ -559,6 +580,12 @@ def onboarding_close():
     db = get_db_connection()
     cursor = db.cursor()
     ob_id = request.form.get("ob_id")
+    cursor.execute("SELECT employee_id FROM employee_onboarding WHERE id=%s", (ob_id,))
+    _ob_owner = cursor.fetchone()
+    if not _ob_owner or hr_scope_denied(_ob_owner[0]):
+        cursor.close()
+        db.close()
+        return "Onboarding record not found", 404
     cursor.execute("UPDATE employee_onboarding SET status='Completed' WHERE id=%s", (ob_id,))
     db.commit()
     cursor.close()

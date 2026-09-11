@@ -27,7 +27,7 @@ from utils.auth import (
     admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required,
     email_settings_step_up_valid,
 )
-from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime
+from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime, hr_scope_column, hr_scope_denied
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
@@ -97,33 +97,38 @@ def update_salary():
 # ---------------- MONTHLY ATTENDANCE REPORT ----------------
 
 
-def compute_salary_data_for_month(year, month, active_cid=None):
+def compute_salary_data_for_month(year, month, active_cid=None, employee_ids=None):
     """Assemble the full per-employee salary_data list for one month --
     shared by salary_report() below and blueprints/disbursement.py's
     payout preparation, so disbursement amounts are guaranteed identical
     to what the salary report shows rather than a second, potentially
     drifting reimplementation. Returns a list of compute_salary_entry()
-    dicts, each additionally carrying 'email'/'role'/'phone'."""
+    dicts, each additionally carrying 'email'/'role'/'phone'.
+
+    employee_ids (optional): restrict to just this list of employee_ids --
+    added for blueprints/hr_dashboard.py's HR-scoped payroll report, which
+    needs the exact same computation as the company-wide report but only
+    for an HR session's assigned employees. None (the default) keeps every
+    existing call site's behavior unchanged."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
+    _where = "WHERE 1=1"
+    _params = []
     if active_cid:
-        cursor.execute("""
-            SELECT e.employee_id, e.name, e.email, COALESCE(s.salary_per_day, 0),
-                   COALESCE(e.role,''), COALESCE(e.phone,'')
-            FROM employees e
-            LEFT JOIN salary_config s ON e.employee_id = s.employee_id
-            WHERE e.company_id = %s
-            ORDER BY e.name
-        """, (active_cid,))
-    else:
-        cursor.execute("""
-            SELECT e.employee_id, e.name, e.email, COALESCE(s.salary_per_day, 0),
-                   COALESCE(e.role,''), COALESCE(e.phone,'')
-            FROM employees e
-            LEFT JOIN salary_config s ON e.employee_id = s.employee_id
-            ORDER BY e.name
-        """)
+        _where += " AND e.company_id = %s"
+        _params.append(active_cid)
+    if employee_ids is not None:
+        _where += " AND e.employee_id = ANY(%s)"
+        _params.append(list(employee_ids))
+    cursor.execute(f"""
+        SELECT e.employee_id, e.name, e.email, COALESCE(s.salary_per_day, 0),
+               COALESCE(e.role,''), COALESCE(e.phone,'')
+        FROM employees e
+        LEFT JOIN salary_config s ON e.employee_id = s.employee_id
+        {_where}
+        ORDER BY e.name
+    """, _params)  # nosec B608 -- _where is built from fixed literals gated by active_cid/employee_ids booleans, never user input
     employees = cursor.fetchall()
 
     _, last_day = calendar.monthrange(year, month)
@@ -1314,7 +1319,17 @@ def view_payslip(emp_id, year, month):
             resource_type="payslip", resource_id=f"{emp_id}:{year}-{month:02d}",
         )
         return redirect(tpath("/login"))
+    return _render_payslip_html(emp_id, year, month)
 
+
+def _render_payslip_html(emp_id, year, month):
+    """The actual payslip-building logic behind view_payslip() above --
+    split out so blueprints/hr_dashboard.py's own HR-only payslip route
+    (guarded by hr_scope_denied() instead of the admin-only check above,
+    per this session's payroll-access decision: HR gets full unmasked
+    access for employees assigned to them) can reuse it without duplicating
+    this query/formatting glue. Callers are responsible for their own
+    ownership/role guard before calling this -- it does none itself."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
@@ -1429,7 +1444,10 @@ def admin_payslips():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
-    cursor.execute("SELECT employee_id, name, role, COALESCE(phone,''), COALESCE(email,'') FROM employees ORDER BY name")
+    _hr, _hr_args = hr_scope_column()
+    cursor.execute(  # nosec B608
+        f"SELECT employee_id, name, role, COALESCE(phone,''), COALESCE(email,'') FROM employees WHERE 1=1 {_hr} ORDER BY name",
+        _hr_args)
     employees = cursor.fetchall()
 
     pending_leaves, pending_resignations, pending_tickets = get_pending_counts()

@@ -51,6 +51,12 @@
     .nav-item.active .nav-icon { background: rgba(96,165,250,0.2); }
     .nav-item:hover  .nav-icon { background: rgba(255,255,255,0.12); }
     .badge-count { margin-left: auto; background: #ef4444; color: white; border-radius: 20px; padding: 1px 7px; font-size: 10px; font-weight: 700; }
+    /* A nav-item that has to be a <button type="submit"> (inside its own
+       tiny <form>, for CSRF) instead of a plain <a> -- e.g. "My Profile"'s
+       POST to /switch_to_my_employee_portal -- needs its native button
+       chrome stripped so it's visually identical to the <a> ones. */
+    .nav-item-form { margin: 0; }
+    .nav-item-btn  { width: 100%; background: none; border: none; font-family: inherit; text-align: left; cursor: pointer; }
 
     /* ── Main area ── */
     .main { flex: 1; padding: 28px; min-width: 0; overflow-x: hidden; zoom: 0.85; }
@@ -106,12 +112,20 @@
 
   {% set _tp = (pending_leaves|default(0)) + (pending_resignations|default(0)) + (pending_tickets|default(0)) %}
 
-  <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="{{ tpath('/employees') if _is_hr else tpath('/admin') }}" {{ 'aria-current=page' if active_nav == 'dashboard' }}>
+  <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="{{ tpath('/hr_dashboard') if _is_hr else tpath('/admin') }}" {{ 'aria-current=page' if active_nav == 'dashboard' }}>
     <span class="nav-icon"><i class="ti ti-home"></i></span>Dashboard
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}" {{ 'aria-current=page' if active_nav == 'employees' }}>
     <span class="nav-icon"><i class="ti ti-users"></i></span>Employees
   </a>
+  {% if _is_hr and hr_has_own_employee %}
+  <form action="{{ tpath('/switch_to_my_employee_portal') }}" method="POST" class="nav-item-form">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+    <button type="submit" class="nav-item nav-item-btn" aria-label="Go to my personal profile">
+      <span class="nav-icon"><i class="ti ti-user-circle"></i></span>My Profile
+    </button>
+  </form>
+  {% endif %}
   <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}" {{ 'aria-current=page' if active_nav == 'attendance' }}>
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>

@@ -79,7 +79,7 @@ from utils.email_utils import (
 # rounds of security work (structured event logging, BOLA risk-scoring,
 # the session kill switch) were silently not reaching any route in this
 # file. Consolidated onto one implementation; see utils/auth.py.
-from utils.auth import generate_password_hash, check_password_hash
+from utils.auth import generate_password_hash, check_password_hash, HR_ROLE
 from utils.helpers import (
     _error_page, invalidate_settings_cache, get_company_settings,
     get_companies_list, get_overdue_onboarding_count, coerce_datetime,
@@ -109,7 +109,49 @@ def inject_common_vars():
     return dict(
         shift_start=cfg.SHIFT_START.strftime("%I:%M %p"),
         shift_end=cfg.SHIFT_END.strftime("%I:%M %p"),
+        # templates/admin_base.html's sidebar "Dashboard" link reads this
+        # (`tpath('/employees') if _is_hr else tpath('/admin')`) -- it was
+        # referencing this exact name already, just never actually
+        # defined anywhere, so Jinja silently treated it as falsy and
+        # every admin-side session, HR-role included, always got sent to
+        # /admin. HR sessions (whether a real admin_users role='hr'
+        # account, or an employee auto-routed here because their
+        # employees.role is exactly "HR" -- see blueprints/auth.py's
+        # _finish_employee_login) land on /employees instead, which is
+        # also where their login already redirects them to.
+        _is_hr=(session.get("admin_role") == HR_ROLE),
+        hr_has_own_employee=_hr_has_own_employee(),
     )
+
+
+def _hr_has_own_employee():
+    """True if the current HR-role session's admin_username is backed by
+    a real employees row -- gates templates/admin_base.html's "My
+    Profile" button (blueprints/auth.py's switch_to_my_employee_portal()
+    404s harmlessly without this, but showing the button at all when
+    there's nothing to switch to is just a dead click). Some admin_users
+    role='hr' accounts are standalone (created via /hr_accounts) rather
+    than auto-provisioned from an employee whose own role is "HR" -- see
+    blueprints/auth.py's _ensure_hr_admin_account -- and have no
+    employees row of their own to switch to.
+
+    Cached on flask.g per-request since inject_common_vars() runs once
+    per template render but this can be called from more than one context
+    processor in the future; cheap either way (one indexed lookup on
+    employees.employee_id's UNIQUE constraint)."""
+    if session.get("admin_role") != HR_ROLE or not session.get("admin_username"):
+        return False
+    if not hasattr(_g, "_hr_has_own_employee"):
+        try:
+            db = get_db_connection()
+            cursor = db.cursor(buffered=True)
+            cursor.execute("SELECT 1 FROM employees WHERE employee_id=%s", (session["admin_username"],))
+            _g._hr_has_own_employee = cursor.fetchone() is not None
+            cursor.close()
+            db.close()
+        except Exception:
+            _g._hr_has_own_employee = False
+    return _g._hr_has_own_employee
 
 
 @app.template_filter('qr_url')
@@ -1065,6 +1107,42 @@ def init_db(seed_admin=True):
     db.close()
 
 
+def _run_migrations_for_all_tenants():
+    """Re-run _run_schema_migrations() against every already-provisioned
+    tenant schema, not just whichever one happens to be active when
+    init_db() is called (the "public"/default schema at startup, or a
+    brand-new tenant's own schema via init_tenant_db()). Without this, an
+    existing tenant created before a given migration was added to
+    _run_column_migrations()/etc. never receives it -- e.g. a tenant
+    provisioned before assigned_hr_username existed would 500 on
+    blueprints/employees.py's view_employees() forever, since nothing else
+    ever re-applies startup migrations to its schema. Every statement run
+    here is already idempotent (IF NOT EXISTS-guarded) and independently
+    try/except-guarded, so re-running them on every boot is safe -- same
+    pattern as utils/email_utils.py's _active_tenant_schemas()."""
+    try:
+        from database import get_master_db, get_tenant_db
+        mconn = get_master_db()
+        mcur = mconn.cursor(buffered=True)
+        mcur.execute("SELECT db_name FROM tenants")
+        schemas = [r[0] for r in mcur.fetchall()]
+        mcur.close()
+        mconn.close()
+    except Exception as exc:
+        app_log.warning("Migration: failed to list tenant schemas: %s", exc, exc_info=True)
+        return
+
+    for schema in schemas:
+        try:
+            db = get_tenant_db(schema)
+            cursor = db.cursor(buffered=True)
+            _run_schema_migrations(cursor, db)
+            cursor.close()
+            db.close()
+        except Exception as exc:
+            app_log.warning("Migration: tenant schema '%s' failed: %s", schema, exc, exc_info=True)
+
+
 def _init_core_tables(cursor, db):
     """Create every base table (and its triggers/seed rows) this app
      needs, in dependency order -- e.g. company_settings before the
@@ -1102,6 +1180,28 @@ def _init_core_tables(cursor, db):
             name VARCHAR(100) NOT NULL
         )
     """)
+    # Company-wide policies (Terms, Rules, POSH, etc.) -- previously just
+    # hardcoded static text in templates/employee_portal.html; this table
+    # backs blueprints/policies.py's admin+HR CRUD (surfaced as the HR
+    # Dashboard's Policies tab) and utils/helpers.py's seeded copy of that
+    # old hardcoded text (see _seed_defaults_and_admin). No company_id
+    # column, matching the holidays table above -- policies, like
+    # holidays, apply company-wide, not per assigned_hr_username.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS company_policies (
+            id SERIAL PRIMARY KEY,
+            category VARCHAR(50) NOT NULL,
+            title VARCHAR(200) NOT NULL,
+            body TEXT NOT NULL,
+            is_published SMALLINT DEFAULT 1,
+            sort_order INT DEFAULT 0,
+            created_by VARCHAR(50),
+            updated_by VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    _attach_updated_at_trigger(cursor, "company_policies")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS salary_config (
             id SERIAL PRIMARY KEY,
@@ -1840,6 +1940,8 @@ def _run_schema_migrations(cursor, db):
     _run_qr_signing_migration(cursor, db)
     _run_index_migrations(cursor, db)
     _run_data_integrity_migrations(cursor, db)
+    _run_company_policies_seed(cursor, db)
+    _run_company_policies_seed_v2(cursor, db)
 
 
 def _run_column_migrations(cursor, db):
@@ -1892,6 +1994,16 @@ def _run_column_migrations(cursor, db):
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS department VARCHAR(100) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS designation VARCHAR(150) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_active SMALLINT DEFAULT 1",
+        # Which HR admin_users account this employee is managed by --
+        # NULL means unassigned (visible only to 'admin' role, not to any
+        # 'hr' session; see blueprints/employees.py's view_employees()).
+        # References admin_users.username, not employees.employee_id --
+        # an HR account can be either a real admin_users row (created via
+        # /hr_accounts) or the auto-provisioned one for an employee whose
+        # own role is exactly "HR" (blueprints/auth.py's
+        # _ensure_hr_admin_account), and both share that same username
+        # space, so this one column covers both cases identically.
+        "ALTER TABLE employees ADD COLUMN IF NOT EXISTS assigned_hr_username VARCHAR(100) DEFAULT NULL",
         "ALTER TABLE employees ADD COLUMN IF NOT EXISTS email_alerts_enabled SMALLINT DEFAULT 1",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS leave_type_id INT DEFAULT NULL",
         "ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS is_half_day SMALLINT DEFAULT 0",
@@ -2210,6 +2322,468 @@ def _run_incentives_unique_constraint_migration(cursor, db):
             db.commit()
     except Exception as exc:
         app_log.warning("Migration 'incentives_unique_v1' failed: %s", exc, exc_info=True)
+
+
+# Starter content for company_policies, seeded once per tenant schema below
+# -- short placeholders, not the full legacy text that used to be hardcoded
+# in templates/employee_portal.html (~lines 2315-2750 there), since HR/admin
+# can now edit these for real via blueprints/policies.py's CRUD (surfaced
+# as the HR Dashboard's Policies tab) instead of that text being frozen in
+# a template. category values match that old template's tab ids so a
+# future swap of employee_portal.html onto GET /api/employee/policies is a
+# drop-in match.
+# Superseded by the full-text content below (company_policies_seed_v2) --
+# kept only so that migration can detect rows still holding this original
+# placeholder text and safely replace them, without touching a row any HR
+# has since edited for real.
+_POLICY_SEED_CONTENT_V1_LEGACY = {
+    "terms": (
+        "By using this portal, you agree to keep your login credentials confidential, "
+        "keep your personal details accurate, and use the attendance/leave features "
+        "honestly. Edit this from the HR Dashboard's Policies tab to add your "
+        "organisation's full terms."
+    ),
+    "rules": (
+        "These rules apply to all employees across all departments. Violations may "
+        "lead to a warning, suspension, or termination depending on severity. Edit "
+        "this from the HR Dashboard's Policies tab to add your organisation's full "
+        "rules."
+    ),
+    "limitations": (
+        "This portal is provided as-is for attendance, leave, and payroll "
+        "administration. Edit this from the HR Dashboard's Policies tab to add your "
+        "organisation's specific limitations and disclaimers."
+    ),
+    "instructions": (
+        "Use the sidebar to check in/out, apply for leave, and view your payslips. "
+        "Contact HR for any access issues. Edit this from the HR Dashboard's "
+        "Policies tab to add your organisation's specific instructions."
+    ),
+    "posh": (
+        "The organisation is committed to providing a safe workplace, free from "
+        "harassment. Report any concerns to your HR contact. Edit this from the HR "
+        "Dashboard's Policies tab to add your organisation's full POSH policy."
+    ),
+    "resignation": (
+        "Employees must submit a resignation request with their intended last "
+        "working day. Edit this from the HR Dashboard's Policies tab to add your "
+        "organisation's full resignation/notice-period policy."
+    ),
+}
+
+# Full starter policy text for a brand-new tenant's Policies tab -- plain
+# text (company_policies.body has no HTML rendering), mirroring the same
+# section structure/content that used to be hardcoded directly into
+# templates/employee_portal.html before that page started reading from this
+# table via GET /api/employee/policies. HR/admin can edit any of this for
+# real via blueprints/policies.py once the tenant is live.
+_POLICY_SEED_CONTENT = [
+    ("terms", "Terms & Conditions",
+     "Effective Date: These terms are effective from your date of joining and govern "
+     "your use of the employee portal.\n\n"
+     "1. Acceptance of Terms\n"
+     "By accessing and using this portal, you acknowledge that you have read, "
+     "understood, and agree to be bound by these Terms and Conditions. Use of this "
+     "portal is restricted solely to authorised employees of the organisation.\n\n"
+     "2. Employee Credentials & Account Security\n"
+     "- Your login credentials are personal and must not be shared with any other "
+     "individual, including colleagues.\n"
+     "- You are responsible for all activities that occur under your account.\n"
+     "- If you suspect unauthorised access, report it immediately to the HR "
+     "department or system administrator.\n"
+     "- The organisation reserves the right to suspend or terminate access at any "
+     "time without prior notice in case of a policy violation.\n\n"
+     "3. Accuracy of Information\n"
+     "- Employees are required to ensure that all personal details entered in the "
+     "portal are accurate and up to date.\n"
+     "- Any false or misleading information may result in disciplinary action, "
+     "including termination of employment.\n"
+     "- Attendance records generated by the system are considered official records "
+     "of the organisation.\n\n"
+     "4. Attendance & Leave\n"
+     "- Employees must mark attendance honestly and accurately within the "
+     "designated check-in and check-out window.\n"
+     "- Proxy attendance or tampering with attendance data is a serious offence and "
+     "may lead to immediate disciplinary action.\n"
+     "- Leave applications must be submitted with genuine reasons. Misuse of leave "
+     "entitlements will be dealt with strictly.\n"
+     "- Approved leave does not guarantee salary credits if leave balance is "
+     "exhausted.\n\n"
+     "5. Data Privacy\n"
+     "- Personal data collected through this portal is used strictly for "
+     "employment and payroll administration purposes.\n"
+     "- The organisation complies with applicable data protection laws.\n"
+     "- Employee data will not be shared with third parties without consent, "
+     "except where required by law.\n\n"
+     "6. Intellectual Property\n"
+     "All content, software, and features of this portal are the intellectual "
+     "property of the organisation. Employees may not reproduce, distribute, or "
+     "modify any part of this portal without written permission.\n\n"
+     "7. Amendments\n"
+     "The organisation reserves the right to modify these Terms and Conditions at "
+     "any time. Continued use of the portal following any changes constitutes "
+     "acceptance of the revised terms.\n\n"
+     "8. Governing Law\n"
+     "These terms shall be governed by and construed in accordance with the laws "
+     "of India. Any disputes shall be subject to the exclusive jurisdiction of the "
+     "courts of competent jurisdiction."),
+    ("rules", "Rules & Regulations",
+     "Note: These rules apply to all employees across all departments and levels "
+     "of the organisation. Violations may lead to warning, suspension, or "
+     "termination depending on severity.\n\n"
+     "1. Punctuality & Attendance\n"
+     "- Employees must report to work on time as per their assigned shift "
+     "schedule.\n"
+     "- Habitual late arrivals (more than 3 times in a month) will attract a "
+     "formal warning.\n"
+     "- Unauthorised absence without prior approval will result in loss of pay "
+     "(LOP) for those days.\n"
+     "- Continuous absence for more than 3 working days without notification may "
+     "be treated as voluntary abandonment.\n\n"
+     "2. Dress Code & Personal Appearance\n"
+     "- Employees must maintain a professional appearance at all times during "
+     "working hours.\n"
+     "- Formals or organisation-issued uniforms (where applicable) must be worn on "
+     "all working days.\n"
+     "- Casual wear is permitted only on designated casual Fridays or special "
+     "occasions announced by HR.\n\n"
+     "3. Workplace Conduct\n"
+     "- Employees must treat all colleagues, clients, and visitors with respect "
+     "and professionalism.\n"
+     "- Aggressive language, shouting, or physical altercations are strictly "
+     "prohibited.\n"
+     "- Use of offensive, discriminatory, or abusive language -- verbal or "
+     "written -- will result in immediate disciplinary action.\n"
+     "- Gossiping, spreading rumours, or making false statements about colleagues "
+     "is not permitted.\n\n"
+     "4. Use of Office Resources\n"
+     "- Office equipment, internet, and telephone facilities must be used for "
+     "official purposes only.\n"
+     "- Personal use of office resources is limited and must not interfere with "
+     "work duties.\n"
+     "- Employees must not download or install unauthorised software on company "
+     "devices.\n"
+     "- Misuse or damage to office property will be charged to the responsible "
+     "employee.\n\n"
+     "5. Confidentiality\n"
+     "- Employees must maintain strict confidentiality of all business-sensitive "
+     "information.\n"
+     "- Client data, internal strategies, salary details, and employee records "
+     "must not be disclosed to unauthorised persons.\n"
+     "- Confidentiality obligations remain in effect even after the termination "
+     "of employment.\n\n"
+     "6. Social Media Policy\n"
+     "- Employees must not post, share, or comment on content that could harm the "
+     "organisation's reputation on any social media platform.\n"
+     "- Sharing internal documents, meeting screenshots, or client information on "
+     "social media is strictly prohibited.\n"
+     "- Personal social media activities during work hours should not impact "
+     "productivity.\n\n"
+     "7. Anti-Corruption & Ethics\n"
+     "- Bribery, fraud, or corruption in any form is strictly prohibited and will "
+     "lead to immediate termination and legal action.\n"
+     "- Employees must declare any conflict of interest to their manager or HR "
+     "promptly.\n"
+     "- Accepting gifts worth more than Rs. 500 from vendors or clients must be "
+     "disclosed to the management.\n\n"
+     "8. Disciplinary Process\n"
+     "- Level 1: Verbal warning\n"
+     "- Level 2: Written warning placed on record\n"
+     "- Level 3: Suspension without pay\n"
+     "- Level 4: Termination of employment\n\n"
+     "The organisation reserves the right to skip steps in cases of serious "
+     "misconduct."),
+    ("limitations", "Limitations",
+     "Important: These limitations exist to ensure a safe, productive, and "
+     "legally compliant workplace for all. Non-compliance may result in "
+     "disciplinary action.\n\n"
+     "1. Working Hours\n"
+     "- Standard working hours are as per the assigned shift. Employees must not "
+     "extend working hours without prior approval from their manager.\n"
+     "- Overtime work must be pre-approved and will be compensated as per the "
+     "organisation's overtime policy.\n"
+     "- Working more than 12 hours in a single day is not permitted under any "
+     "circumstances without written approval from HR.\n\n"
+     "2. Leave Limitations\n"
+     "- Casual Leave (CL): Maximum 1 day per month (non-accumulative).\n"
+     "- Sick Leave (SL): Medical certificate is mandatory for sick leave exceeding "
+     "2 consecutive days.\n"
+     "- Earned Leave (EL): Maximum carry-forward as per the organisation's leave "
+     "policy.\n"
+     "- Leave cannot be applied retroactively without manager approval.\n"
+     "- Back-to-back leaves adjoining weekends or holidays require specific "
+     "approval.\n\n"
+     "3. Internet & Technology Use\n"
+     "- Accessing adult, gambling, or any illegal content on office networks or "
+     "devices is strictly prohibited.\n"
+     "- Streaming platforms and heavy personal internet usage during working "
+     "hours are not allowed.\n"
+     "- Personal devices must not be connected to the organisation's secured "
+     "internal network without IT approval.\n"
+     "- Employees must not bypass or attempt to bypass network security measures "
+     "(firewalls, VPN policies).\n\n"
+     "4. Client Interaction Limitations\n"
+     "- Employees must not directly negotiate pricing, contracts, or commitments "
+     "with clients without authorisation from their manager.\n"
+     "- Making verbal or written promises to clients outside the approved scope "
+     "of work is not permitted.\n"
+     "- All client communication must be documented and archived as per the "
+     "communication policy.\n\n"
+     "5. Financial Limitations\n"
+     "- Expense claims must be submitted within 7 days of incurring the expense "
+     "with valid receipts.\n"
+     "- Petty cash usage is limited to pre-approved amounts. Exceeding limits "
+     "requires written approval.\n"
+     "- Employees must not make purchases on the organisation's behalf exceeding "
+     "their authorised spending limit.\n\n"
+     "6. Workplace Physical Restrictions\n"
+     "- Access to restricted areas (server rooms, HR records room, management "
+     "cabins) is only permitted with explicit authorisation.\n"
+     "- Visitors must be registered at reception and escorted within the "
+     "premises at all times.\n"
+     "- Photographs or recordings inside the office premises are not permitted "
+     "without HR approval.\n\n"
+     "7. Communication Limitations\n"
+     "- Official communication must only be sent from the organisation's "
+     "designated email addresses.\n"
+     "- Employees must not speak to the media on behalf of the organisation "
+     "without written approval from management.\n"
+     "- Internal escalations must follow the designated reporting structure "
+     "(immediate manager -> department head -> HR)."),
+    ("instructions", "Instructions",
+     "For assistance, raise a Support Ticket through this portal or contact HR "
+     "directly.\n\n"
+     "1. Marking Attendance\n"
+     "- Attendance is marked via face recognition or QR code scan at the office "
+     "entrance scanner.\n"
+     "- Check-in must be done within 30 minutes of shift start to avoid being "
+     "marked Late.\n"
+     "- You must also mark Check-out before leaving office. Missing check-out "
+     "will mark you as Half Day.\n"
+     "- If you face any issue with attendance marking, raise a Support Ticket "
+     "immediately with the date and reason.\n\n"
+     "2. Applying for Leave\n"
+     "- Go to Apply Leave in the sidebar.\n"
+     "- Select the leave date, type (Casual / Sick / Earned), and provide a "
+     "reason.\n"
+     "- Ensure you apply at least 1 day in advance for planned leaves.\n"
+     "- Emergency leaves (same-day) require you to call or message your manager "
+     "directly and then apply through the portal.\n"
+     "- Leave status (Pending / Approved / Rejected) can be tracked under Leave "
+     "History.\n\n"
+     "3. Viewing Pay Slips\n"
+     "- Go to Pay Slips in the sidebar to view and download your monthly salary "
+     "slips.\n"
+     "- Pay slips are generated on the 1st of every month for the previous "
+     "month.\n"
+     "- If your salary appears incorrect, raise a Support Ticket with details.\n\n"
+     "4. Support Tickets\n"
+     "- Use the Support Tickets section to report attendance issues, payroll "
+     "discrepancies, or any HR-related queries.\n"
+     "- Provide a clear subject and detailed description to help the admin "
+     "resolve your ticket faster.\n"
+     "- Response time is typically within 2 working days.\n"
+     "- Do not raise duplicate tickets for the same issue.\n\n"
+     "5. Updating Your Profile\n"
+     "- Keep your contact number, emergency contact, and bank details updated "
+     "under My Profile.\n"
+     "- Changes to critical details (PAN, Aadhar, Bank Account) are subject to HR "
+     "verification.\n"
+     "- Profile photo updates must be done through HR directly.\n\n"
+     "6. Changing Your Password\n"
+     "- It is recommended to change your portal password every 90 days.\n"
+     "- Password must be at least 6 characters long.\n"
+     "- Never share your password with anyone, including IT support staff.\n"
+     "- If you forget your password, contact the system administrator or HR.\n\n"
+     "7. Resignation Process\n"
+     "- Resignation requests must be submitted through the Resignation section "
+     "with a minimum of 30 days notice (or as per your employment contract).\n"
+     "- Ensure all handover documents are completed before your last working "
+     "day.\n"
+     "- Final settlement and relieving letter will be processed only after "
+     "proper handover and clearance from all departments.\n\n"
+     "8. Emergency Contacts\n"
+     "HR Department: Contact your HR manager for any portal or policy-related "
+     "queries.\n"
+     "IT Support: Raise a Support Ticket for technical issues with the portal.\n"
+     "Payroll: For salary or PF-related queries, raise a Support Ticket with the "
+     "category \"Payroll\"."),
+    ("posh", "POSH Policy",
+     "Legal Mandate: This policy is governed by the Sexual Harassment of Women "
+     "at Workplace (Prevention, Prohibition and Redressal) Act, 2013 (POSH Act). "
+     "Compliance is mandatory for all employees, contractors, and visitors.\n\n"
+     "1. Purpose & Scope\n"
+     "This policy aims to provide a safe, respectful, and dignified working "
+     "environment free from sexual harassment. It applies to all employees "
+     "(permanent, contractual, temporary, interns), clients, customers, and "
+     "visitors at the workplace and during work-related events, trips, and "
+     "digital communications.\n\n"
+     "2. Definition of Sexual Harassment\n"
+     "- Physical contact or advances of a sexual nature\n"
+     "- Demand or request for sexual favours\n"
+     "- Making sexually coloured remarks or jokes\n"
+     "- Showing pornography or objectionable material\n"
+     "- Unwelcome sexual emails, messages, or social media contact\n"
+     "- Gender-based insults, intimidation, or threats\n"
+     "- Stalking (physical or digital)\n"
+     "- Any other unwelcome physical, verbal, or non-verbal conduct of a sexual "
+     "nature\n\n"
+     "3. Internal Complaints Committee (ICC)\n"
+     "- Presiding Officer: A senior woman employee\n"
+     "- Internal Members: At least two employees committed to women's welfare\n"
+     "- External Member: An NGO representative or person familiar with women's "
+     "issues\n"
+     "Contact the ICC through HR or by raising a Support Ticket marked as POSH "
+     "Complaint (Confidential).\n\n"
+     "4. Filing a Complaint\n"
+     "- A complaint must be filed in writing within 3 months of the incident "
+     "(extendable in special circumstances).\n"
+     "- The complaint may be submitted to the Presiding Officer of the ICC or to "
+     "HR directly.\n"
+     "- Complaints can be made in writing, by email, or through this portal's "
+     "Support Ticket system (marked Confidential).\n"
+     "- Where the aggrieved person is unable to file in writing due to "
+     "incapacity, the ICC shall render reasonable assistance.\n\n"
+     "5. Inquiry Process\n"
+     "- Upon receipt of a complaint, the ICC will commence an inquiry within 7 "
+     "working days.\n"
+     "- Both the complainant and the respondent will be given a fair opportunity "
+     "to present their case.\n"
+     "- The inquiry will be completed within 90 days of receipt of the "
+     "complaint.\n"
+     "- All proceedings of the ICC shall be kept strictly confidential.\n\n"
+     "6. Interim Relief\n"
+     "- Transfer of the aggrieved person or respondent to another department\n"
+     "- Granting paid leave to the aggrieved person\n"
+     "- Restraint on the respondent from reporting on the performance of the "
+     "aggrieved person\n\n"
+     "7. Consequences of Sexual Harassment\n"
+     "- Written apology\n"
+     "- Warning or reprimand placed on record\n"
+     "- Withholding of promotion or pay increment\n"
+     "- Deduction from salary as compensation to the aggrieved person\n"
+     "- Suspension\n"
+     "- Termination of employment\n"
+     "- Reporting to law enforcement authorities\n\n"
+     "8. Protection Against Retaliation\n"
+     "Any employee who retaliates, victimises, or intimidates the complainant or "
+     "witnesses will face strict disciplinary action, up to and including "
+     "termination.\n\n"
+     "9. False Complaints\n"
+     "Filing a knowingly false complaint or providing false evidence is also a "
+     "punishable offence under the Act. However, the inability to prove a "
+     "complaint does not constitute a false complaint.\n\n"
+     "10. Awareness & Training\n"
+     "- All employees are required to complete the mandatory POSH awareness "
+     "training provided by HR.\n"
+     "- POSH training sessions are conducted at least once a year.\n"
+     "- New employees must complete POSH orientation within 30 days of "
+     "joining.\n\n"
+     "Zero Tolerance Statement: Our organisation has a zero-tolerance policy "
+     "towards sexual harassment in any form. Every employee deserves to work in "
+     "an environment of respect, dignity, and safety."),
+    ("resignation", "Resignation Policy",
+     "Important: Resignation is a formal process. Please read this policy "
+     "carefully before submitting your resignation through this portal.\n\n"
+     "1. Notice Period\n"
+     "- Employees are required to serve the notice period as specified in their "
+     "employment contract.\n"
+     "- Standard notice period is typically 30 to 90 days depending on your role "
+     "and grade.\n"
+     "- The exact notice period applicable to you is mentioned in your offer "
+     "letter or employment agreement.\n"
+     "- Failure to serve the notice period may result in forfeiture of dues or "
+     "recovery of notice pay.\n\n"
+     "2. How to Submit Your Resignation\n"
+     "- Use the Resignation section in your portal sidebar to submit your "
+     "resignation formally.\n"
+     "- Your resignation request will be reviewed and acknowledged by HR within "
+     "2 working days.\n"
+     "- Do not consider your resignation accepted until you receive a formal "
+     "confirmation from HR.\n\n"
+     "3. Exit Process\n"
+     "- An exit interview will be scheduled with HR before your last working "
+     "day.\n"
+     "- All company assets (laptop, ID card, access cards, uniforms) must be "
+     "returned before the full and final settlement.\n"
+     "- Pending tasks must be handed over to your reporting manager or "
+     "designated colleague.\n"
+     "- Ensure all leaves, expenses, and reimbursements are cleared before your "
+     "last day.\n\n"
+     "4. Full & Final Settlement\n"
+     "- Full and final settlement will be processed within 30-45 days of your "
+     "last working day.\n"
+     "- Settlement includes remaining salary, encashable leave balance, and any "
+     "outstanding reimbursements.\n"
+     "- Any dues owed to the organisation (salary advance, notice pay shortfall) "
+     "will be deducted from the settlement.\n\n"
+     "5. Experience & Relieving Letter\n"
+     "- A relieving letter and experience certificate will be issued after "
+     "successful completion of the exit process.\n"
+     "- Documents will be provided only after all dues are cleared and company "
+     "property is returned.\n\n"
+     "6. Withdrawal of Resignation\n"
+     "An employee may request to withdraw their resignation by contacting HR, "
+     "provided the withdrawal is made before HR issues the formal acceptance. "
+     "Withdrawal is subject to management discretion.\n\n"
+     "Note: Absconding (leaving without completing the notice period and "
+     "without informing HR) will be treated as misconduct and may affect your "
+     "full and final settlement, reference letters, and future employment "
+     "prospects."),
+]
+
+
+def _run_company_policies_seed(cursor, db):
+    """One-time, per-tenant-schema seed of company_policies with starter
+    content (see _POLICY_SEED_CONTENT above) so a brand-new Policies tab
+    isn't just an empty list -- HR/admin can then edit each one for real
+    via blueprints/policies.py. Guarded like every other one-off migration
+    in this file; a tenant that already has any company_policies rows
+    (e.g. HR already started editing) is left alone."""
+    try:
+        cursor.execute("SELECT 1 FROM _applied_migrations WHERE name='company_policies_seed_v1'")
+        if cursor.fetchone():
+            return
+        cursor.execute("SELECT COUNT(*) FROM company_policies")
+        if cursor.fetchone()[0] == 0:
+            for i, (category, title, body) in enumerate(_POLICY_SEED_CONTENT):
+                cursor.execute(
+                    "INSERT INTO company_policies (category, title, body, is_published, sort_order) "
+                    "VALUES (%s,%s,%s,1,%s)",
+                    (category, title, body, i)
+                )
+        cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('company_policies_seed_v1')")
+        db.commit()
+    except Exception as exc:
+        app_log.warning("Migration 'company_policies_seed_v1' failed: %s", exc, exc_info=True)
+
+
+def _run_company_policies_seed_v2(cursor, db):
+    """One-time follow-up to company_policies_seed_v1: that seed shipped
+    with only a one-paragraph placeholder per category (now
+    _POLICY_SEED_CONTENT_V1_LEGACY) because templates/employee_portal.html
+    still showed its own hardcoded rich text at the time and nothing read
+    company_policies yet. Now that the employee portal reads this table
+    directly (GET /api/employee/policies), replace that placeholder with
+    the full starter text -- but only for rows that still hold the
+    original placeholder verbatim, so a tenant whose HR already wrote a
+    real policy is left untouched."""
+    try:
+        cursor.execute("SELECT 1 FROM _applied_migrations WHERE name='company_policies_seed_v2'")
+        if cursor.fetchone():
+            return
+        for category, title, body in _POLICY_SEED_CONTENT:
+            legacy_body = _POLICY_SEED_CONTENT_V1_LEGACY.get(category)
+            if legacy_body is None:
+                continue
+            cursor.execute(
+                "UPDATE company_policies SET body=%s WHERE category=%s AND body=%s",
+                (body, category, legacy_body)
+            )
+        cursor.execute("INSERT INTO _applied_migrations (name) VALUES ('company_policies_seed_v2')")
+        db.commit()
+    except Exception as exc:
+        app_log.warning("Migration 'company_policies_seed_v2' failed: %s", exc, exc_info=True)
 
 
 def _run_pii_widen_migration_v1(cursor, db):
@@ -3870,11 +4444,13 @@ if "core.home" not in app.view_functions:
     from blueprints.platform_admin import platform_admin_bp
     from blueprints.honeypot_routes import honeypot_bp
     from blueprints.disbursement import disbursement_bp
+    from blueprints.hr_dashboard import hr_dashboard_bp
+    from blueprints.policies import policies_bp
     for _bp in (health_bp, notifications_bp, payroll_bp, leave_bp, admin_views_bp,
                 auth_bp, employees_bp, attendance_bp, tickets_bp, performance_bp,
                 documents_bp, org_bp, onboarding_bp, employee_portal_bp, core_bp,
                 ai_hrms_bp, email_blast_bp, daily_report_bp, billing_bp, webhooks_bp, seats_bp, auto_debit_bp,
-                billing_dunning_bp, platform_admin_bp, honeypot_bp, disbursement_bp):
+                billing_dunning_bp, platform_admin_bp, honeypot_bp, disbursement_bp, hr_dashboard_bp, policies_bp):
         app.register_blueprint(_bp)
 
 
@@ -3902,6 +4478,7 @@ _register_api_v1_aliases()
 if __name__ == "__main__":
     init_master_db()
     init_db()
+    _run_migrations_for_all_tenants()
     cfg.load_default_shift()
     cfg.load_salary_rules()
     # wsgi.py wraps app.wsgi_app with this at import time -- running app.py

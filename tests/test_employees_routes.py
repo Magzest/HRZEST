@@ -259,7 +259,7 @@ class TestAddEmployeePage:
             "bank_name": "Test Bank", "bank_account": "000111222333", "bank_ifsc": "tbnk0001234",
             "degree[]": ["B.Tech", "M.Tech"], "institution[]": ["ABC University", "XYZ Institute"],
             "year_of_passing[]": ["2016", "2018"], "percentage[]": ["82", "75"],
-            "salary_per_day": "1800.00",
+            "monthly_salary": "46800.00",
         }, follow_redirects=True)
         assert b"registered" in resp.data
 

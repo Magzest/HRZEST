@@ -317,6 +317,46 @@
         </div>
       </div>
 
+      <!-- HR PENDING-ACTION CARDS -- this page is where HR-role sessions
+           land after login (blueprints/auth.py's _finish_employee_login;
+           app.py's _is_hr makes the sidebar's own "Dashboard" link point
+           here too), so it doubles as their dashboard, not just an
+           employee list. -->
+      <div class="stat-row">
+        <a class="stat-card" href="{{ tpath('/leave_holidays?tab=leaves') }}" style="text-decoration:none;">
+          <div class="stat-icon onleave"><i class="ti ti-calendar-due"></i></div>
+          <div><div class="stat-val">{{ pending_leaves }}</div><div class="stat-lbl">Pending Leaves</div></div>
+        </a>
+        <a class="stat-card" href="{{ tpath('/leave_holidays?tab=resignations') }}" style="text-decoration:none;">
+          <div class="stat-icon resigned"><i class="ti ti-door-exit"></i></div>
+          <div><div class="stat-val">{{ pending_resignations }}</div><div class="stat-lbl">Pending Resignations</div></div>
+        </a>
+        <a class="stat-card" href="{{ tpath('/leave_holidays?tab=tickets') }}" style="text-decoration:none;">
+          <div class="stat-icon active"><i class="ti ti-ticket"></i></div>
+          <div><div class="stat-val">{{ pending_tickets }}</div><div class="stat-lbl">Open Tickets</div></div>
+        </a>
+        <a class="stat-card" href="{{ tpath('/onboarding') }}" style="text-decoration:none;">
+          <div class="stat-icon total"><i class="ti ti-checklist"></i></div>
+          <div><div class="stat-val">{{ ob_active }}</div><div class="stat-lbl">Onboarding In Progress{% if ob_overdue %} &middot; {{ ob_overdue }} overdue{% endif %}</div></div>
+        </a>
+      </div>
+
+      <!-- HR QUICK LINKS -->
+      <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px;">
+        <a href="{{ tpath('/monthly_report') }}" style="display:flex; align-items:center; gap:7px; padding:9px 16px; border-radius:10px; background:#fff; border:1px solid #dbeafe; color:#1e3a8a; font-size:13px; font-weight:700; text-decoration:none;">
+          <i class="ti ti-calendar-check"></i> Attendance
+        </a>
+        <a href="{{ tpath('/leave_holidays') }}" style="display:flex; align-items:center; gap:7px; padding:9px 16px; border-radius:10px; background:#fff; border:1px solid #dbeafe; color:#1e3a8a; font-size:13px; font-weight:700; text-decoration:none;">
+          <i class="ti ti-beach"></i> Leave &amp; Holidays
+        </a>
+        <a href="{{ tpath('/onboarding') }}" style="display:flex; align-items:center; gap:7px; padding:9px 16px; border-radius:10px; background:#fff; border:1px solid #dbeafe; color:#1e3a8a; font-size:13px; font-weight:700; text-decoration:none;">
+          <i class="ti ti-checklist"></i> Onboarding
+        </a>
+        <a href="{{ tpath('/leave_holidays?tab=tickets') }}" style="display:flex; align-items:center; gap:7px; padding:9px 16px; border-radius:10px; background:#fff; border:1px solid #dbeafe; color:#1e3a8a; font-size:13px; font-weight:700; text-decoration:none;">
+          <i class="ti ti-ticket"></i> Support Tickets
+        </a>
+      </div>
+
       {% if co.paid_employee_slots is not none %}
       {% set _at_cap = employee_count >= co.paid_employee_slots %}
       {% set _near_cap = not _at_cap and co.paid_employee_slots > 0 and (employee_count / co.paid_employee_slots) >= 0.8 %}
@@ -326,7 +366,7 @@
           Employee Seats: {{ employee_count }} / {{ co.paid_employee_slots }} used
           {% if _at_cap %} — limit reached, new employees need more seats{% endif %}
         </div>
-        <a href="{{ tpath('/settings/seats') }}" style="flex-shrink:0; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; background:{{ '#dc2626' if _at_cap else '#2563eb' }}; color:#fff;">
+        <a href="{{ tpath('/settings?tab=billing') }}" style="flex-shrink:0; padding:7px 14px; border-radius:8px; font-size:12px; font-weight:700; text-decoration:none; background:{{ '#dc2626' if _at_cap else '#2563eb' }}; color:#fff;">
           {{ 'Buy More Seats' if _at_cap else 'Manage Seats' }}
         </a>
       </div>
@@ -419,6 +459,7 @@
                 <th>Name</th>
                 <th>Role</th>
                 <th>Department</th>
+                {% if not is_hr_scoped %}<th>Assigned HR</th>{% endif %}
                 <th>Shift</th>
                 <th>Phone</th>
                 <th>Status</th>
@@ -431,7 +472,7 @@
               {% for e in employees %}
               {% set emp_id, name, role, email, doj, total_days, last_seen,
                      work_mode, work_lat, work_lon, face_image, qr_code,
-                     department, phone, gender, shift_name, shift_id, emp_status = e %}
+                     department, phone, gender, shift_name, shift_id, assigned_hr_username, emp_status = e %}
               <tr
                 data-dept="{{ department or '' }}"
                 data-shift="{{ shift_name or '' }}"
@@ -465,6 +506,9 @@
                   {% else %}<span class="muted">—</span>{% endif %}
                 </td>
                 <td>{% if department %}{{ department }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                {% if not is_hr_scoped %}
+                <td>{% if assigned_hr_username %}{{ assigned_hr_username }}{% else %}<span class="muted">Unassigned</span>{% endif %}</td>
+                {% endif %}
                 <td>{% if shift_name %}{{ shift_name }}{% else %}<span class="muted">—</span>{% endif %}</td>
                 <td>{% if phone %}{{ phone }}{% else %}<span class="muted">—</span>{% endif %}</td>
                 <td>
@@ -802,9 +846,20 @@
                       <input type="text" name="phone" placeholder="9876543210" />
                     </div>
                     <div class="field-group">
-                      <label>Daily Salary (₹)</label>
-                      <input type="number" name="salary_per_day" placeholder="e.g. 1500.00" step="0.01" min="0" />
+                      <label>Monthly Salary (₹)</label>
+                      <input type="number" name="monthly_salary" placeholder="e.g. 30000.00" step="0.01" min="0" />
                     </div>
+                    {% if not is_hr_scoped %}
+                    <div class="field-group">
+                      <label>Assigned HR</label>
+                      <select name="assigned_hr_username">
+                        <option value="">— No HR Assigned —</option>
+                        {% for hr_username in hr_accounts %}
+                          <option value="{{ hr_username }}">{{ hr_username }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    {% endif %}
                   </div>
                 </div>
               </div>
@@ -1075,6 +1130,17 @@
                 <label>Department</label>
                 <input name="department" id="edit_department" type="text" />
               </div>
+              {% if not is_hr_scoped %}
+              <div class="field-group">
+                <label>Assigned HR</label>
+                <select name="assigned_hr_username" id="edit_assigned_hr">
+                  <option value="">— No HR Assigned —</option>
+                  {% for hr_username in hr_accounts %}
+                    <option value="{{ hr_username }}">{{ hr_username }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endif %}
               <div class="field-group">
                 <label>Gender</label>
                 <select name="gender" id="edit_gender">
@@ -1688,6 +1754,8 @@
           document.getElementById('edit_email').value         = d.email        || '';
           document.getElementById('edit_phone').value         = d.phone        || '';
           document.getElementById('edit_role').value          = d.role         || '';
+          var editAssignedHr = document.getElementById('edit_assigned_hr');
+          if (editAssignedHr) editAssignedHr.value = d.assigned_hr_username || '';
           document.getElementById('edit_department').value    = d.department   || '';
           document.getElementById('edit_gender').value        = d.gender       || '';
           document.getElementById('edit_dob').value           = d.dob          || '';

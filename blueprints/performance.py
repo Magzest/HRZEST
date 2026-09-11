@@ -11,7 +11,7 @@ from functools import wraps
 from flask import Blueprint, request, session, redirect, render_template, flash, jsonify
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, employee_api_required
-from utils.helpers import tpath, co_scope_column, _db, get_pending_counts, get_company_settings, get_employee_sidebar_info
+from utils.helpers import tpath, co_scope_column, hr_scope_column, hr_scope_denied, _db, get_pending_counts, get_company_settings, get_employee_sidebar_info
 from extensions import limiter, log_security_event
 
 performance_bp = Blueprint("performance", __name__)
@@ -187,7 +187,8 @@ def performance():
     active_cid = session.get("active_company_id")
     dept_filter = "AND e.department=%s" if dept else ""
     co_filter, _co_params = co_scope_column(active_cid, alias="e")
-    params = [yr, q] + ([dept] if dept else []) + list(_co_params)
+    hr_filter, _hr_params = hr_scope_column(alias="e")
+    params = [yr, q] + ([dept] if dept else []) + list(_co_params) + list(_hr_params)
     cursor.execute(f"""
         SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
                pr.id, COALESCE(pr.overall_rating,0), COALESCE(pr.status,'--'),
@@ -195,7 +196,7 @@ def performance():
         FROM employees e
         LEFT JOIN performance_reviews pr
             ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
-        WHERE e.is_active=1 {dept_filter} {co_filter}
+        WHERE e.is_active=1 {dept_filter} {co_filter} {hr_filter}
         ORDER BY e.name
     """, params)  # nosec B608
     employees = cursor.fetchall()
@@ -220,7 +221,8 @@ def performance():
     hike_eligible_count = 0
     if active_tab == 'hike':
         _hike_co, _hike_co_args = co_scope_column(active_cid, alias="e")
-        _hike_params = (yr, q) + _hike_co_args
+        _hike_hr, _hike_hr_args = hr_scope_column(alias="e")
+        _hike_params = (yr, q) + _hike_co_args + _hike_hr_args
         cursor.execute(f"""
             SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
                    COALESCE(pr.overall_rating,0), COALESCE(pr.status,'--'),
@@ -228,7 +230,7 @@ def performance():
             FROM employees e
             LEFT JOIN performance_reviews pr ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
             LEFT JOIN salary_config sc ON sc.employee_id=e.employee_id
-            WHERE e.is_active=1 {_hike_co}
+            WHERE e.is_active=1 {_hike_co} {_hike_hr}
             ORDER BY e.name
         """, _hike_params)  # nosec B608
         for (h_eid, h_name, h_role, h_dept, h_rating, h_status, h_ctc) in cursor.fetchall():
@@ -272,6 +274,9 @@ def performance():
 @performance_bp.route("/performance_review/<emp_id>", methods=["GET"])
 @admin_required
 def performance_review(emp_id):
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath("/performance"))
     today = datetime.date.today()
     q = int(request.args.get("quarter", (today.month - 1) // 3 + 1))
     yr = int(request.args.get("year", today.year))
@@ -337,6 +342,10 @@ def performance_save_review():
     feedback = request.form.get("reviewer_feedback", "").strip()
     status = request.form.get("status", "Draft")
 
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath("/performance"))
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
@@ -382,6 +391,10 @@ def performance_add_kpi():
         flash("KPI title is required.", "error")
         return redirect(tpath(f"/performance_review/{emp_id}?quarter={q}&year={yr}"))
 
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath("/performance"))
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
 
@@ -418,6 +431,10 @@ def performance_rate_kpi():
     achievement = request.form.get("achievement", "").strip()
     comments = request.form.get("comments", "").strip()
 
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath("/performance"))
+
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
@@ -450,6 +467,9 @@ def performance_delete_kpi():
     emp_id = request.form["employee_id"]
     q = int(request.form["quarter"])
     yr = int(request.form["year"])
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath("/performance"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("DELETE FROM performance_kpis WHERE id=%s", (kpi_id,))
@@ -603,8 +623,9 @@ def performance_export():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
+    _hr, _hr_args = hr_scope_column(alias="e")
 
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
                COALESCE(pr.overall_rating,0), COALESCE(pr.status,'Not Started'),
                COALESCE(pr.reviewer_feedback,''), COALESCE(pr.employee_comment,''),
@@ -612,21 +633,21 @@ def performance_export():
         FROM employees e
         LEFT JOIN performance_reviews pr
             ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
-        WHERE e.is_active=1
+        WHERE e.is_active=1 {_hr}
         ORDER BY e.name
-    """, (yr, q))
+    """, (yr, q) + _hr_args)  # nosec B608
     employees = cursor.fetchall()
 
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT e.employee_id, e.name, pk.kpi_title, COALESCE(pk.description,''),
                COALESCE(pk.target,''), COALESCE(pk.achievement,''),
                pk.weight, COALESCE(pk.rating,0), COALESCE(pk.comments,'')
         FROM employees e
         JOIN performance_reviews pr ON pr.employee_id=e.employee_id AND pr.year=%s AND pr.quarter=%s
         JOIN performance_kpis pk ON pk.review_id=pr.id
-        WHERE e.is_active=1
+        WHERE e.is_active=1 {_hr}
         ORDER BY e.name, pk.id
-    """, (yr, q))
+    """, (yr, q) + _hr_args)  # nosec B608
     kpis = cursor.fetchall()
     cursor.close()
     db.close()

@@ -17,13 +17,26 @@ from flask import (
 
 from extensions import app_log
 from database import get_db_connection
-from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, get_pending_counts, company_today, get_employee_sidebar_info, coerce_datetime
+from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required, role_required
+from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, hr_scope_subquery, hr_scope_column, hr_scope_denied, get_pending_counts, company_today, get_employee_sidebar_info, coerce_datetime
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import get_indian_holidays
 import utils.config as cfg
 
 leave_bp = Blueprint("leave", __name__)
+
+# Roles allowed to read or act on another employee's leave/resignation/
+# overtime request. Previously these routes only checked @admin_required /
+# @api_required (any logged-in admin-side session or valid admin API
+# token, regardless of role) with no role restriction at all -- meaning a
+# soc_analyst account, which every other sensitive admin route treats as
+# lower-privilege (see utils/dlp.py's PII-clearance tier), could read and
+# approve/reject every employee's leave, resignation, and overtime data
+# company-wide. There is no per-team/manager-owns-employee scoping in this
+# codebase today (admin_users carries a role, not a link to specific
+# employees), so this is a role-tier gate, not team-scoped visibility --
+# see the PR description for why that's the deliberate scope of this fix.
+_LEAVE_APPROVER_ROLES = ("admin", "hr", "manager")
 
 
 @leave_bp.route("/add_holiday", methods=["POST"])
@@ -220,15 +233,17 @@ def leave_balance():
     db.commit()
 
     # Fetch all balances
-    cursor.execute("""
+    _hr, _hr_args = hr_scope_column(alias="e")
+    cursor.execute(f"""
         SELECT e.employee_id, e.name, e.department,
                lt.id, lt.name, lb.total_days, lb.used_days
         FROM employees e
         JOIN leave_types lt ON lt.is_active=1
         LEFT JOIN leave_balances lb ON lb.employee_id=e.employee_id
             AND lb.leave_type_id=lt.id AND lb.year=%s
+        WHERE 1=1 {_hr}
         ORDER BY e.name, lt.id
-    """, (year,))
+    """, (year,) + _hr_args)  # nosec B608
     rows = cursor.fetchall()
 
     # Group by employee
@@ -266,6 +281,9 @@ def set_leave_balance():
     lt_id = int(request.form.get("leave_type_id"))
     total = int(request.form.get("total_days", 0))
     year = int(request.form.get("year", datetime.date.today().year))
+    if hr_scope_denied(emp_id):
+        flash("Employee not found.", "error")
+        return redirect(tpath(f"/leave_balance?year={year}"))
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
     cursor.execute("""
@@ -285,6 +303,17 @@ def leave_requests_redirect():
     return redirect(tpath("/leave_holidays?tab=leaves"))
 
 
+@leave_bp.route("/resignation_requests")
+def resignation_requests_redirect():
+    # Resignations were consolidated into leave_holidays.html's own
+    # "Resignations" tab (same page that already serves /api/resignation_requests'
+    # data), same retirement pattern as leave_requests_redirect() above and
+    # /tickets (blueprints/tickets.py) -- kept as a redirect (not deleted)
+    # so old bookmarks/links still resolve, rather than duplicating a
+    # second standalone page for data that already has a home.
+    return redirect(tpath("/leave_holidays?tab=resignations"))
+
+
 @leave_bp.route("/leave_holidays")
 @admin_required
 def leave_holidays():
@@ -298,6 +327,8 @@ def leave_holidays():
     active_cid = session.get("active_company_id")
     _co_join, _co_args = co_scope_column(active_cid, alias="e")
     _co_sub, _ = co_scope_subquery(active_cid)
+    _hr_join, _hr_args = hr_scope_column(alias="e")
+    _hr_sub, _ = hr_scope_subquery()
 
     cursor.execute(f"""
         SELECT lr.id, e.name, lr.employee_id, lr.leave_date, lr.reason, lr.status, lr.created_at,
@@ -305,37 +336,37 @@ def leave_holidays():
                COALESCE(lr.is_half_day, 0) AS is_half_day,
                lr.half_day_session
         FROM leave_requests lr
-        JOIN employees e ON lr.employee_id = e.employee_id {_co_join}
+        JOIN employees e ON lr.employee_id = e.employee_id {_co_join} {_hr_join}
         LEFT JOIN leave_types lt ON lr.leave_type_id = lt.id
         ORDER BY CASE WHEN lr.status='Pending' THEN 0 WHEN lr.status='Approved' THEN 1 WHEN lr.status='Rejected' THEN 2 ELSE 3 END, lr.created_at DESC
-    """, _co_args)  # nosec B608
+    """, _co_args + _hr_args)  # nosec B608
     leaves = cursor.fetchall()
     cursor.execute(f"""
         SELECT employee_id, SUM(CASE WHEN COALESCE(is_half_day,0)=1 THEN 0.5 ELSE 1 END)
         FROM leave_requests WHERE EXTRACT(YEAR FROM leave_date)=EXTRACT(YEAR FROM CURRENT_DATE) AND status='Approved'
-        {_co_sub} GROUP BY employee_id
-    """, _co_args)  # nosec B608
+        {_co_sub} {_hr_sub} GROUP BY employee_id
+    """, _co_args + _hr_args)  # nosec B608
     leave_used = {row[0]: float(row[1]) for row in cursor.fetchall()}
     cursor.execute("SELECT id, name, annual_quota FROM leave_types WHERE is_active=1 ORDER BY id")
     leave_types_list = cursor.fetchall()
     cursor.execute(f"""
         SELECT t.id, t.employee_id, e.name, t.category, t.subject, t.description,
                t.priority, t.status, t.admin_response, t.created_at, t.updated_at
-        FROM tickets t JOIN employees e ON t.employee_id = e.employee_id {_co_join}
+        FROM tickets t JOIN employees e ON t.employee_id = e.employee_id {_co_join} {_hr_join}
         ORDER BY CASE WHEN t.status='Open' THEN 0 WHEN t.status='In Progress' THEN 1 WHEN t.status='Resolved' THEN 2 WHEN t.status='Closed' THEN 3 ELSE 4 END, t.created_at DESC
-    """, _co_args)  # nosec B608
+    """, _co_args + _hr_args)  # nosec B608
     all_tickets = cursor.fetchall()
     cursor.execute(f"""
         SELECT rr.id, e.name, rr.employee_id, rr.last_working_day, rr.reason, rr.status, rr.created_at
-        FROM resignation_requests rr JOIN employees e ON rr.employee_id = e.employee_id {_co_join}
+        FROM resignation_requests rr JOIN employees e ON rr.employee_id = e.employee_id {_co_join} {_hr_join}
         ORDER BY CASE WHEN rr.status='Pending' THEN 0 WHEN rr.status='Accepted' THEN 1 WHEN rr.status='Declined' THEN 2 ELSE 3 END, rr.created_at DESC
-    """, _co_args)  # nosec B608
+    """, _co_args + _hr_args)  # nosec B608
     resignations = cursor.fetchall()
-    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
+    cursor.execute(f"SELECT COUNT(*) FROM leave_requests WHERE status='Pending' {_co_sub} {_hr_sub}", _co_args + _hr_args)  # nosec B608
     pending_leaves = cursor.fetchone()[0]
-    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status='Open' {_co_sub}", _co_args)  # nosec B608
+    cursor.execute(f"SELECT COUNT(*) FROM tickets WHERE status='Open' {_co_sub} {_hr_sub}", _co_args + _hr_args)  # nosec B608
     pending_tickets = cursor.fetchone()[0]
-    cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub}", _co_args)  # nosec B608
+    cursor.execute(f"SELECT COUNT(*) FROM resignation_requests WHERE status='Pending' {_co_sub} {_hr_sub}", _co_args + _hr_args)  # nosec B608
     pending_resignations = cursor.fetchone()[0]
 
     # Holidays data
@@ -392,7 +423,7 @@ def leave_holidays():
 
 
 @leave_bp.route("/leave_action/<int:lid>", methods=["POST"])
-@admin_required
+@role_required(*_LEAVE_APPROVER_ROLES)
 def leave_action(lid):
     action = request.form.get("action", "")
     if action not in ("Approved", "Rejected"):
@@ -410,6 +441,10 @@ def leave_action(lid):
         WHERE lr.id = %s
     """, (lid,))
     leave_row = cursor.fetchone()
+    if leave_row and hr_scope_denied(leave_row[0]):
+        cursor.close()
+        db.close()
+        return "Forbidden", 403
 
     # Fetch leave_type_id before updating
     cursor.execute("SELECT leave_type_id FROM leave_requests WHERE id=%s", (lid,))
@@ -536,7 +571,8 @@ def leave_calendar():
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute("""
+    _hr, _hr_args = hr_scope_column(alias="e")
+    cursor.execute(f"""
         SELECT lr.leave_date, e.name, lr.employee_id,
                COALESCE(lr.is_half_day,0),
                COALESCE(lt.name,'Leave') AS leave_type,
@@ -545,9 +581,9 @@ def leave_calendar():
         JOIN employees e ON lr.employee_id = e.employee_id
         LEFT JOIN leave_types lt ON lr.leave_type_id = lt.id
         WHERE lr.status = 'Approved'
-          AND lr.leave_date BETWEEN %s AND %s
+          AND lr.leave_date BETWEEN %s AND %s {_hr}
         ORDER BY lr.leave_date, e.name
-    """, (start_date, end_date))
+    """, (start_date, end_date) + _hr_args)  # nosec B608
     cal_data = defaultdict(list)
     for ld, name, eid, half, ltype, sess in cursor.fetchall():
         day = ld.day if hasattr(ld, 'day') else int(str(ld)[8:10])
@@ -643,7 +679,7 @@ def request_resignation():
 
 
 @leave_bp.route("/resignation_action/<int:rid>", methods=["POST"])
-@admin_required
+@role_required(*_LEAVE_APPROVER_ROLES)
 def resignation_action(rid):
     action = request.form.get("action", "")
     if action not in ("Accepted", "Declined"):
@@ -659,6 +695,10 @@ def resignation_action(rid):
         WHERE rr.id = %s
     """, (rid,))
     resign_row = cursor.fetchone()
+    if resign_row and hr_scope_denied(resign_row[0]):
+        cursor.close()
+        db.close()
+        return "Forbidden", 403
     cursor.execute("UPDATE resignation_requests SET status=%s WHERE id=%s", (action, rid))
     db.commit()
     cursor.close()
@@ -712,7 +752,7 @@ def resignation_action(rid):
 
 
 @leave_bp.route("/bulk_leave_action", methods=["POST"])
-@admin_required
+@role_required(*_LEAVE_APPROVER_ROLES)
 def bulk_leave_action():
     action = request.form.get("action", "")
     raw_ids = request.form.getlist("leave_ids")
@@ -739,6 +779,8 @@ def bulk_leave_action():
         if not row:
             continue
         emp_id, leave_date, reason, emp_name, emp_email, email_alerts_enabled = row
+        if hr_scope_denied(emp_id):
+            continue
         cursor.execute("UPDATE leave_requests SET status=%s WHERE id=%s", (action, lid))
         if action == "Approved":
             cursor.execute("""
@@ -809,6 +851,7 @@ def api_holidays():
 
 @leave_bp.route("/api/leave_requests", methods=["GET"])
 @api_required
+@api_role_required(*_LEAVE_APPROVER_ROLES)
 def api_leave_requests():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -832,6 +875,7 @@ def api_leave_requests():
 
 @leave_bp.route("/api/leave_requests/<int:lid>/action", methods=["POST"])
 @api_required
+@api_role_required(*_LEAVE_APPROVER_ROLES)
 def api_leave_action(lid):
     data = request.get_json(silent=True) or {}
     raw_action = data.get("action", "").strip().lower()
@@ -862,6 +906,7 @@ def api_leave_action(lid):
 
 @leave_bp.route("/api/resignation_requests", methods=["GET"])
 @api_required
+@api_role_required(*_LEAVE_APPROVER_ROLES)
 def api_resignation_requests():
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -885,6 +930,7 @@ def api_resignation_requests():
 
 @leave_bp.route("/api/resignation_requests/<int:rid>/action", methods=["POST"])
 @api_required
+@api_role_required(*_LEAVE_APPROVER_ROLES)
 def api_resignation_action(rid):
     data = request.get_json(silent=True) or {}
     action = data.get("action", "").strip()
@@ -1255,6 +1301,7 @@ def api_overtime():
 
 @leave_bp.route("/api/overtime/<int:oid>/action", methods=["POST"])
 @api_required
+@api_role_required(*_LEAVE_APPROVER_ROLES)
 def api_overtime_action(oid):
     """Bearer-token twin of overtime_action() below -- same two effects
     (set the record's status, and credit compoff_balance when approving
@@ -1365,13 +1412,14 @@ def overtime():
     active_tab = request.args.get('tab', 'ot')
 
     # OT records
-    cursor.execute("""
+    _hr, _hr_args = hr_scope_column(alias="e")
+    cursor.execute(f"""
         SELECT o.id, o.employee_id, e.name, o.date, o.shift_end, o.actual_logout,
                o.ot_minutes, o.ot_pay, o.status, o.notes
         FROM overtime_records o JOIN employees e ON e.employee_id=o.employee_id
-        WHERE EXTRACT(MONTH FROM o.date)=%s AND EXTRACT(YEAR FROM o.date)=%s
+        WHERE EXTRACT(MONTH FROM o.date)=%s AND EXTRACT(YEAR FROM o.date)=%s {_hr}
         ORDER BY o.date DESC
-    """, (month, year))
+    """, (month, year) + _hr_args)  # nosec B608
     records = cursor.fetchall()
 
     total_ot_minutes = sum(r[6] for r in records)
@@ -1388,13 +1436,14 @@ def overtime():
     minutes_per_day = int(cfg_row[1])
 
     # Comp-off balances per employee
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT e.employee_id, e.name, COALESCE(e.role,''), COALESCE(e.department,''),
                COALESCE(cb.earned_minutes,0), COALESCE(cb.used_minutes,0)
         FROM employees e
         LEFT JOIN compoff_balance cb ON cb.employee_id=e.employee_id
+        WHERE 1=1 {_hr}
         ORDER BY e.name
-    """)
+    """, _hr_args)  # nosec B608
     compoff_balances = []
     for emp_id, name, role, dept, earned, used in cursor.fetchall():
         earned_days = round(earned / minutes_per_day, 2) if minutes_per_day else 0
@@ -1430,7 +1479,7 @@ def overtime():
 
 
 @leave_bp.route("/overtime_action/<int:oid>", methods=["POST"])
-@admin_required
+@role_required(*_LEAVE_APPROVER_ROLES)
 def overtime_action(oid):
     action = request.form.get('action', '').strip()
     notes = request.form.get('notes', '').strip()
@@ -1444,6 +1493,10 @@ def overtime_action(oid):
     # Fetch OT record before updating
     cursor.execute("SELECT employee_id, ot_minutes, status FROM overtime_records WHERE id=%s", (oid,))
     ot_row = cursor.fetchone()
+    if ot_row and hr_scope_denied(ot_row[0]):
+        cursor.close()
+        db.close()
+        return "Forbidden", 403
 
     cursor.execute(
         "UPDATE overtime_records SET status=%s, notes=%s WHERE id=%s",
