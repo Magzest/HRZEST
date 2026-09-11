@@ -11,7 +11,6 @@ env:
   ECR_REPOSITORY: hrms-prod-repo
   ECS_CLUSTER: hrms-prod-cluster
   ECS_SERVICE: hrms-prod-service
-  MIGRATION_TASK_DEF: hrms-migration-task
   APP_TASK_DEF_FILE: TaskDefinition.json
 
 jobs:
@@ -111,10 +110,19 @@ jobs:
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------
-  # Phase 3: DB Migrations & ECS Deployment
+  # Phase 3: ECS Deployment
   # ---------------------------------------------------------
+  # No separate migration step here: there is no Flask-Migrate/Alembic in
+  # this codebase (no migrations/ dir, no `flask db` CLI registered), so a
+  # standalone `flask db upgrade` ECS task always failed and always blocked
+  # every deploy at this stage. Schema migrations for every tenant already
+  # run automatically at application boot -- see wsgi.py's
+  # _run_migrations_for_all_tenants() call and app.py's ~20 idempotent
+  # migration phases -- so the new task definition's own container startup
+  # (triggered by the ECS service update below) applies them with no
+  # separate orchestration needed.
   deploy:
-    name: Pre-deploy DB Migrations & ECS Update
+    name: ECS Update
     needs: build-and-push
     runs-on: ubuntu-latest
     environment: production
@@ -129,31 +137,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Step 1: Run the Database Migrations automatically as an ECS Standalone Task
-      - name: Run Automated Database Migrations
-        run: |
-          echo "Triggering standalone ECS task to run flask db upgrade..."
-          TASK_ARN=$(aws ecs run-task \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --task-definition ${{ env.MIGRATION_TASK_DEF }} \
-            --launch-type FARGATE \
-            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.SUBNET_ID }}],securityGroups=[${{ secrets.SECURITY_GROUP_ID }}],assignPublicIp=ENABLED}" \
-            --overrides '{"containerOverrides": [{"name": "app-container", "command": ["flask", "db", "upgrade"]}]}' \
-            --query 'tasks[0].taskArn' \
-            --output text)
-            
-          echo "Waiting for migration task $TASK_ARN to complete..."
-          aws ecs wait tasks-stopped --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN
-          
-          # Check exit code to ensure migrations succeeded
-          EXIT_CODE=$(aws ecs describe-tasks --cluster ${{ env.ECS_CLUSTER }} --tasks $TASK_ARN --query 'tasks[0].containers[0].exitCode' --output text)
-          if [ "$EXIT_CODE" != "0" ]; then
-            echo "Database migration failed with exit code $EXIT_CODE"
-            exit 1
-          fi
-          echo "Database migrations completed successfully!"
-
-      # Step 2: Render Task Definition and Deploy
       - name: Render new ECS Task Definition
         id: render-task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
