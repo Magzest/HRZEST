@@ -72,7 +72,7 @@ class TestAdminLoginMfa:
 
     def test_hr_role_can_use_admin_login_and_completes_mfa(self, client, seed_admin, db_engine, mandatory_login_mfa_enabled):
         """HR accounts (blueprints/admin_views.py's /hr_accounts management
-        page) use the same general login as admin, and land on /employees
+        page) use the same general login as admin, and land on /hr_dashboard
         instead of /admin after MFA -- role_required("admin") elsewhere
         scopes them away from admin-only pages regardless."""
         db_engine.cursor().execute("UPDATE admin_users SET role='hr' WHERE username=%s", (seed_admin["username"],))
@@ -85,7 +85,7 @@ class TestAdminLoginMfa:
                 code = sess["mfa_otp_code"]
             resp = client.post("/mfa_verify", data={"otp_code": code}, follow_redirects=False)
             assert resp.status_code == 302
-            assert resp.headers.get("Location") == "/employees"
+            assert resp.headers.get("Location") == "/hr_dashboard"
             with client.session_transaction() as sess:
                 assert sess.get("admin_logged_in") is True
                 assert sess.get("admin_role") == "hr"
@@ -186,6 +186,71 @@ class TestEmployeeLoginMfa:
             code = sess["mfa_otp_code"]
         resp = client.get("/mfa_verify")
         assert code.encode() not in resp.data
+
+
+@pytest.fixture
+def mandatory_admin_mfa_enabled(client):
+    client.application.config["MANDATORY_ADMIN_MFA"] = True
+    yield
+    client.application.config["MANDATORY_ADMIN_MFA"] = False
+
+
+class TestHrRoleEmployeeLoginMfa:
+    """Full real-world path for a freshly created HR-role employee with
+    BOTH MANDATORY_LOGIN_MFA and MANDATORY_ADMIN_MFA on (the actual
+    combination this feature was built and debugged against): password ->
+    emailed OTP -> forced PIN change (new employees always start with
+    force_pin_change=1, see blueprints/employees.py's add_employee_page())
+    -> HR admin panel, with no second, redundant TOTP-enrollment demand
+    right after."""
+
+    def test_hr_employee_full_first_login_flow_reaches_employees_with_no_mfa_reenrollment_demand(
+        self, client, seed_employee, db_engine, mandatory_login_mfa_enabled, mandatory_admin_mfa_enabled,
+    ):
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='HR', force_pin_change=1 WHERE employee_id=%s",
+                    (seed_employee["employee_id"],))
+        try:
+            # 1. Password login -> stops at the emailed-OTP step, same as
+            # any other employee.
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert resp.headers.get("Location") == "/mfa_verify"
+            with client.session_transaction() as sess:
+                code = sess["mfa_otp_code"]
+
+            # 2. Correct OTP -> force_pin_change=1 wins over the HR check,
+            # same as the non-MFA path already tested in test_auth_routes.py.
+            resp = client.post("/mfa_verify", data={"otp_code": code}, follow_redirects=False)
+            assert resp.headers.get("Location") == "/force_change_pin"
+            with client.session_transaction() as sess:
+                assert sess.get("employee_id") == seed_employee["employee_id"]
+                assert not sess.get("admin_logged_in")
+
+            # 3. Completing the forced PIN change re-checks role and NOW
+            # routes to the HR admin panel instead of /employee_portal.
+            resp = client.post("/force_change_pin", data={
+                "new_password": "NewStrongPass@1", "confirm_password": "NewStrongPass@1",
+            }, follow_redirects=False)
+            assert resp.headers.get("Location") == "/hr_dashboard"
+            with client.session_transaction() as sess:
+                assert sess.get("admin_logged_in") is True
+                assert sess.get("admin_username") == seed_employee["employee_id"]
+                assert sess.get("admin_role") == "hr"
+
+            # 4. The auto-provisioned admin_users row must NOT be bounced
+            # to a second, separate TOTP-enrollment page -- the OTP email
+            # already verified in step 2 counts as this login's MFA.
+            resp = client.get("/admin", follow_redirects=False)
+            assert resp.status_code != 302 or resp.headers.get("Location") != "/admin/mfa-required"
+            cur.execute("SELECT totp_enabled FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone()[0] == 1
+        finally:
+            cur.execute("UPDATE employees SET role=NULL, force_pin_change=0 WHERE employee_id=%s",
+                        (seed_employee["employee_id"],))
+            cur.execute("DELETE FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            cur.close()
 
 
 # The standalone HR Portal (blueprints/hr_portal.py: its own /hr_login and

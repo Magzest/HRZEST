@@ -126,6 +126,104 @@ class TestAdminLoginEdgeBranches:
                         (seed_employee["employee_id"],))
             cur.close()
 
+    def test_hr_role_employee_login_redirects_to_employees_admin_panel(self, client, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='HR' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert resp.status_code == 302
+            assert resp.headers["Location"].endswith("/hr_dashboard")
+            with client.session_transaction() as sess:
+                assert sess.get("admin_logged_in") is True
+                assert sess.get("admin_username") == seed_employee["employee_id"]
+                assert sess.get("admin_role") == "hr"
+                assert "employee_id" not in sess
+            cur.execute("SELECT role, is_active FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            row = cur.fetchone()
+            assert row is not None
+            assert row[0] == "hr" and row[1] == 1
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+            cur.execute("DELETE FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            cur.close()
+
+    def test_hr_role_employee_login_is_idempotent(self, client, seed_employee, db_engine):
+        """Logging in twice must not try to INSERT a second admin_users row
+        for the same employee_id (which would 500 on the UNIQUE username
+        constraint) -- the second login should just reuse the first."""
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='hr' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            for _ in range(2):
+                # Log out first -- admin_login() redirects an already
+                # admin_logged_in session straight to /admin without ever
+                # reaching credential checking (pre-existing behavior,
+                # unrelated to this change), so a fresh session is needed
+                # to actually re-exercise _finish_employee_login() each time.
+                client.get("/logout")
+                resp = client.post("/login", data={
+                    "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+                }, follow_redirects=False)
+                assert resp.status_code == 302
+                assert resp.headers["Location"].endswith("/hr_dashboard")
+                # _clear_login_failures() (blueprints/auth.py) enqueues its
+                # DB write onto the shared background writer thread rather
+                # than running it synchronously (see utils/auth.py's own
+                # docstring on that queue) -- back-to-back login attempts
+                # with zero delay between them can otherwise race that
+                # write. Not specific to this feature; settling here is
+                # just what this suite's existing helper is for.
+                _wait_for_async_writes()
+            cur.execute("SELECT COUNT(*) FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone()[0] == 1
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+            cur.execute("DELETE FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            cur.close()
+
+    def test_hr_substring_role_does_not_grant_admin_access(self, client, seed_employee, db_engine):
+        """employees.role is free text an admin can type anything into --
+        only an EXACT 'HR' match may grant admin-panel access, never a
+        substring, or any job title containing "HR" (e.g. "HR Executive")
+        would silently escalate that employee to the admin panel."""
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='HR Executive' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert resp.status_code == 302
+            assert "/employee_portal" in resp.headers["Location"]
+            cur.execute("SELECT 1 FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone() is None
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+            cur.close()
+
+    def test_hr_role_employee_with_pending_pin_change_goes_to_force_change_pin_first(self, client, seed_employee, db_engine):
+        """A forced PIN change always wins over the HR redirect -- an
+        employee who hasn't changed their initial PIN yet must not be able
+        to skip straight into the admin panel."""
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='HR', force_pin_change=1 WHERE employee_id=%s",
+                    (seed_employee["employee_id"],))
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert "/force_change_pin" in resp.headers["Location"]
+            with client.session_transaction() as sess:
+                assert sess.get("employee_id") == seed_employee["employee_id"]
+                assert not sess.get("admin_logged_in")
+            cur.execute("SELECT 1 FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone() is None
+        finally:
+            cur.execute("UPDATE employees SET role=NULL, force_pin_change=0 WHERE employee_id=%s",
+                        (seed_employee["employee_id"],))
+            cur.close()
+
     def test_employee_wrong_password_records_failure(self, client, seed_employee):
         resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": "WrongPass!",
