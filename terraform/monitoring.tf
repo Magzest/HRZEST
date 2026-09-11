@@ -8,14 +8,8 @@
 #
 # NOT independently verified against a real AWS account (no credentials
 # were available in the environment this was written in) -- validated with
-# `terraform fmt`/`terraform validate` only. Review with `terraform plan`
-# before applying. Also note: this config has pre-existing, unrelated gaps
-# (aws_db_instance.this, aws_iam_instance_profile.ec2_app_profile,
-# aws_security_group.app_firewall are referenced in outputs.tf but not
-# defined anywhere; variables.tf and main.tf each declare db_username/
-# db_password, a duplicate-declaration error) that block `terraform
-# validate`/`apply` for the whole config regardless of anything in this
-# file -- out of scope for this change, flagged separately.
+# `terraform validate` against the real config. Review with `terraform plan`
+# before applying.
 
 resource "aws_sns_topic" "alerts" {
   name = "${var.project_name}-alerts"
@@ -135,52 +129,8 @@ resource "aws_cloudwatch_metric_alarm" "healthz_down" {
   ok_actions    = [aws_sns_topic.alerts.arn]
 }
 
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-}
-
-# ── ECS/ALB error rate (only relevant if the ecs.tf deployment path is the
-# one actually in use -- this repo's terraform config carries resources for
-# both an existing-EC2-instance deployment (the rest of this file) and an
-# ECS/Fargate one; aws_lb.app_alb only exists if ecs.tf is applied) ─────────
-resource "aws_cloudwatch_metric_alarm" "alb_5xx_high" {
-  alarm_name          = "${var.project_name}-alb-5xx-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "HTTPCode_Target_5XX_Count"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 10
-  alarm_description   = "More than 10 5xx responses/minute from the app in two consecutive minutes."
-  dimensions = {
-    LoadBalancer = aws_lb.app_alb.arn_suffix
-  }
-  alarm_actions = [aws_sns_topic.alerts.arn]
-  ok_actions    = [aws_sns_topic.alerts.arn]
-}
-
-resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_targets" {
-  # app_tg's own health check already probes /healthz (terraform/ecs.tf) --
-  # this alarms on that check actually failing, the ECS-path equivalent of
-  # ec2_status_check_failed above.
-  alarm_name          = "${var.project_name}-alb-unhealthy-targets"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "UnHealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Maximum"
-  threshold           = 0
-  alarm_description   = "At least one ECS task is failing its /healthz check."
-  dimensions = {
-    TargetGroup  = aws_lb_target_group.app_tg.arn_suffix
-    LoadBalancer = aws_lb.app_alb.arn_suffix
-  }
-  alarm_actions = [aws_sns_topic.alerts.arn]
-  ok_actions    = [aws_sns_topic.alerts.arn]
-}
+# us_east_1 provider alias is declared once, in main.tf (also used by
+# security_hardening.tf's CloudFront-scoped WAF) -- not redeclared here.
 
 # ── Daily EBS snapshot of the app server's root volume ───────────────────────
 # Fulfills outputs.tf's dlm_required_instance_tag output, which already
