@@ -7,6 +7,14 @@ function showToast(message, type = 'info', icon = null) {
   if (!container) {
     container = document.createElement('div');
     container.id = 'toast-container';
+    // Toasts are injected after the page has already loaded/been read --
+    // without this, a screen-reader user gets no announcement at all when
+    // one appears. "polite" (not "assertive") queues the announcement
+    // behind whatever the user is currently doing, rather than
+    // interrupting it -- appropriate for a passive notification, not an
+    // urgent one.
+    container.setAttribute('role', 'status');
+    container.setAttribute('aria-live', 'polite');
     document.body.appendChild(container);
   }
 

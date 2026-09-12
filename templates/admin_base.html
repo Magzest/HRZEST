@@ -81,6 +81,29 @@
       .sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; padding: 10px; }
       .sidebar .brand, .sidebar .brand-sub, .sidebar-footer { display: none; }
     }
+
+    /* ── Accessibility ──
+       "Skip to main content" -- off-screen until it receives keyboard
+       focus (the very first Tab stop on every page), so a keyboard/
+       screen-reader user isn't forced through the full sidebar nav on
+       every single page load just to reach the actual content.
+       :focus-visible with !important guarantees a visible ring survives
+       even where a template applies shared.min.css's .u-out-none utility
+       (outline:none, no :focus scoping, used in 11 templates) to an
+       interactive element with no replacement focus style of its own --
+       that utility's stylesheet loads after this block, so without
+       !important here it would silently win and leave keyboard focus
+       invisible on whatever it's applied to. */
+    .skip-link {
+      position: absolute; left: -9999px; top: 0; z-index: 10050;
+      background: #1e3a8a; color: #fff; padding: 10px 18px; border-radius: 0 0 8px 0;
+      font-size: 13px; font-weight: 700; text-decoration: none;
+    }
+    .skip-link:focus { left: 0; }
+    :focus-visible {
+      outline: 2px solid #2563eb !important; outline-offset: 2px !important;
+    }
+    body.dark-mode :focus-visible { outline-color: #60a5fa !important; }
   </style>
   <link rel="stylesheet" href="{{ static_url('shared.min.css') }}" />
   <link rel="stylesheet" href="{{ static_url('enterprise-ui.css') }}" />
@@ -88,8 +111,10 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main-content">Skip to main content</a>
+
 <!-- ── SIDEBAR ── -->
-<div class="sidebar">
+<div class="sidebar" role="navigation" aria-label="Primary">
   {% set _is_hr = session.admin_role == 'hr' %}
   <div class="brand-wrap">
     <div class="brand-icon" style="overflow:hidden;background:#fff;">
@@ -173,7 +198,7 @@
 </div>
 
 <!-- ── MAIN ── -->
-<div class="main">
+<div class="main" id="main-content" role="main" tabindex="-1">
   {% if billing_lock_status %}
   <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
               padding:12px 18px;border-radius:10px;margin-bottom:14px;font-size:13px;font-weight:600;
