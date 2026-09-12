@@ -14,6 +14,7 @@ hyphenated address, or the word "select" in a dropdown label never trips a
 false positive -- each pattern requires the *shape* of an actual injection
 attempt (a keyword next to the syntax that would make it executable).
 """
+import os
 import re
 import time
 import datetime
@@ -223,9 +224,14 @@ def inspect_request(request):
 # random, but every worker independently escalates to the same shared
 # banned_ips row (database.py), so the ban itself is not per-worker even
 # though the counter that triggers it is.
-_BREACH_WINDOW_SECONDS = 600
-_BREACH_THRESHOLD = 5
-_BAN_MINUTES = 15
+# Configurable via env so an operator can tune WAF sensitivity (a genuine
+# false-positive rate, or a genuinely more/less hostile traffic mix) without
+# a code change/redeploy -- same "sensible default, env overrides it"
+# pattern used throughout this codebase. Defaults are the values this file
+# has always shipped with, unchanged.
+_BREACH_WINDOW_SECONDS = int(os.environ.get("WAF_BREACH_WINDOW_SECONDS", "600"))
+_BREACH_THRESHOLD = int(os.environ.get("WAF_BREACH_THRESHOLD", "5"))
+_BAN_MINUTES = int(os.environ.get("WAF_BAN_MINUTES", "15"))
 
 _breach_lock = threading.Lock()
 _breach_log = defaultdict(deque)  # ip -> deque[timestamp]

@@ -625,7 +625,11 @@ def save_application_document(file_storage, application_id, doc_kind):
 _co_cache = {}
 _auth_cache = {}
 _settings_lock = threading.Lock()
-_CO_CACHE_TTL = 60
+# Configurable via env so an operator can trade off "settings changes are
+# visible sooner" against "fewer DB round-trips under load" without a code
+# change -- same pattern as utils/waf.py's threshold env vars. Default (60s)
+# is what this cache has always used.
+_CO_CACHE_TTL = int(os.environ.get("SETTINGS_CACHE_TTL_SECONDS", "60"))
 
 # Sentinel distinct from None -- get_overdue_onboarding_count() legitimately
 # caches 0, and get_auth_config()/get_company_settings() can cache a dict
@@ -1121,8 +1125,8 @@ def add_employee_seat_cap_check(cursor=None) -> str:
 # cutting 2 of the ~4 DB round trips every admin page load previously paid.
 _companies_cache = {}
 _onboarding_cache = {}
-_COMPANIES_CACHE_TTL = 30
-_ONBOARDING_CACHE_TTL = 20
+_COMPANIES_CACHE_TTL = int(os.environ.get("COMPANIES_CACHE_TTL_SECONDS", "30"))
+_ONBOARDING_CACHE_TTL = int(os.environ.get("ONBOARDING_CACHE_TTL_SECONDS", "20"))
 
 
 def invalidate_companies_cache():
