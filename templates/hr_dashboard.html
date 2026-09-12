@@ -494,7 +494,7 @@
     tbody.innerHTML = rows.map(function(e) {
       return '<tr>' +
         '<td>' + esc(e.employee_id) + '</td>' +
-        '<td><a href="' + e.detail_url + '" style="color:#1e3a8a;text-decoration:none;font-weight:600;">' + esc(e.name) + '</a></td>' +
+        '<td><a href="' + esc(e.detail_url) + '" style="color:#1e3a8a;text-decoration:none;font-weight:600;">' + esc(e.name) + '</a></td>' +
         '<td>' + esc(e.department || '--') + '</td>' +
         '<td>' + esc(e.role || '--') + '</td>' +
         '<td><span class="hr-badge ' + _hrStatusBadgeClass(e.status) + '">' + esc(e.status) + '</span></td>' +
@@ -511,7 +511,7 @@
         '<td><span class="hr-badge ' + _hrStatusBadgeClass(r.status) + '">' + esc(r.status) + '</span></td>' +
         '<td>' + esc(r.login_time || '--') + '</td>' +
         '<td>' + esc(r.logout_time || '--') + '</td>' +
-        '<td><a href="' + r.detail_url + '" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">View <i class="ti ti-arrow-right"></i></a></td>' +
+        '<td><a href="' + esc(r.detail_url) + '" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">View <i class="ti ti-arrow-right"></i></a></td>' +
         '</tr>';
     }).join('');
   }
@@ -540,7 +540,7 @@
         '<td>' + esc(r.late_days) + '</td><td>' + esc(r.absent) + '</td>' +
         '<td>' + esc(r.gross) + '</td><td>' + esc(r.deduction) + '</td>' +
         '<td style="font-weight:700;">' + esc(r.net) + '</td>' +
-        '<td><a href="' + r.payslip_url + '" target="_blank" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">Payslip <i class="ti ti-arrow-right"></i></a></td>' +
+        '<td><a href="' + esc(r.payslip_url) + '" target="_blank" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">Payslip <i class="ti ti-arrow-right"></i></a></td>' +
         '</tr>';
     }).join('');
   }
@@ -625,7 +625,7 @@
         '<td>' + esc(r.due_date || '--') + (r.is_overdue ? ' <span class="hr-badge resigned">Overdue</span>' : '') + '</td>' +
         '<td>' + esc(r.progress_pct) + '%</td>' +
         '<td><span class="hr-badge ' + (r.status === 'Completed' ? 'active' : 'onleave') + '">' + esc(r.status) + '</span></td>' +
-        '<td><a href="' + r.detail_url + '" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">View <i class="ti ti-arrow-right"></i></a></td>' +
+        '<td><a href="' + esc(r.detail_url) + '" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">View <i class="ti ti-arrow-right"></i></a></td>' +
         '</tr>';
     }).join('');
   }
@@ -638,7 +638,7 @@
         '<td>' + esc(r.name) + '</td><td>' + esc(r.department || '--') + '</td>' +
         '<td>' + (r.rating > 0 ? esc(r.rating) + ' / 5' : '--') + '</td>' +
         '<td><span class="hr-badge ' + (r.status === 'Completed' || r.status === 'Submitted' ? 'active' : 'onleave') + '">' + esc(r.status) + '</span></td>' +
-        '<td><a href="' + r.review_url + '" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">Review <i class="ti ti-arrow-right"></i></a></td>' +
+        '<td><a href="' + esc(r.review_url) + '" style="color:#1e3a8a;text-decoration:none;font-size:12px;font-weight:700;">Review <i class="ti ti-arrow-right"></i></a></td>' +
         '</tr>';
     }).join('');
   }
