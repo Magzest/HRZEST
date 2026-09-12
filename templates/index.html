@@ -6,7 +6,7 @@
          (app.py's _normalize_loopback_host), before login sets any cookie. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Attendance Scanner</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="{{ static_url('favicon.svg') }}" />
     <!-- defer: jsQR() is only ever called from inside the camera-scan loop,
          well after user interaction starts a scan -- nothing needs this
          130KB library synchronously during initial parse, so deferring it
