@@ -205,6 +205,11 @@
         50%      { transform: scale(1.12); opacity: 1; }
       }
 
+      .table-scroll-hint {
+        display: none; padding: 8px 14px 0; font-size: 11px; color: #94a3b8;
+        text-align: right;
+      }
+
       @media (max-width: 900px) {
         .stat-row { grid-template-columns: repeat(2, 1fr); }
       }
@@ -216,6 +221,16 @@
         .form-grid { grid-template-columns: 1fr; }
         .form-grid .full, .sec-title, .location-box { grid-column: 1; }
         .stat-row { grid-template-columns: repeat(2, 1fr); }
+        .main { padding: 16px; }
+        /* Employee table on a phone: 13-14 columns doesn't fit any screen,
+           but showing only 4-5 with no hint that it scrolled was silently
+           cutting the row off mid-column (Photo/Employee ID/Name, nothing
+           past that) -- narrowed to the columns someone actually needs at
+           a glance (ID, Name, Status, Actions) and added an explicit
+           swipe hint for the rest, rather than leaving both problems for
+           the user to discover by accident. */
+        .col-mobile-hide { display: none; }
+        .table-scroll-hint { display: block; }
       }
 
       /* ── PAGINATION ── */
@@ -448,23 +463,24 @@
 
       <!-- TABLE -->
       <div class="section">
+        <div class="table-scroll-hint">Swipe left for more details &rarr;</div>
         <div class="table-wrap">
           <table id="empTable">
             <thead>
               <tr>
-                <th><label class="u-d-contents"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all" aria-label="Select all employees"></label></th>
-                <th>#</th>
-                <th>Photo</th>
+                <th class="col-mobile-hide"><label class="u-d-contents"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="Select all" aria-label="Select all employees"></label></th>
+                <th class="col-mobile-hide">#</th>
+                <th class="col-mobile-hide">Photo</th>
                 <th>Employee ID</th>
                 <th>Name</th>
-                <th>Role</th>
-                <th>Department</th>
-                {% if not is_hr_scoped %}<th>Assigned HR</th>{% endif %}
-                <th>Shift</th>
-                <th>Phone</th>
+                <th class="col-mobile-hide">Role</th>
+                <th class="col-mobile-hide">Department</th>
+                {% if not is_hr_scoped %}<th class="col-mobile-hide">Assigned HR</th>{% endif %}
+                <th class="col-mobile-hide">Shift</th>
+                <th class="col-mobile-hide">Phone</th>
                 <th>Status</th>
-                <th>Date of Joining</th>
-                <th>Days Present</th>
+                <th class="col-mobile-hide">Date of Joining</th>
+                <th class="col-mobile-hide">Days Present</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -479,9 +495,9 @@
                 data-status="{{ emp_status }}"
                 data-gender="{{ gender or '' }}"
               >
-                <td><input type="checkbox" class="emp-check" value="{{ emp_id }}" onchange="updateBulkToolbar()"></td>
-                <td class="muted">{{ loop.index }}</td>
-                <td>
+                <td class="col-mobile-hide"><input type="checkbox" class="emp-check" value="{{ emp_id }}" onchange="updateBulkToolbar()"></td>
+                <td class="muted col-mobile-hide">{{ loop.index }}</td>
+                <td class="col-mobile-hide">
                   {% if face_image %}
                     <button class="avatar-btn" onclick="openLightbox(this.dataset.empId,this.dataset.empName,true)" data-emp-id="{{ emp_id|e }}" data-emp-name="{{ name|e }}" title="View photo">
                       <img class="avatar" src="/dataset/{{ emp_id }}.jpg" alt="{{ name }}"
@@ -501,16 +517,16 @@
                   <a class="u-fw-700 u-c-1e3a8a u-tdec-none" href="/employee_detail/{{ emp_id }}" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">{{ name }}</a>
                   {% if email %}<div class="u-fs-11 u-c-94a3b8">{{ email }}</div>{% endif %}
                 </td>
-                <td>
+                <td class="col-mobile-hide">
                   {% if role %}<span class="badge badge-role">{{ role }}</span>
                   {% else %}<span class="muted">—</span>{% endif %}
                 </td>
-                <td>{% if department %}{{ department }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td class="col-mobile-hide">{% if department %}{{ department }}{% else %}<span class="muted">—</span>{% endif %}</td>
                 {% if not is_hr_scoped %}
-                <td>{% if assigned_hr_username %}{{ assigned_hr_username }}{% else %}<span class="muted">Unassigned</span>{% endif %}</td>
+                <td class="col-mobile-hide">{% if assigned_hr_username %}{{ assigned_hr_username }}{% else %}<span class="muted">Unassigned</span>{% endif %}</td>
                 {% endif %}
-                <td>{% if shift_name %}{{ shift_name }}{% else %}<span class="muted">—</span>{% endif %}</td>
-                <td>{% if phone %}{{ phone }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td class="col-mobile-hide">{% if shift_name %}{{ shift_name }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td class="col-mobile-hide">{% if phone %}{{ phone }}{% else %}<span class="muted">—</span>{% endif %}</td>
                 <td>
                   <span class="badge
                     {% if emp_status == 'Active' %}status-active
@@ -519,8 +535,8 @@
                     {{ emp_status }}
                   </span>
                 </td>
-                <td>{% if doj %}{{ doj.strftime('%d %b %Y') }}{% else %}<span class="muted">—</span>{% endif %}</td>
-                <td>
+                <td class="col-mobile-hide">{% if doj %}{{ doj.strftime('%d %b %Y') }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                <td class="col-mobile-hide">
                   {% if total_days %}<span class="badge badge-green">{{ total_days }}d</span>
                   {% else %}<span class="muted">0</span>{% endif %}
                 </td>
