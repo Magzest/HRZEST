@@ -2,6 +2,7 @@
 """Shared utility helpers used across multiple blueprints."""
 import os
 import re
+import json
 import base64
 import datetime
 import hashlib
@@ -12,7 +13,7 @@ import pytz
 from cryptography.fernet import Fernet, InvalidToken as _FernetInvalid
 from flask import session, request
 from database import get_db_connection
-from extensions import app_log, log_security_event
+from extensions import app_log, log_security_event, redis_client
 
 _SAFE_IDENT_RE = re.compile(r'^[a-z][a-z0-9_]*$')
 
@@ -614,10 +615,22 @@ def save_application_document(file_storage, application_id, doc_kind):
 # process), not just a test artifact. get_db_connection() already scopes the
 # underlying query correctly per g.tenant_db; only the cache layer on top of
 # it was unscoped.
+#
+# Backed by Redis (shared across gunicorn workers) when extensions.redis_client
+# is configured, falling back to this in-memory per-worker dict otherwise --
+# same pattern as utils/waf.py's breach counter. Without Redis, an admin
+# changing a setting on the worker that handles their request left every
+# OTHER worker serving the stale value for up to _CO_CACHE_TTL seconds,
+# since invalidate_settings_cache() only ever cleared its own process's dict.
 _co_cache = {}
 _auth_cache = {}
 _settings_lock = threading.Lock()
 _CO_CACHE_TTL = 60
+
+# Sentinel distinct from None -- get_overdue_onboarding_count() legitimately
+# caches 0, and get_auth_config()/get_company_settings() can cache a dict
+# with falsy values, so "no entry" can't just be represented as a falsy return.
+_CACHE_MISS = object()
 
 
 def _tenant_cache_key():
@@ -633,6 +646,58 @@ def _co_expired(cache):
     return entry is None or entry["data"] is None or datetime.datetime.now() >= entry["expires"]
 
 
+def _cache_get(mem_cache, redis_prefix):
+    """Read a cached value for the current tenant. Tries Redis first when
+    configured -- including falling back to the in-memory dict if a
+    configured Redis errors or is unreachable mid-request, matching
+    utils/waf.py's _record_breach_redis fallback. Returns _CACHE_MISS on
+    a genuine miss (expired/absent), never None/falsy, since a cached
+    value can itself be None-ish."""
+    key = _tenant_cache_key()
+    if redis_client is not None:
+        try:
+            raw = redis_client.get(f"{redis_prefix}:{key}")
+            return json.loads(raw) if raw is not None else _CACHE_MISS
+        except Exception as exc:
+            app_log.warning("%s: redis read failed, using in-memory fallback: %s", redis_prefix, exc)
+    with _settings_lock:
+        if not _co_expired(mem_cache):
+            return mem_cache[key]["data"]
+    return _CACHE_MISS
+
+
+def _cache_set(mem_cache, redis_prefix, data, ttl):
+    """Write a cached value for the current tenant -- Redis when configured
+    (falling back to the in-memory dict on error), the in-memory dict
+    otherwise. The in-memory dict is kept as the fallback path even when
+    Redis is configured, not written in parallel with it, since it's only
+    ever read when a Redis attempt fails or Redis isn't configured at all."""
+    key = _tenant_cache_key()
+    if redis_client is not None:
+        try:
+            redis_client.setex(f"{redis_prefix}:{key}", ttl, json.dumps(data))
+            return
+        except Exception as exc:
+            app_log.warning("%s: redis write failed, using in-memory fallback: %s", redis_prefix, exc)
+    with _settings_lock:
+        mem_cache[key] = {"data": data, "expires": datetime.datetime.now() + datetime.timedelta(seconds=ttl)}
+
+
+def _redis_clear_prefix(prefix):
+    """Delete every tenant's Redis key under this cache's namespace -- the
+    Redis-backed equivalent of the in-memory dict's own .clear(). Uses
+    SCAN rather than KEYS so this never blocks the shared Redis instance,
+    even though the actual key count here (one per tenant) is small."""
+    if redis_client is None:
+        return
+    try:
+        keys = list(redis_client.scan_iter(match=f"{prefix}:*"))
+        if keys:
+            redis_client.delete(*keys)
+    except Exception as exc:
+        app_log.warning("Redis cache clear failed for prefix %s: %s", prefix, exc)
+
+
 def invalidate_settings_cache():
     """Clears every tenant's cached entry, not just the caller's current
     one -- deliberately, matching this cache's original (pre-tenant-keying)
@@ -646,6 +711,8 @@ def invalidate_settings_cache():
     with _settings_lock:
         _co_cache.clear()
         _auth_cache.clear()
+    _redis_clear_prefix("settings_co")
+    _redis_clear_prefix("settings_auth")
 
 
 def post_announcement(cursor, db, title, content, priority, visibility, target_emp=None,
@@ -802,9 +869,9 @@ def get_pending_counts():
 
 
 def get_company_settings():
-    with _settings_lock:
-        if not _co_expired(_co_cache):
-            return dict(_co_cache[_tenant_cache_key()]["data"])
+    cached = _cache_get(_co_cache, "settings_co")
+    if cached is not _CACHE_MISS:
+        return dict(cached)
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -838,11 +905,7 @@ def get_company_settings():
                 # for at signup -- see add_employee_seat_cap_check() below.
                 "paid_employee_slots": row_dict.get("paid_employee_slots"),
             }
-            with _settings_lock:
-                _co_cache[_tenant_cache_key()] = {
-                    "data": result,
-                    "expires": datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL),
-                }
+            _cache_set(_co_cache, "settings_co", result, _CO_CACHE_TTL)
             return dict(result)
     except Exception as exc:
         # Falls through to generic hardcoded defaults below -- every page
@@ -1068,15 +1131,18 @@ def invalidate_companies_cache():
     # not silently invalidate the wrong key).
     with _settings_lock:
         _companies_cache.clear()
+    _redis_clear_prefix("settings_companies")
 
 
 def get_companies_list():
-    """Cached list of (id, name, code, has_pin) tuples from the companies
-    table. Call invalidate_companies_cache() after any write to companies
-    (add/edit/delete/set-pin/rename-code)."""
-    with _settings_lock:
-        if not _co_expired(_companies_cache):
-            return list(_companies_cache[_tenant_cache_key()]["data"])
+    """Cached list of (id, name, code, has_pin) rows from the companies
+    table -- tuples on the in-memory-fallback path, lists when served from
+    Redis (JSON has no tuple type); every caller only ever index/iterates
+    them, never checks the exact type. Call invalidate_companies_cache()
+    after any write to companies (add/edit/delete/set-pin/rename-code)."""
+    cached = _cache_get(_companies_cache, "settings_companies")
+    if cached is not _CACHE_MISS:
+        return list(cached)
     try:
         db = get_db_connection()
         cur = db.cursor(buffered=True)
@@ -1087,11 +1153,7 @@ def get_companies_list():
         rows = cur.fetchall()
         cur.close()
         db.close()
-        with _settings_lock:
-            _companies_cache[_tenant_cache_key()] = {
-                "data": rows,
-                "expires": datetime.datetime.now() + datetime.timedelta(seconds=_COMPANIES_CACHE_TTL),
-            }
+        _cache_set(_companies_cache, "settings_companies", rows, _COMPANIES_CACHE_TTL)
         return list(rows)
     except Exception:
         return []
@@ -1099,9 +1161,9 @@ def get_companies_list():
 
 def get_overdue_onboarding_count():
     """Cached count of non-completed onboarding tasks past their due date."""
-    with _settings_lock:
-        if not _co_expired(_onboarding_cache):
-            return _onboarding_cache[_tenant_cache_key()]["data"]
+    cached = _cache_get(_onboarding_cache, "settings_onboarding")
+    if cached is not _CACHE_MISS:
+        return cached
     try:
         db = get_db_connection()
         cur = db.cursor()
@@ -1112,11 +1174,7 @@ def get_overdue_onboarding_count():
         count = cur.fetchone()[0]
         cur.close()
         db.close()
-        with _settings_lock:
-            _onboarding_cache[_tenant_cache_key()] = {
-                "data": count,
-                "expires": datetime.datetime.now() + datetime.timedelta(seconds=_ONBOARDING_CACHE_TTL),
-            }
+        _cache_set(_onboarding_cache, "settings_onboarding", count, _ONBOARDING_CACHE_TTL)
         return count
     except Exception:
         return 0
@@ -1130,9 +1188,9 @@ _AUTH_CONFIG_DEFAULTS = {
 
 
 def get_auth_config():
-    with _settings_lock:
-        if not _co_expired(_auth_cache):
-            return dict(_auth_cache[_tenant_cache_key()]["data"])
+    cached = _cache_get(_auth_cache, "settings_auth")
+    if cached is not _CACHE_MISS:
+        return dict(cached)
     try:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
@@ -1153,11 +1211,7 @@ def get_auth_config():
                 "employee_password_auth": bool(row[4]), "geo_radius": row[5],
                 "office_lat": row[6], "office_lon": row[7],
             }
-            with _settings_lock:
-                _auth_cache[_tenant_cache_key()] = {
-                    "data": result,
-                    "expires": datetime.datetime.now() + datetime.timedelta(seconds=_CO_CACHE_TTL),
-                }
+            _cache_set(_auth_cache, "settings_auth", result, _CO_CACHE_TTL)
             return dict(result)
     except Exception as exc:
         app_log.warning("get_auth_config failed, using defaults: %s", exc, exc_info=True)
