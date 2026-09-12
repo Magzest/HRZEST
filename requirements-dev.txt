@@ -17,3 +17,11 @@ flake8>=7.1.0
 # ── Static asset minification (see minify_static.py) ───────────────────────────
 rcssmin>=1.2.2
 rjsmin>=1.2.5
+
+# ── End-to-end browser tests (see tests_e2e/README.md) ──────────────────────────
+# Separate from the main pytest suite (pytest.ini's testpaths = tests excludes
+# this directory already) -- these drive a real browser against a real
+# running instance of the app, not the Flask test client, so they need their
+# own browser binary (`playwright install chromium`) and are meaningfully
+# slower. Run with: pytest tests_e2e/ --browser chromium
+pytest-playwright>=0.5.2
