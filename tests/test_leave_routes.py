@@ -422,7 +422,10 @@ class TestLeaveApprovalRoleGating:
     overtime data. They're now role-gated to admin/hr/manager (see
     blueprints/leave.py's _LEAVE_APPROVER_ROLES) -- a lower-privilege role
     like soc_analyst must be rejected, while manager (previously
-    indistinguishable from admin here) must still work."""
+    indistinguishable from admin here) must still work for its own direct
+    reports (employees.manager_id -- see utils/helpers.py's
+    manager_scope_denied, added once manager accounts became a real,
+    creatable role rather than just a role-gate check)."""
 
     def test_soc_analyst_denied_web_leave_action(self, client, seed_admin, seed_employee, db_engine):
         cur = db_engine.cursor()
@@ -444,11 +447,17 @@ class TestLeaveApprovalRoleGating:
             "INSERT INTO leave_requests (employee_id, leave_date, reason) VALUES (%s,%s,%s) RETURNING id",
             (seed_employee["employee_id"], datetime.date(2027, 1, 6), "x"))
         lid = cur.fetchone()[0]
+        # manager_scope_denied() requires seed_employee to actually be
+        # this manager's direct report -- without this, the role-gate
+        # would pass but the ownership check now correctly rejects it.
+        cur.execute("UPDATE employees SET manager_id=%s WHERE employee_id=%s",
+                    (seed_admin["username"], seed_employee["employee_id"]))
         _admin_session(client, seed_admin["username"], role="manager")
         resp = client.post(f"/leave_action/{lid}", data={"action": "Approved"}, follow_redirects=False)
         assert resp.status_code == 302
         cur.execute("SELECT status FROM leave_requests WHERE id=%s", (lid,))
         assert cur.fetchone()[0] == "Approved"
+        cur.execute("UPDATE employees SET manager_id=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
         cur.execute("DELETE FROM attendance WHERE employee_id=%s AND date=%s",
                     (seed_employee["employee_id"], datetime.date(2027, 1, 6)))
         cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
@@ -537,6 +546,10 @@ class TestLeaveApprovalRoleGating:
         lid = cur.fetchone()[0]
         token = _admin_bearer_token(client, seed_admin)
         cur.execute("UPDATE admin_users SET role='manager' WHERE username=%s", (seed_admin["username"],))
+        # _api_manager_scope_denied() requires seed_employee to actually be
+        # this manager's direct report -- see the web equivalent above.
+        cur.execute("UPDATE employees SET manager_id=%s WHERE employee_id=%s",
+                    (seed_admin["username"], seed_employee["employee_id"]))
         try:
             resp = client.post(f"/api/leave_requests/{lid}/action", json={"action": "Approved"},
                                headers={"Authorization": f"Bearer {token}"})
@@ -544,6 +557,7 @@ class TestLeaveApprovalRoleGating:
             assert resp.get_json()["status"] == "Approved"
         finally:
             cur.execute("UPDATE admin_users SET role='admin' WHERE username=%s", (seed_admin["username"],))
+            cur.execute("UPDATE employees SET manager_id=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
             cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
             cur.close()
 

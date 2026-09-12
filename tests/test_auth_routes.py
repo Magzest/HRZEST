@@ -1072,12 +1072,18 @@ class TestMobileBiometric:
         assert resp.status_code == 401
 
 
-class TestManagerRoleWebRestriction:
-    """app.py's _restrict_manager_role before_request hook -- a manager-role
-    web session must only ever reach the leave/resignation/overtime
-    approval queues (blueprints/leave.py's _LEAVE_APPROVER_ROLES), never
-    the rest of the admin panel that plain admin_required alone would
-    otherwise let any admin_logged_in session through to."""
+class TestManagerRoleWebAccess:
+    """Manager-role web session reachability. An earlier version of this
+    class tested a blanket app.py before_request hook (_restrict_manager_role)
+    that turned out to be wrong: it intercepted routes that already had
+    their own correct, pre-existing manager-aware handling (utils/dlp.py's
+    has_pii_clearance masks PII for manager on employee_detail/
+    employee_profile/employees; role_required("admin") already 403s
+    view_salary/settings; utils/helpers.py's manager_scope_denied now
+    scopes leave/resignation/overtime to direct reports) -- see
+    tests/test_dlp_pii_masking.py and tests/test_leave_routes.py's
+    TestLeaveApprovalRoleGating for those. This class only covers the
+    plain admin_required routes manager was always meant to reach."""
 
     def test_manager_can_reach_leave_holidays(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="manager")
@@ -1089,26 +1095,21 @@ class TestManagerRoleWebRestriction:
         resp = client.get("/overtime")
         assert resp.status_code == 200
 
-    def test_manager_blocked_from_employees_page(self, client, seed_admin):
+    def test_manager_can_reach_employees_page(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="manager")
-        resp = client.get("/employees", follow_redirects=False)
-        assert resp.status_code == 302
-        assert resp.headers["Location"].endswith("/leave_holidays")
+        resp = client.get("/employees")
+        assert resp.status_code == 200
 
-    def test_manager_blocked_from_admin_dashboard(self, client, seed_admin):
+    def test_manager_can_reach_admin_dashboard(self, client, seed_admin):
         _admin_session(client, seed_admin["username"], role="manager")
-        resp = client.get("/admin", follow_redirects=False)
-        assert resp.status_code == 302
-        assert resp.headers["Location"].endswith("/leave_holidays")
+        resp = client.get("/admin")
+        assert resp.status_code == 200
 
-    def test_manager_blocked_from_settings(self, client, seed_admin):
+    def test_manager_denied_settings(self, client, seed_admin):
+        """/settings is role_required("admin") -- manager gets a real 403,
+        not a redirect."""
         _admin_session(client, seed_admin["username"], role="manager")
         resp = client.get("/settings", follow_redirects=False)
-        assert resp.status_code == 302
-
-    def test_manager_blocked_from_api_employees(self, client, seed_admin):
-        _admin_session(client, seed_admin["username"], role="manager")
-        resp = client.get("/api/employees")
         assert resp.status_code == 403
 
     def test_manager_can_reach_logout(self, client, seed_admin):
@@ -1117,8 +1118,7 @@ class TestManagerRoleWebRestriction:
         assert resp.status_code == 302
 
     def test_plain_admin_session_unaffected(self, client, seed_admin):
-        """Baseline -- confirms the new hook is a no-op for role='admin',
-        which should still reach everything it always could."""
+        """Baseline -- role='admin' still reaches everything it always could."""
         _admin_session(client, seed_admin["username"], role="admin")
         resp = client.get("/employees")
         assert resp.status_code == 200

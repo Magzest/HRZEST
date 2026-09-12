@@ -536,3 +536,45 @@ def seed_assigned_employee(db_engine, seed_hr_admin):
     cur.execute("DELETE FROM employees WHERE employee_id='TST002'")
     cur.execute("DELETE FROM api_tokens WHERE identity='TST002'")
     cur.close()
+
+
+@pytest.fixture
+def seed_manager_admin(db_engine):
+    """Insert a test manager-role admin_users account; clean up after the
+    test. Mirrors seed_hr_admin above but role='manager' -- for tests of
+    the employees.manager_id scoping added to leave/resignation/overtime
+    (see utils/helpers.py's manager_scope_column/manager_scope_subquery/
+    manager_scope_denied)."""
+    from utils.auth import generate_password_hash, MANAGER_ROLE
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM login_attempts WHERE identifier='test_manager_admin'")
+    cur.execute(
+        "INSERT INTO admin_users (username, password, role, email, is_active) VALUES (%s,%s,%s,%s,1) "
+        "ON CONFLICT (username) DO NOTHING",
+        ("test_manager_admin", generate_password_hash("Test@1234"), MANAGER_ROLE, "manager@test.local"),
+    )
+    yield {"username": "test_manager_admin", "password": "Test@1234"}
+    cur.execute("DELETE FROM admin_users WHERE username='test_manager_admin'")
+    cur.close()
+
+
+@pytest.fixture
+def seed_direct_report(db_engine, seed_manager_admin):
+    """A third test employee whose manager_id is seed_manager_admin's
+    username -- pairs with seed_employee (TST001) and seed_assigned_employee
+    (TST002) so a manager-scoping test can seed one employee IN scope and
+    one OUT of scope."""
+    from utils.auth import generate_password_hash
+    cur = db_engine.cursor()
+    cur.execute("DELETE FROM login_attempts WHERE identifier='TST003'")
+    cur.execute(
+        "INSERT INTO employees (employee_id, name, email, password, force_pin_change, manager_id) "
+        "VALUES (%s,%s,%s,%s,0,%s) "
+        "ON CONFLICT (employee_id) DO UPDATE SET manager_id=EXCLUDED.manager_id",
+        ("TST003", "Test Direct Report", "emp3@test.local",
+         generate_password_hash("EmpPass@1"), seed_manager_admin["username"]),
+    )
+    yield {"employee_id": "TST003", "password": "EmpPass@1", "name": "Test Direct Report"}
+    cur.execute("DELETE FROM employees WHERE employee_id='TST003'")
+    cur.execute("DELETE FROM api_tokens WHERE identity='TST003'")
+    cur.close()

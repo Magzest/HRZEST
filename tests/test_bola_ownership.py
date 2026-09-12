@@ -300,3 +300,146 @@ class TestHrScopeRouteGuards:
         }, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Employee not found" in resp.data
+
+
+class TestManagerScopeHelpers:
+    """Direct unit tests for utils/helpers.py's manager_scope_column/
+    manager_scope_subquery/manager_scope_denied -- the manager-role twin
+    of TestHrScopeHelpers above, scoping by employees.manager_id (the
+    existing org-chart reporting-line column) instead of
+    assigned_hr_username."""
+
+    def test_non_manager_session_gets_empty_fragment(self, client):
+        with client.application.test_request_context():
+            from flask import session
+            from utils.helpers import manager_scope_column, manager_scope_subquery
+            session["admin_role"] = "admin"
+            assert manager_scope_column() == ("", ())
+            assert manager_scope_subquery() == ("", ())
+
+    def test_anonymous_session_gets_empty_fragment(self, client):
+        with client.application.test_request_context():
+            from utils.helpers import manager_scope_column, manager_scope_subquery
+            assert manager_scope_column() == ("", ())
+            assert manager_scope_subquery() == ("", ())
+
+    def test_manager_session_gets_scoped_fragment(self, client):
+        with client.application.test_request_context():
+            from flask import session
+            from utils.helpers import manager_scope_column, manager_scope_subquery
+            session["admin_role"] = "manager"
+            session["admin_username"] = "test_manager_admin"
+            col, params = manager_scope_column(alias="e")
+            assert col == "AND e.manager_id=%s"
+            assert params == ("test_manager_admin",)
+            sub, params2 = manager_scope_subquery(alias="x")
+            assert "x.employee_id IN" in sub
+            assert params2 == ("test_manager_admin",)
+
+    def test_manager_scope_denied_false_for_admin(self, client):
+        with client.application.test_request_context():
+            from flask import session
+            from utils.helpers import manager_scope_denied
+            session["admin_role"] = "admin"
+            assert manager_scope_denied("ANY_EMP") is False
+
+    def test_manager_scope_denied_true_for_non_report(self, client, seed_manager_admin, seed_employee):
+        with client.application.test_request_context():
+            from flask import session
+            from utils.helpers import manager_scope_denied
+            session["admin_role"] = "manager"
+            session["admin_username"] = seed_manager_admin["username"]
+            assert manager_scope_denied(seed_employee["employee_id"]) is True
+
+    def test_manager_scope_denied_false_for_direct_report(self, client, seed_direct_report, seed_manager_admin):
+        with client.application.test_request_context():
+            from flask import session
+            from utils.helpers import manager_scope_denied
+            session["admin_role"] = "manager"
+            session["admin_username"] = seed_manager_admin["username"]
+            assert manager_scope_denied(seed_direct_report["employee_id"]) is False
+
+    def test_manager_scope_denied_false_for_own_record(self, client, seed_manager_admin):
+        with client.application.test_request_context():
+            from flask import session
+            from utils.helpers import manager_scope_denied
+            session["admin_role"] = "manager"
+            session["admin_username"] = seed_manager_admin["username"]
+            assert manager_scope_denied(seed_manager_admin["username"]) is False
+
+
+class TestManagerScopeRouteGuards:
+    """Route-level proof that a manager session only sees/acts on its own
+    direct reports (employees.manager_id) for leave/resignation/overtime --
+    admin and HR unaffected. Mirrors TestHrScopeRouteGuards' shape. Keeps
+    its own seed_leave_request fixture (rather than reusing
+    TestHrScopeRouteGuards') since a class-scoped @pytest.fixture is only
+    visible to tests within that same class."""
+
+    @pytest.fixture
+    def seed_leave_request(self, db_engine, seed_employee):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason, status) "
+            "VALUES (%s, CURRENT_DATE, 'test', 'Pending') RETURNING id",
+            (seed_employee["employee_id"],),
+        )
+        lid = cur.fetchone()[0]
+        yield lid
+        cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+        cur.close()
+
+    def test_leave_action_denied_for_non_report(self, client, seed_manager_admin, seed_employee, seed_leave_request):
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_manager_admin["username"]
+            sess["admin_role"] = "manager"
+        resp = client.post(f"/leave_action/{seed_leave_request}", data={"action": "Approved"})
+        assert resp.status_code == 403
+
+    @pytest.fixture
+    def seed_direct_report_leave_request(self, db_engine, seed_direct_report):
+        cur = db_engine.cursor()
+        cur.execute(
+            "INSERT INTO leave_requests (employee_id, leave_date, reason, status) "
+            "VALUES (%s, CURRENT_DATE, 'test', 'Pending') RETURNING id",
+            (seed_direct_report["employee_id"],),
+        )
+        lid = cur.fetchone()[0]
+        yield lid
+        cur.execute("DELETE FROM leave_requests WHERE id=%s", (lid,))
+        cur.close()
+
+    def test_leave_action_allowed_for_direct_report(self, client, seed_manager_admin, seed_direct_report_leave_request):
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_manager_admin["username"]
+            sess["admin_role"] = "manager"
+        resp = client.post(f"/leave_action/{seed_direct_report_leave_request}", data={"action": "Approved"})
+        assert resp.status_code == 302
+
+    def test_leave_holidays_excludes_tickets_tab_for_manager(self, client, seed_manager_admin):
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_manager_admin["username"]
+            sess["admin_role"] = "manager"
+        resp = client.get("/leave_holidays")
+        assert resp.status_code == 200
+        assert b"switchModule('tickets')" not in resp.data
+
+    def test_leave_holidays_includes_tickets_tab_for_admin(self, client, seed_admin):
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_admin["username"]
+            sess["admin_role"] = "admin"
+        resp = client.get("/leave_holidays")
+        assert resp.status_code == 200
+        assert b"switchModule('tickets')" in resp.data
+
+    def test_admin_bypasses_manager_scoping_on_leave_action(self, client, seed_admin, seed_employee, seed_leave_request):
+        with client.session_transaction() as sess:
+            sess["admin_logged_in"] = True
+            sess["admin_username"] = seed_admin["username"]
+            sess["admin_role"] = "admin"
+        resp = client.post(f"/leave_action/{seed_leave_request}", data={"action": "Approved"})
+        assert resp.status_code == 302

@@ -293,7 +293,9 @@
         <div class="sub">Manage leave requests, tickets, resignations, public holidays and announcements</div>
       </div>
       <div class="topbar-actions">
+        {% if not is_manager %}
         <a href="{{ tpath('/leave_balance') }}" class="btn-leave-balance"><i class="ti ti-calendar-stats"></i> Leave Balance</a>
+        {% endif %}
         <a href="{{ tpath('/leave_calendar') }}" class="btn-leave-cal"><i class="ti ti-calendar-month"></i> Leave Calendar</a>
       </div>
     </div>
@@ -302,10 +304,12 @@
         <i class="ti ti-calendar-minus"></i> Leaves
         {% if pending_leaves > 0 %}<span class="mtab-badge tb-pending">{{ pending_leaves }}</span>{% endif %}
       </button>
+      {% if not is_manager %}
       <button class="mtab-btn {% if tab == 'tickets' %}active{% endif %}" onclick="switchModule('tickets')">
         <i class="ti ti-help-circle"></i> Tickets
         {% if pending_tickets > 0 %}<span class="mtab-badge tb-open">{{ pending_tickets }}</span>{% endif %}
       </button>
+      {% endif %}
       <button class="mtab-btn {% if tab == 'announcements' %}active{% endif %}" onclick="switchModule('announcements')">
         <i class="ti ti-speakerphone"></i> Announcements
         {% if ann_list %}<span class="mtab-badge u-bg-dbeafe u-c-1e3a8a">{{ ann_list|length }}</span>{% endif %}

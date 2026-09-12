@@ -1450,6 +1450,56 @@ def hr_scope_denied(emp_id):
     return not row or row[0] != session.get("admin_username")
 
 
+# ── Manager-scoping WHERE fragments + ownership check ───────────────────────
+# Same shape as the HR-scoping trio above, but for a manager-role session's
+# direct reports instead of an HR's assigned employees. Reuses the existing
+# employees.manager_id column (already populated for the org chart --
+# blueprints/employees.py's add/edit forms, blueprints/admin_views.py's
+# api_org_chart_data()) rather than adding a new link table: a manager's
+# admin_users.username is always that same person's own employee_id (see
+# blueprints/auth.py's _ensure_manager_admin_account -- it's auto-
+# provisioned FROM an employee row, sharing that row's ID), so
+# "employees reporting to this manager" is just employees.manager_id
+# matching session["admin_username"], no new schema needed.
+def manager_scope_subquery(alias=""):
+    """WHERE fragment + params scoping to a manager session's direct
+    reports via a subquery, for tables without their own manager_id
+    column (leave_requests, resignation_requests, overtime). Returns
+    ("", ()) for a non-manager (or unauthenticated) session."""
+    from utils.auth import MANAGER_ROLE
+    if session.get("admin_role") != MANAGER_ROLE:
+        return "", ()
+    col = f"{alias}.employee_id" if alias else "employee_id"
+    return f"AND {col} IN (SELECT employee_id FROM employees WHERE manager_id=%s)", (session.get("admin_username"),)  # nosec B608
+
+
+def manager_scope_column(alias=""):
+    """WHERE fragment + params scoping by a direct manager_id column
+    (the employees table itself)."""
+    from utils.auth import MANAGER_ROLE
+    if session.get("admin_role") != MANAGER_ROLE:
+        return "", ()
+    col = f"{alias}.manager_id" if alias else "manager_id"
+    return f"AND {col}=%s", (session.get("admin_username"),)
+
+
+def manager_scope_denied(emp_id):
+    """True if the current session is manager-role and emp_id is NOT one
+    of its direct reports -- mirrors hr_scope_denied's shape exactly,
+    including the same self-access exception (a manager acting on their
+    own employee_id, e.g. their own leave request appearing in a shared
+    list, is never denied by this check alone)."""
+    from utils.auth import MANAGER_ROLE
+    if session.get("admin_role") != MANAGER_ROLE:
+        return False
+    if emp_id == session.get("admin_username"):
+        return False
+    with _db() as (cursor, _conn):
+        cursor.execute("SELECT manager_id FROM employees WHERE employee_id=%s", (emp_id,))
+        row = cursor.fetchone()
+    return not row or row[0] != session.get("admin_username")
+
+
 # ── Pending-action header counters ──────────────────────────────────────────
 # Was hand-repeated (15+ near-identical copies, some drifted to a narrower
 # tickets filter) across admin_views.py/attendance.py/documents.py/

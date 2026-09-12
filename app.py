@@ -80,7 +80,7 @@ from utils.email_utils import (
 # rounds of security work (structured event logging, BOLA risk-scoring,
 # the session kill switch) were silently not reaching any route in this
 # file. Consolidated onto one implementation; see utils/auth.py.
-from utils.auth import generate_password_hash, check_password_hash, HR_ROLE, MANAGER_ROLE
+from utils.auth import generate_password_hash, check_password_hash, HR_ROLE
 from utils.helpers import (
     _error_page, invalidate_settings_cache, get_company_settings,
     get_companies_list, get_overdue_onboarding_count, coerce_datetime,
@@ -717,51 +717,6 @@ def _enforce_admin_mfa_enrollment():
         return jsonify({"ok": False, "msg": "MFA enrollment required before continuing.",
                         "redirect": "/admin/mfa-required"}), 403
     return redirect("/admin/mfa-required")
-
-
-# Manager-role web sessions are scoped to the leave/resignation/overtime
-# approval queues only -- see MANAGER_ROLE's docstring in utils/auth.py.
-# Without this, a manager session would reach every other @admin_required
-# route unrestricted (that decorator only checks admin_logged_in, not
-# role) -- company-wide Employees/Payroll/Analytics/Settings, far beyond
-# what "manager" is meant to grant. Session-cookie check only (session.get,
-# never a Bearer token) -- mobile's manager role reaches its own,
-# separately @api_role_required-scoped API routes, untouched by this.
-_MANAGER_ALLOWED_EXACT_PATHS = {
-    "/leave_holidays", "/bulk_leave_action", "/overtime", "/leave_calendar",
-    "/api/dashboard_live", "/logout",
-    # _admin_chat_widget.html (the HR Assistant chatbot) is included on
-    # every admin_base.html page unconditionally -- HR already gets
-    # unrestricted access to it today, so manager does too rather than
-    # silently breaking the widget on every page it lands on.
-    "/api/admin/chat/messages", "/api/admin/chat/send",
-}
-_MANAGER_ALLOWED_PATH_PREFIXES = ("/leave_action/", "/resignation_action/", "/overtime_action/")
-
-
-@app.before_request
-def _restrict_manager_role():
-    if request.path.startswith("/static/") or request.path == "/healthz":
-        return
-    if session.get("admin_role") != MANAGER_ROLE:
-        return
-    # Always let the mandatory-MFA enrollment/step-up flow itself through --
-    # _enforce_admin_mfa_enrollment above already forces a not-yet-enrolled
-    # manager onto exactly this same allowlist before reaching here.
-    if request.path in _MANDATORY_MFA_EXEMPT_PATHS:
-        return
-    if request.path in _MANAGER_ALLOWED_EXACT_PATHS:
-        return
-    if any(request.path.startswith(p) for p in _MANAGER_ALLOWED_PATH_PREFIXES):
-        return
-    log_security_event(
-        "access.denied", "Manager-role session blocked from a non-approval-queue route",
-        level="INFO", identifier=session.get("admin_username"), path=request.path,
-    )
-    if request.path.startswith("/api/"):
-        return jsonify({"ok": False, "msg": "Not available for the manager role."}), 403
-    flash("That page isn't available for the manager role.", "error")
-    return redirect(_tpath("/leave_holidays"))
 
 
 @app.before_request

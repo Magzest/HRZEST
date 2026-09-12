@@ -138,14 +138,12 @@
 
   {% set _tp = (pending_leaves|default(0)) + (pending_resignations|default(0)) + (pending_tickets|default(0)) %}
 
-  {% if not _is_manager %}
   <a class="nav-item {{ 'active' if active_nav == 'dashboard' }}" href="{{ tpath('/hr_dashboard') if _is_hr else tpath('/admin') }}" {{ 'aria-current=page' if active_nav == 'dashboard' }}>
     <span class="nav-icon"><i class="ti ti-home"></i></span>Dashboard
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'employees' }}" href="{{ tpath('/employees') }}" {{ 'aria-current=page' if active_nav == 'employees' }}>
     <span class="nav-icon"><i class="ti ti-users"></i></span>Employees
   </a>
-  {% endif %}
   {% if _is_hr and hr_has_own_employee %}
   <form action="{{ tpath('/switch_to_my_employee_portal') }}" method="POST" class="nav-item-form">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
@@ -154,11 +152,9 @@
     </button>
   </form>
   {% endif %}
-  {% if not _is_manager %}
   <a class="nav-item {{ 'active' if active_nav == 'attendance' }}" href="{{ tpath('/monthly_report') }}" {{ 'aria-current=page' if active_nav == 'attendance' }}>
     <span class="nav-icon"><i class="ti ti-calendar-check"></i></span>Attendance
   </a>
-  {% endif %}
   {% if not _is_hr and not _is_manager %}
   <a class="nav-item {{ 'active' if active_nav == 'salary' }}" href="{{ tpath('/salary_report') }}" {{ 'aria-current=page' if active_nav == 'salary' }}>
     <span class="nav-icon"><i class="ti ti-coin"></i></span>Salary &amp; Payslips
@@ -170,14 +166,12 @@
   <a class="nav-item {{ 'active' if active_nav == 'overtime' }}" href="{{ tpath('/overtime') }}" {{ 'aria-current=page' if active_nav == 'overtime' }}>
     <span class="nav-icon"><i class="ti ti-clock-bolt"></i></span>OT &amp; Comp-off
   </a>
-  {% if not _is_manager %}
   <a class="nav-item {{ 'active' if active_nav == 'performance' }}" href="{{ tpath('/performance') }}" {{ 'aria-current=page' if active_nav == 'performance' }}>
     <span class="nav-icon"><i class="ti ti-chart-line"></i></span>Performance &amp; Comms
   </a>
   <a class="nav-item {{ 'active' if active_nav == 'onboarding' }}" href="{{ tpath('/onboarding') }}" {{ 'aria-current=page' if active_nav == 'onboarding' }}>
     <span class="nav-icon"><i class="ti ti-checklist"></i></span>Onboarding{% if overdue_onboardings > 0 %}<span class="badge-count u-bg-ef4444">{{ overdue_onboardings }}</span>{% endif %}
   </a>
-  {% endif %}
   {% if not _is_hr and not _is_manager %}
   <a class="nav-item {{ 'active' if active_nav == 'analytics' }}" href="{{ tpath('/analytics') }}" {{ 'aria-current=page' if active_nav == 'analytics' }}>
     <span class="nav-icon"><i class="ti ti-chart-bar"></i></span>Analytics
