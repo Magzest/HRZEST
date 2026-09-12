@@ -6,16 +6,21 @@ on:
   pull_request:
     branches: [ "main" ]
 
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: hrms-prod-repo
-  ECS_CLUSTER: hrms-prod-cluster
-  ECS_SERVICE: hrms-prod-service
-  APP_TASK_DEF_FILE: TaskDefinition.json
-
 jobs:
   # ---------------------------------------------------------
-  # Phase 1: Lint, Security & Unit Testing
+  # Lint, Security & Unit Testing
+  #
+  # This used to also carry a "Build & Push to ECR" / "ECS Update" deploy
+  # path (Docker build -> ECR -> ECS service update against
+  # hrms-prod-cluster/hrms-prod-repo). Removed: those names matched no
+  # Terraform-provisioned resource anywhere (not even the also-removed
+  # ecs.tf, which used different names again), it built via `docker build
+  # -f Dockerfile` even though this repo's actual container path is Podman
+  # + Containerfile (see compose.yaml/deploy.sh/README's own "DevOps:
+  # Podman, nginx, Let's Encrypt, GitHub Actions CI/CD, AWS EC2 + RDS +
+  # Terraform" line -- no ECS/Fargate/ECR anywhere in it). The real
+  # deployment is deploy.sh, run on the EC2 host itself. Every push to
+  # main was very likely failing (or silently no-op'ing) at this stage.
   # ---------------------------------------------------------
   security-and-test:
     name: Code Quality & Security Scanning
@@ -76,82 +81,3 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: test
-
-  # ---------------------------------------------------------
-  # Phase 2: Docker Build & ECR Push
-  # ---------------------------------------------------------
-  build-and-push:
-    name: Build & Push to ECR
-    needs: security-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    outputs:
-      image: ${{ steps.build-image.outputs.image }}
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - name: Build, Tag, and Push Image to ECR
-        id: build-image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest -f Dockerfile .
-          docker push -a $ECR_REGISTRY/$ECR_REPOSITORY
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-  # ---------------------------------------------------------
-  # Phase 3: ECS Deployment
-  # ---------------------------------------------------------
-  # No separate migration step here: there is no Flask-Migrate/Alembic in
-  # this codebase (no migrations/ dir, no `flask db` CLI registered), so a
-  # standalone `flask db upgrade` ECS task always failed and always blocked
-  # every deploy at this stage. Schema migrations for every tenant already
-  # run automatically at application boot -- see wsgi.py's
-  # _run_migrations_for_all_tenants() call and app.py's ~20 idempotent
-  # migration phases -- so the new task definition's own container startup
-  # (triggered by the ECS service update below) applies them with no
-  # separate orchestration needed.
-  deploy:
-    name: ECS Update
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Render new ECS Task Definition
-        id: render-task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: ${{ env.APP_TASK_DEF_FILE }}
-          container-name: app-container
-          image: ${{ needs.build-and-push.outputs.image }}
-
-      - name: Deploy to Amazon ECS (Zero-Downtime Rolling Update)
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
-        with:
-          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
