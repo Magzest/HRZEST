@@ -74,8 +74,8 @@ employee-attendance/
 │   └── toast.js / toast.css    # Toast Alert Notifications
 │
 ├── tests/                      # Pytest Test Suite
-├── Dockerfile                  # Container definition (Python 3.13-slim + non-root appuser)
-├── compose.yaml                # Production Docker Compose orchestration
+├── Containerfile                # Container definition (Python 3.13-slim + non-root appuser), built by Podman
+├── compose.yaml                # Production Podman Compose orchestration
 ├── deploy.sh                   # One-command automated VPS deployment script
 ├── setup_env.py                # Automated local .env generator
 ├── nginx.conf                  # Production Reverse Proxy & SSL Configuration
