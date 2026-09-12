@@ -23,12 +23,13 @@ qrcode>=8.2
 
 # ── Spreadsheets & reports ────────────────────────────────────────────────────
 openpyxl>=3.1.5
-# Dependabot-proposed major bump (3.x -> 5.x) — floor raised per its advisory,
-# but NOT locally verified: this dev sandbox's Python 3.7 can't even install
-# reportlab 5.x (needs >=3.9), so PDF generation (payslips, offer letters,
-# onboarding docs — see utils/salary_utils.py, blueprints/onboarding.py) needs
-# a real smoke test against 5.x before this is trusted, via CI or a
-# Python 3.11 environment matching the production container.
+# Dependabot-proposed major bump (3.x -> 5.x) — floor raised per its advisory.
+# Verified on Python 3.12 (matching the production container, not the 3.7
+# interpreter this comment used to warn about): reportlab 5.0.1 installs
+# cleanly and tests/test_onboarding.py's own tests call the real PDF
+# generator (_generate_offer_letter_pdf, blueprints/onboarding.py) directly,
+# unmocked — passing there across many full-suite runs is the actual smoke
+# test this comment used to say was still needed.
 reportlab>=5.0.0,<6.0.0
 
 # ── Cryptography & auth ───────────────────────────────────────────────────────

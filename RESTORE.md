@@ -27,21 +27,18 @@ If you're reading this because production is down, skip to
 
 1. Apply the `backups` S3 bucket: `terraform apply` picks it up automatically
    from `terraform/s3_storage.tf` once the rest of the terraform config is
-   applied. **Known gap as of this writing:** several *other* resources this
-   terraform config's `outputs.tf` already references —
+   applied. (Previously noted here as a known gap — `outputs.tf` referenced
    `aws_iam_instance_profile.ec2_app_profile`, `aws_security_group.app_firewall`,
-   `aws_sns_topic.alerts`, `aws_db_instance.this` — are not actually defined
-   anywhere in `terraform/*.tf`, so a bare `terraform apply` will fail with
-   "reference to undeclared resource" until those are added or the outputs
-   referencing them are removed. This is a pre-existing gap unrelated to
-   backups specifically; the `backups` bucket itself has no such issue.
-2. Grant the EC2 instance's IAM role `s3:PutObject` on
-   `arn:aws:s3:::<project>-backups-<account-id>/*` (once
-   `ec2_app_profile` above exists) — the backup script relies on the AWS
-   CLI's normal credential chain, so no static keys need to touch the host.
-   Until that role exists, either provision the bucket manually or run the
-   script with `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` set (fine for a
-   one-off, not recommended long-term).
+   `aws_sns_topic.alerts`, and `aws_db_instance.this` before any of them were
+   actually defined, so `terraform apply` failed with "reference to
+   undeclared resource." Fixed: `main.tf` was restored to the real EC2-based
+   config that defines all of these, `terraform validate`/`plan` now succeed
+   against the real config end-to-end. See the "Fix Terraform" commit for
+   the full story of how this regressed and how it was diagnosed.)
+2. Grant the EC2 instance's IAM role (`ec2_app_profile`, `terraform/main.tf`)
+   `s3:PutObject` on `arn:aws:s3:::<project>-backups-<account-id>/*` —
+   the backup script relies on the AWS CLI's normal credential chain, so no
+   static keys need to touch the host.
 3. Set `BACKUP_S3_BUCKET=<project>-backups-<account-id>` in `.env` on the
    app server.
 4. Install the scheduled job:
