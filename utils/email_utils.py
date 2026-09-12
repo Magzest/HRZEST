@@ -19,6 +19,17 @@ from extensions import app, app_log
 from utils.helpers import decrypt_pii
 
 
+def _mask_email(email):
+    """j***@example.com -- enough left to spot-check in a log line
+    ("is this even the right domain/user") without putting the full
+    address into logs an on-call/log-pipeline audience can read, for an
+    error path that doesn't otherwise need the full value."""
+    if not email or "@" not in email:
+        return "***"
+    local, _, domain = email.partition("@")
+    return f"{local[:1]}***@{domain}"
+
+
 def get_email_config():
     """Return SMTP config dict from DB, falling back to .env values.
 
@@ -155,7 +166,7 @@ def send_email_async(to_email, subject, html_body, config,
         cur.close()
         db.close()
     except Exception as e:
-        app_log.error("Failed to enqueue email to %s: %s", to_email, e)
+        app_log.error("Failed to enqueue email to %s: %s", _mask_email(to_email), e)
         threading.Thread(
             target=lambda: send_email_smtp(to_email, subject, html_body, config,
                                            attachment_bytes=attachment_bytes,
@@ -234,7 +245,8 @@ def _drain_queue_for_schema(schema_name):
                     "UPDATE email_queue SET status='done', sent_at=NOW() WHERE id=%s", (eid,)
                 )
             except Exception as exc:
-                app_log.error("Email queue send failed to %s (schema=%s): %s", to_email, schema_name, exc)
+                app_log.error("Email queue send failed (id=%s) to %s (schema=%s): %s",
+                              eid, _mask_email(to_email), schema_name, exc)
                 cur.execute(
                     "UPDATE email_queue SET status='pending', last_error=%s WHERE id=%s",
                     (str(exc)[:500], eid)

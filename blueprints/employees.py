@@ -20,7 +20,7 @@ from utils.helpers import (
     add_employee_seat_cap_check, _safe_app_url, hr_scope_denied as _hr_scope_denied,
 )
 from utils.dlp import has_pii_clearance, mask_tail
-from utils.email_utils import get_email_config, send_email_smtp
+from utils.email_utils import get_email_config, send_email_smtp, _mask_email
 from utils.attendance_utils import _td_to_time
 from utils.leave_utils import assign_leave_balances_for_employee
 from utils.face_utils import face_recognition, _face_recognition_available
@@ -1161,7 +1161,7 @@ def add_employee_page():
                 if _send_welcome_credentials_email(emp_id, name, email):
                     flash(f"Credentials email sent to {email}", "success")
             except Exception as exc:
-                app_log.warning("Welcome-credentials email failed for %s (%s): %s", emp_id, email, exc, exc_info=True)
+                app_log.warning("Welcome-credentials email failed for %s (%s): %s", emp_id, _mask_email(email), exc, exc_info=True)
     else:
         if os.path.exists(filepath):
             os.remove(filepath)

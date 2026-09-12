@@ -28,7 +28,7 @@ from utils.auth import (
     email_settings_step_up_valid,
 )
 from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime, hr_scope_column
-from utils.email_utils import get_email_config, send_email_async, send_email_smtp
+from utils.email_utils import get_email_config, send_email_async, send_email_smtp, _mask_email
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
 )
@@ -507,7 +507,7 @@ def send_salary_email():
         send_email_smtp(email, f"Salary Slip - {month_name}", html_body, config)
         return jsonify({"ok": True, "msg": f"Salary slip sent to {email}"})
     except Exception:
-        app_log.error("Failed to send salary slip email to %s", email, exc_info=True)
+        app_log.error("Failed to send salary slip email for %s (%s)", emp_id, _mask_email(email), exc_info=True)
         return jsonify({"ok": False, "msg": "Failed to send email. Check email settings."})
 
 # ---------------- SEND ALL SALARY EMAILS ----------------
