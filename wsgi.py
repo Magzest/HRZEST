@@ -107,11 +107,11 @@ def _with_heartbeat(job_id, fn):
 try:
     from apscheduler.schedulers.background import BackgroundScheduler
 except ImportError:
-    app_log.warning("APScheduler not installed -- all 6 nightly scheduled jobs disabled. Run: pip install apscheduler")
+    app_log.warning("APScheduler not installed -- all 7 nightly scheduled jobs disabled. Run: pip install apscheduler")
 else:
     try:
         from blueprints.daily_report import generate_and_send_daily_report
-        from blueprints.auto_debit import sync_and_bill_auto_debit
+        from blueprints.auto_debit import sync_and_bill_auto_debit, reconcile_billing_records
         from blueprints.billing_dunning import check_tenant_billing
         from blueprints.disbursement import prepare_pending_disbursements
         from blueprints.trial_billing import check_trial_expirations, check_trial_ending_soon
@@ -122,7 +122,7 @@ else:
         # missing/broken job module (e.g. blueprints/trial_billing.py not
         # yet present on a given checkout) got silently misreported as
         # "APScheduler not installed" -- true-sounding, wrong cause, and
-        # it took down all 6 jobs instead of just the one with the bad
+        # it took down all 7 jobs instead of just the one with the bad
         # import.
         app_log.error(
             "Nightly scheduler jobs disabled -- failed to import a job module (NOT an APScheduler problem): %s",
@@ -143,6 +143,13 @@ else:
                 trigger="cron",
                 hour=2, minute=0,
                 id="auto_debit_sync_and_bill",
+                replace_existing=True,
+            )
+            _scheduler.add_job(
+                func=_with_heartbeat("reconcile_billing_records", reconcile_billing_records),
+                trigger="cron",
+                hour=2, minute=30,
+                id="reconcile_billing_records",
                 replace_existing=True,
             )
             _scheduler.add_job(
@@ -176,6 +183,7 @@ else:
             _scheduler.start()
             app_log.info("Daily report scheduler started -- fires at 23:59 every night")
             app_log.info("Auto-debit sync/billing scheduler started -- fires at 02:00 every night")
+            app_log.info("Billing records reconciliation started -- fires at 02:30 every night")
             app_log.info("Tenant billing dunning check started -- fires at 03:00 every night")
             app_log.info("Salary disbursement prep scheduler started -- fires at 04:00 every night")
             app_log.info("Trial expiration check started -- fires at 01:00 every night")

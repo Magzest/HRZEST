@@ -535,3 +535,139 @@ class TestSyncAndBillAutoDebit:
 
         assert healthy_sub in update_calls
         assert broken_sub not in update_calls
+
+
+class TestReconcileBillingRecords:
+    """reconcile_billing_records() -- the nightly safety net for a missed
+    subscription.charged webhook. Mocks list_subscription_invoices() at
+    blueprints.auto_debit's own bound name (same boundary convention as
+    every other real-mode test in this file) rather than making a real
+    Razorpay call; _record_charge() itself is never mocked, so these tests
+    also exercise the exact same insert path the webhook handler uses."""
+
+    def test_noop_when_razorpay_not_configured(self, db_engine, clean_mandate, monkeypatch):
+        from blueprints.auto_debit import reconcile_billing_records
+        monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: False)
+        calls = []
+        monkeypatch.setattr("blueprints.auto_debit.list_subscription_invoices",
+                            lambda *a, **k: calls.append(a) or ([], None))
+        sub_id = "sub_real_" + secrets.token_hex(4)
+        _insert_mandate(db_engine, subscription_id=sub_id, status="active",
+                        activated_at=datetime.datetime.now())
+
+        with flask_app.app_context():
+            reconcile_billing_records()
+
+        assert calls == []  # never even looks at mandates when Razorpay isn't configured
+
+    def test_demo_subscription_skipped(self, db_engine, clean_mandate, monkeypatch):
+        from blueprints.auto_debit import reconcile_billing_records
+        monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: True)
+        calls = []
+        monkeypatch.setattr("blueprints.auto_debit.list_subscription_invoices",
+                            lambda *a, **k: calls.append(a) or ([], None))
+        sub_id = "demo_sub_" + secrets.token_hex(4)
+        _insert_mandate(db_engine, subscription_id=sub_id, status="active",
+                        activated_at=datetime.datetime.now())
+
+        with flask_app.app_context():
+            reconcile_billing_records()
+
+        assert calls == []  # a subscription that was never real has nothing to reconcile
+
+    def test_fills_in_a_paid_invoice_the_webhook_missed(self, db_engine, clean_mandate, monkeypatch):
+        from blueprints.auto_debit import reconcile_billing_records
+        monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: True)
+        sub_id = "sub_real_" + secrets.token_hex(4)
+        payment_id = "pay_" + secrets.token_hex(6)
+        _insert_mandate(db_engine, subscription_id=sub_id, status="active",
+                        activated_at=datetime.datetime.now())
+        monkeypatch.setattr(
+            "blueprints.auto_debit.list_subscription_invoices",
+            lambda subscription_id, **k: (
+                [{"status": "paid", "payment_id": payment_id, "amount_paid": 49900}], None
+            ),
+        )
+
+        with flask_app.app_context():
+            reconcile_billing_records()
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT status, amount_paise, razorpay_payment_id FROM att_master.monthly_invoices "
+            "WHERE razorpay_subscription_id=%s", (sub_id,),
+        )
+        row = cur.fetchone()
+        cur.close()
+        assert row is not None, "webhook-missed invoice was not backfilled"
+        assert row == ("paid", 49900, payment_id)
+
+    def test_replaying_an_already_recorded_invoice_is_a_noop(self, db_engine, clean_mandate, monkeypatch):
+        """The whole point of reusing _record_charge()'s own idempotency
+        (a real unique constraint on razorpay_payment_id) -- this job never
+        needs to first check what's already recorded before replaying."""
+        from blueprints.auto_debit import reconcile_billing_records
+        monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: True)
+        sub_id = "sub_real_" + secrets.token_hex(4)
+        payment_id = "pay_" + secrets.token_hex(6)
+        _insert_mandate(db_engine, subscription_id=sub_id, status="active",
+                        activated_at=datetime.datetime.now())
+        monkeypatch.setattr(
+            "blueprints.auto_debit.list_subscription_invoices",
+            lambda subscription_id, **k: (
+                [{"status": "paid", "payment_id": payment_id, "amount_paid": 49900}], None
+            ),
+        )
+
+        with flask_app.app_context():
+            reconcile_billing_records()
+            reconcile_billing_records()  # second run -- must not duplicate
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM att_master.monthly_invoices WHERE razorpay_payment_id=%s", (payment_id,),
+        )
+        assert cur.fetchone()[0] == 1
+        cur.close()
+
+    def test_unpaid_invoice_is_not_recorded(self, db_engine, clean_mandate, monkeypatch):
+        from blueprints.auto_debit import reconcile_billing_records
+        monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: True)
+        sub_id = "sub_real_" + secrets.token_hex(4)
+        _insert_mandate(db_engine, subscription_id=sub_id, status="active",
+                        activated_at=datetime.datetime.now())
+        monkeypatch.setattr(
+            "blueprints.auto_debit.list_subscription_invoices",
+            lambda subscription_id, **k: (
+                [{"status": "issued", "payment_id": None, "amount_paid": 0}], None
+            ),
+        )
+
+        with flask_app.app_context():
+            reconcile_billing_records()  # must not raise
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM att_master.monthly_invoices WHERE razorpay_subscription_id=%s", (sub_id,),
+        )
+        assert cur.fetchone()[0] == 0
+        cur.close()
+
+    def test_fetch_error_for_one_tenant_does_not_raise(self, db_engine, clean_mandate, monkeypatch):
+        from blueprints.auto_debit import reconcile_billing_records
+        monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: True)
+        sub_id = "sub_real_" + secrets.token_hex(4)
+        _insert_mandate(db_engine, subscription_id=sub_id, status="active",
+                        activated_at=datetime.datetime.now())
+        monkeypatch.setattr("blueprints.auto_debit.list_subscription_invoices",
+                            lambda subscription_id, **k: (None, "network error contacting Razorpay"))
+
+        with flask_app.app_context():
+            reconcile_billing_records()  # must not raise
+
+        cur = db_engine.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM att_master.monthly_invoices WHERE razorpay_subscription_id=%s", (sub_id,),
+        )
+        assert cur.fetchone()[0] == 0
+        cur.close()

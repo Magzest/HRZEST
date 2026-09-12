@@ -236,6 +236,28 @@ def update_subscription_quantity(subscription_id: str, quantity: int):
     return True, None
 
 
+def list_subscription_invoices(subscription_id: str, count: int = 5):
+    """GET /v1/invoices?subscription_id={id} -- Razorpay's own authoritative
+    billing history for one subscription, most recent first. Used by
+    blueprints/auto_debit.py's nightly reconciliation job to fill in a
+    monthly_invoices row for a cycle whose subscription.charged webhook
+    never arrived (a network blip, an outage during the delivery window --
+    Razorpay retries webhooks, but not forever). Returns (items, error)
+    where items is the raw list of invoice objects (each carrying at least
+    id/status/amount_paid/date/payment_id) -- deliberately not reshaped
+    here, since _record_charge() (auto_debit.py) already owns the mapping
+    from "Razorpay's fields" to "this app's monthly_invoices columns" for
+    the webhook path, and the reconciliation job reuses that exact
+    function rather than a second, parallel mapping that could drift from
+    it."""
+    data, error = _request(
+        f"/invoices?subscription_id={subscription_id}&count={count}", method="GET"
+    )
+    if error:
+        return None, error
+    return data.get("items", []), None
+
+
 def cancel_subscription(subscription_id: str, cancel_at_cycle_end: bool = False):
     """POST /v1/subscriptions/{id}/cancel. Returns (ok, error)."""
     data, error = _request(f"/subscriptions/{subscription_id}/cancel", {

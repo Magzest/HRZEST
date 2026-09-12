@@ -38,7 +38,7 @@ from utils.razorpay_utils import (
     create_plan, create_customer, create_subscription, update_subscription_quantity,
     cancel_subscription as razorpay_cancel_subscription, verify_subscription_signature,
     key_id as razorpay_key_id, razorpay_configured,
-    create_id_or_demo, verify_or_demo,
+    create_id_or_demo, verify_or_demo, list_subscription_invoices,
 )
 from blueprints.webhooks import register_webhook_handler
 
@@ -508,6 +508,67 @@ def sync_and_bill_auto_debit():
                 _sync_mandate_quantity(tenant_schema, subscription_id, quantity_synced, current_count, is_demo_sub=False)
         except Exception as exc:
             app_log.error("sync_and_bill_auto_debit: failed for tenant %s: %s", tenant_schema, exc)
+
+
+def reconcile_billing_records():
+    """Scheduled nightly (wsgi.py) -- a safety net for sync_and_bill_auto_debit()'s
+    real-mode charges, which normally land in monthly_invoices via the
+    subscription.charged webhook (blueprints/webhooks.py), not via any
+    scheduled job. If that webhook delivery is ever missed entirely (a
+    brief outage during Razorpay's own retry window, a bug in the webhook
+    endpoint) the tenant's payment still succeeds on Razorpay's side, but
+    this app never finds out -- silently drifting the two systems apart,
+    with a real, concrete consequence: blueprints/billing_dunning.py's
+    check_tenant_billing() would treat a genuinely-paid tenant as overdue
+    and eventually lock their account.
+
+    For every active, non-demo mandate, asks Razorpay directly (the
+    authoritative source, not a guess) for its recent invoice history and
+    replays each one Razorpay shows as paid through _record_charge() --
+    the exact same function the webhook handler itself calls, so there is
+    only one place that ever maps "Razorpay's fields" to this app's
+    monthly_invoices columns, and its existing idempotency (a real DB
+    unique constraint on razorpay_payment_id, see app.py's
+    idx_monthly_invoices_payment_id) means replaying an already-recorded
+    invoice is always a safe no-op -- this never needs to first check
+    what's already there.
+
+    Never invents a charge Razorpay doesn't itself show as paid; a
+    genuine payment failure is check_tenant_billing()'s job to act on,
+    not this one's."""
+    if not razorpay_configured():
+        return
+    conn = get_master_db()
+    cur = conn.cursor(buffered=True)
+    cur.execute(
+        "SELECT tenant_schema, razorpay_subscription_id FROM auto_debit_mandates "
+        "WHERE status='active' AND razorpay_subscription_id IS NOT NULL "
+        "AND razorpay_subscription_id NOT LIKE %s",
+        (_DEMO_SUBSCRIPTION_PREFIX + "%",)
+    )
+    mandates = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    for tenant_schema, subscription_id in mandates:
+        try:
+            invoices, error = list_subscription_invoices(subscription_id)
+            if error:
+                app_log.warning(
+                    "reconcile_billing_records: could not fetch invoices for %s (%s): %s",
+                    tenant_schema, subscription_id, error,
+                )
+                continue
+            for inv in invoices:
+                if inv.get("status") != "paid":
+                    continue
+                payment_id = inv.get("payment_id")
+                if not payment_id:
+                    continue
+                amount_paise = inv.get("amount_paid") or inv.get("amount") or 0
+                _record_charge(subscription_id, amount_paise, payment_id, status="paid")
+        except Exception as exc:
+            app_log.error("reconcile_billing_records: failed for tenant %s: %s", tenant_schema, exc)
 
 
 def _sync_mandate_quantity(tenant_schema, subscription_id, quantity_synced, current_count, is_demo_sub):
