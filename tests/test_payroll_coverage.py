@@ -36,7 +36,7 @@ def _admin_session(client, seed_admin):
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -85,7 +85,7 @@ class TestUpsertCoFeatures:
     def test_valid_fields_upsert_succeeds(self, mocker):
         from utils.helpers import _upsert_co_features
         mock_conn = mocker.MagicMock()
-        mock_cur  = mocker.MagicMock()
+        mock_cur = mocker.MagicMock()
         mock_conn.cursor.return_value = mock_cur
         mocker.patch("utils.helpers.get_db_connection", return_value=mock_conn)
         _upsert_co_features(99, {"geo_enabled": True, "qr_enabled": False})

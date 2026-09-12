@@ -199,5 +199,3 @@ def totp_qr_data_uri(admin_username: str, secret: str) -> str:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-
-

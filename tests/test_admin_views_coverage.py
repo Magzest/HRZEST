@@ -8,6 +8,7 @@ save_geo_radius, save_security_settings, switch_company, clear_company.
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _admin_session(client, seed_admin):
     client.post("/login", data={
         "identifier": seed_admin["username"],

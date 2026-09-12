@@ -9,6 +9,10 @@ import threading
 from contextlib import contextmanager
 
 import pytz
+from cryptography.fernet import Fernet, InvalidToken as _FernetInvalid
+from flask import session, request
+from database import get_db_connection
+from extensions import app_log, log_security_event
 
 _SAFE_IDENT_RE = re.compile(r'^[a-z][a-z0-9_]*$')
 
@@ -47,11 +51,6 @@ def coerce_datetime(value):
         except ValueError:
             return None
     return None
-
-
-from flask import session, request
-from database import get_db_connection
-from extensions import app_log, log_security_event
 
 
 def tpath(path: str) -> str:
@@ -221,8 +220,6 @@ def _safe_referrer_redirect(referrer: str, fallback: str) -> str:
 # Every environment that runs this code now needs a real key; generate
 # one with:
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-from cryptography.fernet import Fernet, InvalidToken as _FernetInvalid
-
 _ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "").strip()
 if not _ENCRYPTION_KEY:
     app_log.critical(
@@ -310,8 +307,6 @@ def decrypt_pii_date(value):
         return datetime.datetime.strptime(str(decrypted), "%Y-%m-%d").date()
     except (ValueError, TypeError):
         return None
-
-
 
 
 # ── DB context manager ────────────────────────────────────────────────────────
@@ -564,7 +559,7 @@ def save_uploaded_logo(file_storage, name_hint):
     ext = os.path.splitext(file_storage.filename)[1].lower()
     safe_name = _LOGO_NAME_RE.sub("", name_hint.lower()) or "logo"
     return save_public(current_app.root_path, file_storage, f"company_logos/{safe_name}{ext}",
-                        content_type=file_storage.content_type)
+                       content_type=file_storage.content_type)
 
 
 _APPLICATION_DOC_KINDS = {
@@ -607,7 +602,7 @@ def save_application_document(file_storage, application_id, doc_kind):
         return None, err
     ext = os.path.splitext(file_storage.filename)[1].lower()
     return save_private(current_app.root_path, file_storage,
-                         f"tenant_applications/{int(application_id)}/{doc_kind}{ext}")
+                        f"tenant_applications/{int(application_id)}/{doc_kind}{ext}")
 
 
 # ── Company settings cache (60-second TTL) ────────────────────────────────────
@@ -654,7 +649,7 @@ def invalidate_settings_cache():
 
 
 def post_announcement(cursor, db, title, content, priority, visibility, target_emp=None,
-                       attachment_original_name=None, attachment_stored_ref=None):
+                      attachment_original_name=None, attachment_stored_ref=None):
     """Insert an `announcements` row and fan out the matching `notifications`
     row(s) -- shared by the web admin form (blueprints/admin_views.py's
     announcements_admin) and the Bearer-token API twin (blueprints/
@@ -725,7 +720,8 @@ def _email_announcement(title, content, priority, recipient_emails, attachment_n
         if attachment_name else ""
     )
     html_body = f"""
-    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:auto;padding:20px;border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:auto;padding:20px;
+         border:1px solid #e2e8f0;border-radius:12px;background:#ffffff;">
       <div style="background:#1e3a8a;padding:16px 20px;border-radius:8px 8px 0 0;color:#ffffff;">
         <h2 style="margin:0;font-size:18px;">📢 {safe_title}</h2>
       </div>
@@ -823,7 +819,7 @@ def get_company_settings():
                 row_dict = dict(zip(cols, row))
         cursor.close()
         db.close()
-        
+
         if row_dict:
             result = {
                 "company_name": row_dict.get("company_name") or "My Company",
@@ -1465,7 +1461,8 @@ def _error_page(code, icon, title, subtitle, hint):
     background: var(--gradient-brand); display: flex; align-items: center; justify-content: center;
     font-size: 32px; box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
   }}
-  .code {{ font-family: var(--font-heading); font-size: 15px; font-weight: 800; letter-spacing: 2px; color: var(--accent-cyan); margin-bottom: 8px; text-transform: uppercase; }}
+  .code {{ font-family: var(--font-heading); font-size: 15px; font-weight: 800; letter-spacing: 2px;
+           color: var(--accent-cyan); margin-bottom: 8px; text-transform: uppercase; }}
   .title {{ font-family: var(--font-heading); font-size: 22px; font-weight: 800; color: var(--text-main); margin-bottom: 10px; }}
   .sub {{ font-size: 14px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.6; }}
   .hint {{ font-size: 12.5px; color: var(--text-subtle); margin-bottom: 28px; }}

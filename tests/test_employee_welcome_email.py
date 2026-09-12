@@ -86,7 +86,7 @@ class TestAddEmployeePageWelcomeEmail:
         monkeypatch.setattr(employees_module, "get_email_config", lambda: {"host": "smtp.test"})
         sent = []
         monkeypatch.setattr(employees_module, "send_email_smtp",
-                             lambda to, subject, html, cfg: sent.append((to, subject, html)))
+                            lambda to, subject, html, cfg: sent.append((to, subject, html)))
 
         emp_id = "WELMAIL002"
         try:
@@ -113,7 +113,7 @@ class TestApiRegisterEmployeeWelcomeEmail:
         monkeypatch.setattr(employees_module, "get_email_config", lambda: {"host": "smtp.test"})
         sent = []
         monkeypatch.setattr(employees_module, "send_email_smtp",
-                             lambda to, subject, html, cfg: sent.append((to, subject, html)))
+                            lambda to, subject, html, cfg: sent.append((to, subject, html)))
 
         emp_id = "WELMAIL003"
         try:
@@ -146,7 +146,7 @@ class TestApiEmployeeSignupWelcomeEmail:
         monkeypatch.setattr(core_module, "get_email_config", lambda: {"host": "smtp.test"})
         sent = []
         monkeypatch.setattr(core_module, "send_email_smtp",
-                             lambda to, subject, html, cfg: sent.append((to, subject, html)))
+                            lambda to, subject, html, cfg: sent.append((to, subject, html)))
 
         emp_id = "WELMAIL004"
         try:

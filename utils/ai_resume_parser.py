@@ -15,7 +15,7 @@ def _extract_text_from_bytes(file_bytes, filename=""):
     """Extract plain text from uploaded PDF/Docx or plain text file bytes."""
     if not file_bytes:
         return ""
-    
+
     # Simple plain text / string fallback
     try:
         text = file_bytes.decode("utf-8", errors="ignore")
@@ -41,11 +41,11 @@ def _extract_text_from_bytes(file_bytes, filename=""):
 def parse_resume(file_bytes, filename=""):
     """Parse resume content and return structured candidate metadata."""
     raw_text = _extract_text_from_bytes(file_bytes, filename)
-    
+
     # Extract candidate contact & skill info using regex heuristics
     emails = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", raw_text)
     phones = re.findall(r"\(?\+?\d{1,3}\)?[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}", raw_text)
-    
+
     # Common tech/HR skill keywords
     skill_keywords = [
         "Python", "JavaScript", "React", "Next.js", "Node.js", "PostgreSQL", "SQL",
@@ -54,23 +54,26 @@ def parse_resume(file_bytes, filename=""):
         "HRMS", "Payroll", "Recruitment", "Management", "Agile", "Scrum"
     ]
     extracted_skills = [s for s in skill_keywords if re.search(r"\b" + re.escape(s) + r"\b", raw_text, re.IGNORECASE)]
-    
+
     # Estimate years of experience
     year_matches = re.findall(r"\b(20\d{2}|19\d{2})\b", raw_text)
     est_years = 0
     if len(year_matches) >= 2:
         sorted_years = sorted([int(y) for y in year_matches])
         est_years = max(1, sorted_years[-1] - sorted_years[0])
-    
+
     # Derive candidate name from first line or filename
     candidate_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title() if filename else "Candidate"
-    first_lines = [l.strip() for l in raw_text.splitlines() if l.strip() and len(l.strip()) < 50]
+    first_lines = [line.strip() for line in raw_text.splitlines() if line.strip() and len(line.strip()) < 50]
     if first_lines and not re.search(r"resume|curriculum|cv", first_lines[0], re.IGNORECASE):
         candidate_name = first_lines[0].title()
 
     if len(raw_text) > 50:
         try:
-            prompt = f"Parse the following resume into JSON with keys: candidate_name, email, phone, skills (list), education, years_experience (number), summary.\n\nResume Text:\n{raw_text[:3000]}"
+            prompt = (
+                "Parse the following resume into JSON with keys: candidate_name, email, phone, skills (list), "
+                f"education, years_experience (number), summary.\n\nResume Text:\n{raw_text[:3000]}"
+            )
             text_out = call_claude(prompt, max_tokens=500)
             json_match = re.search(r"\{.*\}", text_out, re.DOTALL)
             if json_match:
@@ -95,26 +98,26 @@ def match_candidate_job(parsed_candidate, job_description):
     """Evaluate a parsed candidate profile against a target job description."""
     if not job_description:
         job_description = "Software Developer with Python, SQL, and Agile experience."
-        
+
     cand_skills = [s.lower() for s in parsed_candidate.get("skills", [])]
     jd_lower = job_description.lower()
-    
+
     # Skill overlap matching
     matched_skills = [s for s in cand_skills if s in jd_lower]
     total_cand_skills = max(len(cand_skills), 1)
     overlap_ratio = len(matched_skills) / total_cand_skills
-    
+
     # Calculate score (base 60 + up to 40 bonus for skill overlap)
     match_score = min(98, max(55, int(60 + (overlap_ratio * 35) + min(10, parsed_candidate.get("years_experience", 2) * 2))))
-    
+
     tier = "Strong Match" if match_score >= 85 else ("Good Match" if match_score >= 70 else "Potential Fit")
-    
+
     rationale = (
         f"Candidate {parsed_candidate.get('candidate_name', 'Candidate')} demonstrates key competencies in "
         f"{', '.join(parsed_candidate.get('skills', [])[:3])}. Matches {len(matched_skills)} required job skills with "
         f"~{parsed_candidate.get('years_experience', 3)} years of relevant domain experience."
     )
-    
+
     return {
         "candidate_name": parsed_candidate.get("candidate_name"),
         "match_score": match_score,

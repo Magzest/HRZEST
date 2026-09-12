@@ -407,7 +407,7 @@ def admin_login():
                 )
             _clear_login_failures(identifier)
             return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
-                                     "Executive Administrator")
+                                    "Executive Administrator")
         if admin_row and check_password_hash(admin_row[0], password):
             if not admin_row[3]:
                 # Terminated account -- same generic error as a wrong
@@ -432,14 +432,14 @@ def admin_login():
                     _ud.commit()
             if app.config["MANDATORY_LOGIN_MFA"]:
                 return _start_login_mfa(co, "admin_login.html", "admin_users", identifier, admin_row[2],
-                                         "Executive Administrator" if admin_row[1] == "admin" else admin_row[1].title())
+                                        "Executive Administrator" if admin_row[1] == "admin" else admin_row[1].title())
             session.clear()
             session["admin_logged_in"] = True
             session["admin_username"] = identifier
             session["admin_role"] = admin_row[1]
             session["_session_created"] = time.time()
             session.permanent = True
-            sid = ensure_session_id(session)
+            ensure_session_id(session)
             log_security_event(
                 "auth.admin_login_success", f"Admin login for '{identifier}' (role={admin_row[1]})",
                 level="INFO", identifier=identifier,
@@ -532,7 +532,7 @@ def mfa_verify():
                 session["admin_role"] = role
                 session["_session_created"] = time.time()
                 session.permanent = True
-                sid = ensure_session_id(session)
+                ensure_session_id(session)
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
                 dest = redirect(tpath("/hr_dashboard" if role == HR_ROLE else "/admin"))
@@ -599,7 +599,7 @@ def api_change_admin_password():
     if not verify_and_update_password("admin_users", "username", username, current_pw, new_pw):
         return jsonify({"ok": False, "msg": "Current password is incorrect."}), 400
     log_security_event("auth.password_changed", f"Password changed for '{username}' via mobile app",
-                        level="INFO", identifier=username)
+                       level="INFO", identifier=username)
     return jsonify({"ok": True, "msg": "Password updated."})
 
 
@@ -679,7 +679,8 @@ def admin_forgot_password():
   </div>
   <div style="padding:28px;">
     <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">You requested a password reset for the admin account.</p>
-    <a href="{reset_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:20px;">
+    <a href="{reset_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;
+      border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:20px;">
       Reset My Password
     </a>
     <p style="font-size:13px;color:#64748b;">This link expires in <strong>1 hour</strong>. If you did not request this, ignore this email.</p>
@@ -770,8 +771,10 @@ def employee_forgot_password():
     <div style="font-size:13px;opacity:0.75;margin-top:4px;">Employee Portal</div>
   </div>
   <div style="padding:28px;">
-    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Hi <strong>{emp_name}</strong>, you requested a password reset for Employee ID <strong>{emp_id}</strong>.</p>
-    <a href="{reset_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:20px;">
+    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Hi <strong>{emp_name}</strong>, you requested a
+      password reset for Employee ID <strong>{emp_id}</strong>.</p>
+    <a href="{reset_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;
+      border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:20px;">
       Reset My Password
     </a>
     <p style="font-size:13px;color:#64748b;">This link expires in <strong>1 hour</strong>. If you did not request this, please ignore this email.</p>

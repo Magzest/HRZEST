@@ -31,13 +31,13 @@ _report_lock = threading.Lock()
 # ── HTML email template ──────────────────────────────────────────────────────
 
 def _build_email_html(date_str: str, stats: dict) -> str:
-    present    = stats.get("present", 0)
-    absent     = stats.get("absent", 0)
-    late       = stats.get("late", 0)
-    total      = stats.get("total", 0)
-    on_leave   = stats.get("on_leave", 0)
+    present = stats.get("present", 0)
+    absent = stats.get("absent", 0)
+    late = stats.get("late", 0)
+    total = stats.get("total", 0)
+    on_leave = stats.get("on_leave", 0)
     pending_lv = stats.get("pending_leaves", 0)
-    pct        = round((present / total * 100), 1) if total else 0
+    pct = round((present / total * 100), 1) if total else 0
 
     rows_html = ""
     for r in stats.get("rows", [])[:30]:   # cap at 30 rows in email
@@ -50,6 +50,16 @@ def _build_email_html(date_str: str, stats: dict) -> str:
           <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">{r.get('login_time') or '--'}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">{r.get('logout_time') or '--'}</td>
         </tr>"""
+
+    pending_alert_html = "" if pending_lv == 0 else (
+        '<div style="margin:16px 24px;padding:14px 18px;background:#FEF3C7;border-left:4px solid #F59E0B;'
+        'border-radius:8px;font-size:14px;color:#92400E;"><strong>⏳ {} leave request{} pending approval.'
+        '</strong></div>'
+    ).format(pending_lv, "s" if pending_lv != 1 else "")
+    more_rows_html = (
+        "<p style='text-align:center;color:#94A3B8;font-size:12px;margin-top:12px;'>"
+        "Showing first 30 employees. Log in to view full report.</p>"
+    ) if len(stats.get("rows", [])) > 30 else ""
 
     return f"""
 <!DOCTYPE html>
@@ -89,7 +99,7 @@ def _build_email_html(date_str: str, stats: dict) -> str:
     </div>
 
     <!-- Pending alerts -->
-    {"" if pending_lv == 0 else f'<div style="margin:16px 24px;padding:14px 18px;background:#FEF3C7;border-left:4px solid #F59E0B;border-radius:8px;font-size:14px;color:#92400E;"><strong>⏳ {pending_lv} leave request{"s" if pending_lv != 1 else ""} pending approval.</strong></div>'}
+    {pending_alert_html}
 
     <!-- Employee table -->
     <div style="padding:24px;">
@@ -106,7 +116,7 @@ def _build_email_html(date_str: str, stats: dict) -> str:
         </thead>
         <tbody>{rows_html}</tbody>
       </table>
-      {"<p style='text-align:center;color:#94A3B8;font-size:12px;margin-top:12px;'>Showing first 30 employees. Log in to view full report.</p>" if len(stats.get("rows", [])) > 30 else ""}
+      {more_rows_html}
     </div>
 
     <!-- Footer -->
@@ -221,7 +231,7 @@ def _run_report():
         return
 
     subject = f"📊 Daily Attendance Report -- {date_str}"
-    html    = _build_email_html(date_str, stats)
+    html = _build_email_html(date_str, stats)
     for email in admin_emails:
         send_email_async(email, subject, html, cfg)
     app_log.info(f"daily_report: done -- sent to {len(admin_emails)} admins")
@@ -255,7 +265,9 @@ def send_weekly_employee_digests():
                     <strong>Employee ID:</strong> {emp_id}<br>
                     <strong>Status:</strong> Active &amp; Up-to-date
                   </div>
-                  <p style="font-size:13px;color:#64748b;">Log into your <a href="http://localhost:5000/employee_portal" style="color:#3b82f6;">Employee Portal</a> to view detailed payslips and apply for leave.</p>
+                  <p style="font-size:13px;color:#64748b;">Log into your
+                    <a href="http://localhost:5000/employee_portal" style="color:#3b82f6;">Employee Portal</a>
+                    to view detailed payslips and apply for leave.</p>
                 </div>
                 """
                 send_email_async(emp_email, subject, html, cfg)
@@ -282,4 +294,3 @@ def trigger_weekly_digest():
     t = threading.Thread(target=send_weekly_employee_digests, daemon=True)
     t.start()
     return jsonify({"ok": True, "msg": "Weekly employee digest generation started."})
-

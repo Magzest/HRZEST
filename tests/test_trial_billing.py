@@ -298,7 +298,7 @@ class TestCancelAtPeriodEnd:
     def test_cancel_at_period_end_keeps_mandate_billing_until_cycle_end(self, client, db_engine, seed_admin, clean_mandate, monkeypatch):
         called = []
         monkeypatch.setattr("blueprints.auto_debit.razorpay_cancel_subscription",
-                             lambda sub_id, **k: called.append((sub_id, k)) or (True, None))
+                            lambda sub_id, **k: called.append((sub_id, k)) or (True, None))
         sub_id = "sub_real_" + secrets.token_hex(4)
         _insert_mandate(db_engine, sub_id, status="active")
         _admin_session(client, seed_admin["username"])
@@ -502,7 +502,9 @@ class TestTrialSignupIntegration:
             assert trial_start is not None and trial_end is not None, "trial clock did not start at first login"
             from blueprints.trial_billing import TRIAL_DURATION_DAYS
             delta = trial_end - trial_start
-            assert datetime.timedelta(days=TRIAL_DURATION_DAYS) - datetime.timedelta(minutes=1) < delta < datetime.timedelta(days=TRIAL_DURATION_DAYS) + datetime.timedelta(minutes=1)
+            lower = datetime.timedelta(days=TRIAL_DURATION_DAYS) - datetime.timedelta(minutes=1)
+            upper = datetime.timedelta(days=TRIAL_DURATION_DAYS) + datetime.timedelta(minutes=1)
+            assert lower < delta < upper
 
             cur.execute(
                 "SELECT status, razorpay_subscription_id FROM att_master.auto_debit_mandates WHERE tenant_schema=%s",

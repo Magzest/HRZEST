@@ -108,7 +108,7 @@ class TestMobileWebSessionLinkAndBridgeLogin:
     def test_unrecognized_target_falls_back_to_default_on_redemption(self, client, seed_admin):
         token = _admin_token(client, seed_admin)
         data = client.post("/api/mobile/web_session_link", json={"target": "/some/other/page"},
-                            headers=_auth(token)).get_json()
+                           headers=_auth(token)).get_json()
         bridge_token = re.search(r"/mobile_bridge_login/([0-9a-f]+)$", data["url"]).group(1)
         resp = client.get(f"/mobile_bridge_login/{bridge_token}", follow_redirects=False)
         assert resp.status_code == 302
@@ -117,7 +117,7 @@ class TestMobileWebSessionLinkAndBridgeLogin:
     def test_allowlisted_target_is_honored(self, client, seed_admin):
         token = _admin_token(client, seed_admin)
         data = client.post("/api/mobile/web_session_link", json={"target": "/settings/seats"},
-                            headers=_auth(token)).get_json()
+                           headers=_auth(token)).get_json()
         bridge_token = re.search(r"/mobile_bridge_login/([0-9a-f]+)$", data["url"]).group(1)
         resp = client.get(f"/mobile_bridge_login/{bridge_token}", follow_redirects=False)
         assert resp.status_code == 302

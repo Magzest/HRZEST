@@ -28,6 +28,7 @@ class _SyncThread:
     -- same pattern tests/test_email_utils.py uses for send_email_async's
     fallback thread -- so the two manual-trigger routes below can assert on
     what got invoked without a real thread race or a sleep-and-poll loop."""
+
     def __init__(self, target=None, daemon=None):
         self._target = target
 
@@ -174,7 +175,7 @@ class TestGenerateAndSendDailyReport:
             sent = []
             monkeypatch.setattr(daily_report_module, "get_email_config", lambda: {"host": "smtp.test"})
             monkeypatch.setattr(daily_report_module, "send_email_async",
-                                 lambda to, subject, html, cfg: sent.append((to, subject, html)))
+                                lambda to, subject, html, cfg: sent.append((to, subject, html)))
 
             daily_report_module.generate_and_send_daily_report()
 
@@ -268,7 +269,7 @@ class TestSendWeeklyEmployeeDigests:
             sent = []
             monkeypatch.setattr(daily_report_module, "get_email_config", lambda: {"host": "smtp.test"})
             monkeypatch.setattr(daily_report_module, "send_email_async",
-                                 lambda to, subject, html, cfg: sent.append((to, subject, html)))
+                                lambda to, subject, html, cfg: sent.append((to, subject, html)))
 
             daily_report_module.send_weekly_employee_digests()
 

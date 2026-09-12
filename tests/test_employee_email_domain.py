@@ -115,7 +115,7 @@ class TestDomainConfigured:
         try:
             _admin_session(client, seed_admin)
             resp = client.post("/add_employee_page", data=_registration_payload(emp_id, "someone@other.com"),
-                                follow_redirects=True)
+                               follow_redirects=True)
             assert resp.status_code == 200
             assert b"must be a @acme.com address" in resp.data
 
@@ -152,7 +152,7 @@ class TestDomainConfigured:
         try:
             _admin_session(client, seed_admin)
             resp = client.post("/add_employee_page", data=_registration_payload(emp_id, "new.hire@acme.com"),
-                                follow_redirects=True)
+                               follow_redirects=True)
             assert resp.status_code == 200
 
             cur = db_engine.cursor()

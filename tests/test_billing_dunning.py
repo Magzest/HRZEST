@@ -84,7 +84,7 @@ def clean_invoices(db_engine):
 
 
 def _set_billing_state(db_engine, billing_state="current", grace_period_ends_at=None, locked_at=None,
-                        payment_option="online", created_at=None, schema=TENANT_SCHEMA):
+                       payment_option="online", created_at=None, schema=TENANT_SCHEMA):
     cur = db_engine.cursor()
     cur.execute(
         "UPDATE att_master.tenants SET billing_state=%s, grace_period_ends_at=%s, locked_at=%s, "
@@ -95,7 +95,7 @@ def _set_billing_state(db_engine, billing_state="current", grace_period_ends_at=
 
 
 def _insert_invoice(db_engine, status="pending", billing_period=None, order_id=None, payment_id=None,
-                     employee_count=5, schema=TENANT_SCHEMA):
+                    employee_count=5, schema=TENANT_SCHEMA):
     billing_period = billing_period or datetime.date.today().replace(day=1)
     amount_paise = calculate_price(employee_count)
     cur = db_engine.cursor()
@@ -212,7 +212,7 @@ class TestCreateOverdueOrder:
         # A stale/unpaid invoice from "last month" recorded the OLD count --
         # must not be what create_order() uses.
         _insert_invoice(db_engine, status="pending", employee_count=baseline_count,
-                         billing_period=datetime.date.today().replace(day=1) - datetime.timedelta(days=32))
+                        billing_period=datetime.date.today().replace(day=1) - datetime.timedelta(days=32))
 
         from utils.auth import generate_password_hash
         new_emp_id = "DUN" + secrets.token_hex(4).upper()
@@ -297,12 +297,12 @@ class TestVerifyOverduePayment:
         assert resp.status_code == 404
 
     def test_real_mode_invalid_signature_rejected(self, client, db_engine, seed_admin, clean_invoices,
-                                                    restore_tenant_billing_state, monkeypatch):
+                                                  restore_tenant_billing_state, monkeypatch):
         monkeypatch.setattr("utils.razorpay_utils.razorpay_configured", lambda: True)
         monkeypatch.setattr("blueprints.billing_dunning.verify_payment_signature", lambda *a, **k: False)
 
         _set_billing_state(db_engine, billing_state="grace",
-                            grace_period_ends_at=datetime.datetime.now() + datetime.timedelta(days=1))
+                           grace_period_ends_at=datetime.datetime.now() + datetime.timedelta(days=1))
         order_id = "order_real_" + secrets.token_hex(6)
         _insert_invoice(db_engine, status="pending", order_id=order_id)
 
@@ -320,7 +320,7 @@ class TestVerifyOverduePayment:
         cur.close()
 
     def test_demo_order_rejected_once_real_keys_configured(self, client, db_engine, seed_admin, clean_invoices,
-                                                              restore_tenant_billing_state, monkeypatch):
+                                                           restore_tenant_billing_state, monkeypatch):
         monkeypatch.setattr("utils.razorpay_utils.razorpay_configured", lambda: True)
         order_id = "demo_dunning_" + secrets.token_hex(6)
         _insert_invoice(db_engine, status="pending", order_id=order_id)
@@ -333,7 +333,7 @@ class TestVerifyOverduePayment:
         assert "demo" in resp.get_json()["msg"].lower()
 
     def test_valid_payment_unlocks_and_is_idempotent(self, client, db_engine, seed_admin, clean_invoices,
-                                                        restore_tenant_billing_state):
+                                                     restore_tenant_billing_state):
         _set_billing_state(db_engine, billing_state="locked", locked_at=datetime.datetime.now())
         order_id = "demo_dunning_" + secrets.token_hex(6)
         _insert_invoice(db_engine, status="pending", order_id=order_id)
@@ -364,7 +364,7 @@ class TestVerifyOverduePayment:
         assert resp2.get_json()["ok"] is True
 
     def test_verify_unlocks_current_session_immediately(self, client, db_engine, seed_admin, clean_invoices,
-                                                           restore_tenant_billing_state):
+                                                        restore_tenant_billing_state):
         """The redirect-verify path additionally clears the SESSION's own
         cached billing_locked flag so the paying admin isn't still blocked
         by _enforce_billing_lock() until the next periodic recheck (app.py's
@@ -386,7 +386,7 @@ class TestVerifyOverduePayment:
 
 class TestMarkInvoicePaidAndUnlockCrossTenantGuard:
     def test_order_belonging_to_different_tenant_not_redeemable(self, db_engine, clean_invoices,
-                                                                   restore_tenant_billing_state):
+                                                                restore_tenant_billing_state):
         from blueprints.billing_dunning import _mark_invoice_paid_and_unlock
 
         order_id = "demo_dunning_" + secrets.token_hex(6)
@@ -408,7 +408,7 @@ class TestOverduePaymentCapturedWebhook:
         from blueprints.billing_dunning import _handle_overdue_payment_captured
 
         _set_billing_state(db_engine, billing_state="grace",
-                            grace_period_ends_at=datetime.datetime.now() + datetime.timedelta(days=1))
+                           grace_period_ends_at=datetime.datetime.now() + datetime.timedelta(days=1))
         order_id = "demo_dunning_" + secrets.token_hex(6)
         _insert_invoice(db_engine, status="pending", order_id=order_id)
 
@@ -478,7 +478,7 @@ class TestGraceAndLockStateMachine:
         # created_at well before this month so the "signup month is
         # already covered by checkout" skip doesn't apply.
         _set_billing_state(db_engine, billing_state="current", payment_option="online",
-                            created_at=datetime.datetime.now() - datetime.timedelta(days=90))
+                           created_at=datetime.datetime.now() - datetime.timedelta(days=90))
         # No paid invoice for the current billing_period at all.
 
         with flask_app.app_context():
@@ -536,7 +536,7 @@ class TestGraceAndLockStateMachine:
     def test_paid_invoice_reactivates_a_locked_tenant(self, db_engine, clean_invoices, restore_tenant_billing_state):
         from blueprints.billing_dunning import _run_billing_check
         _set_billing_state(db_engine, billing_state="locked", locked_at=datetime.datetime.now(),
-                            payment_option="online", created_at=datetime.datetime.now() - datetime.timedelta(days=90))
+                           payment_option="online", created_at=datetime.datetime.now() - datetime.timedelta(days=90))
         _insert_invoice(db_engine, status="paid", billing_period=datetime.date.today().replace(day=1))
 
         with flask_app.app_context():
@@ -552,7 +552,7 @@ class TestGraceAndLockStateMachine:
     def test_already_current_and_paid_tenant_is_untouched(self, db_engine, clean_invoices, restore_tenant_billing_state):
         from blueprints.billing_dunning import _run_billing_check
         _set_billing_state(db_engine, billing_state="current", payment_option="online",
-                            created_at=datetime.datetime.now() - datetime.timedelta(days=90))
+                           created_at=datetime.datetime.now() - datetime.timedelta(days=90))
         _insert_invoice(db_engine, status="paid", billing_period=datetime.date.today().replace(day=1))
 
         with flask_app.app_context():
@@ -569,7 +569,7 @@ class TestGraceAndLockStateMachine:
         payment_option IN ('online', 'manual') explicitly."""
         from blueprints.billing_dunning import _run_billing_check
         _set_billing_state(db_engine, billing_state="current", payment_option="trial",
-                            created_at=datetime.datetime.now() - datetime.timedelta(days=90))
+                           created_at=datetime.datetime.now() - datetime.timedelta(days=90))
         # No paid invoice at all -- would normally trigger grace for an
         # online/manual tenant.
 
@@ -587,7 +587,7 @@ class TestGraceAndLockStateMachine:
         and nothing here should immediately dun a brand-new company."""
         from blueprints.billing_dunning import _run_billing_check
         _set_billing_state(db_engine, billing_state="current", payment_option="online",
-                            created_at=datetime.datetime.now())  # signed up this month
+                           created_at=datetime.datetime.now())  # signed up this month
         # No paid invoice -- would normally trigger grace, except for the
         # signup-month exemption.
 
@@ -606,7 +606,7 @@ class TestGraceAndLockStateMachine:
         from blueprints.billing_dunning import _run_billing_check, _check_one_tenant
 
         _set_billing_state(db_engine, billing_state="current", payment_option="online",
-                            created_at=datetime.datetime.now() - datetime.timedelta(days=90))
+                           created_at=datetime.datetime.now() - datetime.timedelta(days=90))
 
         calls = []
         real_check = _check_one_tenant

@@ -47,7 +47,7 @@ def api_evaluate_interview():
     candidate_name = data.get("candidate_name", "Candidate")
     position = data.get("position", "Software Engineer")
     notes = data.get("notes", "")
-    
+
     if not notes:
         return jsonify({"ok": False, "msg": "Interviewer notes required."}), 400
 

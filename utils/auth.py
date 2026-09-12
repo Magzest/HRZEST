@@ -13,6 +13,7 @@ from werkzeug.security import check_password_hash as _wz_check_pw
 from extensions import app_log, log_security_event
 from utils.session_risk import is_session_compromised, evaluate_session_risk
 from utils.async_writer import enqueue_write
+from utils.helpers import _db
 
 # ── Password hashing (bcrypt with legacy pbkdf2 fallback) ────────────────────
 
@@ -78,9 +79,6 @@ def verify_and_update_password(table, id_column, id_value, current_pw, new_pw):
 # ── Token hashing ─────────────────────────────────────────────────────────────
 def _hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
-
-
-from utils.helpers import _db
 
 
 # ── Account lockout ───────────────────────────────────────────────────────────
@@ -314,7 +312,7 @@ def _account_still_active(table: str, id_column: str, id_value) -> bool:
         from database import get_db_connection
         db = get_db_connection()
         cur = db.cursor()
-        cur.execute(f"SELECT COALESCE(is_active,1) FROM {table} WHERE {id_column}=%s", (id_value,))  # nosec B608 -- table/id_column are fixed call-site literals, never request input; id_value is %s-bound
+        cur.execute(f"SELECT COALESCE(is_active,1) FROM {table} WHERE {id_column}=%s", (id_value,))  # nosec B608 -- table/id_column are fixed call-site literals, never request input; id_value is %s-bound  # noqa: E501
         row = cur.fetchone()
         cur.close()
         db.close()

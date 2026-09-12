@@ -319,7 +319,7 @@ class TestGatedSignupFlow:
             "name_board_photo": (self._io.BytesIO(self._FAKE_PNG), "board.png"),
         }
         return client.post("/create_org/upload_documents", data=data,
-                            content_type="multipart/form-data", follow_redirects=False)
+                           content_type="multipart/form-data", follow_redirects=False)
 
     def _login_platform_admin(self, client):
         import time as _time
@@ -544,7 +544,7 @@ class TestGatedSignupFlow:
             )
             self._login_platform_admin(client)
             resp = client.post(f"/super_admin/applications/{application_id}/reject",
-                                data={"reason": "Documents did not match."}, follow_redirects=False)
+                               data={"reason": "Documents did not match."}, follow_redirects=False)
             assert resp.status_code in (301, 302)
 
             cur = db_engine.cursor()
@@ -763,7 +763,7 @@ class TestCompanyNameFuzzyMatching:
     def test_check_duplicate_admin_email_direct(self, db_engine):
         from blueprints.org import check_duplicate_admin_email
         self._insert_fake_tenant(db_engine, "Email Direct Test Co", "email-direct-test",
-                                  admin_email="Direct.Owner@Test.Local")
+                                 admin_email="Direct.Owner@Test.Local")
         try:
             row = check_duplicate_admin_email("  direct.owner@test.local  ")
             assert row is not None
@@ -790,9 +790,9 @@ class TestSignupOtpCleartextLoggingGate:
         monkeypatch.setattr(org_module, "get_email_config", lambda: None)
         mock_log = type("M", (), {"calls": []})()
         monkeypatch.setattr(org_module.app_log, "warning",
-                             lambda *a, **k: mock_log.calls.append(("warning", a, k)))
+                            lambda *a, **k: mock_log.calls.append(("warning", a, k)))
         monkeypatch.setattr(org_module.app_log, "error",
-                             lambda *a, **k: mock_log.calls.append(("error", a, k)))
+                            lambda *a, **k: mock_log.calls.append(("error", a, k)))
         ok = org_module.send_org_signup_otp_email("someone@test.local", "Acme", "123456")
         assert ok is False
         assert any(lvl == "warning" and "123456" in args for lvl, args, _ in mock_log.calls)
@@ -803,9 +803,9 @@ class TestSignupOtpCleartextLoggingGate:
         monkeypatch.setattr(org_module, "get_email_config", lambda: None)
         mock_log = type("M", (), {"calls": []})()
         monkeypatch.setattr(org_module.app_log, "warning",
-                             lambda *a, **k: mock_log.calls.append(("warning", a, k)))
+                            lambda *a, **k: mock_log.calls.append(("warning", a, k)))
         monkeypatch.setattr(org_module.app_log, "error",
-                             lambda *a, **k: mock_log.calls.append(("error", a, k)))
+                            lambda *a, **k: mock_log.calls.append(("error", a, k)))
         ok = org_module.send_org_signup_otp_email("someone@test.local", "Acme", "123456")
         assert ok is False
         # The code must not appear in ANY logged call, at any level.

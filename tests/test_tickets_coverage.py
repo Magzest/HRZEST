@@ -16,7 +16,7 @@ def _admin_session(client, seed_admin):
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -32,6 +32,7 @@ def _make_employee_token(db_engine, emp_id):
         (emp_id, token_hash, expiry)
     )
     cur.close()
+
     def cleanup():
         c = db_engine.cursor()
         c.execute("DELETE FROM api_tokens WHERE token=%s", (token_hash,))
@@ -50,6 +51,7 @@ def _make_admin_token(db_engine, identity="admin"):
         (identity, token_hash, expiry)
     )
     cur.close()
+
     def cleanup():
         c = db_engine.cursor()
         c.execute("DELETE FROM api_tokens WHERE token=%s", (token_hash,))

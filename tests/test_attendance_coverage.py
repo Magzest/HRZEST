@@ -22,7 +22,7 @@ def _admin_session(client, seed_admin):
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -567,9 +567,9 @@ class TestBulkMarkAttendanceCoverage:
         _admin_session(client, seed_admin)
         rv = client.post("/bulk_mark_attendance", data={
             "date":           today.isoformat(),
-            f"att_TST001":    "Full Day",
-            f"login_TST001":  "09:00",
-            f"logout_TST001": "18:00",
+            "att_TST001":     "Full Day",
+            "login_TST001":   "09:00",
+            "logout_TST001":  "18:00",
         })
         assert rv.status_code in (200, 302)
 
@@ -808,14 +808,14 @@ class TestApiCheckinStatusBranches:
 
     def _patch_shifts(self, att, s_start, s_half, s_end, grace=0):
         att.cfg.SHIFT_START = s_start
-        att.cfg.SHIFT_HALF  = s_half
-        att.cfg.SHIFT_END   = s_end
+        att.cfg.SHIFT_HALF = s_half
+        att.cfg.SHIFT_END = s_end
         att.cfg.GRACE_MINUTES = grace
 
     def _restore_shifts(self, att):
-        att.cfg.SHIFT_START   = datetime.time(9, 0)
-        att.cfg.SHIFT_HALF    = datetime.time(13, 0)
-        att.cfg.SHIFT_END     = datetime.time(18, 0)
+        att.cfg.SHIFT_START = datetime.time(9, 0)
+        att.cfg.SHIFT_HALF = datetime.time(13, 0)
+        att.cfg.SHIFT_END = datetime.time(18, 0)
         att.cfg.GRACE_MINUTES = 15
 
     def test_late_login(self, client, seed_admin, seed_employee, db_engine):
@@ -924,15 +924,15 @@ class TestApiCheckinStatusBranches:
 class TestApiEmployeeCheckinCoverage:
 
     def _patch_shifts(self, att, s_start, s_half, s_end, grace=0):
-        att.cfg.SHIFT_START   = s_start
-        att.cfg.SHIFT_HALF    = s_half
-        att.cfg.SHIFT_END     = s_end
+        att.cfg.SHIFT_START = s_start
+        att.cfg.SHIFT_HALF = s_half
+        att.cfg.SHIFT_END = s_end
         att.cfg.GRACE_MINUTES = grace
 
     def _restore_shifts(self, att):
-        att.cfg.SHIFT_START   = datetime.time(9, 0)
-        att.cfg.SHIFT_HALF    = datetime.time(13, 0)
-        att.cfg.SHIFT_END     = datetime.time(18, 0)
+        att.cfg.SHIFT_START = datetime.time(9, 0)
+        att.cfg.SHIFT_HALF = datetime.time(13, 0)
+        att.cfg.SHIFT_END = datetime.time(18, 0)
         att.cfg.GRACE_MINUTES = 15
 
     def test_invalid_punched_at_silently_uses_now(self, client, seed_employee, db_engine):
@@ -1289,7 +1289,7 @@ class TestApiShiftsCoverage:
         # The shifts table has NOT NULL on time columns, so mock the cursor
         # to return a row with None times (defensive branch in the route).
         mock_shift_row = (999, "Null-Time Shift", None, None, None)
-        mock_emp_row   = ("TST999", "Ghost", "employee", None, None)
+        mock_emp_row = ("TST999", "Ghost", "employee", None, None)
         mock_cur = mocker.MagicMock()
         mock_cur.fetchall.side_effect = [[mock_shift_row], [mock_emp_row]]
         mock_conn = mocker.MagicMock()

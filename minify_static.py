@@ -31,4 +31,3 @@ if __name__ == "__main__":
         before, after = len(source.encode()), len(minified.encode())
         print(f"{src_path} -> {out_path}: {before:,}B -> {after:,}B "
               f"({100 * (1 - after / before):.0f}% smaller)")
-

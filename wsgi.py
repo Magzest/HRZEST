@@ -104,6 +104,8 @@ import app as _app_module  # noqa: F401
 # job you want covered -- pinged only on that job's successful completion,
 # same convention as BACKUP_HEARTBEAT_URL in scripts/backup_db.sh. A job
 # with no matching env var runs exactly as before, heartbeat-free.
+
+
 def _with_heartbeat(job_id, fn):
     def _wrapped(*args, **kwargs):
         result = fn(*args, **kwargs)

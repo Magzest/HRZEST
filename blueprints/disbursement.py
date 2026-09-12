@@ -117,7 +117,7 @@ def api_save_payout_bank_config():
     _audit("save_payout_bank_config", "payout_bank_config", None,
            f"bank={bank_name} ifsc={ifsc} day={day} enabled={enabled}")
     log_security_event("payout.bank_config_saved", "Company payout bank account saved/updated",
-                        level="INFO", identifier=session.get("admin_username"))
+                       level="INFO", identifier=session.get("admin_username"))
     return jsonify({"ok": True})
 
 
@@ -136,11 +136,11 @@ def api_payout_verify_2fa():
     code = (request.get_json(silent=True) or {}).get("code", "")
     if not verify_totp_code(username, code, require_enabled=True):
         log_security_event("access.denied", "Invalid 2FA code for Payout Settings step-up",
-                            level="WARNING", identifier=username)
+                           level="WARNING", identifier=username)
         return jsonify({"ok": False, "msg": "Invalid verification code"}), 401
     payout_settings_step_up_refresh()
     log_security_event("auth.step_up_verified", "Admin completed 2FA step-up for Payout Settings",
-                        level="INFO", identifier=username)
+                       level="INFO", identifier=username)
     return jsonify({"ok": True})
 
 
@@ -160,12 +160,12 @@ def api_payout_2fa_enable():
     code = (request.get_json(silent=True) or {}).get("code", "")
     if not verify_totp_code(username, code, require_enabled=False):
         log_security_event("auth.2fa_enroll_failed", "TOTP enrollment confirmation failed (Payout Settings)",
-                            level="WARNING", identifier=username)
+                           level="WARNING", identifier=username)
         return jsonify({"ok": False, "msg": "Invalid code"}), 400
     mark_totp_enabled(username)
     payout_settings_step_up_refresh()
     log_security_event("auth.2fa_enrolled", "Admin enabled TOTP 2FA (confirmed via Payout Settings)",
-                        level="INFO", identifier=username)
+                       level="INFO", identifier=username)
     return jsonify({"ok": True})
 
 
@@ -232,8 +232,8 @@ def approve_disbursement_run(run_id):
     cursor.close()
     db.close()
     log_security_event("payout.disbursement_approved",
-                        f"Disbursement run {run_id} ({year}-{month:02d}) approved for processing",
-                        level="INFO", identifier=approver)
+                       f"Disbursement run {run_id} ({year}-{month:02d}) approved for processing",
+                       level="INFO", identifier=approver)
 
     _process_disbursement_run(run_id)
 
@@ -274,7 +274,7 @@ def reject_disbursement_run(run_id):
     db.close()
     _audit("cancel_disbursement_run", "salary_disbursement_runs", run_id, reason)
     log_security_event("payout.disbursement_cancelled", f"Disbursement run {run_id} cancelled",
-                        level="INFO", identifier=session.get("admin_username"), reason=reason)
+                       level="INFO", identifier=session.get("admin_username"), reason=reason)
     flash("Disbursement run cancelled.", "success")
     return redirect(tpath("/settings?tab=payroll"))
 
@@ -441,7 +441,6 @@ def prepare_pending_disbursements():
 
 
 def _run_disbursement_prep():
-    from flask import g as _g
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     cur.execute("SELECT id, company_name, subdomain, db_name FROM tenants WHERE status='active'")
@@ -532,9 +531,9 @@ def _prepare_one_tenant(tenant_schema):
         cursor.close()
         db.close()
         log_security_event("payout.disbursement_prepared",
-                            f"Disbursement run {run_id} prepared for {today.year}-{today.month:02d} "
-                            f"({len(salary_data)} employees, total {total}, {missing_count} missing bank details) "
-                            "-- awaiting admin approval",
-                            level="INFO", identifier="system")
+                           f"Disbursement run {run_id} prepared for {today.year}-{today.month:02d} "
+                           f"({len(salary_data)} employees, total {total}, {missing_count} missing bank details) "
+                           "-- awaiting admin approval",
+                           level="INFO", identifier="system")
     finally:
         _g.tenant_db = prev_tenant_db

@@ -11,40 +11,40 @@ def compute_attrition_and_burnout_analytics(company_id=None):
     """Compute organization-wide and individual employee burnout risk scores and turnover trends."""
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    
+
     # Query employees
     where_clause = "WHERE company_id = %s" if company_id else ""
     params = (company_id,) if company_id else ()
-    
-    cursor.execute(f"SELECT employee_id, name, department, designation FROM employees {where_clause}", params)  # nosec B608 -- where_clause is one of two fixed literal strings above, company_id itself is always passed as a %s param, never interpolated
+
+    cursor.execute(f"SELECT employee_id, name, department, designation FROM employees {where_clause}", params)  # nosec B608 -- where_clause is one of two fixed literal strings above, company_id itself is always passed as a %s param, never interpolated  # noqa: E501
     employees = cursor.fetchall()
-    
+
     high_risk_count = 0
     medium_risk_count = 0
     low_risk_count = 0
-    
+
     employee_risk_list = []
-    
+
     for emp in employees:
         emp_id, name, dept, desig = emp
-        
+
         # 1. Check attendance anomalies (late check-ins or absences in past 30 days)
         cursor.execute(
             "SELECT COUNT(*) FROM attendance WHERE employee_id=%s AND status IN ('Late', 'Absent') AND date >= NOW() - INTERVAL '30 days'",
             (emp_id,)
         )
         late_absent_count = cursor.fetchone()[0] or 0
-        
+
         # 2. Check pending leaves or excessive leave requests
         cursor.execute(
             "SELECT COUNT(*) FROM leave_requests WHERE employee_id=%s AND status='Approved' AND created_at >= NOW() - INTERVAL '60 days'",
             (emp_id,)
         )
         leave_count = cursor.fetchone()[0] or 0
-        
+
         # 3. Calculate risk score (0 - 100)
         risk_score = min(92, max(8, (late_absent_count * 15) + (leave_count * 8) + 12))
-        
+
         if risk_score >= 65:
             risk_level = "High"
             high_risk_count += 1
@@ -57,7 +57,7 @@ def compute_attrition_and_burnout_analytics(company_id=None):
             risk_level = "Low"
             low_risk_count += 1
             risk_factor = "Stable attendance & balanced workload"
-            
+
         employee_risk_list.append({
             "employee_id": emp_id,
             "name": name,
@@ -70,7 +70,7 @@ def compute_attrition_and_burnout_analytics(company_id=None):
 
     cursor.close()
     db.close()
-    
+
     total_emp = max(len(employees), 1)
     turnover_index = round((high_risk_count * 1.0 + medium_risk_count * 0.4) / total_emp * 100, 1)
 

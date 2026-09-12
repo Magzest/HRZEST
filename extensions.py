@@ -10,6 +10,7 @@ from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from pythonjsonlogger import jsonlogger
+import redis as _redis_lib
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 _log_handler = logging.StreamHandler(sys.stdout)
@@ -278,7 +279,7 @@ CORS(app, resources={r"/api/*": {"origins": _allowed_origins}})
 # (see the StreamHandler setup at the top of this file), so it can't be
 # silently swallowed the way a log line at a filtered level could.
 def check_production_safety(app_env, clamav_host, malware_scan_enabled=True,
-                             ai_assistant_configured=True, logger=None):
+                            ai_assistant_configured=True, logger=None):
     """Pure-ish (env values passed in, not read internally) so this can be
     unit-tested directly without reloading this module or its side effects
     (CORS registration, rate limiter, etc.) against the shared Flask app
@@ -335,7 +336,8 @@ _ai_assistant_configured_at_boot = bool(
     or os.environ.get("ANTHROPIC_API_KEY", "").strip()
 )
 check_production_safety(_app_env, os.environ.get("CLAMAV_HOST"), _malware_scan_enabled_at_boot,
-                         _ai_assistant_configured_at_boot)
+                        _ai_assistant_configured_at_boot)
+
 
 # ── Redis (optional shared cache — rate limiter + WAF auto-ban counters) ──────
 # PostgreSQL remains the only durable datastore this app runs; Redis here is
@@ -354,9 +356,6 @@ check_production_safety(_app_env, os.environ.get("CLAMAV_HOST"), _malware_scan_e
 # worker instead. A short ping at startup decides which mode wins — a
 # misconfigured/unreachable REDIS_HOST degrades to the in-memory fallback
 # with a logged warning rather than failing app startup.
-import redis as _redis_lib
-
-
 def _init_redis_backend():
     """Returns (redis_client_or_None, limiter_storage_uri). Split out from
     module scope so tests can exercise the fallback logic directly instead

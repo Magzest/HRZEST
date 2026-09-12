@@ -82,7 +82,7 @@ def test_leave_pending_api_scoped_to_assigned_only(client, db_engine, seed_hr_ad
     resp = client.get("/api/hr_dashboard/leave/pending")
     assert resp.status_code == 200
     data = resp.get_json()
-    reasons = [l["reason"] for l in data["leaves"]]
+    reasons = [leave["reason"] for leave in data["leaves"]]
     assert "assigned" in reasons
     assert "unassigned" not in reasons
 

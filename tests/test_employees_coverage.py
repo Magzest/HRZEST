@@ -27,6 +27,7 @@ def _make_admin_token(db_engine, identity="admin"):
         (identity, token_hash, expiry)
     )
     cur.close()
+
     def cleanup():
         c = db_engine.cursor()
         c.execute("DELETE FROM api_tokens WHERE token=%s", (token_hash,))
@@ -101,7 +102,7 @@ class TestApiEmployeeInfo:
         assert rv.status_code == 200
         data = rv.get_json()
         assert data["emp_id"] == seed_employee["employee_id"]
-        assert data["name"]   == seed_employee["name"]
+        assert data["name"] == seed_employee["name"]
 
     def test_unknown_employee_returns_404(self, client, seed_admin):
         _admin_session(client, seed_admin)

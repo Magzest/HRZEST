@@ -75,7 +75,7 @@ class TestActivityLogPage:
     def test_search_finds_seeded_entry(self, client, seed_admin, db_engine):
         marker = "ACTLOGMARKER_" + secrets.token_hex(6)
         self._seed_entry(db_engine, "update_salary", seed_admin["username"],
-                          f"salary_per_day set to 5000 ({marker})")
+                         f"salary_per_day set to 5000 ({marker})")
         _admin_session(client, seed_admin["username"])
         resp = client.get(f"/activity_log?q={marker}")
         assert resp.status_code == 200

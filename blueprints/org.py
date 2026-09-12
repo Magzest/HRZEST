@@ -4,7 +4,6 @@ import os
 import re
 import html
 import secrets
-import datetime
 import difflib
 from flask import Blueprint, request, redirect, render_template, flash, jsonify, session
 from extensions import app_log, limiter, log_security_event
@@ -47,8 +46,9 @@ def _clean_subdomain_slug(raw, company_name=""):
     s = re.sub(r'[^a-z0-9\-]', '', s)
     return s
 
+
 def _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
-                                 email_domain=None):
+                                email_domain=None):
     """Shared field validation for all three tenant-creation entry points
     (/create_org, /api/create_org, and the platform-admin-initiated create
     flow in platform_admin.py) -- keeps the reserved-subdomain and
@@ -83,8 +83,8 @@ _PAYMENT_OPTIONS = frozenset({"online", "manual", "trial"})
 
 
 def provision_tenant(company_name, subdomain, admin_username, admin_password_hash, admin_email,
-                      payment_option="online", email_domain=None, employee_count=None, logo_path=None,
-                      gst_number=None):
+                     payment_option="online", email_domain=None, employee_count=None, logo_path=None,
+                     gst_number=None):
     """Shared tenant-provisioning core: schema creation, admin-user seed,
     and master-registry insert. Callers must run
     _validate_new_tenant_fields() first -- this only does the actual
@@ -279,7 +279,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
         email_cfg = get_email_config()
         if not email_cfg:
             return False
-        
+
         creds_block = ""
         if admin_password:
             creds_block = f"""
@@ -307,7 +307,8 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
             """
 
         html_body = f"""
-<div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
+<div style="font-family:Segoe UI,sans-serif;max-width:540px;margin:auto;background:#ffffff;border-radius:16px;
+     overflow:hidden;border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(0,0,0,0.08);">
   <div style="background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 100%);padding:28px;color:white;text-align:center;">
     <div style="font-size:24px;font-weight:800;">🏢 {company_name}</div>
     <div style="font-size:14px;opacity:0.85;margin-top:6px;">Your Dedicated HRzest.com Portal is Ready</div>
@@ -319,11 +320,14 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 
     {creds_block}
 
-    <a href="{portal_url}" style="display:block;text-align:center;padding:16px 28px;background:linear-gradient(135deg,#0284c7,#2563eb);color:white;border-radius:12px;text-decoration:none;font-size:16px;font-weight:700;margin:24px 0;box-shadow:0 6px 20px rgba(37,99,235,0.35);">
+    <a href="{portal_url}" style="display:block;text-align:center;padding:16px 28px;
+       background:linear-gradient(135deg,#0284c7,#2563eb);color:white;border-radius:12px;text-decoration:none;
+       font-size:16px;font-weight:700;margin:24px 0;box-shadow:0 6px 20px rgba(37,99,235,0.35);">
       🚀 Launch Your Branded Dashboard
     </a>
 
-    <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser: <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
+    <p style="font-size:12px;color:#94a3b8;text-align:center;">Or copy this link to your browser:
+      <br><a href="{portal_url}" style="color:#2563eb;">{portal_url}</a></p>
 
     {checkin_block}
   </div>
@@ -336,7 +340,7 @@ def send_portal_ready_email(admin_email, company_name, admin_username, portal_ur
 
 
 def send_payment_confirmation_email(admin_email, company_name, portal_url,
-                                     employee_count, amount_paise, razorpay_payment_id, checkin_url=None):
+                                    employee_count, amount_paise, razorpay_payment_id, checkin_url=None):
     """Post-payment welcome email for the paid /create_org flow
     (blueprints/billing.py's verify_payment). The admin logs in with the
     password they already set during the gated signup application (well
@@ -367,21 +371,26 @@ def send_payment_confirmation_email(admin_email, company_name, portal_url,
     </div>
             """
         html_body = f"""
-<div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;overflow:hidden;border:1px solid #dbeafe;">
+<div style="font-family:Segoe UI,sans-serif;max-width:520px;margin:auto;background:#f8fafc;border-radius:16px;
+     overflow:hidden;border:1px solid #dbeafe;">
   <div style="background:#1e3a8a;padding:24px 28px;color:white;">
     <div style="font-size:20px;font-weight:700;">Payment received -- your HRzest.com portal is ready</div>
     <div style="font-size:13px;opacity:0.75;margin-top:4px;">{company_name}</div>
   </div>
   <div style="padding:28px;">
-    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your organisation's dedicated HRzest.com portal has been created.</p>
-    <a href="{portal_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
+    <p style="font-size:15px;color:#1e293b;margin-bottom:20px;">Your payment was successful and your
+      organisation's dedicated HRzest.com portal has been created.</p>
+    <a href="{portal_url}" style="display:block;text-align:center;padding:14px 28px;background:#1e3a8a;color:white;
+       border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px;">
       Sign In to Your Portal
     </a>
     <p style="font-size:12px;color:#94a3b8;margin-bottom:20px;">Use the admin password you set when you registered. Or copy the link: {portal_url}</p>
     <div style="background:#f1f5f9;border-radius:10px;padding:16px 18px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:700;color:#1e293b;margin-bottom:8px;">Payment Receipt</div>
-      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Billing</span><strong>{plan_display_name}</strong></div>
-      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Amount Paid</span><strong>{amount_display}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span>Billing</span><strong>{plan_display_name}</strong></div>
+      <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span>Amount Paid</span><strong>{amount_display}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;margin-bottom:4px;"><span>Date</span><strong>{paid_on}</strong></div>
       <div style="font-size:13px;color:#475569;display:flex;justify-content:space-between;"><span>Payment ID</span><strong>{razorpay_payment_id}</strong></div>
     </div>
@@ -532,7 +541,7 @@ def check_duplicate_admin_email(admin_email):
 
 
 def _record_duplicate_alert(application_id, attempted_company_name, attempted_admin_email, conflicting,
-                             match_type="exact"):
+                            match_type="exact"):
     """Internal-only record of a signup blocked by check_duplicate_name()/
     check_duplicate_gst()/check_duplicate_admin_email() (match_type
     identifies which one fired: 'exact'/'fuzzy' for a company-name match,
@@ -602,7 +611,7 @@ def send_org_signup_otp_email(to_email, company_name, otp_code):
                 # email-verification step for an arbitrary address during an
                 # SMTP outage.
                 app_log.warning("send_org_signup_otp_email: no SMTP configured -- OTP for %s (%s) is %s",
-                                 to_email, company_name, otp_code)
+                                to_email, company_name, otp_code)
             else:
                 # Fails closed in production: no code anywhere an operator's
                 # log/alert pipeline (utils/alerts.py) would surface it, so
@@ -627,7 +636,8 @@ def send_org_signup_otp_email(to_email, company_name, otp_code):
     <div style="font-size:12px;opacity:0.8;margin-top:4px;">Registering {_company}</div>
   </div>
   <div style="padding:26px;">
-    <p style="color:#cbd5e1;font-size:13px;">Use this code to confirm your email address and continue registering your company. It expires in {_OTP_TTL_MINUTES} minutes and can only be used once.</p>
+    <p style="color:#cbd5e1;font-size:13px;">Use this code to confirm your email address and continue
+      registering your company. It expires in {_OTP_TTL_MINUTES} minutes and can only be used once.</p>
     <div style="text-align:center;margin:22px 0;padding:16px;background:#090d16;border-radius:12px;">
       <span style="font-size:32px;font-weight:800;letter-spacing:6px;color:#60a5fa;">{_code}</span>
     </div>
@@ -657,7 +667,8 @@ def send_application_rejected_email(to_email, company_name, reason, status_url=N
         _link_block = ""
         if status_url:
             _link_block = f"""
-    <a href="{status_url}" style="display:block;text-align:center;padding:13px 20px;background:#1e3a8a;color:#fff;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;margin:18px 0 6px;">
+    <a href="{status_url}" style="display:block;text-align:center;padding:13px 20px;background:#1e3a8a;color:#fff;
+       border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;margin:18px 0 6px;">
       Re-upload Corrected Documents
     </a>"""
         html_body = f"""
@@ -792,7 +803,7 @@ def _verify_application_otp(application, otp_code):
     _dev_bypass = os.environ.get("APP_ENV", "production") == "development"
     if _dev_bypass:
         app_log.warning("_verify_application_otp: APP_ENV=development -- OTP check bypassed for application %s",
-                         application["id"])
+                        application["id"])
     code_matches = _dev_bypass or (bool(otp_code) and secrets.compare_digest(_hash_token(otp_code), stored_hash))
     if not code_matches:
         mcur.execute("UPDATE tenant_applications SET otp_attempts=otp_attempts+1, updated_at=NOW() WHERE id=%s",
@@ -901,7 +912,7 @@ def create_org():
     gst_number = _clean_gst(request.form.get("gst_number", ""))
 
     error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
-                                         email_domain)
+                                        email_domain)
     if error:
         flash(error, "error")
         return redirect("/create_org")
@@ -971,7 +982,7 @@ def create_org():
         # in this codebase that relaxes local dev; production (default
         # "production") always goes through the real verify_otp step.
         app_log.warning("create_org: APP_ENV=development -- OTP screen skipped entirely for application %s",
-                         application_id)
+                        application_id)
         _mark_application_otp_verified(application_id, mconn, mcur)
         return redirect(f"/create_org/upload_documents?application_id={application_id}")
 
@@ -1331,7 +1342,7 @@ def api_create_org():
         gst_number = _clean_gst(data.get("gst_number", ""))
 
         error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
-                                             email_domain)
+                                            email_domain)
         if error:
             return jsonify({"ok": False, "msg": error}), 400
 
@@ -1435,7 +1446,7 @@ def api_create_org_upload_documents():
         return jsonify({"ok": False, "msg": error}), 400
 
     return jsonify({"ok": True, "step": "pending_review",
-                     "msg": "Your application has been submitted and is under review. We'll email you once it's approved."})
+                    "msg": "Your application has been submitted and is under review. We'll email you once it's approved."})
 
 
 @org_bp.route("/api/create_org/status/<int:application_id>", methods=["GET"])

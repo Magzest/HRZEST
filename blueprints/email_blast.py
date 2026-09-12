@@ -10,7 +10,7 @@ Out-of-band delivery is handled via the asynchronous DB-backed email queue,
 returning an immediate HTTP 202 Queue Confirmation response (<50ms).
 """
 import html
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 from database import get_db_connection, transaction
 from utils.email_utils import get_email_config
 from utils.auth import resolve_admin_identity
@@ -40,9 +40,10 @@ def api_email_blast():
     clean_subject = html.escape(raw_subject)
     # Basic safe tags allowed or escape for security
     clean_body = html.escape(raw_body).replace("\n", "<br>")
-    
+
     formatted_html = f"""
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px;
+      border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
       <div style="background: #1e3a8a; padding: 16px 20px; border-radius: 8px 8px 0 0; color: #ffffff;">
         <h2 style="margin: 0; font-size: 18px;">📢 Broadcast Announcement</h2>
       </div>
@@ -67,7 +68,9 @@ def api_email_blast():
             cur.execute("SELECT email, name FROM employees WHERE department=%s AND email IS NOT NULL AND email != ''", (target_value,))
             recipients = cur.fetchall()
         elif target_type == "individual":
-            cur.execute("SELECT email, name FROM employees WHERE (employee_id=%s OR email=%s) AND email IS NOT NULL AND email != ''", (target_value, target_value))
+            cur.execute(
+                "SELECT email, name FROM employees WHERE (employee_id=%s OR email=%s) "
+                "AND email IS NOT NULL AND email != ''", (target_value, target_value))
             recipients = cur.fetchall()
         else:
             cur.close()

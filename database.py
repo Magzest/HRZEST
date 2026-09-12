@@ -3,6 +3,8 @@ import os
 import re
 import time
 import logging
+import sqlite3
+import threading
 import psycopg2
 import psycopg2.pool
 from contextlib import contextmanager
@@ -106,9 +108,6 @@ def _set_search_path(conn, schema_name):
     cur.close()
 
 
-import sqlite3
-import threading
-
 # The SQLite fallback below shares ONE sqlite3.Connection across every
 # thread (check_same_thread=False just disables Python's own guard --
 # it does NOT make concurrent access safe, per the sqlite3 docs: "you
@@ -119,6 +118,7 @@ import threading
 # costs nothing over the pooled-connection concurrency Postgres normally
 # provides -- this path only runs at all when Postgres is unreachable.
 _sqlite_lock = threading.Lock()
+
 
 class _SqliteCursor:
     def __init__(self, conn):
@@ -177,7 +177,9 @@ class _SqliteCursor:
         except Exception as exc:
             _log.debug("_SqliteCursor.close failed: %s", exc)
 
+
 _SQLITE_FALLBACK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance", "local_fallback.db")
+
 
 class _SqliteConnWrapper:
     def __init__(self, db_path=_SQLITE_FALLBACK_PATH):
@@ -200,6 +202,7 @@ class _SqliteConnWrapper:
         with _sqlite_lock:
             self.conn.rollback()
 
+
 class _SqlitePool:
     def __init__(self):
         self.conn = _SqliteConnWrapper()
@@ -207,10 +210,13 @@ class _SqlitePool:
             _seed_sqlite_db(self.conn.conn)
         except Exception as exc:
             _log.debug("_seed_sqlite_db failed: %s", exc)
+
     def getconn(self):
         return self.conn
+
     def putconn(self, conn):
         pass
+
     @property
     def _used(self): return []
     @property
@@ -489,6 +495,7 @@ def _seed_sqlite_db(raw_conn):
     except Exception as e:
         _log.warning("SQLite schema creation error: %s", e)
 
+
 # ── Default tenant pool ──────────────────────────────────────────────────────
 _pool = None
 # Guards every _pool creation/replacement below -- without it, concurrent
@@ -513,6 +520,7 @@ def _ensure_pg_schema(raw_conn):
         cur.close()
     except Exception as e:
         _log.warning("PostgreSQL schema migration note: %s", e)
+
 
 def _create_pool(retries=1, delay=0.1):
     global _pool
@@ -575,7 +583,6 @@ def _borrow_connection():
     transaction and poisons the connection for every future borrower once
     it's returned to the pool, so autocommit is set explicitly here to match
     MySQL's behavior."""
-    global _pool
     if _pool is None:
         with _pool_lock:
             if _pool is None:  # re-check: another thread may have built it while we waited

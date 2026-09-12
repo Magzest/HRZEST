@@ -92,6 +92,7 @@ _ENCODED_BLOB_MIN_LEN = 256  # no real SQLi/XSS/path payload is this long AND th
 def _looks_like_encoded_blob(value: str) -> bool:
     return len(value) >= _ENCODED_BLOB_MIN_LEN and bool(_ENCODED_BLOB_RE.match(value))
 
+
 _XSS_PATTERNS = [
     re.compile(r"<script\b", re.IGNORECASE),
     re.compile(r"\bon(?:load|error|click|mouseover|focus|blur|change|submit)\s*=", re.IGNORECASE),

@@ -273,9 +273,11 @@ def build_new_ip_login_email(display_name, identifier, ip_address, login_time_st
   </div>
   <div style="padding:28px;">
     <p style="color:#334155;font-size:14px;">Hi <strong>{_name}</strong>,</p>
-    <p style="color:#475569;font-size:14px;">We noticed a sign-in to your account (<strong>{_id}</strong>) from an IP address we haven't seen on this account before:</p>
+    <p style="color:#475569;font-size:14px;">We noticed a sign-in to your account (<strong>{_id}</strong>)
+      from an IP address we haven't seen on this account before:</p>
     <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
-      <tr style="background:#f1f5f9;"><td style="padding:10px 14px;color:#555;font-weight:600;width:120px;">IP Address</td><td style="padding:10px 14px;">{_ip}</td></tr>
+      <tr style="background:#f1f5f9;"><td style="padding:10px 14px;color:#555;font-weight:600;width:120px;">IP Address</td>
+          <td style="padding:10px 14px;">{_ip}</td></tr>
       <tr><td style="padding:10px 14px;color:#555;font-weight:600;">Time</td><td style="padding:10px 14px;">{_time_s}</td></tr>
     </table>
     <div style="background:#fef3c7;border-left:4px solid #d97706;border-radius:8px;padding:16px 18px;margin:20px 0;">

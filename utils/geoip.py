@@ -6,6 +6,7 @@ from database import get_db_connection
 from extensions import app_log, log_security_event
 from utils.geo import haversine_km as _haversine_km
 
+
 def detect_impossible_travel(identifier: str, current_ip: str, current_lat: float = 0.0, current_lon: float = 0.0) -> bool:
     """
     Check if a login attempt represents an impossible travel anomaly.

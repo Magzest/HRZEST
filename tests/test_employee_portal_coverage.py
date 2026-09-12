@@ -10,7 +10,7 @@ import secrets
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -34,6 +34,7 @@ def _make_employee_token(db_engine, emp_id):
         (emp_id, token_hash, expiry)
     )
     cur.close()
+
     def cleanup():
         c = db_engine.cursor()
         c.execute("DELETE FROM api_tokens WHERE token=%s", (token_hash,))
@@ -61,9 +62,9 @@ class TestEmployeePortal:
 
     def test_force_pin_change_redirects(self, client, seed_employee):
         with client.session_transaction() as sess:
-            sess["employee_id"]   = seed_employee["employee_id"]
+            sess["employee_id"] = seed_employee["employee_id"]
             sess["employee_name"] = seed_employee["name"]
-            sess["_fpc"]          = True
+            sess["_fpc"] = True
         rv = client.get("/employee_portal")
         assert rv.status_code == 302
         assert "force_change_pin" in rv.headers["Location"]
@@ -206,7 +207,7 @@ class TestExperience:
             "role":       "Tester",
             "start_date": "2020-01-01",
             "end_date":   "2022-12-31",
-            "description":"CI testing role",
+            "description": "CI testing role",
         })
         assert rv.status_code == 302
         cur = db_engine.cursor()

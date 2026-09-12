@@ -30,7 +30,7 @@ def _admin_session(client, seed_admin):
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -117,7 +117,6 @@ def attendance_completed(db_engine, seed_employee):
     cur.execute("DELETE FROM attendance WHERE employee_id=%s AND date=%s",
                 (seed_employee["employee_id"], today))
     cur.close()
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

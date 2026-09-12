@@ -65,7 +65,7 @@ MAX_HISTORY_TURNS = 6
 # since utils/ shouldn't reach into blueprints/, and this is a small, stable
 # fixed mapping (performance_reviews.overall_rating is always 0-5).
 _RATING_LABELS = {0: "Not Rated", 1: "Unsatisfactory", 2: "Needs Improvement",
-                   3: "Meets Expectations", 4: "Exceeds Expectations", 5: "Outstanding"}
+                  3: "Meets Expectations", 4: "Exceeds Expectations", 5: "Outstanding"}
 
 _SYSTEM_PROMPT = """You are the HR assistant embedded in this company's employee portal. You help the
 employee understand their own attendance, leave, earnings, and every other section of this portal --

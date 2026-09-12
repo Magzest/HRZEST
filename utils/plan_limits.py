@@ -38,7 +38,7 @@ _rate_cache = {"value": None, "checked_at": 0.0}
 # byte-identical to the old flat-rate-only behavior until a platform admin
 # explicitly sets one of these two new knobs.
 _extra_cost_cache = {"base_fee_paise": {"value": None, "checked_at": 0.0},
-                      "minimum_monthly_paise": {"value": None, "checked_at": 0.0}}
+                     "minimum_monthly_paise": {"value": None, "checked_at": 0.0}}
 
 
 def get_per_employee_paise() -> int:

@@ -527,7 +527,7 @@ class TestNotificationPreferencesApi:
     def test_round_trips_and_reflects_in_profile(self, client, seed_employee):
         token = _emp_token(client, seed_employee)
         resp = client.post("/api/employee/notification_preferences", json={"email_alerts_enabled": False},
-                            headers=_auth(token))
+                           headers=_auth(token))
         assert resp.status_code == 200
         assert resp.get_json()["email_alerts_enabled"] is False
 
@@ -535,7 +535,7 @@ class TestNotificationPreferencesApi:
         assert prof["email_alerts_enabled"] is False
 
         resp2 = client.post("/api/employee/notification_preferences", json={"email_alerts_enabled": True},
-                             headers=_auth(token))
+                            headers=_auth(token))
         assert resp2.get_json()["email_alerts_enabled"] is True
 
     def test_leave_approval_skips_email_when_disabled(self, client, seed_admin, seed_employee, db_engine, monkeypatch):

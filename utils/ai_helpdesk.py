@@ -55,10 +55,10 @@ def _retrieve_relevant_policies(query):
         words = item["category"].split("_") + item["topic"].lower().split()
         if any(w in query_lower for w in words) or any(w in query_lower for w in ["leave", "sick", "insurance", "salary", "pay", "wfh", "time"]):
             matches.append(f"[{item['topic']}]: {item['content']}")
-    
+
     if not matches:
         matches = [f"[{item['topic']}]: {item['content']}" for item in _POLICY_KNOWLEDGE_BASE[:2]]
-        
+
     return "\n\n".join(matches)
 
 
@@ -83,15 +83,17 @@ def process_helpdesk_query(employee_id, query):
 
     relevant_docs = _retrieve_relevant_policies(query)
     needs_escalation = _should_trigger_fallback(query)
-    
+
     ai_answer = ""
 
     try:
         prompt = (
-            f"You are the AI HR Helpdesk Assistant. Answer the employee's question strictly based on the company policy document provided below.\n\n"
+            f"You are the AI HR Helpdesk Assistant. Answer the employee's question strictly based on the "
+            f"company policy document provided below.\n\n"
             f"Company Policy Documents:\n{relevant_docs}\n\n"
             f"Employee Question:\n{query}\n\n"
-            f"Instructions: Give a clear, helpful, 2-3 sentence answer. If uncertain or if the question involves a dispute/unresolved claim, recommend raising an HR ticket."
+            f"Instructions: Give a clear, helpful, 2-3 sentence answer. If uncertain or if the question "
+            f"involves a dispute/unresolved claim, recommend raising an HR ticket."
         )
         ai_answer = call_claude(prompt, max_tokens=400)
     except Exception as exc:
@@ -100,13 +102,16 @@ def process_helpdesk_query(employee_id, query):
     if not ai_answer:
         # Structured fallback response
         if "leave" in query.lower() or "pto" in query.lower() or "vacation" in query.lower():
-            ai_answer = "Company policy grants 18 paid leave days and 10 sick days per year. Leave requests can be submitted directly via the Leaves & Holidays tab."
+            ai_answer = ("Company policy grants 18 paid leave days and 10 sick days per year. Leave requests "
+                         "can be submitted directly via the Leaves & Holidays tab.")
         elif "pay" in query.lower() or "salary" in query.lower() or "payslip" in query.lower():
-            ai_answer = "Salaries are processed on the 28th of each month. Payslips can be downloaded under the Salary & Payslips section."
+            ai_answer = ("Salaries are processed on the 28th of each month. Payslips can be downloaded "
+                         "under the Salary & Payslips section.")
         elif "health" in query.lower() or "insurance" in query.lower() or "medical" in query.lower():
             ai_answer = "Health insurance covers medical claims up to $50,000 annually. Submit claim forms to HR within 30 days of treatment."
         else:
-            ai_answer = f"I've searched our HR policies regarding '{query[:40]}'. For specific inquiries or complex requests, I can route this directly to an HR support representative."
+            ai_answer = (f"I've searched our HR policies regarding '{query[:40]}'. For specific inquiries or "
+                         "complex requests, I can route this directly to an HR support representative.")
 
     ticket_id = None
     if needs_escalation:
@@ -132,7 +137,7 @@ def _create_fallback_ticket(employee_id, query, ai_summary=""):
         subject = f"AI Escalation: {query[:50]}"
         category = "HR Policy / General"
         description = f"Automated escalation from AI HR Helpdesk Chatbot.\n\nUser Query: {query}\n\nAI Pre-Response: {ai_summary}"
-        
+
         target_emp_id = None
         if employee_id:
             cur.execute("SELECT employee_id FROM employees WHERE employee_id=%s", (employee_id,))

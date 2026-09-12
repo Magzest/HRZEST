@@ -239,7 +239,6 @@ def api_dashboard():
     })
 
 
-
 @core_bp.route("/api/billing_status", methods=["GET"])
 @api_required
 def api_billing_status():
@@ -603,4 +602,3 @@ def api_employee_signup():
             except Exception as _close_exc:
                 app_log.debug("api_employee_signup error-path db.close() failed: %s", _close_exc)
         return jsonify({"ok": False, "msg": f"Failed to register employee: {exc}"}), 500
-

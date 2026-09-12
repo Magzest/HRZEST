@@ -33,8 +33,8 @@ from utils.auth import (
     admin_required, role_required, require_email_2fa, EMAIL_2FA_WINDOW_SEC,
     email_settings_step_up_refresh, email_settings_step_up_clear,
     security_settings_step_up_clear,
-    check_password_hash, generate_password_hash, HR_ROLE,
-    api_required, api_role_required, validate_new_password,
+    check_password_hash, HR_ROLE,
+    api_required, api_role_required,
 )
 from utils import chat_utils
 from utils.helpers import (
@@ -42,19 +42,20 @@ from utils.helpers import (
     get_company_settings, get_co_features, _upsert_co_feature,
     _upsert_co_features, _safe_redirect, co_scope_subquery, co_scope_column,
     encrypt_pii, decrypt_pii, invalidate_companies_cache,
-    _validate_image_file, get_pending_action_counts, _audit, invalidate_settings_cache,
+    _validate_image_file, get_pending_action_counts, invalidate_settings_cache,
     post_announcement, _validate_upload,
 )
 from utils.storage import save_private, open_private, delete_private
 from utils.email_utils import get_email_config, send_email_smtp
 
-_ANN_ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
 from utils.totp import (
     get_or_create_admin_totp_secret, mark_totp_enabled, verify_totp_code, totp_qr_data_uri,
     reset_admin_totp_secret,
 )
 from utils.attendance_utils import _td_to_time
 import utils.config as cfg
+
+_ANN_ALLOWED_EXT = {'pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'}
 
 admin_views_bp = Blueprint("admin_views", __name__)
 
@@ -455,7 +456,7 @@ def activity_log_page():
         conditions.append("(detail ILIKE %s OR actor ILIKE %s OR target_id ILIKE %s OR action ILIKE %s)")
         like = f"%{q}%"
         params.extend([like, like, like, like])
-    where_sql = (" WHERE " + " AND ".join(conditions)) if conditions else ""  # nosec B608 -- conditions are fixed literals built above, never from unescaped request input; all variable values are bound params
+    where_sql = (" WHERE " + " AND ".join(conditions)) if conditions else ""  # nosec B608 -- conditions are fixed literals built above, never from unescaped request input; all variable values are bound params  # noqa: E501
 
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
@@ -545,7 +546,9 @@ def settings_page():
             (_csid, _csname, _tdfmt(_csstart), _tdfmt(_cshalf), _tdfmt(_csend)))
 
     # Company-specific breaks (company_id IS NOT NULL), nested per shift
-    cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active, company_id, COALESCE(shift_id,0) FROM break_config WHERE company_id IS NOT NULL ORDER BY company_id, shift_id, break_time")
+    cursor.execute(
+        "SELECT id, break_name, break_time, duration_minutes, is_active, company_id, COALESCE(shift_id,0) "
+        "FROM break_config WHERE company_id IS NOT NULL ORDER BY company_id, shift_id, break_time")
     _co_breaks_raw = cursor.fetchall()
     company_breaks = {}
     for _cbid, _cbname, _cbt, _cbdur, _cbactive, _cbcid, _cbsid in _co_breaks_raw:
@@ -562,7 +565,9 @@ def settings_page():
             (_cbid, _cbname, _cbt_str, _cbdur, _cbactive))
 
     # Breaks (with shift_id) -- pre-format break_time as HH:MM
-    cursor.execute("SELECT id, break_name, break_time, duration_minutes, is_active, COALESCE(shift_id,0) FROM break_config WHERE company_id IS NULL ORDER BY shift_id, break_time")
+    cursor.execute(
+        "SELECT id, break_name, break_time, duration_minutes, is_active, COALESCE(shift_id,0) "
+        "FROM break_config WHERE company_id IS NULL ORDER BY shift_id, break_time")
     breaks = []
     for _bid, _bname, _bt, _bdur, _bactive, _bshift in cursor.fetchall():
         if _bt is None:
@@ -1030,7 +1035,6 @@ def api_reveal_email_password():
     return jsonify({"ok": True, "password": decrypt_pii(row[0])})
 
 
-
 @admin_views_bp.route("/save_default_onboarding_template", methods=["POST"])
 @role_required("admin")
 def save_default_onboarding_template():
@@ -1122,7 +1126,7 @@ def toggle_auth_method():
             return redirect(tpath("/settings?tab=attendance"))
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute(f"UPDATE company_settings SET {column}=%s", (1 if enabled else 0,))  # nosec B608 nosemgrep: python.flask.security.injection.tainted-sql-string.tainted-sql-string
+        cursor.execute(f"UPDATE company_settings SET {column}=%s", (1 if enabled else 0,))  # nosec B608 nosemgrep: python.flask.security.injection.tainted-sql-string.tainted-sql-string  # noqa: E501
         db.commit()
         cursor.close()
         db.close()
@@ -1231,7 +1235,7 @@ def toggle_feature():
     else:
         db = get_db_connection()
         cursor = db.cursor(buffered=True)
-        cursor.execute(f"UPDATE company_settings SET {cs_col}=%s", (value,))  # nosec B608 nosemgrep: python.flask.security.injection.tainted-sql-string.tainted-sql-string
+        cursor.execute(f"UPDATE company_settings SET {cs_col}=%s", (value,))  # nosec B608 nosemgrep: python.flask.security.injection.tainted-sql-string.tainted-sql-string  # noqa: E501
         db.commit()
         cursor.close()
         db.close()
@@ -1400,7 +1404,7 @@ def api_settings_toggle_feature():
         return jsonify({"ok": False, "msg": "Unknown feature."}), 400
     db = get_db_connection()
     cursor = db.cursor(buffered=True)
-    cursor.execute(f"UPDATE company_settings SET {feature}=%s", (value,))  # nosec B608 -- feature is allowlist-checked above, never interpolated from an unchecked value
+    cursor.execute(f"UPDATE company_settings SET {feature}=%s", (value,))  # nosec B608 -- feature is allowlist-checked above, never interpolated from an unchecked value  # noqa: E501
     db.commit()
     cursor.close()
     db.close()
@@ -1695,7 +1699,7 @@ def edit_company(cid):
                     # old employee_id while others got the new one, leaving
                     # the rename applied inconsistently across tables.
                     cursor.execute(
-                        f"UPDATE {tbl} AS t SET employee_id = m.new_eid "  # nosec B608 -- tbl is one of the fixed related_tables literals above, never user input
+                        f"UPDATE {tbl} AS t SET employee_id = m.new_eid "  # nosec B608 -- tbl is one of the fixed related_tables literals above, never user input  # noqa: E501
                         f"FROM (SELECT * FROM UNNEST(%s::text[], %s::text[]) AS m(old_eid, new_eid)) AS m "
                         f"WHERE t.employee_id = m.old_eid",
                         (old_ids, new_ids)
@@ -2029,7 +2033,7 @@ def announcements_admin():
                     db.close()
                     return redirect(tpath("/performance?tab=announcements"))
                 post_announcement(cursor, db, title, content, priority, "public", None,
-                                   attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
+                                  attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
                 flash("Announcement posted.", "success")
             else:
                 for target_emp in target_emps:
@@ -2040,7 +2044,7 @@ def announcements_admin():
                         db.close()
                         return redirect(tpath("/performance?tab=announcements"))
                     post_announcement(cursor, db, title, content, priority, "private", target_emp,
-                                       attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
+                                      attachment_original_name=attachment_name, attachment_stored_ref=attachment_ref)
                 flash(f"Announcement posted to {len(target_emps)} employee(s).", "success")
         elif action == "delete":
             cursor.execute("SELECT attachment_stored_ref FROM announcements WHERE id=%s", (request.form["ann_id"],))
@@ -2394,7 +2398,7 @@ def analytics():
             smart_alerts.append({
                 'level': 'danger',
                 'icon': 'ti-user-off',
-                'title': f'{len(absent3)} employee{"s" if len(absent3)>1 else ""} absent for 3+ consecutive days',
+                'title': f'{len(absent3)} employee{"s" if len(absent3) > 1 else ""} absent for 3+ consecutive days',
                 'detail': names + extra,
                 'link': '/monthly_report'
             })
@@ -2429,7 +2433,7 @@ def analytics():
         smart_alerts.append({
             'level': 'warning',
             'icon': 'ti-chart-bar-off',
-            'title': f'{len(low_att)} employee{"s" if len(low_att)>1 else ""} below 50% attendance this month',
+            'title': f'{len(low_att)} employee{"s" if len(low_att) > 1 else ""} below 50% attendance this month',
             'detail': names + extra,
             'link': '/monthly_report'
         })
@@ -2454,10 +2458,12 @@ def analytics():
     if never_logged:
         names = ', '.join(r[1] for r in never_logged[:3])
         extra = f' +{len(never_logged)-3} more' if len(never_logged) > 3 else ''
+        _plural = len(never_logged) > 1
         smart_alerts.append({
             'level': 'info',
             'icon': 'ti-user-question',
-            'title': f'{len(never_logged)} new joiner{"s" if len(never_logged)>1 else ""} {"have" if len(never_logged)>1 else "has"} never logged attendance',
+            'title': f'{len(never_logged)} new joiner{"s" if _plural else ""} '
+                     f'{"have" if _plural else "has"} never logged attendance',
             'detail': names + extra,
             'link': '/employees'
         })
@@ -2631,7 +2637,6 @@ def api_org_chart_data():
     return jsonify({"ok": True, "tree": tree, "total": len(emp_map)})
 
 
-
 # ── Instant SMTP Connection Test Endpoint ─────────────────────────────────────
 @admin_views_bp.route("/api/admin/test_email", methods=["POST"])
 @admin_required
@@ -2703,4 +2708,3 @@ def api_admin_chat_send():
     if not sent:
         return jsonify({"ok": False, "msg": "Message cannot be empty."}), 400
     return jsonify({"ok": True})
-

@@ -6,7 +6,6 @@ exercised here — only its early-return and exception-handling paths are,
 since those are this module's own logic rather than the webauthn library's.
 """
 import time
-import datetime
 import pytest
 from extensions import app as flask_app
 import utils.webauthn_utils as wa

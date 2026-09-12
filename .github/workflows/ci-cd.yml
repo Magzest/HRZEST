@@ -51,6 +51,9 @@ jobs:
           grep -v '^face-recognition' requirements.txt > /tmp/ci-requirements.txt
           pip install --no-cache-dir -r /tmp/ci-requirements.txt -r requirements-dev.txt
 
+      - name: Lint (flake8)
+        run: python -m flake8 .
+
       - name: Run Pytest
         env:
           DB_HOST: 127.0.0.1

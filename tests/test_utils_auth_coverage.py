@@ -16,7 +16,7 @@ def _admin_session(client, seed_admin):
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -155,7 +155,7 @@ class TestEmployeeRequired:
         """Lines 128-131 in utils/auth.py: admin + employee in session → clear + redirect to /admin."""
         with client.session_transaction() as sess:
             sess["admin_logged_in"] = True
-            sess["employee_id"]     = seed_employee["employee_id"]
+            sess["employee_id"] = seed_employee["employee_id"]
         rv = client.get("/employee_portal")
         assert rv.status_code == 302
         assert "/admin" in rv.headers["Location"]
@@ -163,9 +163,9 @@ class TestEmployeeRequired:
     def test_force_pin_change_redirects(self, client, seed_employee):
         """Line 137 in utils/auth.py: _fpc flag in session → redirect to force_change_pin."""
         with client.session_transaction() as sess:
-            sess["employee_id"]   = seed_employee["employee_id"]
+            sess["employee_id"] = seed_employee["employee_id"]
             sess["employee_name"] = seed_employee["name"]
-            sess["_fpc"]          = True
+            sess["_fpc"] = True
         rv = client.get("/employee_portal")
         assert rv.status_code == 302
         assert "force_change_pin" in rv.headers["Location"]

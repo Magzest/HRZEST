@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+import traceback as _traceback
 # Runs before app_log is importable -- harmless either way (fails only on a
 # stream that doesn't support .reconfigure(), e.g. Python <3.7 or a fully
 # redirected/piped stdout that's already fixed-encoding). See wsgi.py's
@@ -83,6 +84,7 @@ from utils.auth import generate_password_hash, check_password_hash, HR_ROLE
 from utils.helpers import (
     _error_page, invalidate_settings_cache, get_company_settings,
     get_companies_list, get_overdue_onboarding_count, coerce_datetime,
+    tpath as _tpath, static_url as _static_url,
 )
 # Shift timings / deduction rates / office geo-fence -- app.py used to carry
 # its own separate SHIFT_START / LATE_DEDUCTION_RATE / OFFICE_LAT etc.
@@ -228,7 +230,6 @@ def _csrf_token():
 app.jinja_env.globals["csrf_token"] = _csrf_token
 app.jinja_env.globals["timedelta"] = datetime.timedelta
 
-from utils.helpers import tpath as _tpath, static_url as _static_url
 app.jinja_env.globals["tpath"] = _tpath
 app.jinja_env.globals["static_url"] = _static_url
 
@@ -845,7 +846,8 @@ _KILLSWITCH_SCRIPT = (
     b'var es=new EventSource("/api/session/risk-stream");'
     b'function kill(){'
     b'es.close();'
-    b'try{alert("Security alert: unusual activity was detected on your account and this session has been ended. Please contact your administrator.");}catch(e){}'
+    b'try{alert("Security alert: unusual activity was detected on your account and this session has been '
+    b'ended. Please contact your administrator.");}catch(e){}'
     b'try{localStorage.clear();}catch(e){}'
     b'try{sessionStorage.clear();}catch(e){}'
     b'try{document.cookie.split(";").forEach(function(c){'
@@ -1927,7 +1929,7 @@ def _init_core_tables(cursor, db):
     # Add default shift columns if not present
     for col, default in [("shift_start", "09:00:00"), ("shift_half", "13:00:00"), ("shift_end", "18:00:00")]:
         try:
-            cursor.execute(f"ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS {col} TIME DEFAULT '{default}'")  # nosec B608 -- col/default come from the fixed literal list above, never user input
+            cursor.execute(f"ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS {col} TIME DEFAULT '{default}'")  # nosec B608 -- col/default come from the fixed literal list above, never user input  # noqa: E501
             db.commit()
         except Exception as exc:
             app_log.warning("Migration: ALTER company_settings ADD COLUMN %s failed: %s", col, exc, exc_info=True)
@@ -3349,7 +3351,9 @@ def init_master_db():
         # of the existing check-then-write idiom in _record_charge() /
         # _mark_invoice_paid_and_unlock() -- partial index since most rows
         # (pending orders, demo charges) never get a real payment id.
-        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_invoices_payment_id ON monthly_invoices (razorpay_payment_id) WHERE razorpay_payment_id IS NOT NULL")
+        cur.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_invoices_payment_id ON monthly_invoices "
+            "(razorpay_payment_id) WHERE razorpay_payment_id IS NOT NULL")
         # Lightweight traffic counter for the public marketing pages
         # (landing page, get-started, create_org) -- one row per
         # (path, day), incremented via ON CONFLICT below rather than one
@@ -3522,7 +3526,6 @@ def init_tenant_db(schema_name: str):
 
 
 # ---------------- ERROR HANDLERS ----------------
-import traceback as _traceback
 
 # _error_page consolidated onto utils/helpers.py -- that copy rendered a
 # template (templates/error.html) that doesn't exist anywhere in this
@@ -3798,15 +3801,10 @@ def unhandled_exception(e):
 # employee_reset_password migrated to blueprints/auth.py
 
 
-
-
 # serve_dataset migrated to blueprints/employees.py
 
 
 # my_photo migrated to blueprints/employees.py
-
-
-
 
 
 # ---------------- SHIFTS (redirect to settings) ----------------
@@ -3828,13 +3826,6 @@ def unhandled_exception(e):
 
 
 # ──────────────────────── SHIFT SWAP REQUESTS ────────────────────────
-
-
-
-
-
-
-
 
 
 # import_indian_holidays migrated to blueprints/leave.py
@@ -4015,8 +4006,6 @@ def unhandled_exception(e):
 
 
 # request_resignation migrated to blueprints/leave.py
-
-
 
 
 # resignation_action migrated to blueprints/leave.py
@@ -4475,7 +4464,6 @@ def inject_billing_context():
         return dict(employee_count=0, per_employee_paise=9900, monthly_bill_display="₹0")
 
 
-
 _register_api_v1_aliases()
 
 # ---------------- RUN ----------------
@@ -4561,7 +4549,7 @@ if __name__ == "__main__":
                 super().finish_request(request, client_address)
 
         _srv = _DeferredHandshakeServer("0.0.0.0", _port, app, handler=_QuietRequestHandler,
-                                         ssl_context=None)
+                                        ssl_context=None)
         # Socket itself stays unwrapped (see finish_request above); this
         # attribute only drives wsgi.url_scheme detection and SSL-error-log
         # suppression elsewhere in werkzeug/serving.py, both of which still

@@ -237,7 +237,8 @@ def bulk_assign_onboarding():
     # action, so re-running these same two SELECTs per employee (as the
     # loop used to) is redundant work repeated N times for no reason.
     cursor.execute(
-        "SELECT id, task_title, task_description, requires_document, due_days FROM onboarding_template_tasks WHERE template_id=%s ORDER BY sort_order, id", (tid,))
+        "SELECT id, task_title, task_description, requires_document, due_days FROM onboarding_template_tasks "
+        "WHERE template_id=%s ORDER BY sort_order, id", (tid,))
     template_tasks = cursor.fetchall()
     cursor.execute("SELECT name FROM onboarding_templates WHERE id=%s", (tid,))
     _tr = cursor.fetchone()
@@ -245,15 +246,19 @@ def bulk_assign_onboarding():
         if hr_scope_denied(emp_id):
             continue
         cursor.execute(
-            "SELECT id FROM employee_onboarding WHERE employee_id=%s AND template_id=%s AND status='In Progress'", (emp_id, tid))
+            "SELECT id FROM employee_onboarding WHERE employee_id=%s AND template_id=%s AND status='In Progress'",
+            (emp_id, tid))
         if cursor.fetchone():
             continue
-        cursor.execute("INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date, status) VALUES (%s,%s,%s,%s,'In Progress') RETURNING id",
-                       (emp_id, tid, today, due_date))
+        cursor.execute(
+            "INSERT INTO employee_onboarding (employee_id, template_id, assigned_date, due_date, status) "
+            "VALUES (%s,%s,%s,%s,'In Progress') RETURNING id",
+            (emp_id, tid, today, due_date))
         ob_id = cursor.fetchone()[0]
         if template_tasks:
             cursor.executemany(
-                "INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, task_description, requires_document, due_days, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'Pending')",
+                "INSERT INTO employee_onboarding_tasks (onboarding_id, template_task_id, employee_id, task_title, "
+                "task_description, requires_document, due_days, status) VALUES (%s,%s,%s,%s,%s,%s,%s,'Pending')",
                 [(ob_id, tt[0], emp_id, tt[1], tt[2], tt[3], tt[4]) for tt in template_tasks]
             )
         assigned += 1
@@ -265,7 +270,8 @@ def bulk_assign_onboarding():
                 _ecfg = get_email_config()
                 if _ecfg:
                     _html = (f"<p>Hi <strong>{_er[0]}</strong>,</p>"
-                             f"<p>A new onboarding checklist <strong>'{_tr[0]}'</strong> has been assigned to you. Please complete all tasks by <strong>{due_date}</strong>.</p>")
+                             f"<p>A new onboarding checklist <strong>'{_tr[0]}'</strong> has been assigned to you. "
+                             f"Please complete all tasks by <strong>{due_date}</strong>.</p>")
                     send_email_async(_er[1], f"New Onboarding Checklist -- {_tr[0]}", _html, _ecfg)
         except Exception as exc:
             app_log.warning("Onboarding-assigned notification email failed for %s: %s", emp_id, exc, exc_info=True)
@@ -871,7 +877,8 @@ def _generate_offer_letter_pdf(letter, co):
     tc_items = [
         "This offer is subject to satisfactory verification of your educational qualifications, credentials, and prior employment history.",
         f"You will serve a probationary period of <b>{probation} months</b> from the date of joining. Confirmation is subject to satisfactory performance.",
-        f"Post-confirmation, either party may terminate employment by providing <b>{notice_days} days'</b> written notice or salary in lieu thereof. During probation, 7 days' notice applies.",
+        f"Post-confirmation, either party may terminate employment by providing <b>{notice_days} days'</b> written "
+        "notice or salary in lieu thereof. During probation, 7 days' notice applies.",
         "All compensation is subject to applicable statutory deductions (TDS, PF, ESI, Professional Tax) as per prevailing Indian law.",
         f"This offer is valid until <b>{valid_until}</b>. Non-acceptance by this date shall render this offer null and void.",
         "You shall maintain strict confidentiality of all proprietary and sensitive information of the Company during and after your employment.",
@@ -995,31 +1002,50 @@ def offer_letter_send(letter_id):
             sa = round(monthly_ctc * 0.33, 2)
             pf = round(monthly_ctc * 0.04, 2)
             gr = round(monthly_ctc * 0.03, 2)
+            _th_style = (
+                "background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;"
+                "text-transform:uppercase;padding:9px 12px;border-bottom:1px solid #e5e7eb;"
+            )
+            _td_style = "padding:9px 12px;border-bottom:1px solid #f3f4f6;"
+            _td_num_style = _td_style + "text-align:right;font-weight:600;"
+
+            def _ctc_row(label, monthly, annual, border=True):
+                td = _td_style if border else "padding:9px 12px;"
+                td_num = _td_num_style if border else "padding:9px 12px;text-align:right;font-weight:600;"
+                return (
+                    f'<tr><td style="{td}">{label}</td>'
+                    f'<td style="{td_num}">{fmt(monthly)}</td>'
+                    f'<td style="{td_num}">{fmt(annual)}</td></tr>'
+                )
+
             ctc_section = f"""
             <p style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1d4ed8;margin:20px 0 8px;">Compensation Details</p>
             <table style="width:100%;border-collapse:collapse;font-size:12.5px;margin-bottom:20px;">
               <thead><tr>
-                <th style="background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;padding:9px 12px;text-align:left;border-bottom:1px solid #e5e7eb;">Salary Component</th>
-                <th style="background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;padding:9px 12px;text-align:right;border-bottom:1px solid #e5e7eb;">Monthly (&#8377;)</th>
-                <th style="background:#f3f4f6;color:#6b7280;font-size:10px;font-weight:700;text-transform:uppercase;padding:9px 12px;text-align:right;border-bottom:1px solid #e5e7eb;">Annual (&#8377;)</th>
+                <th style="{_th_style}text-align:left;">Salary Component</th>
+                <th style="{_th_style}text-align:right;">Monthly (&#8377;)</th>
+                <th style="{_th_style}text-align:right;">Annual (&#8377;)</th>
               </tr></thead>
               <tbody>
-                <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">Basic Salary</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(basic)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(basic*12)}</td></tr>
-                <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">House Rent Allowance (HRA)</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(hra)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(hra*12)}</td></tr>
-                <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">Special Allowance</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(sa)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(sa*12)}</td></tr>
-                <tr><td style="padding:9px 12px;border-bottom:1px solid #f3f4f6;">PF -- Employer Contribution</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(pf)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;border-bottom:1px solid #f3f4f6;">{fmt(pf*12)}</td></tr>
-                <tr><td style="padding:9px 12px;">Gratuity (4.81% of Basic)</td><td style="padding:9px 12px;text-align:right;font-weight:600;">{fmt(gr)}</td><td style="padding:9px 12px;text-align:right;font-weight:600;">{fmt(gr*12)}</td></tr>
+                {_ctc_row("Basic Salary", basic, basic * 12)}
+                {_ctc_row("House Rent Allowance (HRA)", hra, hra * 12)}
+                {_ctc_row("Special Allowance", sa, sa * 12)}
+                {_ctc_row("PF -- Employer Contribution", pf, pf * 12)}
+                {_ctc_row("Gratuity (4.81% of Basic)", gr, gr * 12, border=False)}
               </tbody>
               <tfoot><tr>
                 <td style="padding:10px 12px;font-weight:800;background:#111827;color:#fff;">Gross CTC</td>
-                <td style="padding:10px 12px;text-align:right;font-weight:800;background:#111827;color:#fff;">&#8377;{fmt(monthly_ctc)}</td>
-                <td style="padding:10px 12px;text-align:right;font-weight:800;background:#111827;color:#fff;">&#8377;{fmt(monthly_ctc*12)}</td>
+                <td style="padding:10px 12px;text-align:right;font-weight:800;background:#111827;color:#fff;">
+                  &#8377;{fmt(monthly_ctc)}</td>
+                <td style="padding:10px 12px;text-align:right;font-weight:800;background:#111827;color:#fff;">
+                  &#8377;{fmt(monthly_ctc*12)}</td>
               </tr></tfoot>
             </table>"""
 
         notes_section = ""
         if notes:
-            notes_section = f"""<div style="background:#eff6ff;border-left:3px solid #1d4ed8;padding:11px 16px;font-size:12.5px;color:#1e40af;border-radius:0 6px 6px 0;margin-bottom:16px;line-height:1.7;">
+            notes_section = f"""<div style="background:#eff6ff;border-left:3px solid #1d4ed8;padding:11px 16px;
+                 font-size:12.5px;color:#1e40af;border-radius:0 6px 6px 0;margin-bottom:16px;line-height:1.7;">
               <strong>Note:</strong> {notes}</div>"""
 
         dept_html = f' in the <strong>{department}</strong> department' if department else ''
@@ -1146,14 +1172,23 @@ def offer_letter_send(letter_id):
     <!-- Terms & Conditions -->
     <p style="font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#1d4ed8;margin:20px 0 8px;">Terms &amp; Conditions</p>
     <ol style="padding-left:18px;font-size:12.5px;color:#4b5563;line-height:1.85;margin-bottom:20px;">
-      <li style="margin-bottom:7px;">This offer is subject to satisfactory verification of your educational qualifications, credentials, and prior employment history.</li>
-      <li style="margin-bottom:7px;">You will serve a probationary period of <strong>{probation} months</strong> from the date of joining. Confirmation is subject to satisfactory performance.</li>
-      <li style="margin-bottom:7px;">Post-confirmation, either party may terminate employment by providing <strong>{notice_days} days'</strong> written notice or salary in lieu thereof. During probation, 7 days' notice applies.</li>
-      <li style="margin-bottom:7px;">All compensation is subject to applicable statutory deductions (TDS, PF, ESI, Professional Tax) as per prevailing Indian law.</li>
-      <li style="margin-bottom:7px;">This offer is valid until <strong>{valid_until}</strong>. Non-acceptance by this date shall render this offer null and void.</li>
-      <li style="margin-bottom:7px;">You shall maintain strict confidentiality of all proprietary and sensitive information of the Company during and after your employment.</li>
-      <li style="margin-bottom:7px;">You will abide by the Company's HR policies, Code of Conduct, and all applicable rules as amended from time to time.</li>
-      <li style="margin-bottom:7px;">A formal Appointment Letter will be issued upon joining. This offer letter does not constitute a contract of employment.</li>
+      <li style="margin-bottom:7px;">This offer is subject to satisfactory verification of your
+        educational qualifications, credentials, and prior employment history.</li>
+      <li style="margin-bottom:7px;">You will serve a probationary period of <strong>{probation} months</strong>
+        from the date of joining. Confirmation is subject to satisfactory performance.</li>
+      <li style="margin-bottom:7px;">Post-confirmation, either party may terminate employment by providing
+        <strong>{notice_days} days'</strong> written notice or salary in lieu thereof. During probation,
+        7 days' notice applies.</li>
+      <li style="margin-bottom:7px;">All compensation is subject to applicable statutory deductions
+        (TDS, PF, ESI, Professional Tax) as per prevailing Indian law.</li>
+      <li style="margin-bottom:7px;">This offer is valid until <strong>{valid_until}</strong>.
+        Non-acceptance by this date shall render this offer null and void.</li>
+      <li style="margin-bottom:7px;">You shall maintain strict confidentiality of all proprietary and
+        sensitive information of the Company during and after your employment.</li>
+      <li style="margin-bottom:7px;">You will abide by the Company's HR policies, Code of Conduct, and
+        all applicable rules as amended from time to time.</li>
+      <li style="margin-bottom:7px;">A formal Appointment Letter will be issued upon joining. This offer
+        letter does not constitute a contract of employment.</li>
     </ol>
 
     <p style="font-size:13px;color:#374151;line-height:1.9;margin-bottom:20px;">
@@ -1178,7 +1213,8 @@ def offer_letter_send(letter_id):
           &#128065; &nbsp;View PDF
         </a>
         <a href="{pdf_dl_url}"
-           style="display:inline-block;padding:10px 22px;background:#fff;color:#111827;font-size:12px;font-weight:700;text-decoration:none;border-radius:7px;border:1.5px solid #d1d5db;margin-left:10px;">
+           style="display:inline-block;padding:10px 22px;background:#fff;color:#111827;font-size:12px;font-weight:700;
+                  text-decoration:none;border-radius:7px;border:1.5px solid #d1d5db;margin-left:10px;">
           &#8681; &nbsp;Download PDF
         </a>
       </div>
@@ -1187,11 +1223,13 @@ def offer_letter_send(letter_id):
     <!-- Accept / Reject -->
     <div style="margin:0 0 16px;text-align:center;">
       <a href="{accept_url}"
-         style="display:inline-block;padding:14px 40px;background:#16a34a;color:#fff;font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;margin-right:14px;letter-spacing:.3px;">
+         style="display:inline-block;padding:14px 40px;background:#16a34a;color:#fff;font-size:14px;font-weight:700;
+                text-decoration:none;border-radius:8px;margin-right:14px;letter-spacing:.3px;">
         &#10003;&nbsp; Accept Offer
       </a>
       <a href="{reject_url}"
-         style="display:inline-block;padding:14px 40px;background:#dc2626;color:#fff;font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;letter-spacing:.3px;">
+         style="display:inline-block;padding:14px 40px;background:#dc2626;color:#fff;font-size:14px;font-weight:700;
+                text-decoration:none;border-radius:8px;letter-spacing:.3px;">
         &#10005;&nbsp; Decline Offer
       </a>
     </div>
@@ -1399,7 +1437,7 @@ def my_onboarding_task_done():
             import os as _os
             upload_dir = _os.path.join("static", "onboarding_docs")
             _os.makedirs(upload_dir, exist_ok=True)
-            safe_name = f"{emp_id}_{task_id}_{f.filename.replace(' ','_')}"
+            safe_name = f"{emp_id}_{task_id}_{f.filename.replace(' ', '_')}"
             f.save(_os.path.join(upload_dir, safe_name))
             doc_path = safe_name
 
@@ -1528,7 +1566,7 @@ def api_my_onboarding_task_done(task_id):
             import os as _os
             upload_dir = _os.path.join("static", "onboarding_docs")
             _os.makedirs(upload_dir, exist_ok=True)
-            safe_name = f"{emp_id}_{task_id}_{f.filename.replace(' ','_')}"
+            safe_name = f"{emp_id}_{task_id}_{f.filename.replace(' ', '_')}"
             f.save(_os.path.join(upload_dir, safe_name))
             doc_path = safe_name
 

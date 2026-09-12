@@ -37,7 +37,7 @@ def test_ai_helpdesk_query_and_fallback(db_engine, seed_employee):
 def test_interview_evaluator_unit():
     notes = "Candidate showed excellent technical skills in Python and SQL, clear communication, and impressive problem solving."
     eval_report = evaluate_interview_notes("Jane Smith", "Senior Developer", notes)
-    
+
     assert eval_report["overall_rating"] >= 7.5
     assert "positive" in eval_report["sentiment_analysis"]
     assert eval_report["overall_recommendation"] in ("Hire", "Strong Hire")
@@ -85,7 +85,7 @@ def test_hr_helpdesk_bearer_token_employee(client, seed_employee):
     }).get_json()["token"]
 
     res = client.post("/api/ai/hr-helpdesk", json={"query": "How many sick days do I get?"},
-                       headers={"Authorization": f"Bearer {token}"})
+                      headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert res.get_json()["data"]["answer"] is not None
 
@@ -98,7 +98,7 @@ def test_hr_helpdesk_bearer_token_admin(client, seed_admin):
     }).get_json()["token"]
 
     res = client.post("/api/ai/hr-helpdesk", json={"query": "What is the payroll schedule?"},
-                       headers={"Authorization": f"Bearer {token}"})
+                      headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 200
     assert res.get_json()["data"]["answer"] is not None
 

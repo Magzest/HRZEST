@@ -4,6 +4,8 @@ Targets uncovered routes: setup_wizard, admin_login branches, employee_login,
 employee_logout, change_password, force_change_pin, password reset flows,
 admin_forgot_password, admin_reset_password, webauthn_status.
 """
+
+
 def _admin_session(client, seed_admin):
     client.post("/login", data={
         "identifier": seed_admin["username"],
@@ -14,7 +16,7 @@ def _admin_session(client, seed_admin):
 
 def _emp_session(client, seed_employee):
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 
@@ -207,7 +209,9 @@ class TestAdminForgotPassword:
 class TestAdminResetPassword:
 
     def _seed_reset_token(self, db_engine, seed_admin):
-        import secrets, hashlib, datetime
+        import secrets
+        import hashlib
+        import datetime
         token = secrets.token_hex(32)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
@@ -316,7 +320,9 @@ class TestEmployeeResetPassword:
         assert rv.status_code == 200
 
     def _seed_emp_reset_token(self, db_engine, seed_employee):
-        import secrets, hashlib, datetime
+        import secrets
+        import hashlib
+        import datetime
         token = secrets.token_hex(32)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         expiry = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
@@ -415,7 +421,7 @@ class TestForceChangePin:
         # "auth.force_change_pin", so _fpc=True always causes a redirect loop.
         # Test the route logic directly without the _fpc flag.
         with client.session_transaction() as sess:
-            sess["employee_id"]   = seed_employee["employee_id"]
+            sess["employee_id"] = seed_employee["employee_id"]
             sess["employee_name"] = seed_employee["name"]
         return client
 

@@ -24,7 +24,6 @@ actual seeded platform_admins row.
 Run with:
     python -m pytest tests/test_platform_admin.py -v
 """
-import io
 import os
 import re
 import time
@@ -376,14 +375,14 @@ class TestSetLeadStatus:
 
     def test_requires_login(self, client, lead_row):
         resp = client.post(f"/super_admin/leads/{lead_row}/status", data={"status": "contacted"},
-                            follow_redirects=False)
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
     def test_valid_status_update(self, client, db_engine, lead_row):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/leads/{lead_row}/status", data={"status": "converted"},
-                            follow_redirects=False)
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         cur = db_engine.cursor()
         cur.execute("SELECT status FROM att_master.leads WHERE id=%s", (lead_row,))
@@ -393,7 +392,7 @@ class TestSetLeadStatus:
     def test_invalid_status_rejected(self, client, db_engine, lead_row):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/leads/{lead_row}/status", data={"status": "bogus"},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Invalid lead status." in resp.data
         cur = db_engine.cursor()
@@ -500,21 +499,21 @@ class TestTenantStatus:
 
     def test_requires_login(self, client, tenant_row):
         resp = client.post(f"/super_admin/tenants/{tenant_row}/status", data={"status": "suspended"},
-                            follow_redirects=False)
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
     def test_suspend_and_reactivate(self, client, db_engine, tenant_row):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tenants/{tenant_row}/status", data={"status": "suspended"},
-                            follow_redirects=False)
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         cur = db_engine.cursor()
         cur.execute("SELECT status FROM att_master.tenants WHERE id=%s", (tenant_row,))
         assert cur.fetchone()[0] == "suspended"
 
         resp = client.post(f"/super_admin/tenants/{tenant_row}/status", data={"status": "active"},
-                            follow_redirects=False)
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         cur.execute("SELECT status FROM att_master.tenants WHERE id=%s", (tenant_row,))
         assert cur.fetchone()[0] == "active"
@@ -523,7 +522,7 @@ class TestTenantStatus:
     def test_invalid_status_rejected(self, client, db_engine, tenant_row):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tenants/{tenant_row}/status", data={"status": "deleted"},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Invalid status." in resp.data
         cur = db_engine.cursor()
@@ -550,16 +549,16 @@ class TestBulkTenantStatus:
 
     def test_requires_login(self, client, two_tenant_rows):
         resp = client.post("/super_admin/tenants/bulk-status",
-                            data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
-                            follow_redirects=False)
+                           data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
     def test_bulk_deactivate_and_reactivate(self, client, db_engine, two_tenant_rows):
         _login_platform_admin(client)
         resp = client.post("/super_admin/tenants/bulk-status",
-                            data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
-                            follow_redirects=True)
+                           data={"status": "suspended", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"2 companies updated." in resp.data
         cur = db_engine.cursor()
@@ -567,8 +566,8 @@ class TestBulkTenantStatus:
         assert [r[0] for r in cur.fetchall()] == ["suspended", "suspended"]
 
         resp = client.post("/super_admin/tenants/bulk-status",
-                            data={"status": "active", "tenant_ids": [str(i) for i in two_tenant_rows]},
-                            follow_redirects=True)
+                           data={"status": "active", "tenant_ids": [str(i) for i in two_tenant_rows]},
+                           follow_redirects=True)
         assert resp.status_code == 200
         cur.execute("SELECT status FROM att_master.tenants WHERE id=ANY(%s)", (two_tenant_rows,))
         assert [r[0] for r in cur.fetchall()] == ["active", "active"]
@@ -577,15 +576,15 @@ class TestBulkTenantStatus:
     def test_no_selection_rejected(self, client):
         _login_platform_admin(client)
         resp = client.post("/super_admin/tenants/bulk-status", data={"status": "suspended"},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"No companies were selected." in resp.data
 
     def test_invalid_status_rejected(self, client, db_engine, two_tenant_rows):
         _login_platform_admin(client)
         resp = client.post("/super_admin/tenants/bulk-status",
-                            data={"status": "deleted", "tenant_ids": [str(two_tenant_rows[0])]},
-                            follow_redirects=True)
+                           data={"status": "deleted", "tenant_ids": [str(two_tenant_rows[0])]},
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Invalid status." in resp.data
         cur = db_engine.cursor()
@@ -620,7 +619,7 @@ class TestDeleteTenant:
     def test_requires_login(self, client, deletable_tenant):
         tenant_id, subdomain, _schema = deletable_tenant
         resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
-                            data={"confirm_subdomain": subdomain}, follow_redirects=False)
+                           data={"confirm_subdomain": subdomain}, follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
@@ -628,7 +627,7 @@ class TestDeleteTenant:
         tenant_id, subdomain, schema = deletable_tenant
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
-                            data={"confirm_subdomain": "not-the-right-subdomain"}, follow_redirects=True)
+                           data={"confirm_subdomain": "not-the-right-subdomain"}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"you must type" in resp.data
 
@@ -643,7 +642,7 @@ class TestDeleteTenant:
         tenant_id, subdomain, schema = deletable_tenant
         _login_platform_admin(client, username="delete_test_admin")
         resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
-                            data={"confirm_subdomain": subdomain}, follow_redirects=True)
+                           data={"confirm_subdomain": subdomain}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"permanently deleted" in resp.data
 
@@ -658,14 +657,14 @@ class TestDeleteTenant:
         tenant_id, subdomain, schema = deletable_tenant
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
-                            data={"confirm_subdomain": subdomain.upper()}, follow_redirects=True)
+                           data={"confirm_subdomain": subdomain.upper()}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"permanently deleted" in resp.data
 
     def test_unknown_tenant_flashes_not_found(self, client):
         _login_platform_admin(client)
         resp = client.post("/super_admin/tenants/999999999/delete",
-                            data={"confirm_subdomain": "whatever"}, follow_redirects=True)
+                           data={"confirm_subdomain": "whatever"}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Company not found." in resp.data
 
@@ -688,7 +687,7 @@ class TestDeleteTenant:
         try:
             _login_platform_admin(client, username="payment_survives_admin")
             resp = client.post(f"/super_admin/tenants/{tenant_id}/delete",
-                                data={"confirm_subdomain": subdomain}, follow_redirects=True)
+                               data={"confirm_subdomain": subdomain}, follow_redirects=True)
             assert resp.status_code == 200
 
             cur.execute(
@@ -860,7 +859,7 @@ class TestApplicationDocument:
     def test_document_route_requires_login(self, client, application_with_doc):
         app_id, _path = application_with_doc
         resp = client.get(f"/super_admin/applications/{app_id}/documents/registration_cert",
-                           follow_redirects=False)
+                          follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
@@ -890,7 +889,7 @@ class TestApplicationDocument:
         _login_platform_admin(client)
         app_id, _path = application_with_doc
         resp = client.get(f"/super_admin/applications/{app_id}/documents/{bad_doc_kind}",
-                           follow_redirects=True)
+                          follow_redirects=True)
         assert resp.status_code == 200
         assert b"Invalid document type." in resp.data
 
@@ -908,7 +907,7 @@ class TestApplicationDocument:
         app_id, _path = application_with_doc
         # doc_address_proof was never set on this application row.
         resp = client.get(f"/super_admin/applications/{app_id}/documents/address_proof",
-                           follow_redirects=True)
+                          follow_redirects=True)
         assert resp.status_code == 200
         assert b"Document not found." in resp.data
 
@@ -946,7 +945,7 @@ class TestApplicationApproveRejectEdgeCases:
     def test_reject_unknown_application(self, client):
         _login_platform_admin(client)
         resp = client.post("/super_admin/applications/999999999/reject", data={"reason": "no"},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Application not found." in resp.data
 
@@ -1025,14 +1024,14 @@ class TestBulkAcknowledgeDuplicateAlerts:
 
     def test_requires_login(self, client, two_alert_rows):
         resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge",
-                            data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=False)
+                           data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
     def test_bulk_acknowledge_marks_all_selected(self, client, db_engine, two_alert_rows):
         _login_platform_admin(client, username="bulk_ack_admin")
         resp = client.post("/super_admin/duplicate-alerts/bulk-acknowledge",
-                            data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=True)
+                           data={"alert_ids": [str(i) for i in two_alert_rows]}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"2 alert(s) acknowledged." in resp.data
         cur = db_engine.cursor()
@@ -1257,14 +1256,14 @@ class TestTenantNotes:
 
     def test_requires_login(self, client, crm_tenant):
         resp = client.post(f"/super_admin/companies/{crm_tenant}/notes", data={"note": "hi"},
-                            follow_redirects=False)
+                           follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
     def test_add_note(self, client, db_engine, crm_tenant):
         _login_platform_admin(client, username="notes_admin")
         resp = client.post(f"/super_admin/companies/{crm_tenant}/notes",
-                            data={"note": "Called about their overdue invoice."}, follow_redirects=True)
+                           data={"note": "Called about their overdue invoice."}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Note added." in resp.data
         assert b"Called about their overdue invoice." in resp.data
@@ -1280,14 +1279,14 @@ class TestTenantNotes:
     def test_empty_note_rejected(self, client, crm_tenant):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/companies/{crm_tenant}/notes", data={"note": "   "},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Note cannot be empty." in resp.data
 
     def test_unknown_company_rejected(self, client):
         _login_platform_admin(client)
         resp = client.post("/super_admin/companies/999999999/notes", data={"note": "hi"},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Company not found." in resp.data
 
@@ -1308,7 +1307,7 @@ class TestSupportTickets:
         tenant_id = cur.fetchone()[0]
         yield tenant_id
         cur.execute("DELETE FROM att_master.tenant_ticket_comments WHERE ticket_id IN "
-                     "(SELECT id FROM att_master.tenant_support_tickets WHERE tenant_id=%s)", (tenant_id,))
+                    "(SELECT id FROM att_master.tenant_support_tickets WHERE tenant_id=%s)", (tenant_id,))
         cur.execute("DELETE FROM att_master.tenant_support_tickets WHERE tenant_id=%s", (tenant_id,))
         cur.execute("DELETE FROM att_master.tenants WHERE id=%s", (tenant_id,))
         cur.close()
@@ -1328,7 +1327,7 @@ class TestSupportTickets:
 
     def test_create_ticket_requires_login(self, client, ticket_tenant):
         resp = client.post(f"/super_admin/companies/{ticket_tenant}/tickets",
-                            data={"subject": "x", "description": "y"}, follow_redirects=False)
+                           data={"subject": "x", "description": "y"}, follow_redirects=False)
         assert resp.status_code in (301, 302)
         assert resp.headers["Location"] == "/super_admin/login"
 
@@ -1359,7 +1358,7 @@ class TestSupportTickets:
     def test_create_ticket_missing_fields_rejected(self, client, ticket_tenant):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/companies/{ticket_tenant}/tickets",
-                            data={"subject": "", "description": ""}, follow_redirects=True)
+                           data={"subject": "", "description": ""}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Subject and description are required." in resp.data
 
@@ -1423,7 +1422,7 @@ class TestSupportTickets:
     def test_update_status_and_priority(self, client, db_engine, open_ticket):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
-                            data={"status": "in_progress", "priority": "urgent"}, follow_redirects=True)
+                           data={"status": "in_progress", "priority": "urgent"}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Ticket updated." in resp.data
 
@@ -1439,7 +1438,7 @@ class TestSupportTickets:
     def test_resolving_a_ticket_stamps_resolved_at(self, client, db_engine, open_ticket):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
-                            data={"status": "resolved", "priority": "high"}, follow_redirects=True)
+                           data={"status": "resolved", "priority": "high"}, follow_redirects=True)
         assert resp.status_code == 200
         cur = db_engine.cursor()
         cur.execute("SELECT status, resolved_at FROM att_master.tenant_support_tickets WHERE id=%s", (open_ticket,))
@@ -1452,7 +1451,7 @@ class TestSupportTickets:
         _login_platform_admin(client)
         client.post(f"/super_admin/tickets/{open_ticket}/update", data={"status": "resolved", "priority": "high"})
         resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
-                            data={"status": "open", "priority": "high"}, follow_redirects=True)
+                           data={"status": "open", "priority": "high"}, follow_redirects=True)
         assert resp.status_code == 200
         cur = db_engine.cursor()
         cur.execute("SELECT resolved_at FROM att_master.tenant_support_tickets WHERE id=%s", (open_ticket,))
@@ -1462,21 +1461,21 @@ class TestSupportTickets:
     def test_update_invalid_status_rejected(self, client, open_ticket):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tickets/{open_ticket}/update",
-                            data={"status": "not-a-status", "priority": "high"}, follow_redirects=True)
+                           data={"status": "not-a-status", "priority": "high"}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Invalid status or priority." in resp.data
 
     def test_update_unknown_ticket_flashes_not_found(self, client):
         _login_platform_admin(client)
         resp = client.post("/super_admin/tickets/999999999/update",
-                            data={"status": "open", "priority": "high"}, follow_redirects=True)
+                           data={"status": "open", "priority": "high"}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Ticket not found." in resp.data
 
     def test_add_comment(self, client, db_engine, open_ticket):
         _login_platform_admin(client, username="comment_admin")
         resp = client.post(f"/super_admin/tickets/{open_ticket}/comment",
-                            data={"comment": "Escalated to engineering."}, follow_redirects=True)
+                           data={"comment": "Escalated to engineering."}, follow_redirects=True)
         assert resp.status_code == 200
         assert b"Comment added." in resp.data
         assert b"Escalated to engineering." in resp.data
@@ -1493,13 +1492,13 @@ class TestSupportTickets:
     def test_empty_comment_rejected(self, client, open_ticket):
         _login_platform_admin(client)
         resp = client.post(f"/super_admin/tickets/{open_ticket}/comment", data={"comment": "  "},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Comment cannot be empty." in resp.data
 
     def test_comment_on_unknown_ticket_rejected(self, client):
         _login_platform_admin(client)
         resp = client.post("/super_admin/tickets/999999999/comment", data={"comment": "hi"},
-                            follow_redirects=True)
+                           follow_redirects=True)
         assert resp.status_code == 200
         assert b"Ticket not found." in resp.data

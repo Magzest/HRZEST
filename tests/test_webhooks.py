@@ -33,7 +33,7 @@ class TestReceiveWebhook:
         monkeypatch.setattr("blueprints.webhooks.verify_webhook_signature", lambda *a, **k: True)
         received = []
         monkeypatch.setitem(webhooks_module._HANDLERS, ("razorpay", "test.custom_event"),
-                             lambda payload: received.append(payload))
+                            lambda payload: received.append(payload))
 
         payload = {"event": "test.custom_event", "payload": {"foo": "bar"}}
         resp = client.post("/webhooks/razorpay", json=payload)

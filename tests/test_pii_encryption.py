@@ -23,7 +23,7 @@ def _employee_session(client, employee_id):
 
 def _raw_column(db_engine, employee_id, column):
     cur = db_engine.cursor()
-    cur.execute(f"SELECT {column} FROM employees WHERE employee_id=%s", (employee_id,))  # nosec B608 - column is a fixed literal from this test file, not user input
+    cur.execute(f"SELECT {column} FROM employees WHERE employee_id=%s", (employee_id,))  # nosec B608 - column is a fixed literal from this test file, not user input  # noqa: E501
     row = cur.fetchone()
     cur.close()
     return row[0] if row else None

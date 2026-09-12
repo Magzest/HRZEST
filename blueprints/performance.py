@@ -202,7 +202,9 @@ def performance():
     employees = cursor.fetchall()
 
     if active_cid:
-        cursor.execute("SELECT department FROM employees WHERE is_active=1 AND department IS NOT NULL AND department!='' AND company_id=%s GROUP BY department ORDER BY MIN(id) ASC", (active_cid,))
+        cursor.execute(
+            "SELECT department FROM employees WHERE is_active=1 AND department IS NOT NULL AND department!='' "
+            "AND company_id=%s GROUP BY department ORDER BY MIN(id) ASC", (active_cid,))
     else:
         cursor.execute(
             "SELECT department FROM employees WHERE is_active=1 AND department IS NOT NULL AND department!='' GROUP BY department ORDER BY MIN(id) ASC")
@@ -675,7 +677,7 @@ def performance_export():
     ws1.append([])
     ws1.merge_cells("A1:H1")
     title_cell = ws1["A1"]
-    title_cell.value = f"Performance Summary -- Q{q} ({q_labels.get(q,'')}) {yr}"
+    title_cell.value = f"Performance Summary -- Q{q} ({q_labels.get(q, '')}) {yr}"
     title_cell.font = Font(bold=True, size=14, color="1E3A8A")
     title_cell.alignment = Alignment(horizontal="center", vertical="center")
     ws1.row_dimensions[1].height = 36
@@ -742,7 +744,8 @@ def performance_export():
     note_font = Font(italic=True, size=10, color="92400E")
     ws3.merge_cells("A1:J1")
     n = ws3["A1"]
-    n.value = "Fill in the rows below and import this file. Required columns: employee_id, kpi_title, weight, rating. Quarter & Year are selected in the import dialog."
+    n.value = ("Fill in the rows below and import this file. Required columns: employee_id, kpi_title, weight, "
+               "rating. Quarter & Year are selected in the import dialog.")
     n.font = note_font
     n.fill = note_fill
     n.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)

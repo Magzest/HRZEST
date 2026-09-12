@@ -180,7 +180,7 @@ def verify_payment():
         db.close()
     except Exception as exc:
         app_log.error("seats.verify_payment: payment captured but failed to update paid_employee_slots for %s: %s",
-                       g.tenant_db, exc)
+                      g.tenant_db, exc)
         return jsonify({"ok": False, "msg": f"Payment received, but seat activation failed. Contact support with order ID {razorpay_order_id}."}), 500
 
     invalidate_settings_cache()

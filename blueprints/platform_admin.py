@@ -788,7 +788,10 @@ def platform_admin_set_rate():
         new_plan_id, plan_error = create_plan(new_paise, _PLAN_ITEM_NAME)
         if plan_error:
             app_log.error("platform_admin.set_rate: failed to create new Razorpay plan: %s", plan_error)
-            migration_note = " Warning: creating the new Razorpay plan failed, so auto-debit migration could not be armed -- existing subscribers will keep their old rate until this is retried."
+            migration_note = (
+                " Warning: creating the new Razorpay plan failed, so auto-debit migration could not be armed -- "
+                "existing subscribers will keep their old rate until this is retried."
+            )
         else:
             cur.execute("UPDATE billing_config SET razorpay_plan_id=%s WHERE id=1", (new_plan_id,))
             cur.execute("UPDATE auto_debit_mandates SET needs_rate_migration=TRUE WHERE status='active'")
@@ -848,7 +851,7 @@ def platform_admin_create_tenant():
     email_domain = clean_email_domain(request.form.get("email_domain", ""))
 
     error = _validate_new_tenant_fields(company_name, subdomain, admin_username, admin_password, admin_email,
-                                         email_domain)
+                                        email_domain)
     if error:
         flash(error, "error")
         return redirect("/super_admin")
@@ -863,15 +866,15 @@ def platform_admin_create_tenant():
             return redirect("/super_admin")
 
     ok, error, portal_url, checkin_url = provision_tenant(company_name, subdomain, admin_username,
-                                                            generate_password_hash(admin_password),
-                                                            admin_email, payment_option, email_domain=email_domain,
-                                                            logo_path=logo_path)
+                                                          generate_password_hash(admin_password),
+                                                          admin_email, payment_option, email_domain=email_domain,
+                                                          logo_path=logo_path)
     if not ok:
         flash(error, "error")
         return redirect("/super_admin")
 
     send_portal_ready_email(admin_email, company_name, admin_username, portal_url, admin_password,
-                             checkin_url=checkin_url)
+                            checkin_url=checkin_url)
 
     log_security_event(
         "platform_admin.tenant_created",
@@ -924,7 +927,7 @@ def platform_admin_bulk_set_status():
     cur = conn.cursor(buffered=True)
     placeholders = ",".join(["%s"] * len(tenant_ids))
     cur.execute(
-        f"UPDATE tenants SET status=%s WHERE id IN ({placeholders})",  # nosec B608 -- placeholders is a fixed-width %s list sized to tenant_ids, all values still bound as params
+        f"UPDATE tenants SET status=%s WHERE id IN ({placeholders})",  # nosec B608 -- placeholders is a fixed-width %s list sized to tenant_ids, all values still bound as params  # noqa: E501
         [status] + tenant_ids,
     )
     updated = cur.rowcount
@@ -994,7 +997,7 @@ def platform_admin_delete_tenant(tenant_id):
         return redirect("/super_admin")
 
     try:
-        cur.execute(f'DROP SCHEMA IF EXISTS "{db_name}" CASCADE')  # nosec B608 -- db_name is read back from the tenants row (never from this request) and re-validated against _SAFE_SCHEMA_NAME_RE immediately above
+        cur.execute(f'DROP SCHEMA IF EXISTS "{db_name}" CASCADE')  # nosec B608 -- db_name is read back from the tenants row (never from this request) and re-validated against _SAFE_SCHEMA_NAME_RE immediately above  # noqa: E501
     except Exception as exc:
         conn.rollback()
         cur.close()
@@ -1039,7 +1042,7 @@ _APPLICATION_COLS = [c.strip() for c in _APPLICATION_STATUS_COLS.split(",")]
 def _fetch_application(application_id):
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
-    cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- _APPLICATION_STATUS_COLS is a fixed module-level constant, never built from request input
+    cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- _APPLICATION_STATUS_COLS is a fixed module-level constant, never built from request input  # noqa: E501
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -1055,7 +1058,7 @@ def platform_admin_applications_queue():
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
     if status_filter == "all":
-        cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications ORDER BY created_at DESC")  # nosec B608 -- fixed constant, see _fetch_application
+        cur.execute(f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications ORDER BY created_at DESC")  # nosec B608 -- fixed constant, see _fetch_application  # noqa: E501
     else:
         cur.execute(
             f"SELECT {_APPLICATION_STATUS_COLS} FROM tenant_applications WHERE status=%s ORDER BY created_at ASC",  # nosec B608
@@ -1081,7 +1084,7 @@ def platform_admin_application_detail(application_id):
         flash("Application not found.", "error")
         return redirect("/super_admin/applications")
     return render_template("super_admin_application_detail.html", application=application,
-                            doc_kinds=_APPLICATION_DOC_KINDS)
+                           doc_kinds=_APPLICATION_DOC_KINDS)
 
 
 @platform_admin_bp.route("/super_admin/applications/<int:application_id>/documents/<doc_kind>", methods=["GET"])
@@ -1106,7 +1109,7 @@ def platform_admin_view_document(application_id, doc_kind):
         return redirect(f"/super_admin/applications/{application_id}")
     conn = get_master_db()
     cur = conn.cursor(buffered=True)
-    cur.execute(f"SELECT doc_{doc_kind} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- doc_kind is allowlist-checked against _APPLICATION_DOC_KINDS above, never interpolated from an unchecked value
+    cur.execute(f"SELECT doc_{doc_kind} FROM tenant_applications WHERE id=%s", (application_id,))  # nosec B608 -- doc_kind is allowlist-checked against _APPLICATION_DOC_KINDS above, never interpolated from an unchecked value  # noqa: E501
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -1151,7 +1154,7 @@ def platform_admin_approve_application(application_id):
         conflicting, match_type = check_duplicate_admin_email(application["admin_email"]), "email"
     if conflicting:
         _record_duplicate_alert(application_id, application["company_name"], application["admin_email"],
-                                 conflicting, match_type=match_type)
+                                conflicting, match_type=match_type)
         flash(_GENERIC_DUPLICATE_MSG + " (duplicate detected at approval time)", "error")
         return redirect(f"/super_admin/applications/{application_id}")
 
@@ -1182,7 +1185,7 @@ def platform_admin_approve_application(application_id):
                 email_cfg,
             )
         log_security_event("platform_admin.application_approved", f"Application {application_id} approved (awaiting payment)",
-                            level="INFO", identifier=reviewer, application_id=application_id)
+                           level="INFO", identifier=reviewer, application_id=application_id)
         flash(f"Application approved. Applicant has been emailed a payment link: {pay_url}", "success")
         return redirect("/super_admin/applications")
 
@@ -1221,7 +1224,7 @@ def platform_admin_approve_application(application_id):
                 email_cfg,
             )
         log_security_event("platform_admin.application_approved", f"Application {application_id} approved (awaiting trial mandate setup)",
-                            level="INFO", identifier=reviewer, application_id=application_id)
+                           level="INFO", identifier=reviewer, application_id=application_id)
         flash(f"Application approved. Applicant has been emailed a trial setup link: {setup_url}", "success")
         return redirect("/super_admin/applications")
 
@@ -1254,9 +1257,9 @@ def platform_admin_approve_application(application_id):
     conn.close()
 
     send_portal_ready_email(application["admin_email"], application["company_name"], application["admin_username"],
-                             portal_url, checkin_url=checkin_url)
+                            portal_url, checkin_url=checkin_url)
     log_security_event("platform_admin.application_approved", f"Application {application_id} approved and provisioned",
-                        level="INFO", identifier=reviewer, application_id=application_id, tenant_id=tenant_id)
+                       level="INFO", identifier=reviewer, application_id=application_id, tenant_id=tenant_id)
     flash(f"Company '{application['company_name']}' approved and provisioned. Portal: {portal_url}", "success")
     return redirect("/super_admin/applications")
 
@@ -1297,7 +1300,7 @@ def platform_admin_reject_application(application_id):
     status_url = f"{_safe_app_url()}/create_org/status/{application_id}?token={new_token}"
     send_application_rejected_email(application["admin_email"], application["company_name"], reason, status_url)
     log_security_event("platform_admin.application_rejected", f"Application {application_id} rejected",
-                        level="INFO", identifier=reviewer, application_id=application_id, reason=reason)
+                       level="INFO", identifier=reviewer, application_id=application_id, reason=reason)
     flash("Application rejected.", "success")
     return redirect("/super_admin/applications")
 
@@ -1351,7 +1354,7 @@ def platform_admin_bulk_acknowledge_duplicate_alerts():
     cur = conn.cursor(buffered=True)
     placeholders = ",".join(["%s"] * len(alert_ids))
     cur.execute(
-        f"UPDATE tenant_duplicate_alerts SET acknowledged=1, acknowledged_by=%s, acknowledged_at=NOW() "  # nosec B608 -- placeholders is a fixed-width %s list sized to alert_ids, all values still bound as params
+        f"UPDATE tenant_duplicate_alerts SET acknowledged=1, acknowledged_by=%s, acknowledged_at=NOW() "  # nosec B608 -- placeholders is a fixed-width %s list sized to alert_ids, all values still bound as params  # noqa: E501
         f"WHERE id IN ({placeholders})",
         [session.get("platform_admin_username")] + alert_ids,
     )
@@ -1389,7 +1392,7 @@ def platform_admin_audit_log():
         conditions.append("(message ILIKE %s OR identifier ILIKE %s OR event_type ILIKE %s)")
         like = f"%{q}%"
         params.extend([like, like, like])
-    where_sql = " AND ".join(conditions)  # nosec B608 -- conditions are fixed literals built above, never from unescaped request input; all variable values are bound params
+    where_sql = " AND ".join(conditions)  # nosec B608 -- conditions are fixed literals built above, never from unescaped request input; all variable values are bound params  # noqa: E501
 
     conn = get_db_connection()
     cur = conn.cursor(buffered=True)

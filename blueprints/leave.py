@@ -18,7 +18,11 @@ from flask import (
 from extensions import app_log
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required, role_required
-from utils.helpers import tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column, hr_scope_subquery, hr_scope_column, hr_scope_denied, get_pending_counts, company_today, get_employee_sidebar_info, coerce_datetime
+from utils.helpers import (
+    tpath, _audit, _create_notification, get_company_settings, co_scope_subquery, co_scope_column,
+    hr_scope_subquery, hr_scope_column, hr_scope_denied, get_pending_counts, company_today,
+    get_employee_sidebar_info, coerce_datetime,
+)
 from utils.email_utils import send_email_async, get_email_config, get_admin_emails
 from utils.leave_utils import get_indian_holidays
 import utils.config as cfg
@@ -58,8 +62,6 @@ def add_holiday():
     cursor.close()
     db.close()
     return redirect(tpath(f"/leave_holidays?tab=holidays&year={year}"))
-
-
 
 
 @leave_bp.route("/import_indian_holidays", methods=["POST"])
@@ -169,16 +171,19 @@ def request_leave():
         _safe_period = _html.escape(str(date_label))
         _safe_reason = _html.escape(str(reason))
         html_body = f"""
-<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+     overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:20px;">Leave Request Received</h2>
     <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
   </div>
   <div style="padding:24px;">
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
-      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;width:130px;">Employee</td><td style="padding:10px 14px;">{_safe_name}</td></tr>
+      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;width:130px;">Employee</td>
+          <td style="padding:10px 14px;">{_safe_name}</td></tr>
       <tr><td style="padding:10px 14px;color:#555;font-weight:600;">Employee ID</td><td style="padding:10px 14px;">{_safe_eid}</td></tr>
-      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;">Leave Period</td><td style="padding:10px 14px;">{_safe_period}</td></tr>
+      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;">Leave Period</td>
+          <td style="padding:10px 14px;">{_safe_period}</td></tr>
       <tr><td style="padding:10px 14px;color:#555;font-weight:600;">Reason</td><td style="padding:10px 14px;">{_safe_reason}</td></tr>
     </table>
     <p style="margin-top:20px;padding:12px 16px;background:#fef9c3;border-radius:8px;color:#854d0e;font-size:13px;">
@@ -353,7 +358,8 @@ def leave_holidays():
         SELECT t.id, t.employee_id, e.name, t.category, t.subject, t.description,
                t.priority, t.status, t.admin_response, t.created_at, t.updated_at
         FROM tickets t JOIN employees e ON t.employee_id = e.employee_id {_co_join} {_hr_join}
-        ORDER BY CASE WHEN t.status='Open' THEN 0 WHEN t.status='In Progress' THEN 1 WHEN t.status='Resolved' THEN 2 WHEN t.status='Closed' THEN 3 ELSE 4 END, t.created_at DESC
+        ORDER BY CASE WHEN t.status='Open' THEN 0 WHEN t.status='In Progress' THEN 1
+                      WHEN t.status='Resolved' THEN 2 WHEN t.status='Closed' THEN 3 ELSE 4 END, t.created_at DESC
     """, _co_args + _hr_args)  # nosec B608
     all_tickets = cursor.fetchall()
     cursor.execute(f"""
@@ -522,7 +528,8 @@ def leave_action(lid):
                 _safe_name = _html.escape(str(emp_name))
                 _safe_reason = _html.escape(str(reason)) if reason else '--'
                 html_body = f"""
-<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+     overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:22px;">{icon} Leave {action}</h2>
     <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
@@ -651,16 +658,19 @@ def request_resignation():
         _safe_lwd = _html.escape(str(last_working_day))
         _safe_reason = _html.escape(str(reason))
         html_body = f"""
-<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+     overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,#ef4444,#b91c1c);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:20px;">⚠️ Resignation Notice Received</h2>
     <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
   </div>
   <div style="padding:24px;">
     <table style="width:100%;border-collapse:collapse;font-size:14px;">
-      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;width:160px;">Employee</td><td style="padding:10px 14px;">{_safe_name}</td></tr>
+      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;width:160px;">Employee</td>
+          <td style="padding:10px 14px;">{_safe_name}</td></tr>
       <tr><td style="padding:10px 14px;color:#555;font-weight:600;">Employee ID</td><td style="padding:10px 14px;">{_safe_eid}</td></tr>
-      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;">Last Working Day</td><td style="padding:10px 14px;">{_safe_lwd}</td></tr>
+      <tr style="background:#f8f9fc;"><td style="padding:10px 14px;color:#555;font-weight:600;">Last Working Day</td>
+          <td style="padding:10px 14px;">{_safe_lwd}</td></tr>
       <tr><td style="padding:10px 14px;color:#555;font-weight:600;">Reason</td><td style="padding:10px 14px;">{_safe_reason}</td></tr>
     </table>
     <p style="margin-top:20px;padding:12px 16px;background:#fee2e2;border-radius:8px;color:#991b1b;font-size:13px;">
@@ -725,7 +735,8 @@ def resignation_action(rid):
                 _safe_name = _html.escape(str(emp_name))
                 _safe_reason = _html.escape(str(reason)) if reason else '--'
                 html_body = f"""
-<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+     overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:22px;">{icon} Resignation {action}</h2>
     <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
@@ -845,8 +856,6 @@ def api_holidays():
     cursor.close()
     db.close()
     return jsonify({"ok": True, "holidays": [{"id": r[0], "date": str(r[1]), "name": r[2]} for r in rows]})
-
-
 
 
 @leave_bp.route("/api/leave_requests", methods=["GET"])
@@ -971,7 +980,8 @@ def api_resignation_action(rid):
             _safe_name = _html.escape(str(emp_name))
             _safe_reason = _html.escape(str(reason)) if reason else '--'
             html_body = f"""
-<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#fff;border-radius:12px;
+     overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
   <div style="background:linear-gradient(135deg,{color},{color}cc);padding:24px;color:white;text-align:center;">
     <h2 style="margin:0;font-size:22px;">{icon} Resignation {action}</h2>
     <p style="margin:4px 0 0;opacity:.85;font-size:13px;">HRzest.com</p>
@@ -1394,7 +1404,6 @@ def api_compoff():
             "balance_days": max(0.0, round(earned_days - used_days, 2)),
         })
     return jsonify({"ok": True, "balances": balances})
-
 
 
 @leave_bp.route("/overtime")

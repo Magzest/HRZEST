@@ -583,7 +583,8 @@ def employee_portal():
 
     try:
         cursor.execute(
-            "SELECT date, shift_end, actual_logout, ot_minutes, ot_pay, status FROM overtime_records WHERE employee_id=%s AND EXTRACT(YEAR FROM date)=%s ORDER BY date DESC LIMIT 20",
+            "SELECT date, shift_end, actual_logout, ot_minutes, ot_pay, status FROM overtime_records "
+            "WHERE employee_id=%s AND EXTRACT(YEAR FROM date)=%s ORDER BY date DESC LIMIT 20",
             (emp_id, today.year)
         )
         my_overtime = cursor.fetchall()
@@ -604,7 +605,8 @@ def employee_portal():
         incentives_this_month = 0.0
     try:
         cursor.execute(
-            "SELECT COALESCE(SUM(ot_pay),0) FROM overtime_records WHERE employee_id=%s AND EXTRACT(MONTH FROM date)=%s AND EXTRACT(YEAR FROM date)=%s AND status='Approved'",
+            "SELECT COALESCE(SUM(ot_pay),0) FROM overtime_records WHERE employee_id=%s "
+            "AND EXTRACT(MONTH FROM date)=%s AND EXTRACT(YEAR FROM date)=%s AND status='Approved'",
             (emp_id, today.month, today.year)
         )
         ot_pay_this_month = float(cursor.fetchone()[0] or 0)
@@ -666,7 +668,10 @@ def employee_portal():
         except Exception:
             p_inc = 0.0
         try:
-            cursor.execute("SELECT COALESCE(SUM(ot_pay),0) FROM overtime_records WHERE employee_id=%s AND EXTRACT(MONTH FROM date)=%s AND EXTRACT(YEAR FROM date)=%s AND status='Approved'", (emp_id, pm2, py2))
+            cursor.execute(
+                "SELECT COALESCE(SUM(ot_pay),0) FROM overtime_records WHERE employee_id=%s "
+                "AND EXTRACT(MONTH FROM date)=%s AND EXTRACT(YEAR FROM date)=%s AND status='Approved'",
+                (emp_id, pm2, py2))
             p_ot = float(cursor.fetchone()[0] or 0)
         except Exception:
             p_ot = 0.0
@@ -803,7 +808,8 @@ def api_employee_portal():
                     (token_hash,)
                 )
                 row = cursor.fetchone()
-                if row: emp_id = row[0]
+                if row:
+                    emp_id = row[0]
     if not emp_id:
         return jsonify({"ok": False, "msg": "Unauthorized"}), 401
 

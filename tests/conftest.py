@@ -357,7 +357,7 @@ def _restore_snapshot(cur, schema_snapshots, extra_schemas):
         for table in snap
     ]
     if all_tables:
-        cur.execute(f'TRUNCATE {", ".join(all_tables)} RESTART IDENTITY CASCADE')  # nosec B608 -- table list built entirely from information_schema, never external input
+        cur.execute(f'TRUNCATE {", ".join(all_tables)} RESTART IDENTITY CASCADE')  # nosec B608 -- table list built entirely from information_schema, never external input  # noqa: E501
 
     setval_args = []
     for schema, snap in schema_snapshots.items():
@@ -442,6 +442,7 @@ def signed_qr():
     employee ID) needs to reach the app's own "employee not found" check
     instead of failing at signature verification."""
     from qr_generator import _qr_signature
+
     def _sign(emp_id):
         return f"{emp_id}.{_qr_signature(emp_id)}"
     return _sign

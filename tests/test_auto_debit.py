@@ -62,8 +62,8 @@ def clean_mandate(db_engine):
 
 
 def _insert_mandate(db_engine, tenant_schema=TENANT_SCHEMA, company_name="Test Co",
-                     customer_id=None, subscription_id=None, quantity_synced=0,
-                     status="pending", activated_at=None):
+                    customer_id=None, subscription_id=None, quantity_synced=0,
+                    status="pending", activated_at=None):
     cur = db_engine.cursor()
     cur.execute(
         "INSERT INTO att_master.auto_debit_mandates (tenant_schema, company_name, razorpay_customer_id, "
@@ -141,9 +141,9 @@ class TestEnroll:
 
         plan_calls, customer_calls, subscription_calls = [], [], []
         monkeypatch.setattr("blueprints.auto_debit.create_plan",
-                             lambda *a, **k: plan_calls.append(a) or ("plan_mocked_123", None))
+                            lambda *a, **k: plan_calls.append(a) or ("plan_mocked_123", None))
         monkeypatch.setattr("blueprints.auto_debit.create_customer",
-                             lambda *a, **k: customer_calls.append(a) or ("cust_mocked_123", None))
+                            lambda *a, **k: customer_calls.append(a) or ("cust_mocked_123", None))
         monkeypatch.setattr(
             "blueprints.auto_debit.create_subscription",
             lambda plan_id, customer_id, quantity, **k: subscription_calls.append(
@@ -259,7 +259,7 @@ class TestCancel:
     def test_demo_cancel_skips_real_razorpay_call(self, client, db_engine, seed_admin, clean_mandate, monkeypatch):
         called = []
         monkeypatch.setattr("blueprints.auto_debit.razorpay_cancel_subscription",
-                             lambda *a, **k: called.append(a) or (True, None))
+                            lambda *a, **k: called.append(a) or (True, None))
         _insert_mandate(db_engine, subscription_id="demo_sub_" + secrets.token_hex(4), status="active")
         _admin_session(client, seed_admin["username"])
         resp = client.post("/api/auto_debit/cancel", json={})
@@ -273,7 +273,7 @@ class TestCancel:
     def test_real_cancel_calls_razorpay_and_updates_mandate(self, client, db_engine, seed_admin, clean_mandate, monkeypatch):
         called = []
         monkeypatch.setattr("blueprints.auto_debit.razorpay_cancel_subscription",
-                             lambda sub_id, **k: called.append(sub_id) or (True, None))
+                            lambda sub_id, **k: called.append(sub_id) or (True, None))
         sub_id = "sub_real_" + secrets.token_hex(4)
         _insert_mandate(db_engine, subscription_id=sub_id, status="active")
         _admin_session(client, seed_admin["username"])
@@ -286,7 +286,7 @@ class TestCancel:
 
     def test_real_cancel_failure_leaves_mandate_active(self, client, db_engine, seed_admin, clean_mandate, monkeypatch):
         monkeypatch.setattr("blueprints.auto_debit.razorpay_cancel_subscription",
-                             lambda sub_id, **k: (False, "Razorpay is down"))
+                            lambda sub_id, **k: (False, "Razorpay is down"))
         sub_id = "sub_real_" + secrets.token_hex(4)
         _insert_mandate(db_engine, subscription_id=sub_id, status="active")
         _admin_session(client, seed_admin["username"])
@@ -451,7 +451,7 @@ class TestSyncAndBillAutoDebit:
         monkeypatch.setattr("blueprints.auto_debit.razorpay_configured", lambda: True)
         update_calls = []
         monkeypatch.setattr("blueprints.auto_debit.update_subscription_quantity",
-                             lambda *a, **k: update_calls.append(a) or (True, None))
+                            lambda *a, **k: update_calls.append(a) or (True, None))
         sub_id = "demo_sub_" + secrets.token_hex(4)
         old_activation = datetime.datetime.now() - datetime.timedelta(days=45)
         _insert_mandate(db_engine, subscription_id=sub_id, quantity_synced=0, status="active",
@@ -472,7 +472,7 @@ class TestSyncAndBillAutoDebit:
         from blueprints.auto_debit import sync_and_bill_auto_debit
         update_calls = []
         monkeypatch.setattr("blueprints.auto_debit.update_subscription_quantity",
-                             lambda sub_id, qty: update_calls.append((sub_id, qty)) or (True, None))
+                            lambda sub_id, qty: update_calls.append((sub_id, qty)) or (True, None))
         sub_id = "sub_real_" + secrets.token_hex(4)
         stale_quantity = get_tenant_employee_count(TENANT_SCHEMA) + 99  # force a mismatch
         _insert_mandate(db_engine, subscription_id=sub_id, quantity_synced=stale_quantity, status="active",
@@ -490,7 +490,7 @@ class TestSyncAndBillAutoDebit:
     def test_quantity_sync_failure_does_not_update_quantity_synced(self, db_engine, clean_mandate, monkeypatch):
         from blueprints.auto_debit import sync_and_bill_auto_debit
         monkeypatch.setattr("blueprints.auto_debit.update_subscription_quantity",
-                             lambda *a, **k: (False, "Razorpay unreachable"))
+                            lambda *a, **k: (False, "Razorpay unreachable"))
         sub_id = "sub_real_" + secrets.token_hex(4)
         stale_quantity = get_tenant_employee_count(TENANT_SCHEMA) + 99
         _insert_mandate(db_engine, subscription_id=sub_id, quantity_synced=stale_quantity, status="active",
@@ -520,7 +520,7 @@ class TestSyncAndBillAutoDebit:
         monkeypatch.setattr("blueprints.auto_debit.get_tenant_employee_count", flaky_get_count)
         update_calls = []
         monkeypatch.setattr("blueprints.auto_debit.update_subscription_quantity",
-                             lambda sub_id, qty: update_calls.append(sub_id) or (True, None))
+                            lambda sub_id, qty: update_calls.append(sub_id) or (True, None))
 
         broken_sub = "sub_real_broken_" + secrets.token_hex(4)
         healthy_sub = "sub_real_healthy_" + secrets.token_hex(4)

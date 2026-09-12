@@ -2,6 +2,8 @@
 Targets: onboarding, template CRUD, task CRUD, assign, detail,
 offer_letter routes, offer_letter_pdf/respond with invalid tokens.
 """
+
+
 def _admin_session(client, seed_admin):
     client.post("/login", data={
         "identifier": seed_admin["username"],

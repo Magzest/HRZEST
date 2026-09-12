@@ -20,7 +20,7 @@ except ImportError:
     sys.exit(1)
 
 ENV_EXAMPLE = ".env.example"
-ENV_FILE    = ".env"
+ENV_FILE = ".env"
 
 if not os.path.exists(ENV_EXAMPLE):
     print(f"❌ {ENV_EXAMPLE} not found — are you in the project root?")
@@ -36,7 +36,7 @@ content = open(ENV_EXAMPLE).read()
 
 # Generate real keys
 new_secret = secrets.token_hex(32)
-new_enc    = Fernet.generate_key().decode()
+new_enc = Fernet.generate_key().decode()
 
 content = content.replace("your_secret_key_here",   new_secret)
 content = content.replace("your_encryption_key_here", new_enc)

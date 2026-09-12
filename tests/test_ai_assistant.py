@@ -309,6 +309,7 @@ class TestN8nBackend:
         class _FakeResp:
             def __enter__(self): return self
             def __exit__(self, *a): return False
+
             def read(self):
                 return _json.dumps({"reply": "Here's your answer"}).encode()
 
@@ -342,6 +343,7 @@ class TestN8nBackend:
         class _FakeResp:
             def __enter__(self): return self
             def __exit__(self, *a): return False
+
             def read(self):
                 return _json.dumps({"reply": "ok"}).encode()
 
@@ -360,6 +362,7 @@ class TestN8nBackend:
         class _FakeResp:
             def __enter__(self): return self
             def __exit__(self, *a): return False
+
             def read(self):
                 return _json.dumps({"ok": True}).encode()
 
@@ -372,6 +375,7 @@ class TestN8nBackend:
         class _FakeResp:
             def __enter__(self): return self
             def __exit__(self, *a): return False
+
             def read(self):
                 return b"not json"
 

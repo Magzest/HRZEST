@@ -172,8 +172,8 @@ def build_salary_slip_html(emp_name, emp_id, emp_email, month_name, year, month,
     <div class="att-cell"><div class="num yellow">{late_d}</div><div class="lbl">Late Days</div></div>
     <div class="att-cell"><div class="num yellow">{half_d}</div><div class="lbl">Half Days</div></div>
     <div class="att-cell"><div class="num red">{int(lop_days)}</div><div class="lbl">LOP / Absent</div></div>
-    <div class="att-cell"><div class="num" style="color:#3b82f6">{e.get('holiday_days',0)}</div><div class="lbl">Holidays</div></div>
-    <div class="att-cell"><div class="num" style="color:#9333ea">{e.get('leave_days',0)}</div><div class="lbl">Leave (Paid)</div></div>
+    <div class="att-cell"><div class="num" style="color:#3b82f6">{e.get('holiday_days', 0)}</div><div class="lbl">Holidays</div></div>
+    <div class="att-cell"><div class="num" style="color:#9333ea">{e.get('leave_days', 0)}</div><div class="lbl">Leave (Paid)</div></div>
   </div>
 
   <div class="body">

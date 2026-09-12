@@ -29,7 +29,6 @@ Run with:
     python -m pytest tests/test_billing.py -v
 """
 import secrets
-import pytest
 
 from utils.auth import generate_password_hash
 from utils.plan_limits import calculate_price, format_price_inr
@@ -243,7 +242,7 @@ class TestVerifyPayment:
         email_calls = []
         monkeypatch.setattr("blueprints.org.provision_tenant", fake_provision_tenant)
         monkeypatch.setattr("blueprints.org.send_payment_confirmation_email",
-                             lambda *a, **k: email_calls.append((a, k)))
+                            lambda *a, **k: email_calls.append((a, k)))
 
         application_id, fields = _insert_application(db_engine)
         order_id = "order_real_" + secrets.token_hex(6)

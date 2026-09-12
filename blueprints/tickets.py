@@ -3,6 +3,8 @@
 from flask import Blueprint, request, session, redirect, jsonify, flash
 from database import get_db_connection
 from utils.auth import admin_required, employee_required, api_required, employee_api_required, api_role_required
+from utils.email_utils import get_email_config, send_email_async
+from utils.helpers import tpath, _create_notification, hr_scope_denied
 
 # Roles allowed to read or act on company-wide support tickets via the
 # Bearer-token API below (/api/tickets, /api/tickets/<id>/action) -- the
@@ -13,8 +15,6 @@ from utils.auth import admin_required, employee_required, api_required, employee
 # no per-team ticket ownership/assignment concept in this codebase for a
 # manager's involvement to scope down to).
 _TICKET_ADMIN_ROLES = ("admin", "hr")
-from utils.email_utils import get_email_config, send_email_async
-from utils.helpers import tpath, _create_notification, hr_scope_denied
 
 tickets_bp = Blueprint("tickets", __name__)
 

@@ -746,7 +746,8 @@ def employee_detail(emp_id):
                s.name AS shift_name,
                COUNT(a.date)  AS total_days,
                MAX(a.date)    AS last_seen,
-               SUM(CASE WHEN a.attendance_type IN ('Present','Full Day','Approved Leave') OR (a.login_time IS NOT NULL AND a.attendance_type IS NULL) THEN 1 ELSE 0 END) AS full_days,
+               SUM(CASE WHEN a.attendance_type IN ('Present','Full Day','Approved Leave')
+                        OR (a.login_time IS NOT NULL AND a.attendance_type IS NULL) THEN 1 ELSE 0 END) AS full_days,
                SUM(CASE WHEN a.attendance_type='Half Day' THEN 1 ELSE 0 END) AS half_days,
                SUM(CASE WHEN a.attendance_type LIKE 'Late%%' OR a.status='Late Login' THEN 1 ELSE 0 END) AS late_days,
                COALESCE(sc.salary_per_day, 0) AS salary_per_day,
@@ -1347,7 +1348,7 @@ def _idc_font(size, bold=False):
     # current_app's LocalProxy would raise "Working outside of
     # application context" on first attribute access.
     bundled = os.path.join(app.root_path, "static", "fonts",
-                            "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
+                           "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf")
     os_candidates = (
         ["C:/Windows/Fonts/segoeuib.ttf",
          "C:/Windows/Fonts/arialbd.ttf",

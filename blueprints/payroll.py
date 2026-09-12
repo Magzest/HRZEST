@@ -27,7 +27,7 @@ from utils.auth import (
     admin_required, employee_required, api_required, enforce_ownership, role_required, api_role_required,
     email_settings_step_up_valid,
 )
-from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime, hr_scope_column, hr_scope_denied
+from utils.helpers import tpath, _audit, decrypt_pii, encrypt_pii, get_pending_counts, get_company_settings, company_today, coerce_datetime, hr_scope_column
 from utils.email_utils import get_email_config, send_email_async, send_email_smtp
 from utils.attendance_utils import (
     get_working_days, fetch_holidays_set, get_billable_past_days, infer_type_legacy,
@@ -360,7 +360,7 @@ def api_salary_report_export():
     buf, filename = _build_salary_report_workbook(year, month)
     content_b64 = _base64.b64encode(buf.read()).decode("ascii")
     return jsonify({"ok": True, "filename": filename, "mime_type": _SALARY_XLSX_MIME,
-                     "content_base64": content_b64})
+                    "content_base64": content_b64})
 
 
 # ---------------- EMAIL CONFIG ----------------
@@ -758,7 +758,8 @@ def my_payslip_summary(year, month):
 
     try:
         cursor.execute(
-            "SELECT COALESCE(SUM(ot_pay),0) FROM overtime_records WHERE employee_id=%s AND EXTRACT(MONTH FROM date)=%s AND EXTRACT(YEAR FROM date)=%s AND status='Approved'",
+            "SELECT COALESCE(SUM(ot_pay),0) FROM overtime_records WHERE employee_id=%s "
+            "AND EXTRACT(MONTH FROM date)=%s AND EXTRACT(YEAR FROM date)=%s AND status='Approved'",
             (emp_id, month, year)
         )
         ot_pay = float(cursor.fetchone()[0])
@@ -851,7 +852,7 @@ def my_attendance_pdf():
         if hasattr(t, "strftime"):
             return t.strftime("%H:%M")
         s = int(t.total_seconds())
-        return f"{s//3600:02d}:{(s%3600)//60:02d}"
+        return f"{s//3600:02d}:{(s % 3600)//60:02d}"
 
     rows_html = ""
     for d in sorted(att_by_date.keys()):
@@ -860,18 +861,22 @@ def my_attendance_pdf():
         final = at if at else infer_type_legacy(ls, lt, lot)
         color = {"Full Day": "#16a34a", "Late - Full Day": "#d97706",
                  "Half Day": "#dc2626", "Present": "#d97706"}.get(final, "#6b7280")
-        rows_html += f"<tr><td>{d.strftime('%d %b %Y')}</td><td>{d.strftime('%A')}</td><td>{fmt(lt)}</td><td>{fmt(lot)}</td><td style='color:{color};font-weight:600;'>{final or 'Absent'}</td></tr>"
+        rows_html += (
+            f"<tr><td>{d.strftime('%d %b %Y')}</td><td>{d.strftime('%A')}</td><td>{fmt(lt)}</td>"
+            f"<td>{fmt(lot)}</td><td style='color:{color};font-weight:600;'>{final or 'Absent'}</td></tr>"
+        )
 
     billable = len(billable_past)
     pct = round((full_days + late_days + half_days * 0.5) / billable * 100, 1) if billable else 0
     month_name = datetime.date(year, month, 1).strftime("%B %Y")
-    total_h = f"{total_sec//3600}h {(total_sec%3600)//60}m"
+    total_h = f"{total_sec//3600}h {(total_sec % 3600)//60}m"
 
     html = f"""<!doctype html><html><head><meta charset="UTF-8">
 <title>Attendance Report -- {emp[1]} -- {month_name}</title>
 <style>
   body {{ font-family: "Segoe UI", sans-serif; margin: 0; padding: 32px; color: #1e293b; background: white; }}
-  .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; border-bottom: 2px solid #1e3a8a; padding-bottom: 18px; }}
+  .header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px;
+             border-bottom: 2px solid #1e3a8a; padding-bottom: 18px; }}
   .title {{ font-size: 22px; font-weight: 700; color: #1e3a8a; }}
   .sub {{ font-size: 13px; color: #64748b; margin-top: 4px; }}
   .meta {{ text-align: right; font-size: 13px; color: #64748b; }}
@@ -892,7 +897,8 @@ def my_attendance_pdf():
     <div class="sub">{emp[1]} &nbsp;·&nbsp; {emp[0]} &nbsp;·&nbsp; {emp[2] or 'Employee'}</div>
     <div class="sub">{month_name}</div></div>
   <div class="meta">Generated: {datetime.date.today().strftime('%d %b %Y')}<br>
-    <button onclick="window.print()" style="margin-top:8px;padding:8px 16px;background:#1e3a8a;color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;">🖨️ Print / Save PDF</button>
+    <button onclick="window.print()" style="margin-top:8px;padding:8px 16px;background:#1e3a8a;color:white;
+      border:none;border-radius:8px;cursor:pointer;font-size:13px;">🖨️ Print / Save PDF</button>
   </div>
 </div>
 <div class="stats">
@@ -1626,7 +1632,6 @@ def download_tax_statement(emp_id, year):
     </html>
     """
     return html_content, 200, {"Content-Type": "text/html"}
-
 
 
 # ---------------- API: SHIFTS (JSON) ----------------

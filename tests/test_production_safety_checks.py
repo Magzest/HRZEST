@@ -148,7 +148,7 @@ class TestAiAssistantProductionCheck:
     def test_both_clamav_and_ai_assistant_unconfigured_warns_twice(self):
         logger = _fake_logger()
         check_production_safety("production", None, malware_scan_enabled=True,
-                                 ai_assistant_configured=False, logger=logger)
+                                ai_assistant_configured=False, logger=logger)
         assert logger.critical.call_count == 2
 
 

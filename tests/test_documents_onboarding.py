@@ -25,7 +25,7 @@ def _admin_session(client, seed_admin):
 def _emp_session(client, seed_employee):
     """Inject an employee session directly (employee_login just redirects to admin_login)."""
     with client.session_transaction() as sess:
-        sess["employee_id"]   = seed_employee["employee_id"]
+        sess["employee_id"] = seed_employee["employee_id"]
         sess["employee_name"] = seed_employee["name"]
     return client
 

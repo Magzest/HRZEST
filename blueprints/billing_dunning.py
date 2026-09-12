@@ -71,7 +71,7 @@ def _run_billing_check():
          billing_state, grace_ends_at, created_at) = row
         try:
             _check_one_tenant(tenant_id, company_name, db_name, billing_state,
-                               coerce_datetime(grace_ends_at), coerce_datetime(created_at), period_start)
+                              coerce_datetime(grace_ends_at), coerce_datetime(created_at), period_start)
         except Exception:
             app_log.exception(f"billing_dunning: check failed for tenant '{subdomain}'")
 
@@ -129,7 +129,7 @@ def _set_billing_state(tenant_id, state, grace_period_ends_at=None, locked_at=No
 def _dunning_email_content(kind, company_name, grace_ends=None):
     if kind == "grace":
         grace_str = grace_ends.strftime("%d %b %Y, %I:%M %p") if grace_ends else f"{_GRACE_DAYS} days from today"
-        subject = f"Action needed: your HRzest bill is overdue"
+        subject = "Action needed: your HRzest bill is overdue"
         body = (
             f"<p>This month's bill for <strong>{company_name}</strong> hasn't been paid yet.</p>"
             f"<p>You have until <strong>{grace_str}</strong> to pay before the account is locked. "
@@ -137,7 +137,7 @@ def _dunning_email_content(kind, company_name, grace_ends=None):
             f"payment unlocks the account automatically, no further steps needed.</p>"
         )
     elif kind == "locked":
-        subject = f"Your HRzest account has been locked"
+        subject = "Your HRzest account has been locked"
         body = (
             f"<p><strong>{company_name}</strong>'s account is now locked due to non-payment.</p>"
             f"<p>You can still log in, but no changes (including payroll) can be made until the "
@@ -145,7 +145,7 @@ def _dunning_email_content(kind, company_name, grace_ends=None):
             f"reactivate immediately -- it unlocks automatically the moment payment clears.</p>"
         )
     else:  # reactivated
-        subject = f"Your HRzest account is active again"
+        subject = "Your HRzest account is active again"
         body = (
             f"<p>Payment received -- <strong>{company_name}</strong>'s account is fully active again. "
             f"Thanks for paying promptly.</p>"

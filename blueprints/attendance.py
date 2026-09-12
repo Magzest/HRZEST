@@ -17,8 +17,12 @@ from flask import (
 )
 from extensions import limiter, app_log
 from database import get_db_connection
-from utils.auth import admin_required, employee_required, api_required, resolve_bearer_identity_any
-from utils.helpers import tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect, co_scope_column, co_scope_subquery, hr_scope_column, hr_scope_subquery, hr_scope_denied, decrypt_pii, get_pending_action_counts, company_today, company_now
+from utils.auth import admin_required, api_required, resolve_bearer_identity_any
+from utils.helpers import (
+    tpath, get_auth_config, get_company_settings, _safe_redirect, _safe_referrer_redirect,
+    co_scope_column, hr_scope_column, hr_scope_denied, decrypt_pii, get_pending_action_counts,
+    company_today, company_now,
+)
 from utils.email_utils import get_email_config, send_email_smtp
 from utils.attendance_utils import (
     classify_by_worked_minutes, detect_overtime, get_working_days,
@@ -960,7 +964,8 @@ def monthly_report_export():
     ws.row_dimensions[1].height = 28
 
     ws.merge_cells("A2:H2")
-    ws["A2"] = f"Working Days: {len([d for d in working_days if d <= today and d not in holidays])}   |   Holidays: {len(holidays)}   |   Employees: {len(report)}"
+    working_day_count = len([d for d in working_days if d <= today and d not in holidays])
+    ws["A2"] = f"Working Days: {working_day_count}   |   Holidays: {len(holidays)}   |   Employees: {len(report)}"
     ws["A2"].alignment = center
     ws["A2"].font = Font(size=10, color="64748B")
     ws.row_dimensions[2].height = 18
