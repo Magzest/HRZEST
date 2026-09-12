@@ -2090,6 +2090,20 @@ def api_register_employee():
     _seat_error = add_employee_seat_cap_check()
     if _seat_error:
         return jsonify({"ok": False, "msg": _seat_error}), 403
+    # Cheap preflight, same non-authoritative role as add_employee_seat_cap_check()
+    # above -- the INSERT's own UNIQUE constraint (caught below) is still what
+    # actually prevents a race, but without this check first, file.save() a few
+    # lines down would silently overwrite the EXISTING employee_id's photo on
+    # disk with the rejected duplicate's upload before the INSERT ever ran,
+    # even though the request still correctly 400s.
+    _dup_check_db = get_db_connection()
+    _dup_check_cursor = _dup_check_db.cursor(buffered=True)
+    _dup_check_cursor.execute("SELECT 1 FROM employees WHERE employee_id=%s", (emp_id,))
+    _dup_exists = _dup_check_cursor.fetchone() is not None
+    _dup_check_cursor.close()
+    _dup_check_db.close()
+    if _dup_exists:
+        return jsonify({"ok": False, "msg": "Failed to create employee. Check for duplicate ID."}), 400
     # Validate extension, MIME type, magic bytes and size before writing to disk.
     ok, err = _validate_image_file(file)
     if not ok:
