@@ -16,6 +16,8 @@ import CompanySignupPendingScreen from "./src/screens/CompanySignupPendingScreen
 import AppLockScreen from "./src/screens/AppLockScreen";
 import AdminDrawerNavigator from "./src/navigation/AdminDrawerNavigator";
 import EmployeeDrawerNavigator from "./src/navigation/EmployeeDrawerNavigator";
+import ManagerDrawerNavigator from "./src/navigation/ManagerDrawerNavigator";
+import { getNavigatorKey } from "./src/navigation/roleRouting";
 import { initCrashReporting } from "./src/utils/crashReporting";
 
 initCrashReporting();
@@ -71,11 +73,17 @@ function RootNavigator() {
     return <AppLockScreen />;
   }
 
-  if (user.role === "admin") {
+  const navigatorKey = getNavigatorKey(user);
+
+  if (navigatorKey === "manager") {
+    return <ManagerDrawerNavigator />;
+  }
+
+  if (navigatorKey === "admin") {
     return <AdminDrawerNavigator />;
   }
 
-  if (user.role === "employee") {
+  if (navigatorKey === "employee") {
     return <EmployeeDrawerNavigator />;
   }
 

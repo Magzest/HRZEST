@@ -46,7 +46,7 @@ const clearCrossAccountCaches = async () => {
 };
 
 export function AuthProvider({ children }) {
-  const [user, setUser]     = useState(null);   // { role:'admin'|'employee', adminRole:'admin'|'hr' (only set when role==='admin'), name, employeeId? }
+  const [user, setUser]     = useState(null);   // { role:'admin'|'employee', adminRole:'admin'|'hr'|'manager' (only set when role==='admin'), name, employeeId? }
   const [loading, setLoading] = useState(true);
   // App-lock: a session restored from disk on cold start is gated behind a
   // biometric prompt (when the device has one enrolled) before its data is
