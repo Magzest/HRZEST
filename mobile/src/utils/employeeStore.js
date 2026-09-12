@@ -1,15 +1,22 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// Employee PII (name, email, phone, role, department) used to sit in plain
+// AsyncStorage -- unencrypted on both platforms, readable off a rooted/
+// jailbroken device or extracted from a plain device backup. Routed through
+// secureStorage.js instead: Keychain/Keystore-backed on native builds (the
+// same wrapper AuthContext.js already uses for the session token/user
+// object), AsyncStorage only as its documented web fallback (no Keychain/
+// Keystore in a browser).
+import { secureGetItem, secureSetItem, secureRemoveItem } from './secureStorage';
 
 const STORAGE_KEY = '@custom_created_employees_v1';
 
 export const saveLocalEmployee = async (employeeObj) => {
   try {
-    const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
+    const existingStr = await secureGetItem(STORAGE_KEY);
     let list = existingStr ? JSON.parse(existingStr) : [];
     const empId = employeeObj.employee_id || employeeObj.id;
     list = list.filter((e) => (e.employee_id || e.id) !== empId);
     list.unshift(employeeObj);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    await secureSetItem(STORAGE_KEY, JSON.stringify(list));
     return list;
   } catch (e) {
     return [];
@@ -18,10 +25,10 @@ export const saveLocalEmployee = async (employeeObj) => {
 
 export const deleteLocalEmployee = async (empId) => {
   try {
-    const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
+    const existingStr = await secureGetItem(STORAGE_KEY);
     let list = existingStr ? JSON.parse(existingStr) : [];
     list = list.filter((e) => (e.employee_id || e.id) !== empId);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    await secureSetItem(STORAGE_KEY, JSON.stringify(list));
     return list;
   } catch (e) {
     return [];
@@ -30,7 +37,7 @@ export const deleteLocalEmployee = async (empId) => {
 
 export const getLocalEmployees = async () => {
   try {
-    const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
+    const existingStr = await secureGetItem(STORAGE_KEY);
     return existingStr ? JSON.parse(existingStr) : [];
   } catch (e) {
     return [];
@@ -39,7 +46,7 @@ export const getLocalEmployees = async () => {
 
 export const clearLocalEmployees = async () => {
   try {
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    await secureRemoveItem(STORAGE_KEY);
   } catch (e) {
     // best-effort -- nothing else to fall back to
   }

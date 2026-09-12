@@ -1,4 +1,26 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// employeeStore.js is tested against a mocked secureStorage boundary
+// (already covered by its own secureStorage.test.js -- native-vs-web
+// Platform.OS branching, SecureStore/AsyncStorage dispatch) rather than
+// re-mocking AsyncStorage/expo-secure-store here, so these tests exercise
+// employeeStore's own logic (filtering, merge semantics, error fallback)
+// without depending on how secureStorage picks its backend.
+jest.mock('../secureStorage', () => {
+  const store = new Map();
+  return {
+    __store: store,
+    secureGetItem: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
+    secureSetItem: jest.fn((key, value) => {
+      store.set(key, value);
+      return Promise.resolve();
+    }),
+    secureRemoveItem: jest.fn((key) => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
+  };
+});
+
+import { secureGetItem, secureSetItem, __store } from '../secureStorage';
 import {
   saveLocalEmployee,
   deleteLocalEmployee,
@@ -10,8 +32,9 @@ import {
 const STORAGE_KEY = '@custom_created_employees_v1';
 
 describe('employeeStore', () => {
-  beforeEach(async () => {
-    await AsyncStorage.clear();
+  beforeEach(() => {
+    __store.clear();
+    jest.clearAllMocks();
   });
 
   describe('getLocalEmployees', () => {
@@ -20,7 +43,7 @@ describe('employeeStore', () => {
     });
 
     it('returns [] if the stored value is corrupt JSON', async () => {
-      await AsyncStorage.setItem(STORAGE_KEY, '{not json');
+      await secureSetItem(STORAGE_KEY, '{not json');
       expect(await getLocalEmployees()).toEqual([]);
     });
   });
@@ -46,9 +69,10 @@ describe('employeeStore', () => {
       expect(list[0].name).toBe('Legacy Updated');
     });
 
-    it('persists across calls via AsyncStorage', async () => {
+    it('persists across calls via secureStorage, not plain AsyncStorage', async () => {
       await saveLocalEmployee({ employee_id: 'E1', name: 'Alice' });
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      expect(secureSetItem).toHaveBeenCalledWith(STORAGE_KEY, JSON.stringify([{ employee_id: 'E1', name: 'Alice' }]));
+      const raw = await secureGetItem(STORAGE_KEY);
       expect(JSON.parse(raw)).toEqual([{ employee_id: 'E1', name: 'Alice' }]);
     });
   });
@@ -74,7 +98,7 @@ describe('employeeStore', () => {
       await saveLocalEmployee({ employee_id: 'E2', name: 'Bob' });
       await clearLocalEmployees();
       expect(await getLocalEmployees()).toEqual([]);
-      expect(await AsyncStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(await secureGetItem(STORAGE_KEY)).toBeNull();
     });
 
     it('is a no-op when nothing is cached', async () => {
@@ -118,11 +142,10 @@ describe('employeeStore', () => {
       // failure), so a storage read error surfaces here as "no local
       // employees" rather than as a thrown error -- confirm the merge
       // still produces the server list, not a crash.
-      const spy = jest.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('boom'));
+      secureGetItem.mockRejectedValueOnce(new Error('boom'));
       const serverEmployees = [{ employee_id: 'E9', name: 'Server Only' }];
       const merged = await mergeEmployeesWithLocal(serverEmployees);
       expect(merged).toEqual(serverEmployees);
-      spy.mockRestore();
     });
   });
 });

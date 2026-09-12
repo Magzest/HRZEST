@@ -8,11 +8,26 @@ jest.mock('../../api/client', () => ({
   setUnauthorizedHandler: jest.fn(),
 }));
 
-jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn().mockResolvedValue(null),
-  setItemAsync: jest.fn().mockResolvedValue(undefined),
-  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
-}));
+// Stateful, not just resolved-value stubs -- employeeStore.js now persists
+// its locally-created-employee cache through secureStorage.js (native ->
+// expo-secure-store), so these tests' saveLocalEmployee()/getLocalEmployees()
+// round trips need a fake that actually remembers what was written, not one
+// that always resolves the same static value regardless of prior calls.
+jest.mock('expo-secure-store', () => {
+  const store = new Map();
+  return {
+    __store: store,
+    getItemAsync: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
+    setItemAsync: jest.fn((key, value) => {
+      store.set(key, value);
+      return Promise.resolve();
+    }),
+    deleteItemAsync: jest.fn((key) => {
+      store.delete(key);
+      return Promise.resolve();
+    }),
+  };
+});
 
 jest.mock('expo-local-authentication', () => ({
   hasHardwareAsync: jest.fn().mockResolvedValue(false),
@@ -27,6 +42,7 @@ jest.mock('../../utils/preferences', () => ({
 import { AuthProvider, useAuth } from '../AuthContext';
 import { saveLocalEmployee, getLocalEmployees } from '../../utils/employeeStore';
 import { queuePunch, getPendingPunches } from '../../utils/offlineQueue';
+import { __store as secureStoreBackingStore } from 'expo-secure-store';
 
 // AuthContext.signIn()/signOut() are responsible for keeping two plain
 // (non-account-scoped) AsyncStorage caches -- employeeStore's locally-
@@ -40,6 +56,7 @@ describe('AuthContext cross-account cache isolation', () => {
 
   beforeEach(async () => {
     await AsyncStorage.clear();
+    secureStoreBackingStore.clear();
   });
 
   it('keeps cached data when the same account signs in again', async () => {
