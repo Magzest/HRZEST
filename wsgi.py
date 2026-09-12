@@ -67,31 +67,14 @@ import threading
 from utils.email_utils import _email_queue_worker
 threading.Thread(target=_email_queue_worker, daemon=True, name="email-queue-worker").start()
 
-# ── Register blueprints (uncomment as routes are migrated from app.py) ────────
-#
-# Migration status:
-#   ✅ health.py          -- /healthz, /favicon.ico
-#   ✅ notifications.py   -- /api/notifications/*, /web/notifications/*
-#   ✅ payroll.py         -- salary, payslips, reports, export (25 routes)
-#   ✅ leave.py           -- leave, holidays, resignation, overtime, comp-off (35 routes)
-#   ✅ admin_views.py     -- admin dashboard, settings, companies, analytics, audit (28 routes)
-#   ✅ auth.py            -- login, logout, password reset, WebAuthn (24 routes)
-#   ✅ employees.py       -- employee CRUD, photos, QR, ID cards (24 routes)
-#   ✅ attendance.py      -- check-in/out, shifts, breaks, reports (34 routes)
-#   ✅ tickets.py         -- support tickets (7 routes)
-#   ✅ performance.py     -- KPIs, reviews (10 routes; hike/bonus in payroll.py)
-#   ✅ onboarding.py      -- templates, tasks, offer letters (22 routes)
-#   ✅ documents.py       -- employee document management (7 routes)
-#   ✅ org.py             -- multi-tenant org self-registration (2 routes)
-#   ✅ employee_portal.py -- employee self-service, check-in APIs (20 routes)
-#   ✅ core.py            -- home, CSP reporting, session-risk stream,
-#                            security lockout, token-based REST API (10 routes)
-#
-# All 15 blueprints migrated. app.py now holds zero route handlers -- only
-# shared setup (init_db, error handlers, before/after_request hooks,
-# template filters).
-
-# ── Register blueprints & shared app setup ────────────────────────────────────
+# ── Shared app setup & blueprint registration ─────────────────────────────────
+# The blueprint-split migration mentioned below is long complete -- every
+# route now lives in blueprints/, registered by the single loop near the
+# bottom of app.py (`for _bp in (health_bp, notifications_bp, ...):
+# app.register_blueprint(_bp)`, 28 blueprints as of this writing), not
+# individually here. app.py itself holds only shared setup: init_db, error
+# handlers, before/after_request hooks, template filters. Importing it here
+# is what actually runs that registration loop.
 import app as _app_module  # noqa: F401
 
 # ── Nightly daily report scheduler ───────────────────────────────────────────
