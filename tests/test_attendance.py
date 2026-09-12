@@ -338,16 +338,6 @@ class TestQrFaceMatchTolerance:
 
 
 # ===========================================================================
-# /location — plain geofence check (no attendance write)
-# ===========================================================================
-
-class TestLocationEndpoint:
-    def test_location_missing_fields(self, client):
-        resp = client.post("/location", json={})
-        assert resp.status_code in (200, 400)
-
-
-# ===========================================================================
 # Admin dashboard / reports — session-authenticated routes
 # ===========================================================================
 

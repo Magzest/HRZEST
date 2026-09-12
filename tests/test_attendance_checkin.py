@@ -148,35 +148,6 @@ class TestIsWithinRange:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# /location endpoint (no auth, POST JSON)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TestLocationEndpoint:
-
-    def test_returns_ok(self, client):
-        rv = client.post("/location", json={"lat": 12.9716, "lon": 77.5946})
-        assert rv.status_code == 200
-        assert rv.get_json()["status"] == "ok"
-
-    def test_stores_coordinates_in_session(self, client):
-        client.post("/location", json={"lat": 12.9716, "lon": 77.5946})
-        with client.session_transaction() as sess:
-            assert sess["lat"] == 12.9716
-            assert sess["lon"] == 77.5946
-
-    def test_overwrites_previous_coordinates(self, client):
-        client.post("/location", json={"lat": 1.0, "lon": 1.0})
-        client.post("/location", json={"lat": 12.9716, "lon": 77.5946})
-        with client.session_transaction() as sess:
-            assert sess["lat"] == 12.9716
-
-    def test_missing_lat_key_raises(self, client):
-        rv = client.post("/location", json={"lon": 77.5946})
-        # Production code does data["lat"] — KeyError propagates as 500
-        assert rv.status_code in (400, 500)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # /attendance (kiosk check-in, no auth, POST JSON)
 # ═══════════════════════════════════════════════════════════════════════════════
 

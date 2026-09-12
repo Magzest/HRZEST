@@ -1085,17 +1085,6 @@ def send_absentee_report():
         return jsonify({"ok": False, "msg": "Failed to send email. Check email settings."})
 
 
-@attendance_bp.route("/location", methods=["POST"])
-def location():
-    data = request.get_json(silent=True) or {}
-    lat, lon = data.get("lat"), data.get("lon")
-    if lat is None or lon is None:
-        return jsonify({"status": "error", "msg": "lat and lon required"}), 400
-    session["lat"] = lat
-    session["lon"] = lon
-    return jsonify({"status": "ok"})
-
-
 @attendance_bp.route("/attendance", methods=["POST"])
 def attendance():
     import base64

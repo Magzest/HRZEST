@@ -447,16 +447,6 @@ class TestSendAbsenteeReport:
         assert resp.get_json()["ok"] is False
 
 
-class TestLocation:
-    def test_missing_lat_lon_returns_400(self, client):
-        resp = client.post("/location", json={})
-        assert resp.status_code == 400
-
-    def test_success(self, client):
-        resp = client.post("/location", json={"lat": 12.9, "lon": 77.6})
-        assert resp.get_json()["status"] == "ok"
-
-
 class TestApiCheckin:
     def test_missing_emp_id_returns_400(self, client, seed_admin):
         token = _admin_bearer_token(client, seed_admin)
