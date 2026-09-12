@@ -693,6 +693,18 @@ def require_payout_2fa(f):
 # admin session carries.
 HR_ROLE = "hr"
 
+# Manager accounts have no standalone creation UI at all (unlike HR's
+# /hr_accounts) -- the only way one comes to exist is auto-provisioning an
+# employee whose own employees.role is exactly "Manager", mirroring HR's
+# own _ensure_hr_admin_account/_finish_employee_login pattern in
+# blueprints/auth.py. Scope is intentionally narrower than HR: just the
+# company-wide leave/resignation/overtime approval queues (see
+# blueprints/leave.py's _LEAVE_APPROVER_ROLES) -- no employees, payroll,
+# performance, onboarding, or tickets (blueprints/tickets.py explicitly
+# excludes 'manager' -- no per-team ownership concept exists to scope
+# those down to). Enforced web-side by app.py's _restrict_manager_role.
+MANAGER_ROLE = "manager"
+
 
 # ── Security Settings hub step-up gate ────────────────────────────────────────
 # Same time.time()-in-session step-up pattern as Email Settings, guarding the

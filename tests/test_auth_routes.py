@@ -224,6 +224,87 @@ class TestAdminLoginEdgeBranches:
                         (seed_employee["employee_id"],))
             cur.close()
 
+    def test_manager_role_employee_login_redirects_to_leave_holidays(self, client, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='Manager' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert resp.status_code == 302
+            assert resp.headers["Location"].endswith("/leave_holidays")
+            with client.session_transaction() as sess:
+                assert sess.get("admin_logged_in") is True
+                assert sess.get("admin_username") == seed_employee["employee_id"]
+                assert sess.get("admin_role") == "manager"
+                assert "employee_id" not in sess
+            cur.execute("SELECT role, is_active FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            row = cur.fetchone()
+            assert row is not None
+            assert row[0] == "manager" and row[1] == 1
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+            cur.execute("DELETE FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            cur.close()
+
+    def test_manager_role_employee_login_is_idempotent(self, client, seed_employee, db_engine):
+        """Same UNIQUE-constraint concern as the HR case above -- a second
+        login must reuse the first auto-provisioned row, not try to
+        INSERT a duplicate."""
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='manager' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            for _ in range(2):
+                client.get("/logout")
+                resp = client.post("/login", data={
+                    "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+                }, follow_redirects=False)
+                assert resp.status_code == 302
+                assert resp.headers["Location"].endswith("/leave_holidays")
+                _wait_for_async_writes()
+            cur.execute("SELECT COUNT(*) FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone()[0] == 1
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+            cur.execute("DELETE FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            cur.close()
+
+    def test_manager_substring_role_does_not_grant_admin_access(self, client, seed_employee, db_engine):
+        """Same free-text-role caveat as HR's own equivalent test -- a job
+        title like "Project Manager" or "Store Manager" must not match."""
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='Project Manager' WHERE employee_id=%s", (seed_employee["employee_id"],))
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert resp.status_code == 302
+            assert "/employee_portal" in resp.headers["Location"]
+            cur.execute("SELECT 1 FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone() is None
+        finally:
+            cur.execute("UPDATE employees SET role=NULL WHERE employee_id=%s", (seed_employee["employee_id"],))
+            cur.close()
+
+    def test_manager_role_employee_with_pending_pin_change_goes_to_force_change_pin_first(self, client, seed_employee, db_engine):
+        cur = db_engine.cursor()
+        cur.execute("UPDATE employees SET role='Manager', force_pin_change=1 WHERE employee_id=%s",
+                    (seed_employee["employee_id"],))
+        try:
+            resp = client.post("/login", data={
+                "identifier": seed_employee["employee_id"], "password": seed_employee["password"],
+            }, follow_redirects=False)
+            assert "/force_change_pin" in resp.headers["Location"]
+            with client.session_transaction() as sess:
+                assert sess.get("employee_id") == seed_employee["employee_id"]
+                assert not sess.get("admin_logged_in")
+            cur.execute("SELECT 1 FROM admin_users WHERE username=%s", (seed_employee["employee_id"],))
+            assert cur.fetchone() is None
+        finally:
+            cur.execute("UPDATE employees SET role=NULL, force_pin_change=0 WHERE employee_id=%s",
+                        (seed_employee["employee_id"],))
+            cur.close()
+
     def test_employee_wrong_password_records_failure(self, client, seed_employee):
         resp = client.post("/login", data={
             "identifier": seed_employee["employee_id"], "password": "WrongPass!",
@@ -989,3 +1070,61 @@ class TestMobileBiometric:
     def test_no_token_returns_401(self, client):
         resp = client.post("/api/employee/mobile-biometric-nonce")
         assert resp.status_code == 401
+
+
+class TestManagerRoleWebRestriction:
+    """app.py's _restrict_manager_role before_request hook -- a manager-role
+    web session must only ever reach the leave/resignation/overtime
+    approval queues (blueprints/leave.py's _LEAVE_APPROVER_ROLES), never
+    the rest of the admin panel that plain admin_required alone would
+    otherwise let any admin_logged_in session through to."""
+
+    def test_manager_can_reach_leave_holidays(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/leave_holidays")
+        assert resp.status_code == 200
+
+    def test_manager_can_reach_overtime(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/overtime")
+        assert resp.status_code == 200
+
+    def test_manager_blocked_from_employees_page(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/employees", follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith("/leave_holidays")
+
+    def test_manager_blocked_from_admin_dashboard(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/admin", follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["Location"].endswith("/leave_holidays")
+
+    def test_manager_blocked_from_settings(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/settings", follow_redirects=False)
+        assert resp.status_code == 302
+
+    def test_manager_blocked_from_api_employees(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/api/employees")
+        assert resp.status_code == 403
+
+    def test_manager_can_reach_logout(self, client, seed_admin):
+        _admin_session(client, seed_admin["username"], role="manager")
+        resp = client.get("/logout", follow_redirects=False)
+        assert resp.status_code == 302
+
+    def test_plain_admin_session_unaffected(self, client, seed_admin):
+        """Baseline -- confirms the new hook is a no-op for role='admin',
+        which should still reach everything it always could."""
+        _admin_session(client, seed_admin["username"], role="admin")
+        resp = client.get("/employees")
+        assert resp.status_code == 200
+
+    def test_hr_session_unaffected(self, client, seed_hr_admin):
+        """Baseline -- HR keeps its own existing, broader scope untouched."""
+        _admin_session(client, seed_hr_admin["username"], role="hr")
+        resp = client.get("/hr_dashboard")
+        assert resp.status_code == 200

@@ -19,7 +19,7 @@ from utils.auth import (
     _check_login_lockout, _record_login_failure, _clear_login_failures,
     admin_required, role_required, employee_required, employee_api_required,
     _get_failed_count, verify_turnstile, turnstile_enabled,
-    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, HR_ROLE,
+    CAPTCHA_AFTER_ATTEMPTS, _TURNSTILE_SITE_KEY, HR_ROLE, MANAGER_ROLE,
     api_required, validate_new_password, verify_and_update_password,
 )
 from utils.helpers import tpath, get_company_settings, _audit, _db, _safe_app_url
@@ -155,6 +155,36 @@ def _ensure_hr_admin_account(employee_id, email):
     )
 
 
+# Same exact-match, case-insensitive caveat as _HR_EMPLOYEE_ROLE above --
+# a job title like "Project Manager" or "Store Manager" does NOT grant this.
+_MANAGER_EMPLOYEE_ROLE = "manager"
+
+
+def _ensure_manager_admin_account(employee_id, email):
+    """Auto-provisions (idempotently) the admin_users row that backs
+    manager-tier admin-panel access for an employee whose role is exactly
+    "Manager" -- see _finish_employee_login() below. Identical rationale
+    and mechanics to _ensure_hr_admin_account() above (random, never-shown
+    password; only ever reached via the employee-login auto-route, never a
+    direct admin_users credential check) -- kept as a separate function
+    rather than a shared helper so each role's log message/role constant
+    stays a plain, greppable literal rather than a parameterized one."""
+    with _db() as (cursor, db):
+        cursor.execute("SELECT 1 FROM admin_users WHERE username=%s", (employee_id,))
+        if cursor.fetchone():
+            return
+        cursor.execute(
+            "INSERT INTO admin_users (username, password, role, email, is_active) VALUES (%s,%s,%s,%s,1)",
+            (employee_id, generate_password_hash(secrets.token_urlsafe(32)), MANAGER_ROLE, email)
+        )
+        db.commit()
+    log_security_event(
+        "auth.manager_admin_autoprovisioned",
+        f"Auto-created admin_users manager-role account for employee '{employee_id}' (employees.role is exactly 'Manager')",
+        level="INFO", identifier=employee_id,
+    )
+
+
 def _finish_employee_login(employee_id, name, role, force_pin_change, email):
     """Completes an employee login -- called from both the direct
     password-verified branch below and mfa_verify()'s employee branch, so
@@ -220,6 +250,31 @@ def _finish_employee_login(employee_id, name, role, force_pin_change, email):
         if email:
             notify_if_new_login_ip(employee_id, "admin", request.remote_addr, employee_id, email)
         return redirect(tpath("/hr_dashboard"))
+
+    if (role or "").strip().lower() == _MANAGER_EMPLOYEE_ROLE:
+        _ensure_manager_admin_account(employee_id, email)
+        # Same MFA bookkeeping rationale as the HR branch above.
+        if app.config["MANDATORY_LOGIN_MFA"]:
+            mark_totp_enabled(employee_id)
+        session.clear()
+        session["admin_logged_in"] = True
+        session["admin_username"] = employee_id
+        session["admin_role"] = MANAGER_ROLE
+        session["_session_created"] = time.time()
+        session.permanent = True
+        ensure_session_id(session)
+        log_security_event(
+            "auth.admin_login_success",
+            f"Employee '{employee_id}' logged in via employee credentials, routed to manager approvals panel (role='Manager')",
+            level="INFO", identifier=employee_id,
+        )
+        if email:
+            notify_if_new_login_ip(employee_id, "admin", request.remote_addr, employee_id, email)
+        # No manager-specific dashboard exists -- /leave_holidays is the
+        # actual real capability (see MANAGER_ROLE's docstring in
+        # utils/auth.py), and is already reachable by any admin_logged_in
+        # session today.
+        return redirect(tpath("/leave_holidays"))
 
     session.clear()
     session["employee_id"] = employee_id
@@ -448,6 +503,8 @@ def admin_login():
                 notify_if_new_login_ip(identifier, "admin", request.remote_addr, identifier, admin_row[2])
             if admin_row[1] == HR_ROLE:
                 dest = redirect(tpath("/hr_dashboard"))
+            elif admin_row[1] == MANAGER_ROLE:
+                dest = redirect(tpath("/leave_holidays"))
             else:
                 dest = redirect(tpath("/admin"))
             return dest
@@ -535,7 +592,12 @@ def mfa_verify():
                 ensure_session_id(session)
                 if row[1]:
                     notify_if_new_login_ip(username, "admin", request.remote_addr, username, row[1])
-                dest = redirect(tpath("/hr_dashboard" if role == HR_ROLE else "/admin"))
+                if role == HR_ROLE:
+                    dest = redirect(tpath("/hr_dashboard"))
+                elif role == MANAGER_ROLE:
+                    dest = redirect(tpath("/leave_holidays"))
+                else:
+                    dest = redirect(tpath("/admin"))
                 return dest
 
         log_security_event("auth.mfa_failure", "Invalid login MFA code", level="WARNING", identifier=username)
