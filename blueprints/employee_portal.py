@@ -1784,6 +1784,32 @@ def api_employee_upload_photo():
         return jsonify({"ok": False, "msg": "Failed to process image"}), 500
 
 
+@employee_portal_bp.route("/api/employee/my_id_card")
+@employee_api_required
+def api_employee_my_id_card():
+    """Bearer-token twin of my_id_card() above, for the mobile app --
+    employee_required is session-cookie-only, which a token-only mobile
+    client never has, so that route 401s from mobile as-is. Same
+    _build_id_card_buf() rendering, scoped to the token's own employee_id
+    exactly like the session version is scoped to session['employee_id'].
+
+    Returns base64 JSON, not a raw image stream -- axios in React Native
+    has no reliable blob/arraybuffer download path (see
+    fetchSalaryReportExport's comment in mobile/src/api/client.js, the
+    established precedent for exactly this problem); the mobile client
+    writes this to a local file via expo-file-system and either displays
+    or shares it from there."""
+    import base64
+    from flask import g as _g
+    from blueprints.employees import _build_id_card_buf
+
+    emp_id = _g.api_emp_id
+    buf = _build_id_card_buf(emp_id)
+    if buf is None:
+        return jsonify({"ok": False, "msg": "Employee not found"}), 404
+    return jsonify({"ok": True, "image_base64": base64.b64encode(buf.read()).decode("ascii")})
+
+
 @employee_portal_bp.route("/api/employee/chat", methods=["POST"])
 @employee_required
 @limiter.limit("6 per minute")

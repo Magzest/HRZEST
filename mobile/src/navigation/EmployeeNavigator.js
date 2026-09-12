@@ -18,6 +18,7 @@ import PayslipsScreen from "../screens/employee/PayslipsScreen";
 import PerformanceScreen from "../screens/employee/PerformanceScreen";
 import OnboardingScreen from "../screens/employee/OnboardingScreen";
 import ProfileScreen from "../screens/employee/ProfileScreen";
+import IdCardScreen from "../screens/IdCardScreen";
 import PersonalInfoScreen from "../screens/employee/PersonalInfoScreen";
 import WorkInfoScreen from "../screens/employee/WorkInfoScreen";
 import ContactScreen from "../screens/employee/ContactScreen";
@@ -192,6 +193,12 @@ export default function EmployeeNavigator() {
         <Tab.Screen
           name="Profile"
           component={ProfileScreen}
+          options={{ tabBarItemStyle: { display: "none" } }}
+        />
+
+        <Tab.Screen
+          name="IdCard"
+          component={IdCardScreen}
           options={{ tabBarItemStyle: { display: "none" } }}
         />
 

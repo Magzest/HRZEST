@@ -2044,6 +2044,49 @@ def admin_view_id_card(emp_id):
                      mimetype="image/png")
 
 
+@employees_bp.route("/api/employees/<emp_id>/id_card")
+@api_required
+@api_role_required("admin", HR_ROLE)
+def api_employee_id_card(emp_id):
+    """Bearer-token twin of admin_view_id_card() above, for the mobile
+    app -- admin_required/employee_required are session-cookie-only (see
+    their own definitions in utils/auth.py), which a token-only mobile
+    client never has, so neither existing route is reachable from mobile
+    as-is. HR-scoped the same way every other HR-facing endpoint added
+    this session is: an HR token may only fetch a card for an employee
+    actually assigned to that HR account (assigned_hr_username), never
+    any employee in the company. api_role_required above already
+    confirmed the caller is a real, active admin or HR account.
+
+    Returns base64 JSON, not a raw image stream -- axios in React Native
+    has no reliable blob/arraybuffer download path (see
+    fetchSalaryReportExport's comment in mobile/src/api/client.js, the
+    established precedent for exactly this problem); the mobile client
+    writes this to a local file via expo-file-system and either displays
+    or shares it from there."""
+    import base64
+    from flask import g as _flask_g
+
+    db = get_db_connection()
+    cursor = db.cursor(buffered=True)
+    cursor.execute("SELECT role FROM admin_users WHERE username=%s", (_flask_g.api_user,))
+    role_row = cursor.fetchone()
+    if role_row and role_row[0] == HR_ROLE:
+        cursor.execute("SELECT assigned_hr_username FROM employees WHERE employee_id=%s", (emp_id,))
+        emp_row = cursor.fetchone()
+        if not emp_row or emp_row[0] != _flask_g.api_user:
+            cursor.close()
+            db.close()
+            return jsonify({"ok": False, "msg": "Employee not found"}), 404
+    cursor.close()
+    db.close()
+
+    buf = _build_id_card_buf(emp_id)
+    if buf is None:
+        return jsonify({"ok": False, "msg": "Employee not found"}), 404
+    return jsonify({"ok": True, "image_base64": base64.b64encode(buf.read()).decode("ascii")})
+
+
 @employees_bp.route("/api/employees", methods=["GET"])
 @api_required
 @api_role_required("admin")

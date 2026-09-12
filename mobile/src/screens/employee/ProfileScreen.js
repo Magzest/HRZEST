@@ -224,6 +224,14 @@ export default function ProfileScreen() {
 
   const menuItems = [
     {
+      title: "My ID Card",
+      subtitle: "View & Save Employee ID Card",
+      icon: "id-card-outline",
+      color: "#0F766E",
+      background: "#F0FDFA",
+      screen: "IdCard",
+    },
+    {
       title: "Personal Information",
       subtitle: "Name, DOB, Gender & Identity",
       icon: "person-outline",

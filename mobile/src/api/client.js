@@ -202,6 +202,15 @@ export const requestOvertime = (date, reason) =>
 
 export const fetchMyOvertime = () => client.get('/api/employee/my_overtime');
 
+// Both return { ok, image_base64 } rather than a raw image stream -- same
+// reason as fetchSalaryReportExport above (axios in React Native has no
+// reliable blob/arraybuffer download path). Employee gets their own card
+// only; the admin/HR variant is HR-scoped server-side to that HR's
+// assigned employees (blueprints/employees.py's api_employee_id_card()).
+export const fetchMyIdCard = () => client.get('/api/employee/my_id_card');
+
+export const fetchEmployeeIdCard = (empId) => client.get(`/api/employees/${empId}/id_card`);
+
 export const fetchEmployeeHolidays = () => client.get('/api/employee/holidays');
 
 export const fetchEmployeeProfile = () => client.get('/api/employee/profile');

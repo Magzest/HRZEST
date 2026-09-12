@@ -2,6 +2,7 @@ import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 
 import ProfileScreen from "../screens/employee/ProfileScreen";
+import IdCardScreen from "../screens/IdCardScreen";
 import PersonalInfoScreen from "../screens/employee/PersonalInfoScreen";
 import WorkInfoScreen from "../screens/employee/WorkInfoScreen";
 import ContactScreen from "../screens/employee/ContactScreen";
@@ -21,6 +22,11 @@ export default function ProfileNavigator() {
       <Stack.Screen
         name="ProfileHome"
         component={ProfileScreen}
+      />
+
+      <Stack.Screen
+        name="IdCard"
+        component={IdCardScreen}
       />
 
       <Stack.Screen

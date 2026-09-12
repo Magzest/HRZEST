@@ -674,6 +674,17 @@ export default function EmployeesScreen({ navigation }) {
 
                   <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
                     <TouchableOpacity
+                      style={{ flex: 1, backgroundColor: "#F0FDFA", borderWidth: 1, borderColor: "#99F6E4", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
+                      onPress={() => {
+                        const emp = selectedEmp;
+                        setSelectedEmp(null);
+                        navigation.navigate("IdCard", { empId: emp.employee_id, empName: emp.name });
+                      }}
+                    >
+                      <Text style={{ color: "#0F766E", fontWeight: "700", fontSize: 13 }}>ID Card</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       style={{ flex: 1, backgroundColor: colors.blueBg, borderWidth: 1, borderColor: "#BFDBFE", borderRadius: 12, paddingVertical: 10, alignItems: "center" }}
                       onPress={() => openEditModal(selectedEmp)}
                     >
