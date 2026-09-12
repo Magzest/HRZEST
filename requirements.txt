@@ -10,7 +10,7 @@ werkzeug>=3.1.6
 gunicorn>=23.0.0
 
 # ── Database ───────────────────────────────────────────────────────────────────
-psycopg2-binary>=2.9.9
+psycopg2-binary>=2.9.12
 
 # ── Face recognition & image processing ───────────────────────────────────────
 opencv-python>=4.8.1.78
